@@ -1,0 +1,550 @@
+/**
+ * 留言管理页
+ * ------------------------------------------------------------------
+ * 对应后端菜单：path = /biz/message，component = biz/message/index
+ * 接口：vip.xiaonuo.biz.modular.message（BizMessageController）
+ *
+ * 参照通用分类模块的自包含结构：本页自行加载 / 筛选 / 分页 / 增删改，
+ * 审核与回复复用 /biz/message/edit 接口（整体提交实体字段）。
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  Eye,
+  Loader2,
+  MessageSquareText,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
+  MESSAGE_STATUSES,
+  hasMessagePerm,
+  listAllMessages,
+  messageApi,
+  messageStatusClass,
+  messageStatusLabel,
+  type BizMessage,
+  type MessagePayload,
+  type MessagePermAction,
+} from '../../../lib/message.ts';
+import { formatDateTime } from '../../../lib/format.ts';
+import { MediaImage } from '../../../components/MediaImage.tsx';
+import {
+  MessageDeleteDialog,
+  MessageDetailDialog,
+  MessageFormDialog,
+  MessageReplyDialog,
+} from './dialogs.tsx';
+
+const PAGE_SIZE = 10;
+const GRID_CLASS =
+  'grid grid-cols-[36px_minmax(200px,1.4fr)_minmax(240px,2fr)_92px_130px_140px_112px] gap-3 items-center';
+
+type DialogState =
+  | { kind: 'form'; item: BizMessage | null }
+  | { kind: 'detail'; id: string }
+  | { kind: 'reply'; item: BizMessage }
+  | { kind: 'delete'; items: BizMessage[] }
+  | null;
+
+interface Toast {
+  kind: 'success' | 'error';
+  text: string;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : '操作失败，请稍后重试';
+}
+
+export default function MessageView({ permissions }: { permissions?: string[] }) {
+  const can = useCallback(
+    (action: MessagePermAction) => hasMessagePerm(permissions, action),
+    [permissions]
+  );
+
+  const [items, setItems] = useState<BizMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const notify = useCallback((kind: Toast['kind'], text: string) => {
+    setToast({ kind, text });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await listAllMessages();
+      setItems(data);
+    } catch (err) {
+      setLoadError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const hasFilter = !!search.trim() || statusFilter !== 'all';
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return [...items]
+      .filter((item) => {
+        if (statusFilter !== 'all' && (item.status || '') !== statusFilter) return false;
+        if (!q) return true;
+        return [item.nickname, item.email, item.phone, item.content]
+          .some((v) => (v || '').toLowerCase().includes(q));
+      })
+      .sort((a, b) => {
+        const sa = a.sortCode ?? 9999;
+        const sb = b.sortCode ?? 9999;
+        if (sa !== sb) return sa - sb;
+        return (b.createTime || '').localeCompare(a.createTime || '');
+      });
+  }, [items, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const counts = useMemo(() => {
+    const result: Record<string, number> = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+    items.forEach((item) => {
+      const key = item.status || 'PENDING';
+      result[key] = (result[key] || 0) + 1;
+    });
+    return result;
+  }, [items]);
+
+  const allPageSelected =
+    pageItems.length > 0 && pageItems.every((item) => selected.has(item.id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectPage() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) pageItems.forEach((item) => next.delete(item.id));
+      else pageItems.forEach((item) => next.add(item.id));
+      return next;
+    });
+  }
+
+  async function handleSave(payload: MessagePayload) {
+    if (payload.id) await messageApi.edit(payload);
+    else await messageApi.add(payload);
+    await load();
+    setDialog(null);
+    notify('success', payload.id ? '留言已更新' : '留言已创建');
+  }
+
+  async function handleReply(payload: MessagePayload) {
+    await messageApi.edit(payload);
+    await load();
+    setDialog(null);
+    notify('success', `已${messageStatusLabel(payload.status)}并回复`);
+  }
+
+  async function handleDelete(targets: BizMessage[]) {
+    await messageApi.remove(targets.map((t) => t.id));
+    await load();
+    setSelected(new Set());
+    setDialog(null);
+    notify('success', `已删除 ${targets.length} 条留言`);
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* 概览 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: '全部留言', value: items.length, icon: MessageSquareText },
+          { label: '待审核', value: counts.PENDING || 0, icon: Loader2 },
+          { label: '已通过', value: counts.APPROVED || 0, icon: CheckCircle2 },
+          { label: '已拒绝', value: counts.REJECTED || 0, icon: X },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-white rounded-2xl border border-[#E5E5EA] px-4 py-3.5 flex items-center gap-3"
+          >
+            <div className="w-9 h-9 rounded-xl bg-[#0071E3]/8 flex items-center justify-center shrink-0">
+              <stat.icon className="w-4 h-4 text-[#0071E3]" strokeWidth={1.8} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[20px] font-semibold tabular-nums text-[#1D1D1F] leading-none">
+                {stat.value}
+              </div>
+              <div className="text-[12px] text-[#86868B] mt-1">{stat.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 工具栏 */}
+      <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
+          <div className="relative flex-1 max-w-[300px] min-w-[180px]">
+            <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索昵称、邮箱、电话、内容..."
+              className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="按审核状态筛选"
+            className="h-9 px-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#3A3A3C] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25"
+          >
+            <option value="all">全部状态</option>
+            {MESSAGE_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          {hasFilter && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('all');
+              }}
+              className="h-9 px-2.5 rounded-xl text-[12px] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F2F2F7] inline-flex items-center gap-1 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              清除筛选
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            title="刷新列表"
+            className="h-9 w-9 rounded-xl bg-white border border-[#E5E5EA] flex items-center justify-center text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          {can('delete') && selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                setDialog({
+                  kind: 'delete',
+                  items: items.filter((i) => selected.has(i.id)),
+                })
+              }
+              className="h-9 px-3 rounded-xl bg-white border border-[#FF3B30]/30 text-[#D70015] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#FF3B30]/8 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              批量删除 ({selected.size})
+            </button>
+          )}
+          {can('add') && (
+            <button
+              type="button"
+              onClick={() => setDialog({ kind: 'form', item: null })}
+              className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              新增留言
+            </button>
+          )}
+        </div>
+      </div>
+
+      {loadError && (
+        <div className="rounded-xl bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 flex items-center justify-between gap-3 text-[13px] text-[#D70015]">
+          <span>留言列表加载失败：{loadError}</span>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="shrink-0 font-medium underline underline-offset-2"
+          >
+            重试
+          </button>
+        </div>
+      )}
+
+      {/* 列表 */}
+      <div className="bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+        <div className="overflow-x-auto">
+          <div className="min-w-[1060px]">
+            <div
+              className={`${GRID_CLASS} px-5 h-10 bg-[#FAFAFC] border-b border-[#F2F2F7] text-[12px] font-medium text-[#86868B]`}
+            >
+              <input
+                type="checkbox"
+                aria-label="全选当前页"
+                checked={allPageSelected}
+                onChange={toggleSelectPage}
+                className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
+              />
+              <span>留言人</span>
+              <span>留言内容</span>
+              <span>审核状态</span>
+              <span>联系方式</span>
+              <span>提交时间</span>
+              <span className="text-right">操作</span>
+            </div>
+
+            {loading ? (
+              <div className="py-20 flex flex-col items-center justify-center gap-3 text-[#86868B]">
+                <Loader2 className="w-6 h-6 animate-spin text-[#0071E3]" />
+                <span className="text-[13px]">正在加载留言数据...</span>
+              </div>
+            ) : pageItems.length === 0 ? (
+              <div className="py-20 px-6 text-center">
+                <MessageSquareText
+                  className="w-10 h-10 text-[#C7C7CC] mx-auto mb-3"
+                  strokeWidth={1.5}
+                />
+                <h3 className="text-[16px] font-semibold text-[#1D1D1F]">
+                  {hasFilter ? '没有匹配的留言' : '暂无留言'}
+                </h3>
+                <p className="text-[13px] text-[#6E6E73] mt-1">
+                  {hasFilter
+                    ? '试试调整搜索词或筛选条件'
+                    : '用户提交的留言将在这里显示，可审核与回复'}
+                </p>
+                {!hasFilter && can('add') && (
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ kind: 'form', item: null })}
+                    className="mt-5 h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    新增留言
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-[#F2F2F7]">
+                {pageItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`${GRID_CLASS} px-5 py-2.5 text-[13px] hover:bg-[#FAFAFC] transition-colors`}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`选择 ${item.nickname || '匿名访客'}`}
+                      checked={selected.has(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                      className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
+                    />
+
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-[#F2F2F7] overflow-hidden shrink-0 flex items-center justify-center">
+                        <MediaImage
+                          src={item.avatar || ''}
+                          alt={item.nickname || '访客'}
+                          fallbackLabel={(item.nickname || '访客').slice(0, 1)}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => can('detail') && setDialog({ kind: 'detail', id: item.id })}
+                          className="block max-w-full truncate text-left font-medium text-[#1D1D1F] hover:text-[#0071E3] transition-colors"
+                          title={item.nickname || '匿名访客'}
+                        >
+                          {item.nickname || '匿名访客'}
+                        </button>
+                        <div className="text-[11px] text-[#AEAEB2] truncate">
+                          {item.ip || `ID ${item.id}`}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p
+                        className="truncate text-[13px] text-[#3A3A3C]"
+                        title={item.content || ''}
+                      >
+                        {item.content || '-'}
+                      </p>
+                      {item.reply && (
+                        <p className="mt-0.5 truncate text-[11px] text-[#16A34A]" title={item.reply}>
+                          回复：{item.reply}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => can('edit') && setDialog({ kind: 'reply', item })}
+                      disabled={!can('edit')}
+                      title={can('edit') ? '点击审核回复' : messageStatusLabel(item.status)}
+                      className={`inline-flex w-fit px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${messageStatusClass(item.status)} disabled:cursor-default`}
+                    >
+                      {messageStatusLabel(item.status)}
+                    </button>
+
+                    <span className="text-[12px] text-[#6E6E73] truncate" title={item.email || item.phone || ''}>
+                      {item.email || item.phone || '-'}
+                    </span>
+                    <span className="text-[12px] text-[#86868B] tabular-nums">
+                      {item.createTime ? formatDateTime(item.createTime) : '-'}
+                    </span>
+
+                    <div className="flex items-center justify-end gap-0.5">
+                      {can('detail') && (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'detail', id: item.id })}
+                          aria-label={`查看 ${item.nickname || '留言'}`}
+                          title="详情"
+                          className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
+                      {can('edit') && (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'reply', item })}
+                          aria-label={`审核回复 ${item.nickname || '留言'}`}
+                          title="审核回复"
+                          className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      {can('delete') && (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'delete', items: [item] })}
+                          aria-label={`删除 ${item.nickname || '留言'}`}
+                          title="删除"
+                          className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 分页 */}
+        {!loading && filtered.length > 0 && (
+          <div className="px-5 py-3 border-t border-[#F2F2F7] flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#86868B]">
+            <span>
+              共 {filtered.length} 条{selected.size ? ` · 已选 ${selected.size} 条` : ''} · 第{' '}
+              {currentPage}/{totalPages} 页
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+                aria-label="上一页"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-2 tabular-nums text-[#3A3A3C]">{currentPage}</span>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+                aria-label="下一页"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 弹窗 */}
+      {dialog?.kind === 'form' && (
+        <MessageFormDialog
+          item={dialog.item}
+          onClose={() => setDialog(null)}
+          onSubmit={handleSave}
+        />
+      )}
+      {dialog?.kind === 'detail' && (
+        <MessageDetailDialog id={dialog.id} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'reply' && (
+        <MessageReplyDialog
+          item={dialog.item}
+          onClose={() => setDialog(null)}
+          onSubmit={handleReply}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <MessageDeleteDialog
+          items={dialog.items}
+          onClose={() => setDialog(null)}
+          onConfirm={() => handleDelete(dialog.items)}
+        />
+      )}
+
+      {/* 轻提示 */}
+      {toast && (
+        <div
+          role="status"
+          className={`fixed bottom-6 right-6 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
+            toast.kind === 'success' ? 'bg-[#1D1D1F] text-white' : 'bg-[#D70015] text-white'
+          }`}
+        >
+          {toast.text}
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            aria-label="关闭提示"
+            className="ml-2 opacity-70 hover:opacity-100"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

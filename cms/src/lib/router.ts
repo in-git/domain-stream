@@ -24,6 +24,7 @@ const MODULES: ModuleKey[] = [
   'imagetexts',
   'articles',
   'category',
+  'messages',
   'profile',
 ];
 const CONTENT_MODULES: ContentModule[] = ['videos', 'imagetexts', 'articles'];

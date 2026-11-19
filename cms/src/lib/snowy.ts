@@ -49,12 +49,70 @@ interface SnowyResponse<T> {
   traceId?: string;
 }
 
-/** 鉴权失败（token 失效/未登录），仅此类错误才应清除本地登录态 */
+/**
+ * 需要重新登录的业务码，与 snowy-admin-web/src/utils/codeHandler.js 的 RELOGIN_CODES 对齐。
+ * sa-token 的 NotLoginException（token 过期 / 被顶下线 / 被踢下线）统一返回 401；
+ * 1011007 / 1011008 为 Snowy 约定的其它需要重登的业务码。
+ */
+const RELOGIN_CODES = [401, 1011007, 1011008];
+
+/** 鉴权失败（token 失效/未登录/被顶下线），仅此类错误才应清除本地登录态 */
 export class SnowyAuthError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'SnowyAuthError';
   }
+}
+
+type AuthExpiredHandler = (reason: string) => void;
+const authExpiredHandlers = new Set<AuthExpiredHandler>();
+// 同一波并发请求可能同时命中重登码，避免重复清缓存/通知/弹多层提示
+let reloginInFlight = false;
+
+/**
+ * 注册「鉴权失效」全局回调：一旦任一请求命中重登码，App 据此强制回到登录页。
+ * 返回取消注册函数。
+ */
+export function onAuthExpired(handler: AuthExpiredHandler): () => void {
+  authExpiredHandlers.add(handler);
+  return () => authExpiredHandlers.delete(handler);
+}
+
+/** 是否是"被顶下线/被踢下线"类消息，用于给登录页更明确的提示 */
+function isKickedMessage(msg: string): boolean {
+  return /顶下线|踢下线|顶号|已在.*登录|重复登录|kick|be kicked|replaced/i.test(msg);
+}
+
+/**
+ * 统一的鉴权失效处理：清理全部登录缓存并通知上层回到登录页。
+ * 由请求层在命中 RELOGIN_CODES 时调用；清缓存动作幂等，多次触发无副作用。
+ */
+function forceRelogin(msg: string): SnowyAuthError {
+  const reason = isKickedMessage(msg)
+    ? '您的账号已在其他设备登录，当前会话已被顶下线，请重新登录'
+    : msg || '登录已失效，请重新登录';
+  if (!reloginInFlight) {
+    reloginInFlight = true;
+    // 暂存原因供登录页提示（clearSnowyLoginCache 不清 sessionStorage）
+    try {
+      sessionStorage.setItem('AUTH_EXPIRED_REASON', reason);
+    } catch {
+      // ignore
+    }
+    clearSnowyLoginCache();
+    authExpiredHandlers.forEach((handler) => {
+      try {
+        handler(reason);
+      } catch {
+        // 单个订阅者异常不影响其它订阅者与错误抛出
+      }
+    });
+    // 重置标志：留一个宏任务窗口，合并同一波并发请求的重复触发
+    window.setTimeout(() => {
+      reloginInFlight = false;
+    }, 0);
+  }
+  return new SnowyAuthError(reason);
 }
 
 /**
@@ -93,8 +151,9 @@ export async function snowyRequest<T>(
   } catch {
     throw new Error(`请求失败 (${res.status})：响应格式异常`);
   }
-  if (payload.code === 401) {
-    throw new SnowyAuthError(payload.msg || '登录已失效，请重新登录');
+  if (RELOGIN_CODES.includes(payload.code)) {
+    // 被顶下线 / 登录失效：清缓存 + 通知 App 强制回登录页，即使调用方 catch 了错误
+    throw forceRelogin(payload.msg);
   }
   if (payload.code !== 200) {
     throw new Error(payload.msg || `请求失败 (${res.status})`);
@@ -181,6 +240,10 @@ export function snowyUpload(
         payload = JSON.parse(xhr.responseText);
       } catch {
         reject(new Error('解析上传响应失败'));
+        return;
+      }
+      if (RELOGIN_CODES.includes(payload.code)) {
+        reject(forceRelogin(payload.msg));
         return;
       }
       if (xhr.status >= 200 && xhr.status < 300 && payload.code === 200) {

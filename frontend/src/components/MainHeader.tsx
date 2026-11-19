@@ -13,7 +13,7 @@ interface MainHeaderProps {
 const SECTION_LABELS: Record<SectionId, string> = {
   videos: '推荐视频',
   articles: '精选文章',
-  gallery: '纯图片',
+  gallery: '图文',
   profile: '个人中心',
 };
 

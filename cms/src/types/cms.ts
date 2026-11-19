@@ -4,6 +4,7 @@ export type ModuleKey =
   | 'imagetexts'
   | 'articles'
   | 'category'
+  | 'messages'
   | 'profile';
 
 export type ContentStatus = 'published' | 'draft';

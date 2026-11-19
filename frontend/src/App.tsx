@@ -133,7 +133,7 @@ export default function App() {
             onToggleTheme={() => setIsDark((d) => !d)}
           />
 
-          <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8">
+          <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-24 md:pb-8">
             <AnimatePresence mode="wait">
               {activeSection === 'videos' && (
                 <motion.div

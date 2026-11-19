@@ -28,6 +28,16 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // 被顶下线 / 登录失效后由请求层写入，登录页读取一次即清除
+  const [forceLogoutReason, setForceLogoutReason] = useState(() => {
+    try {
+      const reason = sessionStorage.getItem('AUTH_EXPIRED_REASON') || '';
+      sessionStorage.removeItem('AUTH_EXPIRED_REASON');
+      return reason;
+    } catch {
+      return '';
+    }
+  });
   const [error, setError] = useState('');
 
   function persistAccount(account: string) {
@@ -42,6 +52,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setForceLogoutReason('');
     setSubmitting(true);
     try {
       const account = email.trim();
@@ -59,6 +70,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     setEmail(presetAccount);
     setPassword(presetPass);
     setError('');
+    setForceLogoutReason('');
     setSubmitting(true);
     try {
       const res = await api.login(presetAccount, presetPass);
@@ -147,6 +159,16 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
             </span>
             记住账号，下次自动填充
           </button>
+
+          {forceLogoutReason && (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl bg-[#FF9500]/10 border border-[#FF9500]/25 px-3.5 py-2.5 text-[13px] text-[#9A6700]"
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{forceLogoutReason}</span>
+            </div>
+          )}
 
           {error && (
             <div

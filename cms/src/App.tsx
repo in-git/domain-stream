@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Menu, Plus } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
-import { getCachedMenu, type SnowyMenu } from './lib/snowy.ts';
+import { getCachedMenu, onAuthExpired, type SnowyMenu } from './lib/snowy.ts';
 import {
   hasModulePerm,
   menuNodeToModule,
@@ -48,6 +48,7 @@ import { DeleteConfirmPage } from './components/DeleteConfirmPage.tsx';
 import { QuickCreatePage } from './components/QuickCreatePage.tsx';
 import { NoAccessPage, PageNotFound } from './components/PageShell.tsx';
 import CategoryView from './views/biz/category/index.tsx';
+import MessageView from './views/biz/message/index.tsx';
 
 const MODULE_TITLES: Record<ModuleKey, string> = {
   dashboard: '首页看板',
@@ -55,6 +56,7 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   imagetexts: '图文管理',
   articles: '文章管理',
   category: '通用分类',
+  messages: '留言管理',
   profile: '个人中心',
 };
 
@@ -94,6 +96,17 @@ export default function App() {
     setExternalMenu(null);
     setRoute(navigateToRoute(next, replace));
   }, []);
+  /** 清空会话状态并回到登录页（鉴权失效/被顶下线时调用，不再请求 logout） */
+  const resetToLogin = useCallback(() => {
+    setUser(null);
+    setModules(FALLBACK_MODULES);
+    setPermissions([]);
+    setMenuTree([]);
+    setExternalMenu(null);
+    forgetModule();
+    go({ kind: 'module', module: 'dashboard' }, true);
+  }, [go]);
+
   const goModule = useCallback(
     (mod: ModuleKey) => go({ kind: 'module', module: mod }, true),
     [go]
@@ -129,6 +142,20 @@ export default function App() {
       window.removeEventListener('popstate', onRouteChange);
     };
   }, []);
+
+  // 任一请求命中重登码（含被顶下线）时，强制清空会话并回到登录页
+  useEffect(() => onAuthExpired(() => resetToLogin()), [resetToLogin]);
+
+  // 低频探活：用户静止在任意页面时也能及时发现会话被顶下线
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setInterval(() => {
+      void api.me().catch(() => {
+        // 鉴权失效时 me() 内部会清缓存并触发 onAuthExpired
+      });
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [user]);
 
   // 快速创建页没有对应侧边栏项，沿用进入前的模块高亮
   useEffect(() => {
@@ -339,9 +366,10 @@ export default function App() {
           : '快速上传';
 
   // 顶栏主按钮：新增动作需有对应模块的新增权限；快速上传按任一新增权限开放
-  // 分类页自带「新增分类」等操作按钮，顶栏不再重复放置快速上传
+  // 分类 / 留言页自带操作按钮，顶栏不再重复放置快速上传
   const canPrimaryAction =
     activeModule !== 'category' &&
+    activeModule !== 'messages' &&
     (activeModule === 'videos'
       ? hasModulePerm('videos', 'Add', permissions)
       : activeModule === 'imagetexts'
@@ -563,6 +591,8 @@ export default function App() {
             />
           ) : route.module === 'category' ? (
             <CategoryView permissions={permissions} />
+          ) : route.module === 'messages' ? (
+            <MessageView permissions={permissions} />
           ) : (
             <PersonalCenterView
               user={user}

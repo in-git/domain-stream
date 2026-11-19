@@ -1,0 +1,202 @@
+/**
+ * 留言管理（BIZ_MESSAGE）接口对接层
+ * ------------------------------------------------------------------
+ * 后端：vip.xiaonuo.biz.modular.message.controller.BizMessageController
+ * 路由：/biz/message/*（GET page / detail，POST add / edit / delete）
+ * 前端统一经 /snowy 代理访问，与登录态 token 保持一致。
+ *
+ * 说明：与通用分类模块一致，列表负责分页拉取数据，搜索 / 状态筛选在组件内完成。
+ */
+import { snowyRequest } from './snowy.ts';
+
+const BASE = '/biz/message';
+
+/** 审核状态枚举：与 BIZ_MESSAGE.STATUS 字段注释一致 */
+export const MESSAGE_STATUSES = [
+  { value: 'PENDING', label: '待审核' },
+  { value: 'APPROVED', label: '已通过' },
+  { value: 'REJECTED', label: '已拒绝' },
+] as const;
+
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number]['value'];
+
+export function messageStatusLabel(value?: string): string {
+  return MESSAGE_STATUSES.find((s) => s.value === value)?.label || value || '-';
+}
+
+/** 状态对应的 Tailwind 配色（完整类名，便于静态提取） */
+export function messageStatusClass(value?: string): string {
+  if (value === 'APPROVED') return 'bg-[#16A34A]/10 text-[#16A34A]';
+  if (value === 'REJECTED') return 'bg-[#D70015]/10 text-[#D70015]';
+  return 'bg-[#D97706]/10 text-[#D97706]';
+}
+
+/** BIZ_MESSAGE 实体（后端字段为驼峰） */
+export interface BizMessage {
+  id: string;
+  nickname?: string;
+  avatar?: string;
+  email?: string;
+  phone?: string;
+  content?: string;
+  status?: string;
+  reply?: string;
+  replyTime?: string;
+  replyUser?: string;
+  ip?: string;
+  userAgent?: string;
+  sortCode?: number;
+  remark?: string;
+  extJson?: string;
+  deleteFlag?: string;
+  createTime?: string;
+  createUser?: string;
+  updateTime?: string;
+  updateUser?: string;
+}
+
+/** add / edit 允许提交的业务字段（不含审计字段） */
+export interface MessagePayload {
+  id?: string;
+  nickname?: string;
+  avatar?: string;
+  email?: string;
+  phone?: string;
+  content?: string;
+  status?: string;
+  reply?: string;
+  replyTime?: string;
+  replyUser?: string;
+  ip?: string;
+  userAgent?: string;
+  sortCode?: number;
+  remark?: string;
+  extJson?: string;
+}
+
+/** MyBatis-Plus 分页对象 */
+export interface MessagePage {
+  records: BizMessage[];
+  total: number;
+  size: number;
+  current: number;
+  pages: number;
+}
+
+function qs(params: Record<string, unknown> = {}): string {
+  const entries = Object.entries(params).filter(
+    ([, v]) => v !== undefined && v !== null && v !== ''
+  );
+  if (!entries.length) return '';
+  return (
+    '?' +
+    entries
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join('&')
+  );
+}
+
+/** 留言动作权限码，兼容 Snowy 按钮码与 SaCheckPermission 的路径码两种写法 */
+export type MessagePermAction = 'page' | 'detail' | 'add' | 'edit' | 'delete';
+
+const PERM_CODES: Record<MessagePermAction, string[]> = {
+  page: ['bizMessagePage', '/biz/message/page'],
+  detail: ['bizMessageDetail', '/biz/message/detail'],
+  add: ['bizMessageAdd', '/biz/message/add'],
+  edit: ['bizMessageEdit', '/biz/message/edit'],
+  delete: ['bizMessageDelete', 'bizMessageBatchDelete', '/biz/message/delete'],
+};
+
+/**
+ * 菜单可见即代表有该模块的访问权限；权限列表为空（超管/未下发按钮码）时
+ * 不隐藏按钮，由后端 @SaCheckPermission 兜底。
+ */
+export function hasMessagePerm(
+  permissions: string[] | undefined | null,
+  action: MessagePermAction
+): boolean {
+  if (!permissions || permissions.length === 0) return true;
+  const codes = PERM_CODES[action];
+  return permissions.some((c) => c === '*' || codes.includes(c));
+}
+
+/** 实体 -> 完整编辑参数（后端 edit 会整体复制，不能只传改动字段） */
+export function toMessagePayload(item: BizMessage): MessagePayload {
+  return {
+    id: item.id,
+    nickname: item.nickname || '',
+    avatar: item.avatar || '',
+    email: item.email || '',
+    phone: item.phone || '',
+    content: item.content || '',
+    status: item.status || 'PENDING',
+    reply: item.reply || '',
+    replyTime: item.replyTime || '',
+    replyUser: item.replyUser || '',
+    ip: item.ip || '',
+    userAgent: item.userAgent || '',
+    sortCode: item.sortCode ?? 0,
+    remark: item.remark || '',
+    extJson: item.extJson || '',
+  };
+}
+
+export const messageApi = {
+  /** 分页 */
+  page(params: {
+    current?: number;
+    size?: number;
+    sortField?: string;
+    sortOrder?: string;
+    searchKey?: string;
+  } = {}): Promise<MessagePage> {
+    return snowyRequest<MessagePage>(`${BASE}/page${qs(params)}`);
+  },
+
+  /** 详情 */
+  detail(id: string): Promise<BizMessage> {
+    return snowyRequest<BizMessage>(`${BASE}/detail${qs({ id })}`);
+  },
+
+  /** 新增 */
+  add(payload: MessagePayload): Promise<string> {
+    return snowyRequest<string>(`${BASE}/add`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** 编辑（审核 / 回复也走此接口，payload 必须带 id） */
+  edit(payload: MessagePayload): Promise<string> {
+    return snowyRequest<string>(`${BASE}/edit`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** 删除：后端要求 [{"id":"..."}] 数组，支持批量 */
+  remove(ids: string[]): Promise<string> {
+    return snowyRequest<string>(`${BASE}/delete`, {
+      method: 'POST',
+      body: JSON.stringify(ids.map((id) => ({ id }))),
+    });
+  },
+};
+
+/** 循环分页拉取全部留言 */
+export async function listAllMessages(): Promise<BizMessage[]> {
+  const all: BizMessage[] = [];
+  const size = 200;
+  for (let current = 1; current <= 50; current++) {
+    const page = await messageApi.page({ current, size });
+    const records = page?.records || [];
+    if (!records.length) break;
+    const known = new Set(all.map((item) => item.id));
+    const fresh = records.filter((item) => !known.has(item.id));
+    if (!fresh.length) break;
+    all.push(...fresh);
+    const total = page?.total ?? all.length;
+    if (all.length >= total) break;
+  }
+  return all;
+}

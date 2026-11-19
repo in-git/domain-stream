@@ -60,6 +60,27 @@
   background: rgba(120, 120, 128, 0.45);
 }
 
+/* Vidstack: video fills the whole carousel slide, keeping its native ratio. */
+[data-media-player] {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+[data-media-player][data-view-type='video'],
+[data-media-player] [data-media-provider] {
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+[data-media-player] [data-media-provider] video,
+[data-media-player] [data-media-provider] img {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

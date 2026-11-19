@@ -122,13 +122,13 @@ export function GalleryView({
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-5">
         <div>
           <p className="text-xs font-medium tracking-wide text-[#0071E3] dark:text-[#0A84FF] mb-1.5">
-            无框视觉画廊
+            影像图文志
           </p>
           <h1
             id="gallery-heading"
             className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
           >
-            纯图片
+            图文
           </h1>
         </div>
 
@@ -166,54 +166,104 @@ export function GalleryView({
         </div>
       </div>
 
-      {/* Pure Photography Masonry Wall — unobstructed imagery, whisper-subtle hover reveal */}
-      <div className="columns-1 sm:columns-2 lg:columns-3 gap-5 space-y-5">
+      {/* Image-and-Text Masonry Wall — cover-first cards with caption & meta */}
+      <div className="columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-5 xl:gap-6">
         <AnimatePresence mode="popLayout">
-          {filteredPhotos.map((photo) => {
+          {filteredPhotos.map((photo, idx) => {
             const isLiked = likedIds.includes(photo.id);
+            const isSaved = savedIds.includes(photo.id);
             return (
               <motion.div
                 key={photo.id}
-                layout
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.94 }}
-                transition={SWIFTUI_SMOOTH}
-                whileTap={{ scale: 0.98 }}
-                className="break-inside-avoid"
+                transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(idx, 8) * 0.03 }}
+                className="break-inside-avoid mb-5"
               >
-                <button
-                  type="button"
-                  onClick={() => openPhoto(photo.id)}
-                  className={`group relative block w-full overflow-hidden rounded-2xl bg-[#EEEEF0] dark:bg-[#1C1C1E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${getAspectClass(
-                    photo.aspectRatio
-                  )}`}
-                  aria-label={`查看大图：${photo.title}`}
-                >
-                  <motion.div
-                    layoutId={`photo-frame-${photo.id}`}
-                    transition={SWIFTUI_SMOOTH}
-                    className="w-full h-full"
+                <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => openPhoto(photo.id)}
+                    className={`relative block w-full overflow-hidden bg-[#EEEEF0] dark:bg-[#1C1C1E] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3] ${getAspectClass(
+                      photo.aspectRatio
+                    )}`}
+                    aria-label={`查看大图：${photo.title}`}
                   >
-                    <ResilientImage
-                      src={photo.src}
-                      alt={photo.title}
-                      fallbackTitle={photo.title}
-                      className="w-full h-full transition-transform duration-700 ease-out group-hover:scale-[1.035]"
-                    />
-                  </motion.div>
+                    <motion.div
+                      layoutId={`photo-frame-${photo.id}`}
+                      transition={SWIFTUI_SMOOTH}
+                      className="w-full h-full"
+                    >
+                      <ResilientImage
+                        src={photo.src}
+                        alt={photo.title}
+                        fallbackTitle={photo.title}
+                        className="w-full h-full transition-transform duration-700 ease-out group-hover:scale-[1.035]"
+                      />
+                    </motion.div>
 
-                  {/* Subtle hover-only scrim (desktop) */}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-4 text-left">
-                    <div>
-                      <p className="text-sm font-medium text-white">{photo.title}</p>
-                      <p className="text-xs text-white/75 mt-0.5">{photo.location}</p>
+                    <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
+                      {photo.album}
+                    </span>
+                  </button>
+
+                  <div className="px-3 pt-2.5 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => openPhoto(photo.id)}
+                      className="block w-full text-left focus-visible:outline-none"
+                    >
+                      <h3 className="text-[13px] sm:text-sm font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
+                        {photo.title}
+                      </h3>
+                    </button>
+
+                    <p className="mt-1 text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
+                      {photo.location} · {photo.date}
+                    </p>
+
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-mono-tabular text-[#86868B] dark:text-[#8E8E93] truncate">
+                        {photo.camera}
+                      </span>
+
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <motion.button
+                          type="button"
+                          whileTap={{ scale: 0.85 }}
+                          transition={SWIFTUI_BOUNCY}
+                          onClick={() => onToggleLike(photo.id)}
+                          aria-label={isLiked ? '取消喜欢' : '喜欢图片'}
+                          aria-pressed={isLiked}
+                          className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                            isLiked
+                              ? 'text-[#FF2E4D]'
+                              : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
+                          }`}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                        </motion.button>
+
+                        <motion.button
+                          type="button"
+                          whileTap={{ scale: 0.85 }}
+                          transition={SWIFTUI_BOUNCY}
+                          onClick={() => onToggleSave(photo.id)}
+                          aria-label={isSaved ? '取消收藏' : '收藏图片'}
+                          aria-pressed={isSaved}
+                          className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                            isSaved
+                              ? 'text-[#0071E3] dark:text-[#0A84FF]'
+                              : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+                          }`}
+                        >
+                          <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`} />
+                        </motion.button>
+                      </div>
                     </div>
-                    {isLiked && (
-                      <Heart className="w-4 h-4 text-[#FF375F] fill-current shrink-0" />
-                    )}
                   </div>
-                </button>
+                </div>
               </motion.div>
             );
           })}

@@ -19,7 +19,7 @@ interface LeftSidebarProps {
 const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
   { id: 'videos', label: '视频', Icon: Film },
   { id: 'articles', label: '文章', Icon: BookOpen },
-  { id: 'gallery', label: '纯图片', Icon: ImageIcon },
+  { id: 'gallery', label: '图文', Icon: ImageIcon },
 ];
 
 export function LeftSidebar({

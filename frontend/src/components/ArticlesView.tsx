@@ -144,7 +144,7 @@ export function ArticlesView({
       </div>
 
       {/* Xiaohongshu-style Two-Column Waterfall Feed */}
-      <div className="columns-2 gap-3 sm:gap-4 max-w-4xl mx-auto">
+      <div className="columns-2 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
         {filteredArticles.map((article, idx) => {
           const isSaved = savedIds.includes(article.id);
           const isLiked = likedIds.includes(article.id);

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
 import { formatDateShort, formatNumber } from '../lib/format.ts';
-import { renderMarkdownBlocks } from '../lib/markdown.tsx';
+import { plainText, renderRichContent } from '../lib/richtext.tsx';
 import type { ArticleItem, ContentStatus } from '../types/cms.ts';
 import { MediaImage } from './MediaImage.tsx';
 import { PageShell } from './PageShell.tsx';
@@ -10,6 +10,11 @@ import {
   EditorWorkspace,
   type PreviewDevice,
 } from './EditorWorkspace.tsx';
+
+// 富文本编辑器体积较大，按写作页懒加载，避免拖慢列表/首屏
+const AiRichEditor = lazy(() =>
+  import('./AiRichEditor.tsx').then((m) => ({ default: m.AiRichEditor }))
+);
 
 const ARTICLE_CATEGORIES = ['设计方法论', '产品思考', '数据洞察', '专题访谈', '行业观察'];
 
@@ -71,7 +76,7 @@ function ArticlePreview({
         </p>
         <hr className="my-5 border-[#E5E5EA]" />
         {content.trim() ? (
-          renderMarkdownBlocks(content, compact)
+          renderRichContent(content, compact)
         ) : (
           <p className="text-[13px] text-[#86868B]">暂无正文内容可预览</p>
         )}
@@ -99,26 +104,10 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [formError, setFormError] = useState('');
 
   const coverInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const liveWordCount = useMemo(() => content.replace(/\s+/g, '').length, [content]);
+  // HTML 正文需按纯文本统计字数（避免把标签计入）
+  const liveWordCount = useMemo(() => plainText(content).length, [content]);
   const liveReadMin = Math.max(1, Math.ceil(liveWordCount / 300));
-
-  function insertSnippet(snippet: string) {
-    const el = textareaRef.current;
-    if (!el) {
-      setContent((c) => `${c}${c ? '\n' : ''}${snippet}`);
-      return;
-    }
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const next = content.slice(0, start) + snippet + content.slice(end);
-    setContent(next);
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + snippet.length, start + snippet.length);
-    }, 0);
-  }
 
   async function handleCoverUpload(file: File) {
     if (!file.type.startsWith('image/')) {
@@ -143,7 +132,8 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
       setFormError('请输入文章标题');
       return;
     }
-    if (!content.trim()) {
+    const plain = plainText(content);
+    if (!plain) {
       setFormError('请输入文章正文内容');
       return;
     }
@@ -152,7 +142,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
     try {
       const payload: Partial<ArticleItem> = {
         title: title.trim(),
-        summary: summary.trim() || content.trim().slice(0, 80),
+        summary: summary.trim() || plain.slice(0, 80),
         content: content.trim(),
         category,
         coverUrl: coverUrl || '/src/assets/images/article_cover_typography_1795026087411.jpg',
@@ -297,45 +287,33 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
         </div>
 
         <div>
-          <div className="flex flex-wrap items-center gap-1 mb-2">
-            <button
-              type="button"
-              onClick={() => insertSnippet('\n## 章节标题\n')}
-              className="px-2.5 py-1 rounded-lg bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F]"
-            >
-              H2 标题
-            </button>
-            <button
-              type="button"
-              onClick={() => insertSnippet('\n### 小节标题\n')}
-              className="px-2.5 py-1 rounded-lg bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F]"
-            >
-              H3 小节
-            </button>
-            <button
-              type="button"
-              onClick={() => insertSnippet('\n> 引用关键洞察内容\n')}
-              className="px-2.5 py-1 rounded-lg bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F]"
-            >
-              引用块
-            </button>
-            <button
-              type="button"
-              onClick={() => insertSnippet('\n- 要点条目')}
-              className="px-2.5 py-1 rounded-lg bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F]"
-            >
-              列表
-            </button>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-[13px] font-medium text-[#1D1D1F]">
+              正文内容
+            </label>
+            <span className="text-[11px] text-[#86868B]">
+              富文本编辑器 · 支持标题 / 图片 / 表格 / 代码块
+            </span>
           </div>
-
-          <textarea
-            ref={textareaRef}
-            rows={16}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="支持使用 ## 标题、### 小节、> 引用、- 列表进行清晰排版..."
-            className="w-full p-4 rounded-2xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px] leading-relaxed font-sans"
-          />
+          <div className="rounded-2xl overflow-hidden border border-[#E5E5EA]">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center bg-[#F5F5F7] text-[13px] text-[#86868B]"
+                  style={{ height: 560 }}
+                >
+                  正在加载富文本编辑器...
+                </div>
+              }
+            >
+              <AiRichEditor
+                value={content}
+                onChange={setContent}
+                className="article-ai-editor"
+                style={{ height: 560 }}
+              />
+            </Suspense>
+          </div>
         </div>
 
         {formError && (
@@ -392,7 +370,7 @@ export function ArticleReaderPage({ item, onRefresh, onBack }: ArticleReaderPage
     >
       <p className="text-[15px] text-[#6E6E73] leading-relaxed">{item.summary}</p>
       <hr className="my-6 border-[#E5E5EA]" />
-      <div>{renderMarkdownBlocks(item.content)}</div>
+      <div>{renderRichContent(item.content)}</div>
       <div className="mt-8 pt-4 border-t border-[#E5E5EA] text-[12px] text-[#86868B] tabular-nums">
         {formatNumber(item.views)} 阅读
       </div>
