@@ -23,15 +23,8 @@ interface ArticlesViewProps {
 const DEFAULT_ARTICLE_CATEGORIES = ['设计', '影像', '技术', '随笔'];
 type ArticleCategory = string;
 
-// 小红书式瀑布流：交替不同封面比例，形成错落的两列节奏
-const FEED_COVER_RATIOS = [
-  'aspect-[3/4]',
-  'aspect-square',
-  'aspect-[4/5]',
-  'aspect-[4/3]',
-  'aspect-[3/4]',
-  'aspect-[5/6]',
-];
+// 文章封面统一按 16:9 横版展示，与 CMS 上传裁剪比例保持一致
+const ARTICLE_COVER_ASPECT = 'aspect-[16/9]';
 
 function formatLikes(count: number): string {
   if (count >= 10000) {
@@ -172,9 +165,7 @@ export function ArticlesView({
                     src={article.cover}
                     alt={article.title}
                     fallbackTitle={article.title}
-                    className={`w-full max-h-[360px] ${
-                      FEED_COVER_RATIOS[idx % FEED_COVER_RATIOS.length]
-                    } transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
+                    className={`w-full ${ARTICLE_COVER_ASPECT} transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
                   />
                   <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
                     {article.category}

@@ -46,18 +46,22 @@ import { currentRoute, navigate, subscribeRoute, type RouteInfo } from './lib/ro
 import { LoginView } from './components/LoginView';
 import { RegisterView } from './components/RegisterView';
 import { CallbackView } from './components/CallbackView';
-import { MiniVideoPlayer } from './components/MiniVideoPlayer';
 
 type ContentSection = 'videos' | 'articles' | 'gallery' | 'messages';
 
 function usePersistentState<T>(
   key: string,
-  defaultValue: T
+  defaultValue: T,
+  isValid?: (value: unknown) => value is T
 ): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
     try {
       const raw = window.localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : defaultValue;
+      if (!raw) return defaultValue;
+      const parsed: unknown = JSON.parse(raw);
+      // 本地缓存可能来自旧版本或被手动改坏，校验不通过时回落到默认值
+      if (isValid && !isValid(parsed)) return defaultValue;
+      return parsed as T;
     } catch {
       return defaultValue;
     }
@@ -74,9 +78,21 @@ function usePersistentState<T>(
   return [value, setValue];
 }
 
+const SECTION_IDS: SectionId[] = ['videos', 'articles', 'gallery', 'messages', 'profile'];
+/** 记住用户上次停留的板块，下次进入站点直接回到该路由 */
+const LAST_SECTION_KEY = 'lumina:last-section';
+
+function isSectionId(value: unknown): value is SectionId {
+  return typeof value === 'string' && (SECTION_IDS as string[]).includes(value);
+}
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [activeSection, setActiveSection] = useState<SectionId>('videos');
+  const [activeSection, setActiveSection] = usePersistentState<SectionId>(
+    LAST_SECTION_KEY,
+    'videos',
+    isSectionId
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
   const [route, setRoute] = useState<RouteInfo>(() => currentRoute());
@@ -430,22 +446,35 @@ export default function App() {
           />
 
           <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-24 md:pb-8">
-            <AnimatePresence mode="wait">
-              {activeSection === 'videos' && (
-                <motion.div
-                  key="section-videos"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={SWIFTUI_SMOOTH}
-                >
-                  {loading ? (
-                    <SectionSkeleton section="videos" />
-                  ) : errors.videos ? (
-                    <PortalError
-                      section="videos"
-                      message={errors.videos}
-                      onRetry={() => void loadFromBackend()}
+            {/* 视频板块常驻挂载：切换板块时只改变播放器容器形态，
+                <video> 元素不会被销毁重建，避免重新加载造成的卡顿 */}
+            <div className={activeSection === 'videos' ? 'block' : 'contents'}>
+              {activeSection !== 'videos' ? (
+                <VideosView
+                  videos={videos}
+                  categories={videoCategories}
+                  savedIds={savedIds}
+                  likedIds={likedIds}
+                  searchQuery={searchQuery}
+                  onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                  onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
+                  onPlayVideo={handlePlayVideo}
+                  progressById={videoProgress}
+                  onSaveProgress={saveVideoProgress}
+                  resumeVideoId={persistentVideo?.id}
+                  resumeMuted={persistentMuted}
+                  resumePlaybackRate={persistentRate}
+                  mode={persistentVideo ? 'mini' : 'hidden'}
+                  onMiniClose={() => setPersistentVideo(null)}
+                  onMiniExpand={() => handleSelectSection('videos')}
+                />
+              ) : loading ? (
+                <SectionSkeleton section="videos" />
+              ) : errors.videos ? (
+                <PortalError
+                  section="videos"
+                  message={errors.videos}
+                  onRetry={() => void loadFromBackend()}
                     />
                   ) : videos.length === 0 ? (
                     <PortalEmpty section="videos" onRetry={() => void loadFromBackend()} />
@@ -464,11 +493,12 @@ export default function App() {
                       resumeVideoId={persistentVideo?.id}
                       resumeMuted={persistentMuted}
                       resumePlaybackRate={persistentRate}
+                      mode="immersive"
                     />
                   )}
-                </motion.div>
-              )}
+            </div>
 
+            <AnimatePresence mode="wait">
               {activeSection === 'articles' && (
                 <motion.div
                   key="section-articles"
@@ -603,22 +633,6 @@ export default function App() {
           activeSection={activeSection}
           onSelectSection={handleSelectSection}
         />
-
-        {/* 悬浮迷你播放器：离开视频板块后继续播放 */}
-        <AnimatePresence>
-          {activeSection !== 'videos' && persistentVideo && (
-            <MiniVideoPlayer
-              video={persistentVideo}
-              muted={persistentMuted}
-              playbackRate={persistentRate}
-              savedTime={videoProgress[persistentVideo.id]}
-              onSaveProgress={(t) => saveVideoProgress(persistentVideo.id, t)}
-              onClose={() => setPersistentVideo(null)}
-              onToggleMute={() => setPersistentMuted((m) => !m)}
-              onOpenVideos={() => handleSelectSection('videos')}
-            />
-          )}
-        </AnimatePresence>
       </div>
     </MotionConfig>
   );

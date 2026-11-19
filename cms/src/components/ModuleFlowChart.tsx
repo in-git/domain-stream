@@ -282,6 +282,10 @@ export default function ModuleFlowChart({
                   event.stopPropagation();
                   node.onClick();
                 }}
+                onPointerDown={(event) => {
+                  // 阻止冒泡到画布，避免拖拽逻辑抢占指针导致点击失效
+                  if (node.onClick) event.stopPropagation();
+                }}
                 className={node.onClick ? 'cursor-pointer transition-opacity hover:opacity-85' : undefined}
               >
                 <rect

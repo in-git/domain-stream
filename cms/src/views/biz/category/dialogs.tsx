@@ -242,7 +242,8 @@ export function CategoryFormDialog({
   const [name, setName] = useState(item?.name || '');
   const [image, setImage] = useState(item?.image || '');
   const [parentId, setParentId] = useState(item?.parentId || '0');
-  const [module, setModule] = useState(item?.module || 'ARTICLE');
+  // 适用模块为必填项，新建时留空，强制用户显式选择
+  const [module, setModule] = useState(item?.module || '');
   const [status, setStatus] = useState(item?.status || 'ENABLE');
   const [sortCode, setSortCode] = useState(String(item?.sortCode ?? categories.length + 1));
   const [icon, setIcon] = useState(item?.icon || '');
@@ -273,6 +274,8 @@ export function CategoryFormDialog({
   }
 
   async function handleSubmit() {
+    const trimmedModule = module.trim();
+    if (!trimmedModule) return setError('请选择适用模块');
     const trimmedName = name.trim();
     if (!trimmedName) return setError('请填写分类名称');
     const parsedSort = Number(sortCode);
@@ -286,7 +289,7 @@ export function CategoryFormDialog({
       code: item?.code?.trim() || generateCategoryCode(),
       image: image.trim(),
       icon: icon.trim(),
-      module,
+      module: trimmedModule,
       description: description.trim(),
       status,
       sortCode: Math.trunc(parsedSort),
@@ -308,7 +311,7 @@ export function CategoryFormDialog({
   return (
     <CategoryModal
       title={isEdit ? '编辑分类' : '新增分类'}
-      subtitle="填写名称与图片即可，其余设置可展开「更多选项」调整"
+      subtitle="填写适用模块与名称即可，其余设置可展开「更多选项」调整"
       onClose={onClose}
       footer={
         <>
@@ -323,6 +326,23 @@ export function CategoryFormDialog({
     >
       <div className="space-y-4">
         {error && <InlineError>{error}</InlineError>}
+
+        <div>
+          <label className={LABEL_CLASS}>
+            适用模块 <span className="text-[#D70015]">*</span>
+          </label>
+          <SelectField
+            value={module}
+            onChange={setModule}
+            ariaLabel="适用模块"
+            className="w-full"
+            placeholder="请选择适用模块"
+            options={CATEGORY_MODULES.map((m) => ({ value: m.value, label: m.label }))}
+          />
+          <p className="mt-1 text-[11px] text-[#86868B]">
+            决定该分类会出现在哪个发布模块的分类下拉中
+          </p>
+        </div>
 
         <div>
           <label className={LABEL_CLASS} htmlFor="cat-name">
@@ -394,7 +414,7 @@ export function CategoryFormDialog({
               更多选项
             </span>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-normal text-[#86868B]">
-              父级 / 模块 / 状态等
+              父级 / 状态 / 排序等
               <ChevronDown
                 className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`}
               />
@@ -421,16 +441,6 @@ export function CategoryFormDialog({
                             : c.name || c.id,
                       })),
                     ]}
-                  />
-                </div>
-                <div>
-                  <label className={LABEL_CLASS}>适用模块</label>
-                  <SelectField
-                    value={module}
-                    onChange={setModule}
-                    ariaLabel="适用模块"
-                    className="w-full"
-                    options={CATEGORY_MODULES.map((m) => ({ value: m.value, label: m.label }))}
                   />
                 </div>
                 <div>

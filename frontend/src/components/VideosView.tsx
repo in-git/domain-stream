@@ -281,6 +281,16 @@ function FeedSlide({
     }
   }, [active, isMuted, playbackRate]);
 
+  // 进入迷你窗口时继续播放：静音状态下浏览器允许自动播放
+  useEffect(() => {
+    if (!mini || !active) return;
+    const player = playerRef.current;
+    if (!player) return;
+    if (isMuted) {
+      void player.play().catch(() => {});
+    }
+  }, [mini, active]);
+
   // video 切换时重置恢复标记
   useEffect(() => {
     restoredRef.current = false;
@@ -716,6 +726,33 @@ export function VideosView({
   const handleNext = () => swiperRef.current?.slideNext();
   const handlePrev = () => swiperRef.current?.slidePrev();
 
+  // 网格模式下沉浸式播放区虽然被隐藏，但 <video> 仍在运行，需要主动暂停避免后台出声
+  useEffect(() => {
+    if (viewMode !== 'grid') return;
+    const player = getActivePlayer();
+    if (player && !player.paused) player.pause();
+  }, [viewMode, currentVideo?.id]);
+
+  // 迷你窗口关闭后播放器被完全隐藏，需要主动暂停，避免后台继续出声
+  useEffect(() => {
+    if (mode !== 'hidden') return;
+    const player = getActivePlayer();
+    if (player && !player.paused) player.pause();
+  }, [mode, currentVideo?.id]);
+
+  // 迷你窗口内禁用滚轮/键盘滑动，避免劫持其他板块的滚动与快捷键
+  useEffect(() => {
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    if (isMini) {
+      swiper.mousewheel?.disable?.();
+      swiper.keyboard?.disable?.();
+    } else {
+      swiper.mousewheel?.enable?.();
+      swiper.keyboard?.enable?.();
+    }
+  }, [isMini, currentVideo?.id]);
+
   // Space toggles playback; arrow keys are handled by Swiper's keyboard module.
   useEffect(() => {
     if (viewMode !== 'feed' || !currentVideo) return;
@@ -732,8 +769,18 @@ export function VideosView({
   }, [viewMode, currentVideo?.id]);
 
   return (
-    <section aria-label="视频频道" className="space-y-4">
+    <section
+      aria-label="视频频道"
+      className={
+        isHidden
+          ? 'hidden'
+          : isMini
+            ? 'fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60] w-[min(92vw,360px)] h-[208px] rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
+            : 'space-y-4'
+      }
+    >
       {/* Compact Top Filter & View Mode Row */}
+      {!isMini && (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
           role="tablist"
@@ -815,9 +862,10 @@ export function VideosView({
           </Tooltip>
         </div>
       </div>
+      )}
 
       {/* Empty Search Result */}
-      {filteredVideos.length === 0 && (
+      {!isMini && filteredVideos.length === 0 && (
         <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] py-20 text-center space-y-2">
           <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
             没有找到匹配的视频
@@ -828,11 +876,27 @@ export function VideosView({
         </div>
       )}
 
-      {/* Mode 1: Douyin-style Immersive Seamless Feed */}
-      {viewMode === 'feed' && currentVideo && (
-        <div className="flex items-stretch gap-3 lg:gap-4">
+      {/* Mode 1: Douyin-style Immersive Seamless Feed
+          始终挂载（网格模式用 CSS 隐藏），切换板块时只改变容器形态，
+          <video> 元素不会被销毁重建，从而避免重新加载造成的卡顿 */}
+      {currentVideo && (
+        <div
+          className={
+            viewMode === 'grid' && !isMini
+              ? 'hidden'
+              : isMini
+                ? 'h-full w-full'
+                : 'flex items-stretch gap-3 lg:gap-4'
+          }
+        >
           {/* Full-bleed carousel stage: every slide fills the whole container */}
-          <div className="relative flex-1 min-w-0 h-[calc(100dvh-14.25rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-3xl overflow-hidden bg-[#0A0A0C] border border-black/[0.08] dark:border-white/[0.1] shadow-lg select-none">
+          <div
+            className={
+              isMini
+                ? 'relative w-full h-full overflow-hidden'
+                : 'relative flex-1 min-w-0 h-[calc(100dvh-14.25rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-3xl overflow-hidden bg-[#0A0A0C] border border-black/[0.08] dark:border-white/[0.1] shadow-lg select-none'
+            }
+          >
             <Swiper
               key={`${category}-${normalizedQuery}`}
               onSwiper={(instance) => {
@@ -876,6 +940,9 @@ export function VideosView({
                     onTimeUpdate={setCurrentTime}
                     onDurationChange={setDuration}
                     onSaveProgress={onSaveProgress ? (t) => onSaveProgress(video.id, t) : undefined}
+                    mini={isMini}
+                    onMiniClose={onMiniClose}
+                    onMiniExpand={onMiniExpand}
                   />
                 </SwiperSlide>
               ))}
@@ -883,7 +950,8 @@ export function VideosView({
           </div>
 
           {/* Douyin-style External Up/Down Video Switcher Column (Desktop & Tablet) */}
-          <div className="hidden sm:flex flex-col justify-center gap-3 shrink-0">
+          {!isMini && (
+            <div className="hidden sm:flex flex-col justify-center gap-3 shrink-0">
             <motion.button
               type="button"
               whileTap={{ scale: 0.9 }}
@@ -904,12 +972,13 @@ export function VideosView({
             >
               <ChevronDown className="w-5 h-5" />
             </motion.button>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Mode 2: Discovery Masonry */}
-      {viewMode === 'grid' && filteredVideos.length > 0 && (
+      {!isMini && viewMode === 'grid' && filteredVideos.length > 0 && (
         <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-5">
           {filteredVideos.map((video, idx) => (
             <VideoGridCard

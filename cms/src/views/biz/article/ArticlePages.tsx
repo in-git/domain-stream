@@ -8,6 +8,7 @@ import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/ca
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
 import { MediaImage } from '../../../components/MediaImage.tsx';
+import { CoverCropper } from '../../../components/CoverCropper.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 import {
@@ -102,6 +103,8 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   const [coverUploading, setCoverUploading] = useState(false);
+  // 选中的原始文件，等裁剪确认后再上传
+  const [coverDraft, setCoverDraft] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -128,11 +131,17 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const liveWordCount = useMemo(() => plainText(content).length, [content]);
   const liveReadMin = Math.max(1, Math.ceil(liveWordCount / 300));
 
-  async function handleCoverUpload(file: File) {
+  /** 选择原始图片 → 先进入 9:16 裁剪弹窗，确认后再上传 */
+  function handleCoverPick(file: File) {
     if (!file.type.startsWith('image/')) {
       setFormError('封面图片仅支持 JPG / PNG / WebP');
       return;
     }
+    setFormError('');
+    setCoverDraft(file);
+  }
+
+  async function handleCoverUpload(file: File) {
     setCoverUploading(true);
     setFormError('');
     const previousCoverUrl = coverUrl;
@@ -150,8 +159,12 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
         sessionUploadsRef.current.delete(previousCoverUrl);
         void deleteFilesByUrls([previousCoverUrl]);
       }
+      setCoverDraft(null);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '上传封面失败');
+      const message = err instanceof Error ? err.message : '上传封面失败';
+      setFormError(message);
+      // 抛回裁剪弹窗，让用户在弹窗内直接看到失败原因并重试
+      throw new Error(message);
     } finally {
       setCoverUploading(false);
     }
@@ -207,176 +220,189 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   }
 
   return (
-    <EditorWorkspace
-      title={item ? '编辑专栏文章' : '撰写新文章'}
-      subtitle={`当前 ${formatNumber(liveWordCount)} 字 · 预计阅读 ${liveReadMin} 分钟`}
-      onBack={onBack}
-      actions={
-        <>
-          <button
-            type="button"
-            onClick={onBack}
-            className="h-10 px-4 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[13px] font-medium text-[#1D1D1F]"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void handleSave()}
-            className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
-          >
-            {saving ? '正在保存...' : item ? '保存更新' : '发布文章'}
-          </button>
-        </>
-      }
-      info={
-        <div className="space-y-5">
-          <div>
-            <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#E5E5EA]">
-              <MediaImage
-                src={coverUrl}
-                alt="文章封面"
-                fallbackLabel="文章封面"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <input
-              ref={coverInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleCoverUpload(f);
-              }}
-            />
+    <>
+      <EditorWorkspace
+        title={item ? '编辑专栏文章' : '撰写新文章'}
+        subtitle={`当前 ${formatNumber(liveWordCount)} 字 · 预计阅读 ${liveReadMin} 分钟`}
+        onBack={onBack}
+        actions={
+          <>
             <button
               type="button"
-              disabled={coverUploading}
-              onClick={() => coverInputRef.current?.click()}
-              className="mt-2 w-full px-3 py-2 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center justify-center gap-1.5"
+              onClick={onBack}
+              className="h-10 px-4 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[13px] font-medium text-[#1D1D1F]"
             >
-              <ImagePlus className="w-3.5 h-3.5" />
-              <span>{coverUploading ? '正在上传...' : '上传文章封面'}</span>
+              取消
             </button>
-            <p className="text-[11px] text-[#86868B] mt-1.5">
-              建议 16:9 横版高清插图或摄影作品
-            </p>
-          </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void handleSave()}
+              className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
+            >
+              {saving ? '正在保存...' : item ? '保存更新' : '发布文章'}
+            </button>
+          </>
+        }
+        info={
+          <div className="space-y-5">
+            <div>
+              <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#E5E5EA]">
+                <MediaImage
+                  src={coverUrl}
+                  alt="文章封面"
+                  fallbackLabel="文章封面"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) handleCoverPick(f);
+                }}
+              />
+              <button
+                type="button"
+                disabled={coverUploading}
+                onClick={() => coverInputRef.current?.click()}
+                className="mt-2.5 w-full px-3 py-2 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                <ImagePlus className="w-3.5 h-3.5" />
+                <span>
+                  {coverUploading ? '正在上传...' : coverUrl ? '重新上传并裁剪' : '上传文章封面'}
+                </span>
+              </button>
+              <p className="text-[11px] text-[#86868B] mt-1.5">
+                选图后可拖动框选裁剪区域，再上传
+              </p>
+            </div>
 
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">文章标题</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="输入具有吸引力的文章标题"
-              className="w-full h-11 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[15px] font-medium"
-            />
-          </div>
+            <div>
+              <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">文章标题</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="输入具有吸引力的文章标题"
+                className="w-full h-11 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[15px] font-medium"
+              />
+            </div>
 
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-              文章分类 <span className="text-[#D70015]">*</span>
-            </label>
-            <SelectField
-              value={category}
-              onChange={setCategory}
-              isDisabled={categoryLoading || !!categoryError}
-              placeholder={
-                categoryLoading
-                  ? '正在加载分类...'
-                  : categoryError
-                    ? '分类加载失败'
-                    : '请选择分类'
-              }
-              ariaLabel="文章分类"
-              className="w-full"
-              options={categoryOptions.map((option) => ({
-                value: option.code,
-                label: option.label,
-              }))}
-            />
-            {categoryError && (
-              <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
+            <div>
+              <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+                文章分类 <span className="text-[#D70015]">*</span>
+              </label>
+              <SelectField
+                value={category}
+                onChange={setCategory}
+                isDisabled={categoryLoading || !!categoryError}
+                placeholder={
+                  categoryLoading
+                    ? '正在加载分类...'
+                    : categoryError
+                      ? '分类加载失败'
+                      : '请选择分类'
+                }
+                ariaLabel="文章分类"
+                className="w-full"
+                options={categoryOptions.map((option) => ({
+                  value: option.code,
+                  label: option.label,
+                }))}
+              />
+              {categoryError && (
+                <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
+              <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
+                <button
+                  type="button"
+                  onClick={() => setStatus('published')}
+                  className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
+                    status === 'published' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
+                  }`}
+                >
+                  立即发布
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatus('draft')}
+                  className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
+                    status === 'draft' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
+                  }`}
+                >
+                  存为草稿
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">导语摘要</label>
+              <textarea
+                rows={3}
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="一句话概括文章核心观点（留空将自动截取正文前段）"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px] resize-none"
+              />
+            </div>
+
+            {formError && (
+              <div className="rounded-xl bg-[#FF3B30]/8 px-3.5 py-2 text-[13px] text-[#D70015]">
+                {formError}
+              </div>
             )}
           </div>
-
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
-            <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
-              <button
-                type="button"
-                onClick={() => setStatus('published')}
-                className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
-                  status === 'published' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
-                }`}
-              >
-                立即发布
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatus('draft')}
-                className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
-                  status === 'draft' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
-                }`}
-              >
-                存为草稿
-              </button>
-            </div>
+        }
+        editor={
+          <div className="relative h-full min-h-0 rounded-xl overflow-hidden border border-[#E5E5EA] bg-white">
+            <Suspense
+              fallback={
+                <div className="absolute inset-0 flex items-center justify-center bg-[#F5F5F7] text-[13px] text-[#86868B]">
+                  正在加载富文本编辑器...
+                </div>
+              }
+            >
+              <AiRichEditor
+                value={content}
+                onChange={setContent}
+                className="article-ai-editor absolute inset-0"
+                style={{ height: '100%' }}
+              />
+            </Suspense>
           </div>
-
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">导语摘要</label>
-            <textarea
-              rows={3}
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="一句话概括文章核心观点（留空将自动截取正文前段）"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px] resize-none"
-            />
-          </div>
-
-          {formError && (
-            <div className="rounded-xl bg-[#FF3B30]/8 px-3.5 py-2 text-[13px] text-[#D70015]">
-              {formError}
-            </div>
-          )}
-        </div>
-      }
-      editor={
-        <div className="relative h-full min-h-0 rounded-xl overflow-hidden border border-[#E5E5EA] bg-white">
-          <Suspense
-            fallback={
-              <div className="absolute inset-0 flex items-center justify-center bg-[#F5F5F7] text-[13px] text-[#86868B]">
-                正在加载富文本编辑器...
-              </div>
-            }
-          >
-            <AiRichEditor
-              value={content}
-              onChange={setContent}
-              className="article-ai-editor absolute inset-0"
-              style={{ height: '100%' }}
-            />
-          </Suspense>
-        </div>
-      }
-      preview={(device) => (
-        <ArticlePreview
-          device={device}
-          title={title}
-          summary={summary}
-          content={content}
-          category={categoryLabel}
-          coverUrl={coverUrl}
-          status={status}
-          wordCount={liveWordCount}
-          readMin={liveReadMin}
+        }
+        preview={(device) => (
+          <ArticlePreview
+            device={device}
+            title={title}
+            summary={summary}
+            content={content}
+            category={categoryLabel}
+            coverUrl={coverUrl}
+            status={status}
+            wordCount={liveWordCount}
+            readMin={liveReadMin}
+          />
+        )}
         />
-      )}
-    />
+      <CoverCropper
+        file={coverDraft}
+        aspect={9 / 16}
+        outputWidth={900}
+        heading="裁剪文章封面"
+        onCancel={() => setCoverDraft(null)}
+        onComplete={handleCoverUpload}
+      />
+    </>
   );
 }
 

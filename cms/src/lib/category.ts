@@ -310,9 +310,9 @@ export interface PublishCategoryOption {
  * 优先使用门户只读接口 `/public/categories`（后端仅返回 ENABLE，免登录），
  * 接口不可用（如旧环境未部署）时回退到 CMS 分类管理分页接口 `/biz/category/page`。
  *
- * 注意：分类表单已把「适用模块」收进默认折叠的「更多选项」，新建分类默认
- * ARTICLE。若按 MODULE 硬过滤，视频 / 图文发布页会选不到任何分类。因此这里
- * 展示全部启用分类，MODULE 仅用于把本模块 / COMMON 分类排在前面，不做过滤。
+ * 注意：分类表单的「适用模块」是必填项，但历史数据仍可能为空或标错模块。
+ * 若按 MODULE 硬过滤，视频 / 图文发布页会选不到任何分类。因此这里展示全部
+ * 启用分类，MODULE 仅用于把本模块 / COMMON 分类排在前面，不做过滤。
  */
 export async function fetchPublishCategories(
   module: PublishCategoryModule
