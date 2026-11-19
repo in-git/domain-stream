@@ -2,17 +2,110 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Clock,
   Eye,
+  FileText,
+  Film,
+  Images,
   Monitor,
+  Plus,
   Smartphone,
   Users,
 } from 'lucide-react';
 import { api } from '../lib/api.ts';
 import { formatNumber, formatReadableDuration } from '../lib/format.ts';
+import { hasModulePerm } from '../lib/menu.ts';
+import type { ContentModule } from '../lib/router.ts';
 import type { DashboardPayload, ModuleKey, TrafficPoint } from '../types/cms.ts';
 
 interface DashboardViewProps {
   onNavigate: (module: ModuleKey) => void;
+  onQuickCreate: (module: ContentModule) => void;
+  permissions: string[];
   liveRefreshEnabled: boolean;
+}
+
+/** 大号创作入口：三张中性材质卡片直达新增视频 / 图文 / 文章 */
+function QuickCreateSection({
+  onSelect,
+  permissions,
+}: {
+  onSelect: (module: ContentModule) => void;
+  permissions: string[];
+}) {
+  const options = [
+    {
+      module: 'videos' as const,
+      icon: Film,
+      title: '新增视频',
+      description: '上传作品，自动识别时长与首帧封面',
+      accent: '#0071E3',
+      tint: 'rgba(0, 113, 227, 0.08)',
+    },
+    {
+      module: 'imagetexts' as const,
+      icon: Images,
+      title: '新增图文',
+      description: '多图排版，自由排序并指定首页封面',
+      accent: '#1D9E5F',
+      tint: 'rgba(29, 158, 95, 0.08)',
+    },
+    {
+      module: 'articles' as const,
+      icon: FileText,
+      title: '新增文章',
+      description: '沉浸式编辑器，实时预览与头图上传',
+      accent: '#5E5CE6',
+      tint: 'rgba(94, 92, 230, 0.08)',
+    },
+  ].filter((option) => hasModulePerm(option.module, 'Add', permissions));
+
+  if (options.length === 0) return null;
+
+  return (
+    <section aria-label="快速开始">
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">快速开始</h2>
+          <p className="mt-0.5 text-[13px] text-[#6E6E73]">选择内容类型，直接进入创作</p>
+        </div>
+        <span className="hidden sm:inline text-[12px] text-[#86868B]">点击卡片直接新建</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {options.map((option) => {
+          const Icon = option.icon;
+          return (
+            <button
+              key={option.module}
+              type="button"
+              onClick={() => onSelect(option.module)}
+              className="group relative flex min-h-[176px] flex-col justify-between rounded-[20px] border border-[#E5E5EA] bg-white p-6 text-left shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-[#D2D2D7] hover:shadow-[0_14px_32px_-16px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 focus-visible:ring-offset-2"
+            >
+              <div className="flex items-start justify-between">
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-[14px]"
+                  style={{ background: option.tint, color: option.accent }}
+                >
+                  <Icon className="h-6 w-6" strokeWidth={1.7} />
+                </span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E5E5EA] text-[#86868B] transition-colors duration-300 group-hover:border-[#D2D2D7] group-hover:text-[#1D1D1F]">
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                </span>
+              </div>
+
+              <div className="mt-8">
+                <div className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">
+                  {option.title}
+                </div>
+                <div className="mt-1.5 text-[12.5px] leading-relaxed text-[#6E6E73]">
+                  {option.description}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 type RangeKey = 'realtime' | 'week' | 'month';
@@ -31,7 +124,12 @@ function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
   return d;
 }
 
-export function DashboardView({ onNavigate, liveRefreshEnabled }: DashboardViewProps) {
+export function DashboardView({
+  onNavigate,
+  onQuickCreate,
+  permissions,
+  liveRefreshEnabled,
+}: DashboardViewProps) {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeKey>('realtime');
@@ -226,6 +324,7 @@ export function DashboardView({ onNavigate, liveRefreshEnabled }: DashboardViewP
   if (loading || !data) {
     return (
       <div className="space-y-6">
+        <QuickCreateSection onSelect={onQuickCreate} permissions={permissions} />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="h-[132px] bg-white rounded-[18px] border border-[#E5E5EA] animate-pulse" />
@@ -252,6 +351,8 @@ export function DashboardView({ onNavigate, liveRefreshEnabled }: DashboardViewP
 
   return (
     <div className="space-y-6">
+      <QuickCreateSection onSelect={onQuickCreate} permissions={permissions} />
+
       {/* KPI Strip: Real-time Visitor & Engagement Metrics */}
       <section aria-label="实时访客概览" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Card 1: Real-time Online Visitors */}

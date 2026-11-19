@@ -31,8 +31,11 @@ import vip.xiaonuo.biz.modular.category.mapper.BizCategoryMapper;
 import vip.xiaonuo.biz.modular.graphic.entity.BizGraphic;
 import vip.xiaonuo.biz.modular.graphic.mapper.BizGraphicMapper;
 import vip.xiaonuo.biz.modular.message.entity.BizMessage;
+import vip.xiaonuo.biz.modular.message.entity.BizMessageReply;
 import vip.xiaonuo.biz.modular.message.mapper.BizMessageMapper;
+import vip.xiaonuo.biz.modular.message.mapper.BizMessageReplyMapper;
 import vip.xiaonuo.biz.modular.message.param.BizMessageAddParam;
+import vip.xiaonuo.biz.modular.message.param.BizMessageReplyAddParam;
 import vip.xiaonuo.biz.modular.video.entity.BizVideo;
 import vip.xiaonuo.biz.modular.video.mapper.BizVideoMapper;
 import vip.xiaonuo.common.pojo.CommonResult;
@@ -42,7 +45,7 @@ import java.util.List;
 /**
  * 前台门户接口控制器
  *
- * 面向未登录访客，仅提供「已发布」内容的只读列表与留言提交。
+ * 面向未登录访客，提供「已发布」内容的只读列表、留言提交，以及访客之间的留言回复。
  * 所有接口已在 GlobalConfigure.NO_LOGIN_PATH_ARR 中放行，禁止在此暴露管理接口。
  *
  * @author wuwenlong
@@ -67,6 +70,9 @@ public class BizPortalController {
 
     @Resource
     private BizCategoryMapper bizCategoryMapper;
+
+    @Resource
+    private BizMessageReplyMapper bizMessageReplyMapper;
 
     /**
      * 全部分类列表（仅启用），前端按 MODULE 字段自行筛选
@@ -179,6 +185,58 @@ public class BizPortalController {
         bizMessage.setIp(getClientIp(request));
         bizMessage.setUserAgent(StrUtil.maxLength(request.getHeader("User-Agent"), 500));
         bizMessageMapper.insert(bizMessage);
+        return CommonResult.ok();
+    }
+
+    /**
+     * 全部留言回复列表（前台按 MESSAGE_ID 自行分组）
+     *
+     * @author wuwenlong
+     * @date  2026/11/19
+     */
+    @Operation(summary = "获取留言回复列表")
+    @GetMapping("/public/messageReplies")
+    public CommonResult<List<BizMessageReply>> messageReplies() {
+        LambdaQueryWrapper<BizMessageReply> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.orderByAsc(BizMessageReply::getCreateTime)
+                .orderByAsc(BizMessageReply::getId);
+        return CommonResult.data(bizMessageReplyMapper.selectList(queryWrapper));
+    }
+
+    /**
+     * 回复留言：任何登录访客都可以回复任意一条已通过的留言，也可以回复自己发布的留言。
+     * 不接受状态、审核等管理字段，回复写入独立的 BIZ_MESSAGE_REPLY 表并即时展示。
+     *
+     * @author wuwenlong
+     * @date  2026/11/19
+     */
+    @Operation(summary = "回复留言")
+    @PostMapping("/public/messageReplies")
+    public CommonResult<String> addReply(@RequestBody BizMessageReplyAddParam replyAddParam) {
+        if (replyAddParam == null || StrUtil.isBlank(replyAddParam.getMessageId())
+                || StrUtil.isBlank(replyAddParam.getNickname())
+                || StrUtil.isBlank(replyAddParam.getContent())) {
+            return CommonResult.error("留言ID、昵称和回复内容不能为空");
+        }
+        if (replyAddParam.getContent().length() > 500) {
+            return CommonResult.error("回复内容不能超过500字");
+        }
+        BizMessage target = bizMessageMapper.selectById(replyAddParam.getMessageId().trim());
+        if (target == null || !"APPROVED".equals(target.getStatus())) {
+            return CommonResult.error("该留言不存在或未通过审核");
+        }
+
+        String replyTo = replyAddParam.getReplyToNickname();
+        BizMessageReply reply = new BizMessageReply();
+        reply.setMessageId(replyAddParam.getMessageId().trim());
+        reply.setParentReplyId(StrUtil.isBlank(replyAddParam.getParentReplyId())
+                ? null : replyAddParam.getParentReplyId().trim());
+        reply.setReplyToNickname(StrUtil.isBlank(replyTo) ? null : StrUtil.maxLength(replyTo.trim(), 100));
+        reply.setNickname(StrUtil.maxLength(replyAddParam.getNickname().trim(), 100));
+        reply.setAvatar(replyAddParam.getAvatar());
+        reply.setEmail(replyAddParam.getEmail());
+        reply.setContent(replyAddParam.getContent().trim());
+        bizMessageReplyMapper.insert(reply);
         return CommonResult.ok();
     }
 

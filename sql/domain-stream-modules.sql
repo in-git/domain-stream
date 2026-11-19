@@ -222,6 +222,29 @@ CREATE TABLE `BIZ_MESSAGE`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '留言' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- Table structure for BIZ_MESSAGE_REPLY  留言回复（访客互评，含回复自己的留言）
+-- ----------------------------
+DROP TABLE IF EXISTS `BIZ_MESSAGE_REPLY`;
+CREATE TABLE `BIZ_MESSAGE_REPLY`  (
+  `ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '主键',
+  `MESSAGE_ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属留言ID',
+  `PARENT_REPLY_ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '被回复的回复ID（可空）',
+  `REPLY_TO_NICKNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '被回复者昵称',
+  `NICKNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复人昵称',
+  `AVATAR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复人头像',
+  `EMAIL` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复人邮箱',
+  `CONTENT` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复内容',
+  `DELETE_FLAG` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT 'NOT_DELETE' COMMENT '删除标志：NOT_DELETE正常/DELETED删除',
+  `CREATE_TIME` datetime NULL DEFAULT NULL COMMENT '创建时间',
+  `CREATE_USER` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '创建用户',
+  `UPDATE_TIME` datetime NULL DEFAULT NULL COMMENT '更新时间',
+  `UPDATE_USER` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '更新用户',
+  PRIMARY KEY (`ID`) USING BTREE,
+  INDEX `IDX_REPLY_MESSAGE_ID` (`MESSAGE_ID`) USING BTREE,
+  INDEX `IDX_REPLY_CREATE_TIME` (`CREATE_TIME`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '留言回复' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
 -- Records of BIZ_MESSAGE
 -- ----------------------------
 

@@ -75,6 +75,19 @@ export interface MessageItem {
   replyAt?: string;
 }
 
+/** 留言下的公开回复：任何登录访客都可发表，也可以回复自己发布的留言 */
+export interface MessageReply {
+  id: string;
+  messageId: string;
+  nickname: string;
+  avatar?: string;
+  email?: string;
+  content: string;
+  createdAt: string;
+  /** 被回复者昵称，用于展示「回复 @xxx」 */
+  replyToNickname?: string;
+}
+
 export const INITIAL_PROFILE: UserProfile = {
   name: '林屿',
   handle: '@linyu.atelier',

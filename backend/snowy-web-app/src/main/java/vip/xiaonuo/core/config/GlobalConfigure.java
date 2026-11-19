@@ -211,6 +211,7 @@ public class GlobalConfigure implements WebMvcConfigurer {
             "/public/articles",
             "/public/graphics",
             "/public/messages",
+            "/public/messageReplies",
             "/biz/portal/**",
     };
 

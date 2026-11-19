@@ -528,6 +528,8 @@ export default function App() {
           ) : route.module === 'dashboard' ? (
             <DashboardView
               onNavigate={goModule}
+              onQuickCreate={(module) => goContent(module, 'new')}
+              permissions={permissions}
               liveRefreshEnabled={user.liveRefresh}
             />
           ) : route.module === 'videos' ? (

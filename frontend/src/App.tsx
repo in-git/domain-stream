@@ -4,6 +4,7 @@ import {
   INITIAL_PROFILE,
   type ArticleItem,
   type MessageItem,
+  type MessageReply,
   type PhotoItem,
   type SectionId,
   type UserProfile,
@@ -16,7 +17,9 @@ import {
   graphicsToPhotos,
   messageFromPortal,
   portalApi,
+  replyFromPortal,
   videoFromPortal,
+  type ReplyDraft,
 } from './lib/api';
 import { SWIFTUI_SMOOTH } from './lib/motion';
 import { SplashScreen } from './components/SplashScreen';
@@ -98,6 +101,7 @@ export default function App() {
   const [likedIds, setLikedIds] = usePersistentState<string[]>('lumina:liked', []);
 
   const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [replies, setReplies] = useState<MessageReply[]>([]);
   const [videoCategories, setVideoCategories] = useState<string[]>([]);
   const [articleCategories, setArticleCategories] = useState<string[]>([]);
   const [graphicCategories, setGraphicCategories] = useState<string[]>([]);
@@ -116,8 +120,10 @@ export default function App() {
       portalApi.articles(),
       portalApi.graphics(),
       portalApi.messages(),
+      portalApi.messageReplies(),
     ]);
-    const [categoryResult, videoResult, articleResult, graphicResult, messageResult] = results;
+    const [categoryResult, videoResult, articleResult, graphicResult, messageResult, replyResult] =
+      results;
     const nextErrors: Partial<Record<ContentSection, string>> = {};
     const categories = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
     const names = categoryNameMap(categories);
@@ -172,6 +178,13 @@ export default function App() {
       setMessages(messageResult.value.map(messageFromPortal));
     } else {
       nextErrors.messages = messageResult.reason?.message || '留言服务暂不可用';
+    }
+    /* 回复是增量能力：后端尚未部署 / 接口报错时静默降级，
+       留言与站长回复仍可正常使用，只是暂时没有用户评论区 */
+    if (replyResult.status === 'fulfilled') {
+      setReplies(replyResult.value.map(replyFromPortal));
+    } else {
+      setReplies([]);
     }
 
     setErrors(nextErrors);
@@ -288,6 +301,27 @@ export default function App() {
       { ...message, createdAt: new Date().toISOString(), status: 'APPROVED' },
       ...prev,
     ]);
+  };
+
+  /** 提交回复：先乐观插到评论区，后端失败则回滚并向上抛错 */
+  const handleAddReply = async (draft: ReplyDraft) => {
+    const optimistic: MessageReply = {
+      id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      messageId: draft.messageId,
+      nickname: draft.nickname,
+      avatar: draft.avatar,
+      email: draft.email,
+      content: draft.content,
+      createdAt: new Date().toISOString(),
+      replyToNickname: draft.replyToNickname,
+    };
+    setReplies((prev) => [...prev, optimistic]);
+    try {
+      await portalApi.addReply(draft);
+    } catch (err) {
+      setReplies((prev) => prev.filter((item) => item.id !== optimistic.id));
+      throw err;
+    }
   };
 
   const handleSplashComplete = useCallback(() => {
@@ -482,6 +516,8 @@ export default function App() {
                       onRequireLogin={goLogin}
                       onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
                       onAddMessage={(message) => handleAddMessage(message)}
+                      replies={replies}
+                      onAddReply={handleAddReply}
                     />
                   )}
                 </motion.div>

@@ -5,7 +5,7 @@
  * 所有接口无需登录，对应后端 /public/** 白名单。
  * 这里同时负责把后端实体字段映射为前台视图模型。
  */
-import type { ArticleItem, PhotoItem, VideoItem, MessageItem } from '../data/content';
+import type { ArticleItem, PhotoItem, VideoItem, MessageItem, MessageReply } from '../data/content';
 import { isRichHtml, markdownToHtml, richTextToPlain } from './richtext';
 
 const API_BASE =
@@ -121,6 +121,20 @@ export interface PortalMessage {
   replyTime?: string;
   createTime?: string;
   likeCount?: number;
+}
+
+/** 后端 BIZ_MESSAGE_REPLY 实体（驼峰字段） */
+export interface PortalReply {
+  id: string;
+  messageId?: string;
+  parentReplyId?: string;
+  replyToNickname?: string;
+  nickname?: string;
+  avatar?: string;
+  email?: string;
+  content?: string;
+  createTime?: string;
+  createUser?: string;
 }
 
 /**
@@ -426,6 +440,19 @@ export function messageFromPortal(row: PortalMessage): MessageItem {
   };
 }
 
+export function replyFromPortal(row: PortalReply): MessageReply {
+  return {
+    id: String(row.id),
+    messageId: String(row.messageId || ''),
+    nickname: row.nickname || '匿名访客',
+    avatar: row.avatar,
+    email: row.email,
+    content: row.content || '',
+    createdAt: row.createTime || '',
+    replyToNickname: row.replyToNickname || undefined,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* 接口                                                                */
 /* ------------------------------------------------------------------ */
@@ -436,15 +463,32 @@ export interface MessageDraft {
   content: string;
 }
 
+/** 提交一条留言回复；parentReplyId / replyToNickname 用于「回复某条回复」 */
+export interface ReplyDraft {
+  messageId: string;
+  nickname: string;
+  email?: string;
+  avatar?: string;
+  content: string;
+  parentReplyId?: string;
+  replyToNickname?: string;
+}
+
 export const portalApi = {
   categories: () => request<PortalCategory[]>('/public/categories'),
   videos: () => request<PortalVideo[]>('/public/videos'),
   articles: () => request<PortalArticle[]>('/public/articles'),
   graphics: () => request<PortalGraphic[]>('/public/graphics'),
   messages: () => request<PortalMessage[]>('/public/messages'),
+  messageReplies: () => request<PortalReply[]>('/public/messageReplies'),
   addMessage: (draft: MessageDraft) =>
     request<string>('/public/messages', {
       method: 'POST',
       body: JSON.stringify({ ...draft, status: 'APPROVED' }),
+    }),
+  addReply: (draft: ReplyDraft) =>
+    request<string>('/public/messageReplies', {
+      method: 'POST',
+      body: JSON.stringify(draft),
     }),
 };
