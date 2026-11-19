@@ -74,7 +74,6 @@ export interface ImageTextItem {
   title: string;
   body: string;
   category: string;
-  location: string;
   images: string[];
   views: number;
   likes: number;

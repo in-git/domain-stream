@@ -11,9 +11,9 @@ import {
   formatNumber,
 } from '../../../lib/format.ts';
 import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
+import { CategorySelect } from '../../../components/CategorySelect.tsx';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
-import { SelectField } from '../../../components/SelectField.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
@@ -108,20 +108,48 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   const [videoUrl, setVideoUrl] = useState(item?.videoUrl ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
+  // 选中的视频/封面文件先暂存在本地，点击保存时才上传
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState(item?.videoUrl ?? '');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState(item?.coverUrl ?? '');
+  const [videoFileName, setVideoFileName] = useState('');
   const [durationSec, setDurationSec] = useState(item?.durationSec ?? 120);
   const [resolution, setResolution] = useState(item?.resolution ?? '1920×1080');
   const [fileSizeBytes, setFileSizeBytes] = useState(item?.fileSizeBytes ?? 0);
+  // 只有保存阶段才会真正上传，这里显示上传进度
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverProcessing, setCoverProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [formError, setFormError] = useState('');
 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
-  // 本次编辑会话中新上传但尚未保存的文件，被再次替换时可直接清理
-  const sessionUploadsRef = useRef<Set<string>>(new Set());
+  // 记录尚未上传的本地预览地址，离开页面时统一释放
+  const localPreviewUrlsRef = useRef<Set<string>>(new Set());
+
+  useEffect(
+    () => () => {
+      localPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localPreviewUrlsRef.current.clear();
+    },
+    []
+  );
+
+  /** 生成本地预览地址并登记，便于替换/卸载时释放 */
+  function trackLocalPreview(file: File): string {
+    const url = URL.createObjectURL(file);
+    localPreviewUrlsRef.current.add(url);
+    return url;
+  }
+
+  function releaseLocalPreview(url: string) {
+    if (!url || !localPreviewUrlsRef.current.has(url)) return;
+    localPreviewUrlsRef.current.delete(url);
+    URL.revokeObjectURL(url);
+  }
 
   const {
     options: categoryOptions,
@@ -194,15 +222,11 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     });
   }
 
-  /**
-   * 同一编辑会话内被再次替换的文件可以立即清理：
-   * 它只存在于前端内存，从未被保存到业务数据，删除不会影响已发布内容。
-   */
-  async function dropReplacedUpload(previousUrl: string | undefined, nextUrl: string) {
-    if (!previousUrl || previousUrl === nextUrl) return;
-    if (!sessionUploadsRef.current.has(previousUrl)) return;
-    sessionUploadsRef.current.delete(previousUrl);
-    await deleteFilesByUrls([previousUrl]);
+  /** 封面同样只在本地暂存，保存时才上传 */
+  function applyCoverFile(file: File) {
+    releaseLocalPreview(coverPreviewUrl);
+    setCoverFile(file);
+    setCoverPreviewUrl(trackLocalPreview(file));
   }
 
   async function handleVideoFile(file: File) {
@@ -219,34 +243,29 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setTitle(file.name.replace(/\.[^/.]+$/, ''));
     }
 
-    const previousVideoUrl = videoUrl;
-    setUploadProgress(5);
-    try {
-      const metaPromise = extractVideoMetadataAndFrame(file);
-      const uploaded = await uploadFileWithProgress(file, (pct) => {
-        setUploadProgress(pct);
-      });
-      setVideoUrl(uploaded.url);
-      sessionUploadsRef.current.add(uploaded.url);
-      await dropReplacedUpload(previousVideoUrl, uploaded.url);
-      setFileSizeBytes(uploaded.size);
-      // 视频上传成功后自动打开预览窗口
-      setPreviewOpen(true);
+    // 只做本地暂存与本地解析，不上传
+    releaseLocalPreview(videoPreviewUrl);
+    setVideoFile(file);
+    setVideoPreviewUrl(trackLocalPreview(file));
+    setVideoFileName(file.name);
+    setFileSizeBytes(file.size);
+    // 新选择的视频会替换旧的远端地址，避免保存时误用历史文件
+    setVideoUrl('');
+    // 选择本地视频后自动打开预览窗口
+    setPreviewOpen(true);
 
-      const meta = await metaPromise;
+    try {
+      const meta = await extractVideoMetadataAndFrame(file);
       setDurationSec(meta.duration || 60);
       setResolution(meta.resolution);
 
-      if (!coverUrl && meta.coverBlob) {
+      // 自动截取的首帧同样先本地暂存为封面，已有封面时不覆盖
+      if (!coverFile && meta.coverBlob) {
         const thumbFile = new File([meta.coverBlob], 'auto-cover.jpg', { type: 'image/jpeg' });
-        const webpCover = await convertToWebp(thumbFile);
-        const uploadedCover = await uploadFileWithProgress(webpCover);
-        setCoverUrl(uploadedCover.url);
-        sessionUploadsRef.current.add(uploadedCover.url);
+        applyCoverFile(await convertToWebp(thumbFile));
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '视频上传失败');
-      setUploadProgress(null);
+      setFormError(err instanceof Error ? err.message : '视频信息读取失败');
     }
   }
 
@@ -255,19 +274,14 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setFormError('封面仅支持 JPG / PNG / WebP 图片');
       return;
     }
-    setCoverUploading(true);
+    setCoverProcessing(true);
     setFormError('');
-    const previousCoverUrl = coverUrl;
     try {
-      const webpFile = await convertToWebp(file);
-      const uploaded = await uploadFileWithProgress(webpFile);
-      setCoverUrl(uploaded.url);
-      sessionUploadsRef.current.add(uploaded.url);
-      await dropReplacedUpload(previousCoverUrl, uploaded.url);
+      applyCoverFile(await convertToWebp(file));
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '封面上传失败');
+      setFormError(err instanceof Error ? err.message : '封面处理失败');
     } finally {
-      setCoverUploading(false);
+      setCoverProcessing(false);
     }
   }
 
@@ -287,11 +301,11 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setFormError('请填写视频简介');
       return;
     }
-    if (!videoUrl) {
-      setFormError('请上传视频文件');
+    if (!videoFile && !videoUrl) {
+      setFormError('请选择视频文件');
       return;
     }
-    if (!coverUrl) {
+    if (!coverFile && !coverUrl) {
       setFormError('请上传或选择视频封面');
       return;
     }
@@ -302,22 +316,55 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     }
     setSaving(true);
     setFormError('');
+    setUploadProgress(videoFile ? 0 : null);
+    const hasVideoUpload = !!videoFile;
+    let finalVideoUrl = videoUrl;
+    let finalCoverUrl = coverUrl;
+    let finalSize = fileSizeBytes;
     try {
+      // 点击保存时才真正上传：视频占前 90%，封面占后 10%（只有封面时占满）
+      if (videoFile) {
+        const uploaded = await uploadFileWithProgress(videoFile, (pct) =>
+          setUploadProgress(Math.round(pct * 0.9))
+        );
+        finalVideoUrl = uploaded.url;
+        finalSize = uploaded.size;
+        setVideoUrl(uploaded.url);
+        setFileSizeBytes(uploaded.size);
+        // 已上传成功则不再保留本地文件，保存失败重试时不会重复上传
+        setVideoFile(null);
+        releaseLocalPreview(videoPreviewUrl);
+        setVideoPreviewUrl(uploaded.url);
+      }
+      if (coverFile) {
+        const uploadedCover = await uploadFileWithProgress(coverFile, (pct) =>
+          setUploadProgress(hasVideoUpload ? 90 + Math.round(pct * 0.1) : pct)
+        );
+        finalCoverUrl = uploadedCover.url;
+        setCoverUrl(uploadedCover.url);
+        setCoverFile(null);
+        releaseLocalPreview(coverPreviewUrl);
+        setCoverPreviewUrl(uploadedCover.url);
+      }
+      setUploadProgress(100);
+
       const payload: Partial<VideoItem> = {
         title: title.trim(),
         description: description.trim(),
         category: finalCategory,
         status,
-        videoUrl,
-        coverUrl,
+        videoUrl: finalVideoUrl,
+        coverUrl: finalCoverUrl,
         durationSec,
         resolution,
-        fileSizeBytes,
+        fileSizeBytes: finalSize,
       };
       if (item) {
         await api.updateVideo(item.id, payload);
         // 保存成功后彻底删除被替换掉的历史视频/封面，避免留下孤儿文件
-        void deleteFilesByUrls(removedUrls([item.videoUrl, item.coverUrl], [videoUrl, coverUrl]));
+        void deleteFilesByUrls(
+          removedUrls([item.videoUrl, item.coverUrl], [finalVideoUrl, finalCoverUrl])
+        );
       } else {
         await api.createVideo(payload);
       }
@@ -327,13 +374,14 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setFormError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
+      setUploadProgress(null);
     }
   }
 
   return (
     <EditorWorkspace
       title={item ? '编辑视频信息' : '上传新视频'}
-      subtitle="支持拖拽视频直传，系统自动读取时长、分辨率并截取视频封面"
+      subtitle="支持拖拽选择视频，系统本地读取时长、分辨率并截取封面，点击保存后才上传"
       onBack={onBack}
       previewOpen={previewOpen}
       onPreviewOpenChange={setPreviewOpen}
@@ -352,7 +400,13 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
             onClick={() => void handleSave()}
             className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
           >
-            {saving ? '正在保存...' : item ? '保存更改' : '确认发布'}
+            {saving
+              ? uploadProgress !== null
+                ? `正在上传 ${uploadProgress}%`
+                : '正在保存...'
+              : item
+                ? '保存更改'
+                : '确认发布'}
           </button>
         </>
       }
@@ -384,7 +438,11 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           />
           <UploadCloud className="w-8 h-8 text-[#0071E3] mx-auto mb-2" strokeWidth={1.6} />
           <div className="text-[14px] font-medium text-[#1D1D1F]">
-            {videoUrl ? '已选择视频文件，点击或拖拽可替换' : '点击选择或拖拽视频文件至此'}
+            {videoFile
+              ? '已选择本地视频，点击保存后才会上传'
+              : videoUrl
+                ? '已选择视频文件，点击或拖拽可替换'
+                : '点击选择或拖拽视频文件至此'}
           </div>
           <div className="text-[12px] text-[#86868B] mt-1">
             支持 MP4、MOV、WebM · 最大 1 GB <span className="text-[#D70015]">*</span>
@@ -394,7 +452,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
             <div className="mt-4 max-w-[340px] mx-auto">
               <div className="flex items-center justify-between text-[12px] mb-1">
                 <span className="text-[#1D1D1F] font-medium">
-                  {uploadProgress === 100 ? '视频上传完成' : '正在上传视频...'}
+                  {uploadProgress === 100 ? '上传完成' : '正在上传文件...'}
                 </span>
                 <span className="font-mono tabular-nums text-[#0071E3]">{uploadProgress}%</span>
               </div>
@@ -407,10 +465,15 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
             </div>
           )}
 
-          {videoUrl && uploadProgress === null && (
+          {uploadProgress === null && (videoFile || videoUrl) && (
             <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#16A34A]">
               <CheckCircle2 className="w-4 h-4" />
-              <span>媒体文件已就绪 · {formatDuration(durationSec)} · {resolution}</span>
+              <span>
+                {videoFile ? '待上传' : '媒体文件已就绪'}
+                {videoFileName ? ` · ${videoFileName}` : ''}
+                {videoFile ? ` · ${formatFileSize(fileSizeBytes)}` : ''} ·{' '}
+                {formatDuration(durationSec)} · {resolution}
+              </span>
             </div>
           )}
         </div>
@@ -418,7 +481,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3.5 rounded-2xl bg-[#F5F5F7]">
           <div className="w-36 aspect-video rounded-xl overflow-hidden bg-[#E5E5EA] shrink-0">
             <MediaImage
-              src={coverUrl}
+              src={coverPreviewUrl}
               alt="视频封面预览"
               fallbackLabel="自动生成封面"
               className="w-full h-full object-cover"
@@ -429,7 +492,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
               视频封面图 <span className="text-[#D70015]">*</span>
             </div>
             <p className="text-[12px] text-[#6E6E73] mt-0.5">
-              上传视频后会自动截取精彩帧作为封面，也可手动上传高清海报图。
+              选择视频后会自动截取首帧作为封面，也可手动选择海报图，保存时才上传。
             </p>
             <input
               ref={coverInputRef}
@@ -443,11 +506,11 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
             />
             <button
               type="button"
-              disabled={coverUploading}
+              disabled={coverProcessing}
               onClick={() => coverInputRef.current?.click()}
-              className="mt-2 px-3 py-1.5 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA]"
+              className="mt-2 px-3 py-1.5 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] disabled:opacity-60"
             >
-              {coverUploading ? '正在上传封面...' : '更换封面图片'}
+              {coverProcessing ? '正在处理封面...' : '更换封面图片'}
             </button>
           </div>
         </div>
@@ -466,32 +529,15 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-              所属分类 <span className="text-[#D70015]">*</span>
-            </label>
-            <SelectField
-              value={category}
-              onChange={setCategory}
-              isDisabled={categoryLoading || !!categoryError}
-              placeholder={
-                categoryLoading
-                  ? '正在加载分类...'
-                  : categoryError
-                    ? '分类加载失败'
-                    : '请选择分类'
-              }
-              ariaLabel="所属分类"
-              className="w-full"
-              options={categoryOptions.map((option) => ({
-                value: option.code,
-                label: option.label,
-              }))}
-            />
-            {categoryError && (
-              <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
-            )}
-          </div>
+          <CategorySelect
+            module="VIDEO"
+            value={category}
+            onChange={setCategory}
+            label="所属分类"
+            required
+            ariaLabel="所属分类"
+            className="w-full"
+          />
           <div>
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
             <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
@@ -544,8 +590,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           description={description}
           category={categoryLabel}
           status={status}
-          coverUrl={coverUrl}
-          videoUrl={videoUrl}
+          coverUrl={coverPreviewUrl}
+          videoUrl={videoPreviewUrl}
           durationSec={durationSec}
           resolution={resolution}
         />

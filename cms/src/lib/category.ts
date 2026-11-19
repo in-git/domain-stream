@@ -293,6 +293,8 @@ export async function listAllCategories(): Promise<BizCategory[]> {
 export type PublishCategoryModule = 'ARTICLE' | 'VIDEO' | 'GRAPHIC' | 'COMMON';
 
 export interface PublishCategoryOption {
+  /** 后端分类主键，用于重建父子层级 */
+  id: string;
   /** 提交给业务接口的分类编码，对应 BIZ_CATEGORY.CODE */
   code: string;
   /** 纯分类名称，用于预览/列表展示 */
@@ -311,8 +313,8 @@ export interface PublishCategoryOption {
  * 接口不可用（如旧环境未部署）时回退到 CMS 分类管理分页接口 `/biz/category/page`。
  *
  * 注意：分类表单的「适用模块」是必填项，但历史数据仍可能为空或标错模块。
- * 若按 MODULE 硬过滤，视频 / 图文发布页会选不到任何分类。因此这里展示全部
- * 启用分类，MODULE 仅用于把本模块 / COMMON 分类排在前面，不做过滤。
+ * 这里先返回全部启用分类（按本模块 / COMMON 优先排序），由
+ * filterPublishCategories 在调用侧按需过滤，避免旧数据直接消失。
  */
 export async function fetchPublishCategories(
   module: PublishCategoryModule
@@ -370,6 +372,7 @@ export async function fetchPublishCategories(
     if (seen.has(item.id)) return;
     seen.add(item.id);
     result.push({
+      id: item.id,
       code: item.code,
       name: item.name || item.code,
       label: depth > 0 ? `${'　'.repeat(depth - 1)}└ ${item.name || item.code}` : item.name || item.code,
@@ -389,6 +392,40 @@ export async function fetchPublishCategories(
   usable.forEach((item) => append(item, 0));
 
   return result;
+}
+
+/**
+ * 按适用模块筛选分类（纯前端筛选，后端一次性返回全部分类）：
+ * 只保留目标模块与「通用」（COMMON）分类。
+ * 父级被筛掉时，子分类按顶级展示并重算缩进，避免出现悬空层级。
+ */
+export function filterPublishCategories(
+  options: PublishCategoryOption[],
+  module: PublishCategoryModule,
+  includeCommon = true
+): PublishCategoryOption[] {
+  const matched = options.filter((option) => {
+    const current = (option.module || '').toUpperCase();
+    return current === module || (includeCommon && current === 'COMMON');
+  });
+  if (!matched.length) return matched;
+
+  const byId = new Map(matched.map((option) => [option.id, option]));
+  return matched.map((option) => {
+    let depth = 0;
+    let cursor = option.parentId && option.parentId !== '0' ? option.parentId : '';
+    const seen = new Set<string>();
+    while (cursor && byId.has(cursor) && !seen.has(cursor)) {
+      seen.add(cursor);
+      depth += 1;
+      const parent = byId.get(cursor);
+      cursor = parent?.parentId && parent.parentId !== '0' ? parent.parentId : '';
+    }
+    return {
+      ...option,
+      label: depth > 0 ? `${'　'.repeat(depth - 1)}└ ${option.name}` : option.name,
+    };
+  });
 }
 
 /** 兼容历史数据：优先按编码匹配，其次按分类名称匹配 */

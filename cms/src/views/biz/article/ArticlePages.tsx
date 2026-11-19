@@ -1,16 +1,17 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { api, uploadFileWithProgress } from '../../../lib/api.ts';
 import { deleteFilesByUrls, imageUrlsInHtml, removedUrls } from '../../../lib/fileCenter.ts';
+import { createBlobUploadQueue, type BlobUploadQueue } from '../../../lib/pendingUpload.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import { plainText, renderRichContent } from '../../../lib/richtext.tsx';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
 import { MediaImage } from '../../../components/MediaImage.tsx';
+import { CategorySelect } from '../../../components/CategorySelect.tsx';
 import { CoverCropper } from '../../../components/CoverCropper.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
-import { SelectField } from '../../../components/SelectField.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
@@ -101,16 +102,30 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [content, setContent] = useState(item?.content ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
+  // 封面裁剪结果先暂存在本地，点击保存时才上传
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState(item?.coverUrl ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
-  const [coverUploading, setCoverUploading] = useState(false);
-  // 选中的原始文件，等裁剪确认后再上传
+  // 选中的原始文件，等裁剪确认后再本地暂存
   const [coverDraft, setCoverDraft] = useState<File | null>(null);
+  const [saveProgress, setSaveProgress] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
   const coverInputRef = useRef<HTMLInputElement>(null);
-  // 本次编辑会话中新上传但尚未保存的文件，被再次替换时可直接清理
-  const sessionUploadsRef = useRef<Set<string>>(new Set());
+  const coverPreviewRef = useRef('');
+  // 正文图片延迟上传队列：编辑时用 blob 预览，保存时统一上传并替换地址
+  const bodyQueueRef = useRef<BlobUploadQueue | null>(null);
+  if (!bodyQueueRef.current) bodyQueueRef.current = createBlobUploadQueue();
+
+  // 离开页面时释放本地封面与正文图片的预览地址
+  useEffect(
+    () => () => {
+      if (coverPreviewRef.current) URL.revokeObjectURL(coverPreviewRef.current);
+      bodyQueueRef.current?.reset();
+    },
+    []
+  );
 
   const {
     options: categoryOptions,
@@ -131,7 +146,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const liveWordCount = useMemo(() => plainText(content).length, [content]);
   const liveReadMin = Math.max(1, Math.ceil(liveWordCount / 300));
 
-  /** 选择原始图片 → 先进入 9:16 裁剪弹窗，确认后再上传 */
+  /** 选择原始图片 → 先进入 16:9 裁剪弹窗，确认后只在本地暂存 */
   function handleCoverPick(file: File) {
     if (!file.type.startsWith('image/')) {
       setFormError('封面图片仅支持 JPG / PNG / WebP');
@@ -141,33 +156,18 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
     setCoverDraft(file);
   }
 
-  async function handleCoverUpload(file: File) {
-    setCoverUploading(true);
+  /** 裁剪完成后暂存到本地，点击保存时才上传 */
+  function handleCoverUpload(cropped: File) {
     setFormError('');
-    const previousCoverUrl = coverUrl;
-    try {
-      const webpFile = await convertToWebp(file);
-      const uploaded = await uploadFileWithProgress(webpFile);
-      setCoverUrl(uploaded.url);
-      sessionUploadsRef.current.add(uploaded.url);
-      // 同一会话内被再次替换的临时封面（尚未保存）可直接清理
-      if (
-        previousCoverUrl &&
-        previousCoverUrl !== uploaded.url &&
-        sessionUploadsRef.current.has(previousCoverUrl)
-      ) {
-        sessionUploadsRef.current.delete(previousCoverUrl);
-        void deleteFilesByUrls([previousCoverUrl]);
-      }
-      setCoverDraft(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '上传封面失败';
-      setFormError(message);
-      // 抛回裁剪弹窗，让用户在弹窗内直接看到失败原因并重试
-      throw new Error(message);
-    } finally {
-      setCoverUploading(false);
+    if (coverPreviewRef.current) {
+      URL.revokeObjectURL(coverPreviewRef.current);
+      coverPreviewRef.current = '';
     }
+    const previewUrl = URL.createObjectURL(cropped);
+    coverPreviewRef.current = previewUrl;
+    setCoverFile(cropped);
+    setCoverPreviewUrl(previewUrl);
+    setCoverDraft(null);
   }
 
   async function handleSave() {
@@ -187,13 +187,30 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
     }
     setSaving(true);
     setFormError('');
+    // 队列在组件挂载时即创建，这里断言非空便于后续使用
+    const bodyQueue = bodyQueueRef.current!;
+    setSaveProgress(coverFile || bodyQueue.size() ? 0 : null);
     try {
+      // 保存时才上传：先封面，再正文里暂存的图片
+      let uploadedCoverUrl = '';
+      if (coverFile) {
+        const uploaded = await uploadFileWithProgress(coverFile, (pct) => setSaveProgress(pct));
+        uploadedCoverUrl = uploaded.url;
+        setCoverUrl(uploaded.url);
+        // 已上传成功则置空，保存失败重试时不会再重复上传
+        setCoverFile(null);
+      }
       const finalCoverUrl =
-        coverUrl || '/src/assets/images/article_cover_typography_1795026087411.jpg';
+        uploadedCoverUrl ||
+        coverUrl ||
+        '/src/assets/images/article_cover_typography_1795026087411.jpg';
+      const finalContent = await bodyQueue.flush(content, (pct) => setSaveProgress(pct));
+      if (finalContent !== content) setContent(finalContent);
+
       const payload: Partial<ArticleItem> = {
         title: title.trim(),
         summary: summary.trim() || plain.slice(0, 80),
-        content: content.trim(),
+        content: finalContent.trim(),
         category: finalCategory,
         coverUrl: finalCoverUrl,
         status,
@@ -204,7 +221,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
         void deleteFilesByUrls(
           removedUrls(
             [item.coverUrl, ...imageUrlsInHtml(item.content)],
-            [finalCoverUrl, ...imageUrlsInHtml(content)]
+            [finalCoverUrl, ...imageUrlsInHtml(finalContent)]
           )
         );
       } else {
@@ -216,6 +233,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
       setFormError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
+      setSaveProgress(null);
     }
   }
 
@@ -240,7 +258,13 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
               onClick={() => void handleSave()}
               className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
             >
-              {saving ? '正在保存...' : item ? '保存更新' : '发布文章'}
+              {saving
+                ? saveProgress !== null
+                  ? `正在上传 ${saveProgress}%`
+                  : '正在保存...'
+                : item
+                  ? '保存更新'
+                  : '发布文章'}
             </button>
           </>
         }
@@ -249,7 +273,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
             <div>
               <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#E5E5EA]">
                 <MediaImage
-                  src={coverUrl}
+                  src={coverPreviewUrl}
                   alt="文章封面"
                   fallbackLabel="文章封面"
                   className="w-full h-full object-cover"
@@ -268,17 +292,16 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
               />
               <button
                 type="button"
-                disabled={coverUploading}
                 onClick={() => coverInputRef.current?.click()}
-                className="mt-2.5 w-full px-3 py-2 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+                className="mt-2.5 w-full px-3 py-2 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center justify-center gap-1.5"
               >
                 <ImagePlus className="w-3.5 h-3.5" />
                 <span>
-                  {coverUploading ? '正在上传...' : coverUrl ? '重新上传并裁剪' : '上传文章封面'}
+                  {coverPreviewUrl ? '重新选择并裁剪' : '选择文章封面'}
                 </span>
               </button>
               <p className="text-[11px] text-[#86868B] mt-1.5">
-                选图后可拖动框选裁剪区域，再上传
+                选图后可拖动框选裁剪区域，保存文章时才会上传
               </p>
             </div>
 
@@ -293,32 +316,15 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
               />
             </div>
 
-            <div>
-              <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-                文章分类 <span className="text-[#D70015]">*</span>
-              </label>
-              <SelectField
-                value={category}
-                onChange={setCategory}
-                isDisabled={categoryLoading || !!categoryError}
-                placeholder={
-                  categoryLoading
-                    ? '正在加载分类...'
-                    : categoryError
-                      ? '分类加载失败'
-                      : '请选择分类'
-                }
-                ariaLabel="文章分类"
-                className="w-full"
-                options={categoryOptions.map((option) => ({
-                  value: option.code,
-                  label: option.label,
-                }))}
-              />
-              {categoryError && (
-                <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
-              )}
-            </div>
+            <CategorySelect
+              module="ARTICLE"
+              value={category}
+              onChange={setCategory}
+              label="文章分类"
+              required
+              ariaLabel="文章分类"
+              className="w-full"
+            />
 
             <div>
               <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
@@ -376,6 +382,12 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
                 onChange={setContent}
                 className="article-ai-editor absolute inset-0"
                 style={{ height: '100%' }}
+                // 正文图片先插入本地 blob 地址，保存文章时统一上传并替换
+                uploadImage={(file) =>
+                  Promise.resolve(
+                    bodyQueueRef.current?.register(file) ?? URL.createObjectURL(file)
+                  )
+                }
               />
             </Suspense>
           </div>
@@ -387,7 +399,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
             summary={summary}
             content={content}
             category={categoryLabel}
-            coverUrl={coverUrl}
+            coverUrl={coverPreviewUrl}
             status={status}
             wordCount={liveWordCount}
             readMin={liveReadMin}
@@ -396,8 +408,8 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
         />
       <CoverCropper
         file={coverDraft}
-        aspect={9 / 16}
-        outputWidth={900}
+        aspect={16 / 9}
+        outputWidth={1440}
         heading="裁剪文章封面"
         onCancel={() => setCoverDraft(null)}
         onComplete={handleCoverUpload}

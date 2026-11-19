@@ -696,7 +696,6 @@ function graphicFromSnowy(g: SnowyGraphic): ImageTextItem {
     title: g.title || '',
     body: g.content || g.summary || '',
     category: g.category || '',
-    location: '',
     images: parseImages(g.images),
     views: g.viewCount || 0,
     likes: g.likeCount || 0,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 
 interface MediaImageProps {
@@ -10,6 +10,9 @@ interface MediaImageProps {
 
 export function MediaImage({ src, alt, className = '', fallbackLabel }: MediaImageProps) {
   const [failed, setFailed] = useState(false);
+
+  // 切换图片（如封面替换、本地预览地址变更）后重置失败状态
+  useEffect(() => setFailed(false), [src]);
 
   if (!src || failed) {
     return (

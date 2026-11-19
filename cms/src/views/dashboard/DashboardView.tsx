@@ -30,9 +30,9 @@ function ModuleFlowPanel({
     !permissions.some((code) => code.startsWith(prefix)) || can(module);
 
   const contents = [
-    { id: 'videos' as const, label: '视频', color: '#0071E3', x: 20 },
-    { id: 'imagetexts' as const, label: '图文', color: '#1D9E5F', x: 185 },
-    { id: 'articles' as const, label: '文章', color: '#5E5CE6', x: 350 },
+    { id: 'videos' as const, label: '视频', color: '#0071E3' },
+    { id: 'imagetexts' as const, label: '图文', color: '#1D9E5F' },
+    { id: 'articles' as const, label: '文章', color: '#5E5CE6' },
   ].filter((item) => can(item.id));
   const showCategory = can('category');
   const showFiles = canLoose('files', 'bizFile');
@@ -43,15 +43,22 @@ function ModuleFlowPanel({
   const nodes: FlowChartNode[] = [];
   const edges: FlowChartEdge[] = [];
 
-  // 输入层：通用分类（视频/图文/文章共用）与素材中心（用户主动上传、供内容备用）
+  // 横向三列布局：基础数据（左） → 内容（中） → 产出与互动（右）
+  const COL_W = 164;
+  const COL_GAP = 52;
+  const COL_Y = 10;
+  const COL_H = 248;
+  const colX = (index: number) => 8 + index * (COL_W + COL_GAP);
+
+  // 左列：通用分类（视频/图文/文章共用）与素材中心（用户主动上传、供内容备用）
   const inputNodes: FlowChartNode[] = [];
   if (showCategory) {
     inputNodes.push({
       id: 'category',
       label: '通用分类',
-      x: 40,
-      y: 20,
-      width: 190,
+      x: colX(0) + 10,
+      y: 46,
+      width: COL_W - 20,
       height: 56,
       color: '#0071E3',
       primary: true,
@@ -63,9 +70,9 @@ function ModuleFlowPanel({
     inputNodes.push({
       id: 'materials',
       label: '素材中心',
-      x: 290,
-      y: 20,
-      width: 190,
+      x: colX(0) + 10,
+      y: 150,
+      width: COL_W - 20,
       height: 56,
       color: '#1D9E5F',
       icon: '素',
@@ -73,26 +80,26 @@ function ModuleFlowPanel({
     });
   }
 
-  // 内容层：视频 / 图文 / 文章
-  const contentNodes: FlowChartNode[] = contents.map((item) => ({
+  // 中列：视频 / 图文 / 文章纵向排列，彼此之间不画连线
+  const contentNodes: FlowChartNode[] = contents.map((item, index) => ({
     id: item.id,
     label: item.label,
-    x: item.x,
-    y: 140,
-    width: 150,
-    height: 48,
+    x: colX(1) + 10,
+    y: 26 + index * 78,
+    width: COL_W - 20,
+    height: 56,
     color: item.color,
     onClick: () => onNavigate(item.id),
   }));
 
-  // 输出层：上传视频、图片时产生的文件
+  // 右列：上传视频、图片时产生的文件
   const outputNode: FlowChartNode | null = showFiles
     ? {
         id: 'files',
         label: '文件中心',
-        x: 185,
-        y: 270,
-        width: 150,
+        x: colX(2) + 10,
+        y: 46,
+        width: COL_W - 20,
         height: 56,
         color: '#3478C0',
         icon: '文',
@@ -101,13 +108,34 @@ function ModuleFlowPanel({
     : null;
 
   if (inputNodes.length) {
-    groups.push({ x: 20, y: 8, width: 480, height: 80, fill: '#F5F8FF', stroke: '#E6EDFB' });
+    groups.push({
+      x: colX(0),
+      y: COL_Y,
+      width: COL_W,
+      height: COL_H,
+      fill: '#F5F8FF',
+      stroke: '#E6EDFB',
+    });
   }
   if (contentNodes.length) {
-    groups.push({ x: 8, y: 128, width: 504, height: 72, fill: '#FAFAFC', stroke: '#EDEDF1' });
+    groups.push({
+      x: colX(1),
+      y: COL_Y,
+      width: COL_W,
+      height: COL_H,
+      fill: '#FAFAFC',
+      stroke: '#EDEDF1',
+    });
   }
-  if (outputNode) {
-    groups.push({ x: 20, y: 258, width: 480, height: 80, fill: '#F5FBF7', stroke: '#E4F3E9' });
+  if (outputNode || showMessages) {
+    groups.push({
+      x: colX(2),
+      y: COL_Y,
+      width: COL_W,
+      height: COL_H,
+      fill: '#F5FBF7',
+      stroke: '#E4F3E9',
+    });
   }
 
   nodes.push(...inputNodes, ...contentNodes);
@@ -121,15 +149,14 @@ function ModuleFlowPanel({
     contentNodes.forEach((src) => edges.push({ from: src.id, to: outputNode!.id }));
   }
 
-  // 留言为独立的留言板功能
+  // 留言为独立的留言板功能，与内容之间没有连线
   if (showMessages) {
-    groups.push({ x: 20, y: 378, width: 480, height: 76, fill: '#FAFAFC', stroke: '#EDEDF1' });
     nodes.push({
       id: 'messages',
       label: '留言',
-      x: 185,
-      y: 388,
-      width: 150,
+      x: colX(2) + 10,
+      y: 150,
+      width: COL_W - 20,
       height: 56,
       color: '#8E8E93',
       dashed: true,
@@ -140,16 +167,22 @@ function ModuleFlowPanel({
 
   if (nodes.length === 0) return null;
 
-  const canvasHeight = Math.max(...nodes.map((n) => n.y + (n.height ?? 64)), 120) + 20;
+  // 画布高度同时取决于节点与分组，避免分组底板被裁切
+  const canvasHeight =
+    Math.max(
+      ...nodes.map((n) => n.y + (n.height ?? 64)),
+      ...groups.map((g) => g.y + g.height),
+      120
+    ) + 20;
 
   return (
-    <section aria-label="导航" className="h-full">
+    <section aria-label="导航" className="h-full lg:col-span-1 xl:col-span-2">
       <h2 className="mb-3 text-[17px] font-semibold tracking-tight text-[#1D1D1F]">导航</h2>
       <ModuleFlowChart
         nodes={nodes}
         edges={edges}
         groups={groups}
-        width={520}
+        width={612}
         height={canvasHeight}
         minZoom={0.4}
       />
@@ -494,9 +527,9 @@ export function DashboardView({
       </section>
 
       {/* Main Visualization Row */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <section className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         {/* Visitor Trend Chart */}
-        <div className="lg:col-span-2 bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+        <div className="lg:col-span-2 xl:col-span-3 bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
               <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">

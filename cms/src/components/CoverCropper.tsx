@@ -67,13 +67,13 @@ function formatRatio(aspect: number): string {
 }
 
 /**
- * 封面上传裁剪弹窗：固定比例（默认 9:16 竖版）拖拽 + 滚轮/滑杆缩放。
+ * 封面上传裁剪弹窗：固定比例（默认 16:9 横版）拖拽 + 滚轮/滑杆缩放。
  * 基于 react-easy-crop，触屏手势、边界约束、网格参考线开箱即用。
  */
 export function CoverCropper({
   file,
-  aspect = 9 / 16,
-  outputWidth = 900,
+  aspect = 16 / 9,
+  outputWidth = 1440,
   heading,
   onCancel,
   onComplete,
@@ -139,8 +139,10 @@ export function CoverCropper({
   const sizeLabel = `${outputWidth} × ${Math.round(outputWidth / aspect)}`;
 
   return createPortal(
+    // AiEditor 工具栏等内部浮层 z-index 最高到 1600，这里必须高于它，
+    // 否则在文章编辑页打开裁剪弹窗时会被编辑器工具栏盖住
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
       aria-label={heading || '裁剪封面'}

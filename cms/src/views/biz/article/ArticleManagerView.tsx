@@ -138,7 +138,7 @@ export function ArticleManagerView({
                 onClick={() => onOpen('view', item.id)}
                 className="flex flex-col sm:flex-row items-start gap-4 flex-1 min-w-0 cursor-pointer group"
               >
-                <div className="w-full sm:w-44 aspect-[16/10] rounded-xl overflow-hidden bg-[#F2F2F7] shrink-0">
+                <div className="w-full sm:w-44 aspect-[16/9] rounded-xl overflow-hidden bg-[#F2F2F7] shrink-0">
                   <MediaImage
                     src={item.coverUrl}
                     alt={item.title}

@@ -12,6 +12,12 @@ interface AiRichEditorProps {
   placeholder?: string;
   className?: string;
   style?: React.CSSProperties;
+  /**
+   * 自定义图片上传策略。
+   * 传入后可实现「延迟上传」：插入图片时先返回本地 blob 预览地址，
+   * 由调用方在保存表单时统一上传并替换地址。不传则直接上传文件服务。
+   */
+  uploadImage?: (file: File) => Promise<string>;
 }
 
 type EditorInstance = InstanceType<typeof AiEditor>;
@@ -27,13 +33,16 @@ export function AiRichEditor({
   placeholder = '输入正文内容，支持标题、列表、图片、表格等富文本排版...',
   className,
   style,
+  uploadImage,
 }: AiRichEditorProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<EditorInstance | null>(null);
   const onChangeRef = useRef(onChange);
+  const uploadImageRef = useRef(uploadImage);
   // 记录编辑器自己产出的内容，避免外部 value 回写时重复 setContent 造成光标跳动
   const lastContentRef = useRef<string>('');
   onChangeRef.current = onChange;
+  uploadImageRef.current = uploadImage;
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -50,6 +59,9 @@ export function AiRichEditor({
       aiChat: false,
       uploader: {
         upload: async (file, context) => {
+          const custom = uploadImageRef.current;
+          // 调用方接管上传（延迟到保存时），先返回本地 blob 地址用于预览
+          if (custom) return custom(file);
           const { url } = await snowyUpload(file, (percent) =>
             context.onProgress(percent)
           );

@@ -3,19 +3,25 @@ import {
   ChevronLeft,
   ChevronRight,
   ImagePlus,
-  MapPin,
   Star,
   X,
 } from 'lucide-react';
-import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { api, convertToWebp } from '../../../lib/api.ts';
 import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
+import {
+  createPendingFile,
+  releasePendingFile,
+  releasePendingFiles,
+  uploadPendingFiles,
+  type PendingFile,
+} from '../../../lib/pendingUpload.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
+import { CategorySelect } from '../../../components/CategorySelect.tsx';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
-import { SelectField } from '../../../components/SelectField.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
@@ -27,39 +33,77 @@ interface ImageTextPreviewProps {
   title: string;
   body: string;
   category: string;
-  location: string;
   status: ContentStatus;
 }
 
-/** 右侧实时预览：图文卡片按设备宽度自适应 */
+/** 右侧实时预览：图文卡片按设备宽度自适应，多图以轮播形式预览 */
 function ImageTextPreview({
   device,
   images,
   title,
   body,
   category,
-  location,
   status,
 }: ImageTextPreviewProps) {
   const compact = device === 'mobile';
+  const total = images.length;
+  const [active, setActive] = useState(0);
+
+  // 图片被删除后当前索引可能越界，回到第一张
+  useEffect(() => {
+    if (active > total - 1) setActive(0);
+  }, [active, total]);
+
+  const goPrev = () => setActive((i) => (total ? (i - 1 + total) % total : 0));
+  const goNext = () => setActive((i) => (total ? (i + 1) % total : 0));
+  const current = images[Math.min(active, Math.max(total - 1, 0))];
+
   return (
     <div className="bg-white">
       <div className="relative aspect-[4/3] bg-[#F2F2F7] overflow-hidden">
         <MediaImage
-          src={images[0]}
+          src={current}
           alt="图文封面预览"
           fallbackLabel="图文封面预览"
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/15" />
-        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-black/55 text-[11px] font-medium text-white tabular-nums">
-          {images.length} 张图片
+        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-black/55 backdrop-blur-md text-[11px] font-medium text-white tabular-nums">
+          {total ? `${active + 1} / ${total}` : '0 张图片'}
         </div>
-        {location && (
-          <div className="absolute bottom-3 left-3.5 flex items-center gap-1 text-[12px] text-white/95">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{location}</span>
-          </div>
+        {total > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={goPrev}
+              aria-label="上一张"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-md transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              aria-label="下一张"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-md transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+              {images.map((url, idx) => (
+                <button
+                  key={`${url}-dot-${idx}`}
+                  type="button"
+                  onClick={() => setActive(idx)}
+                  aria-label={`第 ${idx + 1} 张图片`}
+                  aria-current={idx === active}
+                  className={`h-1.5 rounded-full transition-all ${
+                    idx === active ? 'w-4 bg-white' : 'w-1.5 bg-white/55 hover:bg-white/80'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
       <div className={compact ? 'p-4' : 'p-5'}>
@@ -79,19 +123,26 @@ function ImageTextPreview({
         <p className="mt-2 text-[13px] text-[#6E6E73] leading-relaxed whitespace-pre-line">
           {body || '暂无图文配文描述'}
         </p>
-        {images.length > 1 && (
+        {total > 1 && (
           <div className="mt-4 pt-3 border-t border-[#F2F2F7] flex items-center gap-1.5">
-            {images.slice(0, 5).map((url, idx) => (
-              <div
+            {images.slice(0, 6).map((url, idx) => (
+              <button
                 key={`${url}-${idx}`}
-                className="w-11 h-9 rounded-md overflow-hidden border border-[#E5E5EA] shrink-0"
+                type="button"
+                onClick={() => setActive(idx)}
+                aria-label={`查看第 ${idx + 1} 张图片`}
+                className={`w-11 h-9 rounded-md overflow-hidden border shrink-0 transition-all ${
+                  idx === active
+                    ? 'border-[#0071E3] ring-1 ring-[#0071E3]/40'
+                    : 'border-[#E5E5EA] opacity-70 hover:opacity-100'
+                }`}
               >
                 <MediaImage src={url} alt="" className="w-full h-full object-cover" />
-              </div>
+              </button>
             ))}
-            {images.length > 5 && (
+            {images.length > 6 && (
               <span className="text-[11px] text-[#86868B] tabular-nums">
-                +{images.length - 5}
+                +{images.length - 6}
               </span>
             )}
           </div>
@@ -99,6 +150,25 @@ function ImageTextPreview({
       </div>
     </div>
   );
+}
+
+/** 编辑区里的一张图片：可能是已上传的地址，也可能是本地暂存待上传的文件 */
+interface ImageEntry {
+  key: string;
+  /** 已上传后的真实地址；本地待上传时为空串 */
+  url: string;
+  /** 待上传文件，点击保存时才真正上传 */
+  pending?: PendingFile;
+  /** 预览地址：已上传为真实地址，待上传为 blob 地址 */
+  previewUrl: string;
+}
+
+function entriesFromUrls(urls: string[]): ImageEntry[] {
+  return urls.map((url, idx) => ({
+    key: `saved-${idx}-${url}`,
+    url,
+    previewUrl: url,
+  }));
 }
 
 interface ImageTextEditorPageProps {
@@ -112,17 +182,26 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   const [title, setTitle] = useState(item?.title ?? '');
   const [body, setBody] = useState(item?.body ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
-  const [location, setLocation] = useState(item?.location ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
-  const [images, setImages] = useState<string[]>(item ? [...item.images] : []);
-  const [uploadingHint, setUploadingHint] = useState<string | null>(null);
+  // 图片先在浏览器本地暂存，点击保存时才真正上传到服务器
+  const [images, setImages] = useState<ImageEntry[]>(() => entriesFromUrls(item?.images ?? []));
+  const [preparingHint, setPreparingHint] = useState<string | null>(null);
+  const [saveProgress, setSaveProgress] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // 本次编辑会话中新上传但尚未保存的图片，移除时可直接清理
-  const sessionUploadsRef = useRef<Set<string>>(new Set());
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+
+  // 离开页面时释放尚未上传的本地预览地址
+  useEffect(
+    () => () => {
+      releasePendingFiles(imagesRef.current.map((entry) => entry.pending));
+    },
+    []
+  );
 
   const {
     options: categoryOptions,
@@ -146,21 +225,21 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       return;
     }
     setFormError('');
-    const uploadedUrls: string[] = [];
+    const entries: ImageEntry[] = [];
     try {
       for (let i = 0; i < validFiles.length; i++) {
-        const f = validFiles[i];
-        setUploadingHint(`正在上传第 ${i + 1} / ${validFiles.length} 张图片...`);
-        const webpFile = await convertToWebp(f);
-        const res = await uploadFileWithProgress(webpFile);
-        uploadedUrls.push(res.url);
-        sessionUploadsRef.current.add(res.url);
+        setPreparingHint(`正在本地处理第 ${i + 1} / ${validFiles.length} 张图片...`);
+        // 只在本地压缩为 WebP 并生成预览，文件暂存在浏览器内，不发起上传
+        const webpFile = await convertToWebp(validFiles[i]);
+        const pending = createPendingFile(webpFile);
+        entries.push({ key: pending.key, url: '', pending, previewUrl: pending.previewUrl });
       }
-      setImages((prev) => [...prev, ...uploadedUrls]);
+      setImages((prev) => [...prev, ...entries]);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '图片上传失败');
+      releasePendingFiles(entries.map((entry) => entry.pending));
+      setFormError(err instanceof Error ? err.message : '图片处理失败');
     } finally {
-      setUploadingHint(null);
+      setPreparingHint(null);
     }
   }
 
@@ -194,12 +273,9 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
 
   function removeImage(index: number) {
     const target = images[index];
+    // 本地暂存的图片移除后立即释放预览地址
+    if (target?.pending) releasePendingFile(target.pending);
     setImages((prev) => prev.filter((_, idx) => idx !== index));
-    // 本次会话上传但尚未保存的图片，移除后即可彻底删除，避免产生垃圾文件
-    if (target && sessionUploadsRef.current.has(target)) {
-      sessionUploadsRef.current.delete(target);
-      void deleteFilesByUrls([target]);
-    }
   }
 
   async function handleSave() {
@@ -208,7 +284,7 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       return;
     }
     if (images.length === 0) {
-      setFormError('请至少上传 1 张图片');
+      setFormError('请至少选择 1 张图片');
       return;
     }
     const finalCategory = resolvePublishCategoryCode(categoryOptions, category);
@@ -218,19 +294,42 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
     }
     setSaving(true);
     setFormError('');
+    // 点击保存时才真正上传本地暂存的图片
+    const pendingEntries = images.filter((entry) => entry.pending);
+    const uploadedByKey = new Map<string, string>();
+    setSaveProgress(pendingEntries.length ? 0 : null);
     try {
+      if (pendingEntries.length) {
+        await uploadPendingFiles(
+          pendingEntries.map((entry) => entry.pending as PendingFile),
+          (pct) => setSaveProgress(pct),
+          (uploaded, url) => {
+            uploadedByKey.set(uploaded.key, url);
+            releasePendingFile(uploaded);
+            // 上传成功立即回填真实地址，后续失败重试时不会重复上传
+            setImages((prev) =>
+              prev.map((entry) =>
+                entry.key === uploaded.key ? { key: entry.key, url, previewUrl: url } : entry
+              )
+            );
+          }
+        );
+      }
+      const finalImages = images
+        .map((entry) => (entry.pending ? uploadedByKey.get(entry.key) ?? '' : entry.url))
+        .filter((url): url is string => !!url);
+
       const payload: Partial<ImageTextItem> = {
         title: title.trim(),
         body: body.trim(),
         category: finalCategory,
-        location: location.trim(),
         status,
-        images,
+        images: finalImages,
       };
       if (item) {
         await api.updateImageText(item.id, payload);
         // 保存成功后彻底删除被移除/替换掉的历史图片，避免留下孤儿文件
-        void deleteFilesByUrls(removedUrls(item.images, images));
+        void deleteFilesByUrls(removedUrls(item.images, finalImages));
       } else {
         await api.createImageText(payload);
       }
@@ -240,6 +339,7 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       setFormError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
+      setSaveProgress(null);
     }
   }
 
@@ -259,11 +359,17 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           </button>
           <button
             type="button"
-            disabled={saving || !!uploadingHint}
+            disabled={saving || !!preparingHint}
             onClick={() => void handleSave()}
             className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
           >
-            {saving ? '正在保存...' : item ? '保存修改' : '发布图文'}
+            {saving
+              ? saveProgress !== null
+                ? `正在上传 ${saveProgress}%`
+                : '正在保存...'
+              : item
+                ? '保存修改'
+                : '发布图文'}
           </button>
         </>
       }
@@ -301,7 +407,7 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
             点击批量选择或拖拽多张图片至此
           </div>
           <div className="text-[12px] text-[#86868B] mt-0.5">
-            {uploadingHint || '支持 JPG、PNG、WebP 高清图片，首张将自动作为封面'}
+            {preparingHint || '仅支持图片（JPG / PNG / WebP），首张自动作为封面 · 保存时才上传'}
           </div>
         </div>
 
@@ -311,19 +417,24 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
               <span>已添加 {images.length} 张图片（第 1 张为展示封面）</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {images.map((url, idx) => (
+              {images.map((entry, idx) => (
                 <div
-                  key={`${url}-${idx}`}
+                  key={entry.key}
                   className="relative group aspect-[4/3] rounded-xl overflow-hidden border border-[#E5E5EA] bg-[#F2F2F7]"
                 >
                   <MediaImage
-                    src={url}
+                    src={entry.previewUrl}
                     alt={`图片 ${idx + 1}`}
                     className="w-full h-full object-cover"
                   />
                   {idx === 0 && (
                     <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-[#0071E3] text-white text-[10px] font-medium">
                       封面
+                    </div>
+                  )}
+                  {entry.pending && (
+                    <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
+                      待上传
                     </div>
                   )}
                   <div className="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
@@ -386,43 +497,16 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-              主题分类 <span className="text-[#D70015]">*</span>
-            </label>
-            <SelectField
-              value={category}
-              onChange={setCategory}
-              isDisabled={categoryLoading || !!categoryError}
-              placeholder={
-                categoryLoading
-                  ? '正在加载分类...'
-                  : categoryError
-                    ? '分类加载失败'
-                    : '请选择分类'
-              }
-              ariaLabel="主题分类"
-              className="w-full"
-              options={categoryOptions.map((option) => ({
-                value: option.code,
-                label: option.label,
-              }))}
-            />
-            {categoryError && (
-              <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">拍摄地点</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="城市 · 场所（可选）"
-              className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px]"
-            />
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <CategorySelect
+            module="GRAPHIC"
+            value={category}
+            onChange={setCategory}
+            label="主题分类"
+            required
+            ariaLabel="主题分类"
+            className="w-full"
+          />
           <div>
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
             <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
@@ -469,11 +553,10 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       preview={(device) => (
         <ImageTextPreview
           device={device}
-          images={images}
+          images={images.map((entry) => entry.previewUrl)}
           title={title}
           body={body}
           category={categoryLabel}
-          location={location}
           status={status}
         />
       )}
@@ -564,13 +647,7 @@ export function ImageViewPage({ item, slide = 0, onRefresh, onBack }: ImageViewP
 
         <div className="lg:col-span-2 flex flex-col justify-between">
           <div>
-            {item.location && (
-              <div className="flex items-center gap-1 text-[12px] text-[#86868B]">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>{item.location}</span>
-              </div>
-            )}
-            <p className="mt-4 text-[14px] text-[#424245] leading-relaxed whitespace-pre-line">
+            <p className="text-[14px] text-[#424245] leading-relaxed whitespace-pre-line">
               {item.body || '暂无图文配文描述'}
             </p>
           </div>
