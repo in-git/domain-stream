@@ -1,7 +1,6 @@
 import { motion } from 'motion/react';
-import { LogIn, Moon, Search, Sun, X } from 'lucide-react';
-import type { SectionId, UserProfile } from '../data/content';
-import { ResilientImage } from './ResilientImage';
+import { Moon, Search, Sun, X } from 'lucide-react';
+import type { SectionId } from '../data/content';
 
 interface MainHeaderProps {
   activeSection: SectionId;
@@ -9,9 +8,6 @@ interface MainHeaderProps {
   onChangeSearch: (value: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
-  isLoggedIn: boolean;
-  profile: UserProfile;
-  onOpenProfile: () => void;
 }
 
 const SECTION_LABELS: Record<SectionId, string> = {
@@ -27,16 +23,13 @@ export function MainHeader({
   onChangeSearch,
   isDark,
   onToggleTheme,
-  isLoggedIn,
-  profile,
-  onOpenProfile,
 }: MainHeaderProps) {
   return (
     <header className="sticky top-0 z-20 h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl">
       {/* Left: Mobile Brand + Active Section Title */}
       <div className="flex items-center gap-2.5 shrink-0">
         <span className="md:hidden text-base font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-          Lumina
+          吴文龙的私域
         </span>
         <span className="md:hidden text-black/20 dark:text-white/20" aria-hidden="true">
           /
@@ -71,7 +64,7 @@ export function MainHeader({
         </div>
       </div>
 
-      {/* Right: Mobile Theme Toggle + Primary Account Action */}
+      {/* Right: Mobile Theme Toggle */}
       <div className="flex items-center gap-2 shrink-0">
         <motion.button
           type="button"
@@ -81,31 +74,6 @@ export function MainHeader({
           className="md:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </motion.button>
-
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          onClick={onOpenProfile}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 min-h-[36px] rounded-full text-xs font-medium transition-colors whitespace-nowrap shrink-0 bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F] hover:opacity-90"
-        >
-          {isLoggedIn ? (
-            <>
-              <span className="w-5 h-5 rounded-full overflow-hidden shrink-0">
-                <ResilientImage
-                  src={profile.avatar}
-                  alt={profile.name}
-                  className="w-full h-full"
-                />
-              </span>
-              <span className="hidden sm:inline max-w-[80px] truncate">{profile.name}</span>
-            </>
-          ) : (
-            <>
-              <LogIn className="w-3.5 h-3.5" />
-              <span>登录</span>
-            </>
-          )}
         </motion.button>
       </div>
     </header>

@@ -1,0 +1,30 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: C
+      - heading "登录 CueStudio 工作台" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 使用团队内部授权账号进入内容管理与实时数据看板
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: 登录账号
+        - textbox "登录账号" [ref=e13]:
+          - /placeholder: superAdmin
+          - text: superAdmin
+      - generic [ref=e14]:
+        - generic [ref=e15]: 登录密码
+        - generic [ref=e16]:
+          - textbox "登录密码" [ref=e17]:
+            - /placeholder: 输入登录密码
+            - text: Snowy@2026!
+          - button "显示密码" [ref=e18] [cursor=pointer]
+      - button "登录控制台" [ref=e22] [cursor=pointer]
+    - generic [ref=e26]:
+      - paragraph [ref=e27]: 使用小诺 Snowy 统一认证账号，可点击下方预设快速登录：
+      - generic [ref=e28]:
+        - button "超级管理员 superAdmin" [ref=e29] [cursor=pointer]:
+          - generic [ref=e30]: 超级管理员
+          - generic [ref=e31]: superAdmin
+        - button "业务管理员 bizAdmin" [ref=e32] [cursor=pointer]:
+          - generic [ref=e33]: 业务管理员
+          - generic [ref=e34]: bizAdmin
+  - paragraph [ref=e35]: CueStudio 内容与数据中心 · 仅限内部团队使用

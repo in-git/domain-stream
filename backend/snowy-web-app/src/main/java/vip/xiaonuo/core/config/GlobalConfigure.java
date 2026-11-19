@@ -197,6 +197,12 @@ public class GlobalConfigure implements WebMvcConfigurer {
 
             /* 仪表盘放行 */
             "/dashboard/dashboardList/shareDetail",
+
+            /* 首页访客统计放行（前台上报 + CMS 仪表盘拉取，无需B端登录） */
+            "/biz/visitor/dashboard",
+            "/biz/visitor/live",
+            "/biz/visitor/track",
+            "/biz/visitor/heartbeat",
     };
 
     /**

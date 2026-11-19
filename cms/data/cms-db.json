@@ -241,154 +241,154 @@
     }
   ],
   "visitorState": {
-    "onlineNow": 149,
-    "todayPV": 18796,
-    "todayUV": 6926,
+    "onlineNow": 93,
+    "todayPV": 45302,
+    "todayUV": 14417,
     "avgDurationSec": 214,
     "engagementRate": 68.4,
     "realtimePoints": [
       {
-        "label": "02:39:09",
-        "uv": 154,
-        "pv": 355,
+        "label": "10:13:10",
+        "uv": 92,
+        "pv": 223,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:12",
-        "uv": 153,
-        "pv": 356,
+        "label": "10:13:13",
+        "uv": 95,
+        "pv": 222,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:15",
-        "uv": 156,
-        "pv": 367,
+        "label": "10:13:16",
+        "uv": 97,
+        "pv": 222,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:18",
-        "uv": 159,
-        "pv": 378,
+        "label": "10:13:19",
+        "uv": 97,
+        "pv": 226,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:21",
-        "uv": 162,
-        "pv": 373,
+        "label": "10:13:22",
+        "uv": 95,
+        "pv": 234,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:24",
-        "uv": 163,
-        "pv": 387,
+        "label": "10:13:25",
+        "uv": 98,
+        "pv": 233,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:27",
-        "uv": 160,
-        "pv": 372,
+        "label": "10:13:28",
+        "uv": 98,
+        "pv": 229,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:30",
-        "uv": 163,
-        "pv": 387,
+        "label": "10:13:31",
+        "uv": 101,
+        "pv": 243,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:33",
-        "uv": 160,
-        "pv": 380,
+        "label": "10:13:34",
+        "uv": 99,
+        "pv": 239,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:36",
-        "uv": 159,
-        "pv": 374,
+        "label": "10:13:37",
+        "uv": 97,
+        "pv": 226,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:39",
-        "uv": 156,
-        "pv": 371,
+        "label": "10:13:40",
+        "uv": 96,
+        "pv": 236,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:42",
-        "uv": 154,
-        "pv": 355,
+        "label": "10:13:43",
+        "uv": 95,
+        "pv": 230,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:45",
-        "uv": 151,
-        "pv": 348,
+        "label": "10:13:46",
+        "uv": 97,
+        "pv": 238,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:48",
-        "uv": 149,
-        "pv": 355,
+        "label": "10:13:49",
+        "uv": 94,
+        "pv": 228,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:51",
-        "uv": 152,
-        "pv": 346,
+        "label": "10:13:52",
+        "uv": 95,
+        "pv": 230,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:54",
-        "uv": 149,
-        "pv": 351,
+        "label": "10:13:55",
+        "uv": 98,
+        "pv": 237,
         "avgStaySec": 214
       },
       {
-        "label": "02:39:57",
-        "uv": 147,
-        "pv": 343,
+        "label": "10:13:58",
+        "uv": 97,
+        "pv": 222,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:00",
-        "uv": 147,
-        "pv": 347,
+        "label": "10:14:01",
+        "uv": 95,
+        "pv": 218,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:03",
-        "uv": 148,
-        "pv": 353,
+        "label": "10:14:04",
+        "uv": 94,
+        "pv": 216,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:06",
-        "uv": 146,
-        "pv": 341,
+        "label": "10:14:07",
+        "uv": 95,
+        "pv": 234,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:09",
-        "uv": 148,
-        "pv": 353,
+        "label": "10:14:10",
+        "uv": 98,
+        "pv": 241,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:12",
-        "uv": 150,
-        "pv": 342,
+        "label": "10:14:13",
+        "uv": 96,
+        "pv": 228,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:15",
-        "uv": 149,
-        "pv": 339,
+        "label": "10:14:16",
+        "uv": 93,
+        "pv": 225,
         "avgStaySec": 214
       },
       {
-        "label": "02:40:18",
-        "uv": 149,
-        "pv": 351,
+        "label": "10:14:19",
+        "uv": 93,
+        "pv": 213,
         "avgStaySec": 214
       }
     ]

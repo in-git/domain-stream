@@ -98,7 +98,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           transition={{ ...SWIFTUI_SMOOTH, delay: 0.18 }}
           className="text-3xl font-semibold tracking-tight text-white"
         >
-          Lumina
+          吴文龙的私域
         </motion.h1>
 
         <motion.p

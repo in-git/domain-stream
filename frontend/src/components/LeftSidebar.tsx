@@ -3,31 +3,23 @@ import {
   BookOpen,
   Film,
   Image as ImageIcon,
-  LogIn,
   Moon,
-  RotateCcw,
   Sun,
-  User,
 } from 'lucide-react';
-import type { SectionId, UserProfile } from '../data/content';
+import type { SectionId } from '../data/content';
 import { SWIFTUI_SNAPPY } from '../lib/motion';
-import { ResilientImage } from './ResilientImage';
 
 interface LeftSidebarProps {
   activeSection: SectionId;
   onSelectSection: (section: SectionId) => void;
   isDark: boolean;
   onToggleTheme: () => void;
-  onReplaySplash: () => void;
-  isLoggedIn: boolean;
-  profile: UserProfile;
 }
 
 const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
   { id: 'videos', label: '视频', Icon: Film },
   { id: 'articles', label: '文章', Icon: BookOpen },
   { id: 'gallery', label: '纯图片', Icon: ImageIcon },
-  { id: 'profile', label: '个人中心', Icon: User },
 ];
 
 export function LeftSidebar({
@@ -35,9 +27,6 @@ export function LeftSidebar({
   onSelectSection,
   isDark,
   onToggleTheme,
-  onReplaySplash,
-  isLoggedIn,
-  profile,
 }: LeftSidebarProps) {
   return (
     <aside
@@ -60,7 +49,7 @@ export function LeftSidebar({
             </svg>
           </span>
           <span className="hidden lg:inline text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] whitespace-nowrap">
-            Lumina
+            吴文龙的私域
           </span>
         </button>
 
@@ -104,7 +93,7 @@ export function LeftSidebar({
         </nav>
       </div>
 
-      {/* Bottom Utilities & Account Quick Card */}
+      {/* Bottom Utilities */}
       <div className="space-y-2 pt-4 border-t border-black/[0.06] dark:border-white/[0.08]">
         <motion.button
           type="button"
@@ -117,53 +106,6 @@ export function LeftSidebar({
           <span className="hidden lg:inline whitespace-nowrap">
             {isDark ? '浅色外观' : '深色外观'}
           </span>
-        </motion.button>
-
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={onReplaySplash}
-          title="重播开屏动效"
-          className="w-full flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#515154] dark:text-[#A1A1A6] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] transition-colors"
-        >
-          <RotateCcw className="w-4 h-4 shrink-0" />
-          <span className="hidden lg:inline whitespace-nowrap">重播开屏</span>
-        </motion.button>
-
-        {/* Quick Account Status / Login Trigger */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={() => onSelectSection('profile')}
-          className="w-full mt-1 flex items-center justify-center lg:justify-start gap-3 px-2.5 py-2.5 min-h-[48px] rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] hover:border-black/[0.12] dark:hover:border-white/[0.16] transition-colors"
-        >
-          {isLoggedIn ? (
-            <>
-              <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-black/[0.08] dark:border-white/[0.12]">
-                <ResilientImage
-                  src={profile.avatar}
-                  alt={profile.name}
-                  fallbackTitle={profile.name}
-                  className="w-full h-full"
-                />
-              </div>
-              <div className="hidden lg:block text-left min-w-0">
-                <div className="text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
-                  {profile.name}
-                </div>
-                <div className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
-                  已登录
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-center lg:justify-start gap-2.5 w-full px-1 text-[#0071E3] dark:text-[#0A84FF]">
-              <LogIn className="w-4 h-4 shrink-0" />
-              <span className="hidden lg:inline text-xs font-medium whitespace-nowrap">
-                登录 / 注册
-              </span>
-            </div>
-          )}
         </motion.button>
       </div>
     </aside>

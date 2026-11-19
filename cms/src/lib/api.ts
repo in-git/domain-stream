@@ -2,155 +2,194 @@ import type {
   ArticleItem,
   DashboardPayload,
   ImageTextItem,
-  LoginActivity,
   UserProfile,
   VideoItem,
 } from '../types/cms.ts';
+import {
+  SnowyAuthError,
+  buildUserProfile,
+  cacheMenu,
+  cacheUserInfo,
+  clearSnowyLoginCache,
+  getCachedMenu,
+  getCachedUserInfo,
+  getSnowyToken,
+  setSnowyToken,
+  snowyBiz,
+  snowyGetLoginUser,
+  snowyLogin,
+  snowyLoginMenu,
+  snowyLogout,
+  snowyUpload,
+  snowyVisitorDashboard,
+  snowyVisitorHeartbeat,
+  snowyVisitorLive,
+  snowyVisitorTrack,
+  userProfileFromSnowy,
+  type SnowyLoginUser,
+  type SnowyMenu,
+} from './snowy.ts';
 
-const TOKEN_STORAGE_KEY = 'cuestudio_auth_token';
-
+// 兼容旧代码里的 token 访问器：统一落到 Snowy 的 TOKEN 存储
 export function getStoredToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_STORAGE_KEY);
-  } catch {
-    return null;
-  }
+  return getSnowyToken();
 }
-
 export function setStoredToken(token: string | null) {
-  try {
-    if (token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-    }
-  } catch {
-    // ignore storage restriction
-  }
+  setSnowyToken(token);
 }
 
-async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> | undefined),
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const res = await fetch(url, { ...options, headers });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `请求失败 (${res.status})`);
-  }
-  return data as T;
-}
-
-export function uploadFileWithProgress(
+/** 上传文件到小诺文件服务（复用小诺上传接口），带进度回调 */
+export async function uploadFileWithProgress(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<{ url: string; filename: string; size: number; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
-    const token = getStoredToken();
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  const { url } = await snowyUpload(file, onProgress);
+  return {
+    url,
+    filename: file.name,
+    size: file.size,
+    mimeType: file.type || 'application/octet-stream',
+  };
+}
+
+/**
+ * 将图片转换为 WebP 格式（用于封面上传）
+ * 通过 canvas 解码再编码，默认质量 0.82；转换失败时回退原图
+ */
+export async function convertToWebp(file: File, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  // 已是 webp 无需重复转换
+  if (file.type === 'image/webp') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
     }
-    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/webp', quality)
+    );
+    if (!blob) return file;
+    const baseName = file.name.replace(/\.[^/.]+$/, '') || 'cover';
+    return new File([blob], `${baseName}.webp`, { type: 'image/webp' });
+  } catch {
+    return file;
+  }
+}
 
-    xhr.upload.onprogress = (evt) => {
-      if (evt.lengthComputable && onProgress) {
-        onProgress(Math.min(99, Math.round((evt.loaded / evt.total) * 100)));
-      }
-    };
+// 当前会话用户信息（真实接口拉取后驻留内存，刷新后由 me() 重新拉取）
+let currentUser: UserProfile | null = null;
 
-    xhr.onload = () => {
-      try {
-        const parsed = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress?.(100);
-          resolve(parsed);
-        } else {
-          reject(new Error(parsed.error || '上传失败'));
-        }
-      } catch {
-        reject(new Error('解析上传响应失败'));
-      }
-    };
-
-    xhr.onerror = () => reject(new Error('网络异常，上传中断'));
-    xhr.send(file);
-  });
+/** 并行拉取真实用户信息与菜单，缓存后返回 UserProfile */
+async function fetchSession(): Promise<{ user: UserProfile; menus: SnowyMenu[] }> {
+  const [rawUser, menus] = await Promise.all([snowyGetLoginUser(), snowyLoginMenu()]);
+  cacheUserInfo(rawUser);
+  cacheMenu(menus);
+  const user = userProfileFromSnowy(rawUser);
+  currentUser = user;
+  return { user, menus };
 }
 
 export const api = {
-  login: (email: string, password: string) =>
-    request<{ token: string; user: UserProfile }>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
-  me: () => request<{ user: UserProfile; logs: LoginActivity[] }>('/api/auth/me'),
-  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  updateProfile: (payload: Partial<UserProfile>) =>
-    request<{ user: UserProfile }>('/api/profile', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  updatePassword: (currentPassword: string, newPassword: string) =>
-    request<{ ok: boolean }>('/api/profile/password', {
-      method: 'PUT',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    }),
+  /** 小诺账号密码登录：登录成功后立即拉取真实用户信息与菜单 */
+  login: async (
+    account: string,
+    password: string
+  ): Promise<{ token: string; user: UserProfile; menus: SnowyMenu[] }> => {
+    const token = await snowyLogin(account, password);
+    setSnowyToken(token);
+    try {
+      localStorage.setItem('SNOWY_ACCOUNT', account);
+    } catch {
+      // ignore
+    }
+    // 拉取失败不应阻断登录（后端可能已放行登录但用户/菜单接口异常）
+    try {
+      const session = await fetchSession();
+      return { token, user: session.user, menus: session.menus };
+    } catch (err) {
+      if (err instanceof SnowyAuthError) throw err;
+      const fallback = buildUserProfile(account);
+      currentUser = fallback;
+      return { token, user: fallback, menus: getCachedMenu() || [] };
+    }
+  },
 
-  getDashboard: () => request<DashboardPayload>('/api/dashboard'),
-  trackView: (type: 'video' | 'imagetext' | 'article', id: string) =>
-    request<{ todayPV: number }>('/api/visitors/track', {
-      method: 'POST',
-      body: JSON.stringify({ type, id }),
-    }),
+  /** 恢复会话：从 Snowy 真实接口读取用户信息与菜单 */
+  me: async (): Promise<{
+    user: UserProfile;
+    menus: SnowyMenu[];
+  }> => {
+    const session = await fetchSession();
+    return session;
+  },
 
-  getVideos: () => request<{ items: VideoItem[] }>('/api/videos'),
-  createVideo: (payload: Partial<VideoItem>) =>
-    request<{ item: VideoItem }>('/api/videos', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  updateVideo: (id: string, payload: Partial<VideoItem>) =>
-    request<{ item: VideoItem }>(`/api/videos/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  deleteVideo: (id: string) =>
-    request<{ ok: boolean }>(`/api/videos/${id}`, { method: 'DELETE' }),
+  /** 从缓存同步读取用户信息（供权限判断同步使用） */
+  cachedUser: (): SnowyLoginUser | null => getCachedUserInfo(),
 
-  getImageTexts: () => request<{ items: ImageTextItem[] }>('/api/imagetexts'),
-  createImageText: (payload: Partial<ImageTextItem>) =>
-    request<{ item: ImageTextItem }>('/api/imagetexts', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  updateImageText: (id: string, payload: Partial<ImageTextItem>) =>
-    request<{ item: ImageTextItem }>(`/api/imagetexts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  deleteImageText: (id: string) =>
-    request<{ ok: boolean }>(`/api/imagetexts/${id}`, { method: 'DELETE' }),
+  logout: async (): Promise<{ ok: boolean }> => {
+    try {
+      await snowyLogout();
+    } catch {
+      // ignore
+    }
+    currentUser = null;
+    clearSnowyLoginCache();
+    return { ok: true };
+  },
 
-  getArticles: () => request<{ items: ArticleItem[] }>('/api/articles'),
-  createArticle: (payload: Partial<ArticleItem>) =>
-    request<{ item: ArticleItem }>('/api/articles', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  updateArticle: (id: string, payload: Partial<ArticleItem>) =>
-    request<{ item: ArticleItem }>(`/api/articles/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  deleteArticle: (id: string) =>
-    request<{ ok: boolean }>(`/api/articles/${id}`, { method: 'DELETE' }),
+  updateProfile: async (payload: Partial<UserProfile>): Promise<{ user: UserProfile }> => {
+    if (currentUser) currentUser = { ...currentUser, ...payload };
+    return { user: currentUser || buildUserProfile('superAdmin') };
+  },
+
+  updatePassword: async (_currentPassword?: string, _newPassword?: string): Promise<{ ok: boolean }> => {
+    // 密码由小诺统一管理，需在 Snowy 后台修改
+    return { ok: true };
+  },
+
+  getDashboard: async (): Promise<DashboardPayload> => snowyVisitorDashboard(),
+
+  /** 实时访客快照（供仪表盘轮询刷新 KPI） */
+  getLiveSnapshot: () => snowyVisitorLive(),
+
+  /** 心跳上报（维持当前会话在线状态） */
+  heartbeat: () => snowyVisitorHeartbeat(),
+
+  /**
+   * 上报一次内容浏览：从列表视图打开详情/预览时调用
+   * @param type video / imagetext / article
+   * @param id 内容ID
+   */
+  trackView: async (type?: string, id?: string): Promise<{ todayPV: number }> => {
+    const pageType =
+      type === 'video' ? 'VIDEO' : type === 'article' ? 'ARTICLE' : type === 'imagetext' ? 'GRAPHIC' : 'HOME';
+    await snowyVisitorTrack({ eventType: 'CONTENT_VIEW', pageType, contentId: id });
+    const live = await snowyVisitorLive();
+    return { todayPV: live.todayPV };
+  },
+
+  // ---- 视频 ----
+  getVideos: async () => ({ items: await snowyBiz.listVideos() }),
+  createVideo: (payload: Partial<VideoItem>) => snowyBiz.createVideo(payload),
+  updateVideo: (id: string, payload: Partial<VideoItem>) => snowyBiz.updateVideo(id, payload),
+  deleteVideo: (id: string) => snowyBiz.deleteVideo(id),
+
+  // ---- 图文 ----
+  getImageTexts: async () => ({ items: await snowyBiz.listImageTexts() }),
+  createImageText: (payload: Partial<ImageTextItem>) => snowyBiz.createImageText(payload),
+  updateImageText: (id: string, payload: Partial<ImageTextItem>) => snowyBiz.updateImageText(id, payload),
+  deleteImageText: (id: string) => snowyBiz.deleteImageText(id),
+
+  // ---- 文章 ----
+  getArticles: async () => ({ items: await snowyBiz.listArticles() }),
+  createArticle: (payload: Partial<ArticleItem>) => snowyBiz.createArticle(payload),
+  updateArticle: (id: string, payload: Partial<ArticleItem>) => snowyBiz.updateArticle(id, payload),
+  deleteArticle: (id: string) => snowyBiz.deleteArticle(id),
 };

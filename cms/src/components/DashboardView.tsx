@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpRight,
   Clock,
   Eye,
-  FileText,
-  Film,
-  Images,
   Monitor,
   Smartphone,
   Users,
@@ -60,62 +56,65 @@ export function DashboardView({ onNavigate, liveRefreshEnabled }: DashboardViewP
   }, []);
 
   useEffect(() => {
+    // 进入仪表盘时上报一次心跳，将当前会话计入在线访客
+    void api.heartbeat().catch(() => {});
+
     if (!liveRefreshEnabled) {
       setSseConnected(false);
       return;
     }
 
-    const es = new EventSource('/api/visitors/stream');
-    es.onopen = () => setSseConnected(true);
-    es.onerror = () => setSseConnected(false);
-    es.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data) as {
-          onlineNow: number;
-          todayPV: number;
-          todayUV: number;
-          avgDurationSec: number;
-          engagementRate: number;
-          latestPoint?: TrafficPoint;
-          updatedAt: string;
-        };
-        setSseConnected(true);
-        setData((prev) => {
-          if (!prev) return prev;
-          const nextRealtime = msg.latestPoint
-            ? [...prev.series.realtime.slice(1), msg.latestPoint]
-            : prev.series.realtime;
-          const nextWeek = prev.series.week.map((pt, idx, arr) =>
-            idx === arr.length - 1 ? { ...pt, uv: msg.todayUV, pv: msg.todayPV } : pt
-          );
-          const nextMonth = prev.series.month.map((pt, idx, arr) =>
-            idx === arr.length - 1 ? { ...pt, uv: msg.todayUV, pv: msg.todayPV } : pt
-          );
-          return {
-            ...prev,
-            snapshot: {
-              ...prev.snapshot,
-              onlineNow: msg.onlineNow,
-              todayPV: msg.todayPV,
-              todayUV: msg.todayUV,
-              avgDurationSec: msg.avgDurationSec,
-              engagementRate: msg.engagementRate,
-              updatedAt: msg.updatedAt,
-            },
-            series: {
-              realtime: nextRealtime,
-              week: nextWeek,
-              month: nextMonth,
-            },
-          };
+    let active = true;
+    const refresh = () => {
+      api
+        .getLiveSnapshot()
+        .then((msg) => {
+          if (!active) return;
+          setSseConnected(true);
+          setData((prev) => {
+            if (!prev) return prev;
+            const nextWeek = prev.series.week.map((pt, idx, arr) =>
+              idx === arr.length - 1 ? { ...pt, uv: msg.todayUV, pv: msg.todayPV } : pt
+            );
+            const nextMonth = prev.series.month.map((pt, idx, arr) =>
+              idx === arr.length - 1 ? { ...pt, uv: msg.todayUV, pv: msg.todayPV } : pt
+            );
+            const now = new Date();
+            const latestPoint: TrafficPoint = {
+              label: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+              uv: msg.onlineNow,
+              pv: msg.todayPV,
+              avgStaySec: msg.avgDurationSec,
+            };
+            return {
+              ...prev,
+              snapshot: {
+                ...prev.snapshot,
+                onlineNow: msg.onlineNow,
+                todayPV: msg.todayPV,
+                todayUV: msg.todayUV,
+                avgDurationSec: msg.avgDurationSec,
+                engagementRate: msg.engagementRate,
+                updatedAt: msg.updatedAt,
+              },
+              series: {
+                realtime: [...prev.series.realtime.slice(1), latestPoint],
+                week: nextWeek,
+                month: nextMonth,
+              },
+            };
+          });
+        })
+        .catch(() => {
+          if (active) setSseConnected(false);
         });
-      } catch {
-        // ignore malformed SSE chunk
-      }
     };
 
+    refresh();
+    const timer = window.setInterval(refresh, 3000);
     return () => {
-      es.close();
+      active = false;
+      window.clearInterval(timer);
       setSseConnected(false);
     };
   }, [liveRefreshEnabled]);
@@ -702,70 +701,10 @@ export function DashboardView({ onNavigate, liveRefreshEnabled }: DashboardViewP
         </div>
       </section>
 
-      {/* Bottom Row: Top Content Table + Traffic Sources */}
-      <section className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Top Content Leaderboard */}
-        <div className="lg:col-span-3 bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">
-                热门内容表现
-              </h2>
-              <p className="text-[13px] text-[#6E6E73] mt-0.5">
-                跨视频、图文与文章的实时浏览排行
-              </p>
-            </div>
-          </div>
-
-          <div className="divide-y divide-[#F2F2F7]">
-            {data.topContent.map((item, idx) => {
-              const targetMod: ModuleKey =
-                item.type === 'video'
-                  ? 'videos'
-                  : item.type === 'imagetext'
-                    ? 'imagetexts'
-                    : 'articles';
-              const TypeIcon =
-                item.type === 'video' ? Film : item.type === 'imagetext' ? Images : FileText;
-              const typeLabel =
-                item.type === 'video' ? '视频' : item.type === 'imagetext' ? '图文' : '文章';
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onNavigate(targetMod)}
-                  className="w-full py-3 px-2 -mx-2 rounded-xl hover:bg-[#F5F5F7] flex items-center justify-between gap-4 text-left transition-colors group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-5 text-[12px] font-mono text-[#86868B] tabular-nums shrink-0">
-                      0{idx + 1}
-                    </span>
-                    <TypeIcon className="w-4 h-4 text-[#6E6E73] shrink-0" strokeWidth={1.7} />
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-medium text-[#1D1D1F] truncate group-hover:text-[#0071E3] transition-colors">
-                        {item.title}
-                      </div>
-                      <div className="text-[12px] text-[#86868B] flex items-center gap-1.5 mt-0.5 tabular-nums">
-                        <span>{typeLabel}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{item.metricLabel}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[14px] font-semibold text-[#1D1D1F] tabular-nums">
-                      {formatNumber(item.views)}
-                    </span>
-                    <ArrowUpRight className="w-4 h-4 text-[#C7C7CC] group-hover:text-[#0071E3] transition-colors" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
+      {/* Bottom Row: Traffic Sources */}
+      <section className="grid grid-cols-1 gap-5">
         {/* Traffic Sources & Device Breakdown */}
-        <div className="lg:col-span-2 bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+        <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between">
           <div>
             <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">
               访客来源与终端分布

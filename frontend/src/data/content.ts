@@ -31,6 +31,7 @@ export interface ArticleItem {
   author: string;
   date: string;
   readMinutes: number;
+  likes: number;
   cover: string;
   quote: string;
   paragraphs: string[];
@@ -182,6 +183,7 @@ export const ARTICLES: ArticleItem[] = [
     author: '林屿',
     date: '2026年11月14日',
     readMinutes: 6,
+    likes: 1286,
     cover: '/src/assets/images/article_optics_lens_1795019174781.jpg',
     quote: '真正流畅的动效不是为了展示动画本身，而是让数字元素遵守现实世界的惯性与质量感。',
     paragraphs: [
@@ -199,6 +201,7 @@ export const ARTICLES: ArticleItem[] = [
     author: '周念',
     date: '2026年11月8日',
     readMinutes: 5,
+    likes: 843,
     cover: '/src/assets/images/article_architecture_1795019174097.jpg',
     quote: '空白并非什么都没有，它恰恰是为光线预留的舞台。',
     paragraphs: [
@@ -215,6 +218,7 @@ export const ARTICLES: ArticleItem[] = [
     author: '陈默',
     date: '2026年10月29日',
     readMinutes: 7,
+    likes: 2137,
     cover: '/src/assets/images/video_hero_coast_1795019172940.jpg',
     quote: '当室外天空降到 9000K 的深钴蓝，室内一盏 2700K 的落地灯就能讲述整个故事。',
     paragraphs: [
@@ -231,6 +235,7 @@ export const ARTICLES: ArticleItem[] = [
     author: '顾言',
     date: '2026年10月19日',
     readMinutes: 8,
+    likes: 967,
     cover: '/src/assets/images/article_optics_lens_1795019174781.jpg',
     quote: '计算负责把画面记录得更准确，而光学负责让光线在到达传感器前就已经动人。',
     paragraphs: [
@@ -247,6 +252,7 @@ export const ARTICLES: ArticleItem[] = [
     author: '林屿',
     date: '2026年10月3日',
     readMinutes: 4,
+    likes: 1528,
     cover: '/src/assets/images/gallery_travertine_still_1795019174611.jpg',
     quote: '好的器物从不掩饰自己的来源，石材保留孔隙，金属保留切削轨迹。',
     paragraphs: [

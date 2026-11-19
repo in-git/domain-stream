@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUpRight, Bookmark, Heart, Type, X } from 'lucide-react';
+import { Bookmark, Heart, Type, X } from 'lucide-react';
 import type { ArticleItem } from '../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
+import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
 import { ResilientImage } from './ResilientImage';
 
 interface ArticlesViewProps {
@@ -19,6 +19,23 @@ interface ArticlesViewProps {
 
 const ARTICLE_CATEGORIES = ['全部', '设计', '影像', '技术', '随笔'] as const;
 type ArticleCategory = (typeof ARTICLE_CATEGORIES)[number];
+
+// 小红书式瀑布流：交替不同封面比例，形成错落的两列节奏
+const FEED_COVER_RATIOS = [
+  'aspect-[3/4]',
+  'aspect-square',
+  'aspect-[4/5]',
+  'aspect-[4/3]',
+  'aspect-[3/4]',
+  'aspect-[5/6]',
+];
+
+function formatLikes(count: number): string {
+  if (count >= 10000) {
+    return `${(count / 10000).toFixed(1).replace(/\.0$/, '')}万`;
+  }
+  return `${count}`;
+}
 
 export function ArticlesView({
   articles,
@@ -48,9 +65,6 @@ export function ArticlesView({
       a.author.toLowerCase().includes(normalizedQuery);
     return matchCategory && matchQuery;
   });
-
-  const leadArticle = category === '全部' && !normalizedQuery ? filteredArticles[0] : null;
-  const gridArticles = leadArticle ? filteredArticles.slice(1) : filteredArticles;
 
   useEffect(() => {
     if (externalSelectedId) {
@@ -87,9 +101,9 @@ export function ArticlesView({
   };
 
   return (
-    <section aria-labelledby="articles-heading" className="space-y-10">
+    <section aria-labelledby="articles-heading" className="space-y-6">
       {/* Header & Filter */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-5">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="text-xs font-medium tracking-wide text-[#0071E3] dark:text-[#0A84FF] mb-1.5">
             深度专题与设计志
@@ -105,7 +119,7 @@ export function ArticlesView({
         <div
           role="tablist"
           aria-label="文章分类筛选"
-          className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] self-start md:self-auto overflow-x-auto max-w-full"
+          className="flex items-center gap-2 self-start md:self-auto overflow-x-auto max-w-full pb-0.5"
         >
           {ARTICLE_CATEGORIES.map((item) => {
             const active = category === item;
@@ -116,182 +130,114 @@ export function ArticlesView({
                 role="tab"
                 aria-selected={active}
                 onClick={() => setCategory(item)}
-                className={`relative px-3.5 py-2 min-h-[40px] text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+                className={`px-3.5 py-1.5 min-h-[36px] rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
                   active
-                    ? 'text-[#1D1D1F] dark:text-white'
-                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+                    ? 'bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]'
+                    : 'bg-[#F2F2F7] text-[#6E6E73] dark:bg-[#1C1C1E] dark:text-[#98989D] hover:bg-[#E8E8ED] dark:hover:bg-[#242426]'
                 }`}
               >
-                {active && (
-                  <motion.span
-                    layoutId="articleCategoryPill"
-                    transition={SWIFTUI_SNAPPY}
-                    className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-                  />
-                )}
-                <span className="relative z-10">{item}</span>
+                {item}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Lead Editorial Article */}
-      {leadArticle && (
-        <motion.article
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={SWIFTUI_SMOOTH}
-          className="group grid grid-cols-1 lg:grid-cols-12 items-stretch rounded-3xl overflow-hidden bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] shadow-sm"
-        >
-          <button
-            type="button"
-            onClick={() => openArticle(leadArticle)}
-            className="lg:col-span-6 relative aspect-[4/3] lg:aspect-auto lg:min-h-[340px] overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
-          >
-            <ResilientImage
-              src={leadArticle.cover}
-              alt={leadArticle.title}
-              priority
-              fallbackTitle={leadArticle.title}
-              className="w-full h-full transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-            />
-          </button>
+      {/* Xiaohongshu-style Two-Column Waterfall Feed */}
+      <div className="columns-2 gap-3 sm:gap-4 max-w-4xl mx-auto">
+        {filteredArticles.map((article, idx) => {
+          const isSaved = savedIds.includes(article.id);
+          const isLiked = likedIds.includes(article.id);
+          return (
+            <motion.article
+              key={article.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(idx, 8) * 0.03 }}
+              className="break-inside-avoid mb-3 sm:mb-4"
+            >
+              <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                <button
+                  type="button"
+                  onClick={() => openArticle(article)}
+                  className="relative block w-full overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                  aria-label={`阅读文章：${article.title}`}
+                >
+                  <ResilientImage
+                    src={article.cover}
+                    alt={article.title}
+                    fallbackTitle={article.title}
+                    className={`w-full ${
+                      FEED_COVER_RATIOS[idx % FEED_COVER_RATIOS.length]
+                    } transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
+                  />
+                  <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
+                    {article.category}
+                  </span>
+                </button>
 
-          <div className="lg:col-span-6 p-6 sm:p-8 lg:p-10 flex flex-col justify-between gap-6">
-            <div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-[#6E6E73] dark:text-[#98989D] mb-3">
-                <span>头版专稿</span>
-                <span aria-hidden="true">·</span>
-                <span>{leadArticle.category}</span>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">{leadArticle.readMinutes} 分钟阅读</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => openArticle(leadArticle)}
-                className="text-left focus-visible:outline-none"
-              >
-                <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#0A84FF] transition-colors leading-snug">
-                  {leadArticle.title}
-                </h2>
-              </button>
-
-              <p className="mt-3 text-sm sm:text-base text-[#515154] dark:text-[#A1A1A6] leading-relaxed">
-                {leadArticle.excerpt}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-black/[0.05] dark:border-white/[0.06]">
-              <div className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-                {leadArticle.author} · {leadArticle.date}
-              </div>
-
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.96 }}
-                onClick={() => openArticle(leadArticle)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F] text-xs font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
-              >
-                <span>阅读全文</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </motion.button>
-            </div>
-          </div>
-        </motion.article>
-      )}
-
-      {/* Articles Grid */}
-      <motion.div layout className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <AnimatePresence mode="popLayout">
-          {gridArticles.map((article, idx) => {
-            const isSaved = savedIds.includes(article.id);
-            return (
-              <motion.article
-                key={article.id}
-                layout
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97 }}
-                transition={{ ...SWIFTUI_SMOOTH, delay: idx * 0.04 }}
-                whileHover={{ y: -2 }}
-                className="group flex flex-col justify-between rounded-2xl overflow-hidden bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] transition-shadow hover:shadow-md"
-              >
-                <div>
+                <div className="px-2.5 sm:px-3 pt-2 pb-2.5">
                   <button
                     type="button"
                     onClick={() => openArticle(article)}
-                    className="block w-full aspect-[16/10] overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                    className="block w-full text-left focus-visible:outline-none"
                   >
-                    <ResilientImage
-                      src={article.cover}
-                      alt={article.title}
-                      fallbackTitle={article.title}
-                      className="w-full h-full transition-transform duration-500 ease-out group-hover:scale-105"
-                    />
+                    <h3 className="text-[13px] sm:text-sm font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
+                      {article.title}
+                    </h3>
                   </button>
 
-                  <div className="p-6 pb-4">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[#6E6E73] dark:text-[#98989D] mb-2.5">
-                      <span>{article.category}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">{article.readMinutes} 分钟阅读</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{article.date}</span>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="flex items-center justify-center w-4 h-4 shrink-0 rounded-full bg-gradient-to-br from-[#FF6B81] to-[#FF2E4D] text-[9px] font-semibold text-white">
+                        {article.author.slice(0, 1)}
+                      </span>
+                      <span className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
+                        {article.author}
+                      </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => openArticle(article)}
-                      className="text-left focus-visible:outline-none"
-                    >
-                      <h3 className="text-lg sm:text-xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#0A84FF] transition-colors leading-snug">
-                        {article.title}
-                      </h3>
-                    </button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.85 }}
+                        transition={SWIFTUI_BOUNCY}
+                        onClick={() => onToggleLike(article.id)}
+                        aria-label={isLiked ? '取消点赞文章' : '点赞文章'}
+                        aria-pressed={isLiked}
+                        className={`flex items-center gap-1 px-1 py-1 text-[11px] tabular-nums transition-colors ${
+                          isLiked
+                            ? 'text-[#FF2E4D]'
+                            : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                        <span>{formatLikes(article.likes + (isLiked ? 1 : 0))}</span>
+                      </motion.button>
 
-                    <p className="mt-2.5 text-sm text-[#515154] dark:text-[#A1A1A6] leading-relaxed line-clamp-2">
-                      {article.excerpt}
-                    </p>
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.85 }}
+                        transition={SWIFTUI_BOUNCY}
+                        onClick={() => onToggleSave(article.id)}
+                        aria-label={isSaved ? '取消收藏文章' : '收藏文章'}
+                        aria-pressed={isSaved}
+                        className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                          isSaved
+                            ? 'text-[#0071E3] dark:text-[#0A84FF]'
+                            : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+                        }`}
+                      >
+                        <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`} />
+                      </motion.button>
+                    </div>
                   </div>
                 </div>
-
-                <div className="px-6 py-4 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between">
-                  <span className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-                    作者：{article.author}
-                  </span>
-
-                  <div className="flex items-center gap-1">
-                    <motion.button
-                      type="button"
-                      whileTap={{ scale: 0.86 }}
-                      transition={SWIFTUI_BOUNCY}
-                      onClick={() => onToggleSave(article.id)}
-                      aria-label={isSaved ? '取消收藏文章' : '收藏文章'}
-                      className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg transition-colors ${
-                        isSaved
-                          ? 'text-[#0071E3] dark:text-[#0A84FF]'
-                          : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-                      }`}
-                    >
-                      <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
-                    </motion.button>
-
-                    <button
-                      type="button"
-                      onClick={() => openArticle(article)}
-                      className="px-3 py-1.5 min-h-[40px] text-xs font-medium text-[#0071E3] dark:text-[#0A84FF] hover:underline whitespace-nowrap"
-                    >
-                      阅读
-                    </button>
-                  </div>
-                </div>
-              </motion.article>
-            );
-          })}
-        </AnimatePresence>
-      </motion.div>
+              </div>
+            </motion.article>
+          );
+        })}
+      </div>
 
       {/* Apple Reader Sheet Modal */}
       <AnimatePresence>

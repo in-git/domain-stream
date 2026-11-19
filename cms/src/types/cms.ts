@@ -1,4 +1,10 @@
-export type ModuleKey = 'dashboard' | 'videos' | 'imagetexts' | 'articles' | 'profile';
+export type ModuleKey =
+  | 'dashboard'
+  | 'videos'
+  | 'imagetexts'
+  | 'articles'
+  | 'category'
+  | 'profile';
 
 export type ContentStatus = 'published' | 'draft';
 
@@ -13,6 +19,14 @@ export interface UserProfile {
   defaultModule: ModuleKey;
   liveRefresh: boolean;
   lastLoginAt: string;
+  // 以下为 Snowy 真实用户信息映射字段（可选，兼容旧调用）
+  account?: string;
+  nickname?: string;
+  orgName?: string;
+  positionName?: string;
+  buttonCodeList?: string[];
+  roleCodeList?: string[];
+  permissionCodeList?: string[];
 }
 
 export interface LoginActivity {
@@ -41,6 +55,15 @@ export interface VideoItem {
   authorName: string;
   createdAt: string;
   updatedAt: string;
+  // 以下为小诺 biz 后端扩展字段（可选，不影响原有组件）
+  tags?: string;
+  likes?: number;
+  comments?: number;
+  publishTime?: string;
+  isTop?: string;
+  isRecommend?: string;
+  sortCode?: number;
+  remark?: string;
 }
 
 export interface ImageTextItem {
@@ -57,6 +80,17 @@ export interface ImageTextItem {
   authorName: string;
   createdAt: string;
   updatedAt: string;
+  // 以下为小诺 biz 后端扩展字段（可选）
+  coverUrl?: string;
+  description?: string;
+  tags?: string;
+  comments?: number;
+  publishTime?: string;
+  isTop?: string;
+  isRecommend?: string;
+  sortCode?: number;
+  remark?: string;
+  source?: string;
 }
 
 export interface ArticleItem {
@@ -75,6 +109,16 @@ export interface ArticleItem {
   authorName: string;
   createdAt: string;
   updatedAt: string;
+  // 以下为小诺 biz 后端扩展字段（可选）
+  tags?: string;
+  source?: string;
+  likes?: number;
+  comments?: number;
+  publishTime?: string;
+  isTop?: string;
+  isRecommend?: string;
+  sortCode?: number;
+  remark?: string;
 }
 
 export interface TrafficPoint {

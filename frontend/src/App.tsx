@@ -121,9 +121,6 @@ export default function App() {
           onSelectSection={handleSelectSection}
           isDark={isDark}
           onToggleTheme={() => setIsDark((d) => !d)}
-          onReplaySplash={() => setShowSplash(true)}
-          isLoggedIn={isLoggedIn}
-          profile={profile}
         />
 
         {/* Right Main Viewport Column */}
@@ -134,9 +131,6 @@ export default function App() {
             onChangeSearch={setSearchQuery}
             isDark={isDark}
             onToggleTheme={() => setIsDark((d) => !d)}
-            isLoggedIn={isLoggedIn}
-            profile={profile}
-            onOpenProfile={() => handleSelectSection('profile')}
           />
 
           <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8">
@@ -216,7 +210,6 @@ export default function App() {
                     onUpdateProfile={setProfile}
                     isDark={isDark}
                     onToggleTheme={() => setIsDark((d) => !d)}
-                    onReplaySplash={() => setShowSplash(true)}
                   />
                 </motion.div>
               )}

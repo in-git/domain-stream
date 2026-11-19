@@ -5,7 +5,6 @@ import {
   Edit3,
   LogOut,
   Moon,
-  RotateCcw,
   Sun,
   UserPlus,
   X,
@@ -23,7 +22,6 @@ interface ProfileViewProps {
   onUpdateProfile: (next: UserProfile) => void;
   isDark: boolean;
   onToggleTheme: () => void;
-  onReplaySplash: () => void;
 }
 
 export function ProfileView({
@@ -35,7 +33,6 @@ export function ProfileView({
   onUpdateProfile,
   isDark,
   onToggleTheme,
-  onReplaySplash,
 }: ProfileViewProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [emailInput, setEmailInput] = useState('');
@@ -308,18 +305,6 @@ export function ProfileView({
                 <span className="inline-flex items-center gap-1.5 font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                   <span>{isDark ? '深色外观' : '浅色外观'}</span>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onReplaySplash}
-                className="w-full px-6 py-4 flex items-center justify-between text-sm hover:bg-black/[0.02] dark:hover:bg-white/[0.03] transition-colors"
-              >
-                <span className="text-[#6E6E73] dark:text-[#98989D]">开屏动画</span>
-                <span className="inline-flex items-center gap-1.5 font-medium text-[#0071E3] dark:text-[#0A84FF]">
-                  <RotateCcw className="w-4 h-4" />
-                  <span>重播开屏</span>
                 </span>
               </button>
             </div>

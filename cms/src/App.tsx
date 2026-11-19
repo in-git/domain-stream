@@ -1,10 +1,28 @@
-import { useCallback, useEffect, useState } from 'react';
-import { FileText, Film, Images, Menu, Plus, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Menu, Plus } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
+import { getCachedMenu, type SnowyMenu } from './lib/snowy.ts';
+import {
+  hasModulePerm,
+  menuNodeToModule,
+  modulesFromMenu,
+  resolveDefaultModule,
+  type DynamicModule,
+} from './lib/menu.ts';
+import {
+  forgetModule,
+  moduleFromStorage,
+  navigateToRoute,
+  parseRoute,
+  resolveInitialRoute,
+  routeModule,
+  type AppRoute,
+  type ContentAction,
+  type ContentModule,
+} from './lib/router.ts';
 import type {
   ArticleItem,
   ImageTextItem,
-  LoginActivity,
   ModuleKey,
   UserProfile,
   VideoItem,
@@ -16,42 +34,244 @@ import { VideoManagerView } from './components/VideoManagerView.tsx';
 import { ImageTextManagerView } from './components/ImageTextManagerView.tsx';
 import { ArticleManagerView } from './components/ArticleManagerView.tsx';
 import { PersonalCenterView } from './components/PersonalCenterView.tsx';
+import { ExternalMenuView } from './components/ExternalMenuView.tsx';
+import { VideoEditorPage, VideoViewPage } from './components/VideoPages.tsx';
+import {
+  ImageTextEditorPage,
+  ImageViewPage,
+} from './components/ImageTextPages.tsx';
+import {
+  ArticleEditorPage,
+  ArticleReaderPage,
+} from './components/ArticlePages.tsx';
+import { DeleteConfirmPage } from './components/DeleteConfirmPage.tsx';
+import { QuickCreatePage } from './components/QuickCreatePage.tsx';
+import { NoAccessPage, PageNotFound } from './components/PageShell.tsx';
+import CategoryView from './views/biz/category/index.tsx';
 
 const MODULE_TITLES: Record<ModuleKey, string> = {
   dashboard: '首页看板',
   videos: '视频管理',
   imagetexts: '图文管理',
   articles: '文章管理',
+  category: '通用分类',
   profile: '个人中心',
 };
+
+const CONTENT_NAMES: Record<ContentModule, string> = {
+  videos: '视频',
+  imagetexts: '图文',
+  articles: '文章',
+};
+
+const ACTION_NAMES: Record<ContentAction, string> = {
+  new: '新建',
+  edit: '编辑',
+  view: '预览',
+  delete: '删除',
+};
+
+/** 全部内置模块，供尚未拿到菜单前的首屏使用 */
+const FALLBACK_MODULES: DynamicModule[] = modulesFromMenu(null);
 
 export default function App() {
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [loginLogs, setLoginLogs] = useState<LoginActivity[]>([]);
-  const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard');
+  const [modules, setModules] = useState<DynamicModule[]>(FALLBACK_MODULES);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  // 后端 /sys/userCenter/loginMenu 返回的原始菜单树，侧边栏据此动态渲染
+  const [menuTree, setMenuTree] = useState<SnowyMenu[]>(() => getCachedMenu() || []);
+  // 当前选中的外部菜单（CueStudio 未内置对应页面的后台菜单）
+  const [externalMenu, setExternalMenu] = useState<SnowyMenu | null>(null);
+  const [route, setRoute] = useState<AppRoute>({ kind: 'module', module: 'dashboard' });
+  const [lastModule, setLastModule] = useState<ModuleKey>(
+    () => moduleFromStorage() || 'dashboard'
+  );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // 统一跳转：更新 state + URL hash；列表用 replace，子页面用 push（浏览器可返回）
+  const go = useCallback((next: AppRoute, replace = false) => {
+    setExternalMenu(null);
+    setRoute(navigateToRoute(next, replace));
+  }, []);
+  const goModule = useCallback(
+    (mod: ModuleKey) => go({ kind: 'module', module: mod }, true),
+    [go]
+  );
+
+  /** 树形菜单叶子点击：命中内置模块则正常导航，否则渲染外部菜单占位页 */
+  const handleSelectMenu = useCallback(
+    (node: SnowyMenu) => {
+      const target = menuNodeToModule(node);
+      if (target) goModule(target);
+      else setExternalMenu(node);
+    },
+    [goModule]
+  );
+  const goContent = useCallback(
+    (module: ContentModule, action: ContentAction, id?: string, slide?: number) =>
+      go({ kind: 'content', module, action, id, slide }),
+    [go]
+  );
+  const goQuick = useCallback(() => go({ kind: 'quick' }), [go]);
+
+  // 浏览器前进/后退或直接修改 hash 时同步视图
+  useEffect(() => {
+    const onRouteChange = () => {
+      setExternalMenu(null);
+      setRoute(parseRoute());
+      setMobileNavOpen(false);
+    };
+    window.addEventListener('hashchange', onRouteChange);
+    window.addEventListener('popstate', onRouteChange);
+    return () => {
+      window.removeEventListener('hashchange', onRouteChange);
+      window.removeEventListener('popstate', onRouteChange);
+    };
+  }, []);
+
+  // 快速创建页没有对应侧边栏项，沿用进入前的模块高亮
+  useEffect(() => {
+    if (route.kind !== 'quick') setLastModule(routeModule(route));
+  }, [route]);
+
+  const activeModule = route.kind === 'quick' ? lastModule : routeModule(route);
+  // 列表路由越权拦截（如手动改 hash 到无权限模块）
+  const moduleBlocked =
+    route.kind === 'module' && !modules.some((m) => m.key === route.module);
 
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [imagetexts, setImagetexts] = useState<ImageTextItem[]>([]);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
+  // 各模块是否已加载完成（驱动详情页加载态）
+  const [moduleReady, setModuleReady] = useState<Record<ContentModule, boolean>>({
+    videos: false,
+    imagetexts: false,
+    articles: false,
+  });
 
-  // Triggers to open creation/upload modals directly from top bar CTA
-  const [videoUploadTrigger, setVideoUploadTrigger] = useState(0);
-  const [imageTextUploadTrigger, setImageTextUploadTrigger] = useState(0);
-  const [articleCreateTrigger, setArticleCreateTrigger] = useState(0);
-  const [quickUploadSheetOpen, setQuickUploadSheetOpen] = useState(false);
+  // 按模块懒加载：记录已加载过的模块，避免重复请求；刷新时强制重新拉取
+  const loadedRef = useRef<Record<ContentModule, boolean>>({
+    videos: false,
+    imagetexts: false,
+    articles: false,
+  });
+  const loadingRef = useRef<Record<ContentModule, boolean>>({
+    videos: false,
+    imagetexts: false,
+    articles: false,
+  });
 
-  const loadAllContent = useCallback(async () => {
-    const [vRes, iRes, aRes] = await Promise.all([
-      api.getVideos(),
-      api.getImageTexts(),
-      api.getArticles(),
-    ]);
-    setVideos(vRes.items);
-    setImagetexts(iRes.items);
-    setArticles(aRes.items);
+  const markReady = useCallback((mod: ContentModule) => {
+    setModuleReady((prev) => (prev[mod] ? prev : { ...prev, [mod]: true }));
   }, []);
+
+  const loadVideos = useCallback(async (force = false) => {
+    if (!force && loadedRef.current.videos) return;
+    if (loadingRef.current.videos) return;
+    loadingRef.current.videos = true;
+    try {
+      const res = await api.getVideos();
+      setVideos(res.items);
+    } catch {
+      // 加载失败时保留空列表，仍标记为已尝试，避免每次切换模块重复请求
+    } finally {
+      loadedRef.current.videos = true;
+      markReady('videos');
+      loadingRef.current.videos = false;
+    }
+  }, [markReady]);
+
+  const loadImageTexts = useCallback(async (force = false) => {
+    if (!force && loadedRef.current.imagetexts) return;
+    if (loadingRef.current.imagetexts) return;
+    loadingRef.current.imagetexts = true;
+    try {
+      const res = await api.getImageTexts();
+      setImagetexts(res.items);
+    } catch {
+      // 同上
+    } finally {
+      loadedRef.current.imagetexts = true;
+      markReady('imagetexts');
+      loadingRef.current.imagetexts = false;
+    }
+  }, [markReady]);
+
+  const loadArticles = useCallback(async (force = false) => {
+    if (!force && loadedRef.current.articles) return;
+    if (loadingRef.current.articles) return;
+    loadingRef.current.articles = true;
+    try {
+      const res = await api.getArticles();
+      setArticles(res.items);
+    } catch {
+      // 同上
+    } finally {
+      loadedRef.current.articles = true;
+      markReady('articles');
+      loadingRef.current.articles = false;
+    }
+  }, [markReady]);
+
+  const loadModule = useCallback(
+    (mod: ContentModule, force = false) => {
+      if (mod === 'videos') return loadVideos(force);
+      if (mod === 'imagetexts') return loadImageTexts(force);
+      return loadArticles(force);
+    },
+    [loadVideos, loadImageTexts, loadArticles]
+  );
+
+  // 进入（含详情页）对应内容模块时才懒加载该模块数据；登录后生效
+  useEffect(() => {
+    if (!user) return;
+    if (activeModule === 'videos') void loadVideos();
+    else if (activeModule === 'imagetexts') void loadImageTexts();
+    else if (activeModule === 'articles') void loadArticles();
+  }, [user, activeModule, loadVideos, loadImageTexts, loadArticles]);
+
+  /** 用会话数据更新用户/菜单/权限，并按可访问模块校验恢复路由 */
+  const applySession = useCallback(
+    (
+      session: { user: UserProfile; menus?: SnowyMenu[] },
+      opts?: { forceDefault?: boolean }
+    ) => {
+      const nextModules = modulesFromMenu(session.menus || null);
+      setUser(session.user);
+      setModules(nextModules);
+      // 保留原始菜单树供侧边栏树形渲染；登录异常回退时不覆盖已有缓存
+      if (session.menus?.length) setMenuTree(session.menus);
+      setPermissions(session.user.buttonCodeList || []);
+
+      if (opts?.forceDefault) {
+        go(
+          {
+            kind: 'module',
+            module: resolveDefaultModule(nextModules, session.user.defaultModule),
+          },
+          true
+        );
+        return;
+      }
+
+      // 恢复上次路由：优先 URL hash / localStorage，但必须落在可访问模块内
+      const restored = resolveInitialRoute(session.user.defaultModule || 'dashboard');
+      const targetModule = routeModule(restored, 'dashboard');
+      if (!nextModules.some((m) => m.key === targetModule)) {
+        go(
+          {
+            kind: 'module',
+            module: resolveDefaultModule(nextModules, session.user.defaultModule),
+          },
+          true
+        );
+      } else {
+        go(restored, true);
+      }
+    },
+    [go]
+  );
 
   useEffect(() => {
     const token = getStoredToken();
@@ -61,28 +281,28 @@ export default function App() {
     }
     api
       .me()
-      .then(async (res) => {
-        setUser(res.user);
-        setLoginLogs(res.logs);
-        setActiveModule(res.user.defaultModule || 'dashboard');
-        await loadAllContent();
+      .then((res) => {
+        applySession(res);
       })
       .catch(() => {
+        // me() 走真实接口，鉴权失败会在此清除本地登录态
         setStoredToken(null);
       })
       .finally(() => {
         setBooting(false);
       });
-  }, [loadAllContent]);
+  }, [applySession]);
 
   async function handleLoginSuccess(loggedInUser: UserProfile) {
-    setUser(loggedInUser);
-    setActiveModule(loggedInUser.defaultModule || 'dashboard');
     try {
-      const [meRes] = await Promise.all([api.me(), loadAllContent()]);
-      setLoginLogs(meRes.logs);
+      const meRes = await api.me();
+      applySession(meRes, { forceDefault: true });
     } catch {
-      // already logged in
+      // 菜单/用户接口异常时退回登录返回的用户信息
+      applySession(
+        { user: loggedInUser, menus: undefined },
+        { forceDefault: true }
+      );
     }
   }
 
@@ -93,19 +313,20 @@ export default function App() {
       // ignore logout error
     }
     setStoredToken(null);
+    forgetModule();
+    go({ kind: 'module', module: 'dashboard' }, true);
     setUser(null);
+    setModules(FALLBACK_MODULES);
+    setPermissions([]);
+    setMenuTree([]);
+    setExternalMenu(null);
   }
 
   function handlePrimaryTopAction() {
-    if (activeModule === 'videos') {
-      setVideoUploadTrigger((n) => n + 1);
-    } else if (activeModule === 'imagetexts') {
-      setImageTextUploadTrigger((n) => n + 1);
-    } else if (activeModule === 'articles') {
-      setArticleCreateTrigger((n) => n + 1);
-    } else {
-      setQuickUploadSheetOpen(true);
-    }
+    if (activeModule === 'videos') goContent('videos', 'new');
+    else if (activeModule === 'imagetexts') goContent('imagetexts', 'new');
+    else if (activeModule === 'articles') goContent('articles', 'new');
+    else goQuick();
   }
 
   const primaryActionLabel =
@@ -116,6 +337,112 @@ export default function App() {
         : activeModule === 'articles'
           ? '撰写文章'
           : '快速上传';
+
+  // 顶栏主按钮：新增动作需有对应模块的新增权限；快速上传按任一新增权限开放
+  // 分类页自带「新增分类」等操作按钮，顶栏不再重复放置快速上传
+  const canPrimaryAction =
+    activeModule !== 'category' &&
+    (activeModule === 'videos'
+      ? hasModulePerm('videos', 'Add', permissions)
+      : activeModule === 'imagetexts'
+        ? hasModulePerm('imagetexts', 'Add', permissions)
+        : activeModule === 'articles'
+          ? hasModulePerm('articles', 'Add', permissions)
+          : (['videos', 'imagetexts', 'articles'] as ModuleKey[]).some((m) =>
+              hasModulePerm(m, 'Add', permissions)
+            ));
+
+  function renderContentPage(activeRoute: Extract<AppRoute, { kind: 'content' }>): ReactNode {
+    const { module, action, id, slide } = activeRoute;
+    const back = () => goModule(module);
+    // 保存/删除后只强制刷新当前模块
+    const refresh = () => loadModule(module, true);
+
+    // 模块不在可访问列表，或对应动作无权限时，拒绝渲染
+    const permittedAction =
+      action === 'new'
+        ? 'Add'
+        : action === 'edit'
+          ? 'Edit'
+          : action === 'delete'
+            ? 'Delete'
+            : 'Detail';
+    if (
+      !modules.some((m) => m.key === module) ||
+      !hasModulePerm(module, permittedAction, permissions)
+    ) {
+      return <NoAccessPage onBack={() => goModule('dashboard')} />;
+    }
+
+    if (action === 'new') {
+      if (module === 'videos') {
+        return <VideoEditorPage onSaved={refresh} onBack={back} />;
+      }
+      if (module === 'imagetexts') {
+        return <ImageTextEditorPage onSaved={refresh} onBack={back} />;
+      }
+      return <ArticleEditorPage onSaved={refresh} onBack={back} />;
+    }
+
+    const video = module === 'videos' ? videos.find((v) => v.id === id) : undefined;
+    const imageText =
+      module === 'imagetexts' ? imagetexts.find((it) => it.id === id) : undefined;
+    const article = module === 'articles' ? articles.find((a) => a.id === id) : undefined;
+    const missing = !video && !imageText && !article;
+
+    // 详情/编辑需要列表数据定位条目，模块尚未加载完成时先显示加载态
+    if (missing && !moduleReady[module]) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#86868B]">
+          <div className="w-8 h-8 rounded-full border-2 border-[#0071E3] border-t-transparent animate-spin" />
+          <span className="text-[13px]">正在加载{CONTENT_NAMES[module]}...</span>
+        </div>
+      );
+    }
+
+    if (missing) return <PageNotFound label={CONTENT_NAMES[module]} onBack={back} />;
+
+    if (action === 'view') {
+      if (video) return <VideoViewPage item={video} onRefresh={refresh} onBack={back} />;
+      if (imageText) {
+        return (
+          <ImageViewPage
+            item={imageText}
+            slide={slide}
+            onRefresh={refresh}
+            onBack={back}
+          />
+        );
+      }
+      return <ArticleReaderPage item={article!} onRefresh={refresh} onBack={back} />;
+    }
+
+    if (action === 'edit') {
+      if (video) {
+        return <VideoEditorPage item={video} onSaved={refresh} onBack={back} />;
+      }
+      if (imageText) {
+        return <ImageTextEditorPage item={imageText} onSaved={refresh} onBack={back} />;
+      }
+      return <ArticleEditorPage item={article!} onSaved={refresh} onBack={back} />;
+    }
+
+    const itemTitle = video?.title || imageText?.title || article?.title || '';
+    return (
+      <DeleteConfirmPage
+        title={`确认删除该${CONTENT_NAMES[module]}？`}
+        itemTitle={itemTitle}
+        description="此操作不可撤销，内容将从列表中永久移除。"
+        onBack={back}
+        onConfirm={async () => {
+          if (video) await api.deleteVideo(video.id);
+          else if (imageText) await api.deleteImageText(imageText.id);
+          else if (article) await api.deleteArticle(article.id);
+          await refresh();
+        }}
+      />
+    );
+  }
 
   if (booting) {
     return (
@@ -129,11 +456,22 @@ export default function App() {
     return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const headerTitle = externalMenu
+    ? externalMenu.meta?.title || externalMenu.title || '菜单详情'
+    : route.kind === 'content'
+      ? `${ACTION_NAMES[route.action]}${CONTENT_NAMES[route.module]}`
+      : route.kind === 'quick'
+        ? '快速创建'
+        : modules.find((m) => m.key === route.module)?.label || MODULE_TITLES[route.module];
+
   return (
     <div className="min-h-screen bg-[#F5F5F7] flex text-[#1D1D1F]">
       <Sidebar
+        menuTree={menuTree}
         activeModule={activeModule}
-        onSelectModule={setActiveModule}
+        activeMenuId={externalMenu?.id || null}
+        onSelectModule={goModule}
+        onSelectMenu={handleSelectMenu}
         user={user}
         counts={{
           videos: videos.length,
@@ -159,61 +497,75 @@ export default function App() {
             </button>
             <div className="flex items-center gap-2 text-[14px] whitespace-nowrap shrink-0">
               <span className="text-[#86868B] hidden sm:inline">工作台</span>
-              <span className="text-[#C7C7CC] hidden sm:inline" aria-hidden="true">/</span>
+              <span className="text-[#C7C7CC] hidden sm:inline" aria-hidden="true">
+                /
+              </span>
               <h1 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">
-                {MODULE_TITLES[activeModule]}
+                {headerTitle}
               </h1>
             </div>
           </div>
 
-          <div className="shrink-0">
-            <button
-              type="button"
-              onClick={handlePrimaryTopAction}
-              className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{primaryActionLabel}</span>
-            </button>
-          </div>
+          {!externalMenu && route.kind === 'module' && canPrimaryAction && (
+            <div className="shrink-0">
+              <button
+                type="button"
+                onClick={handlePrimaryTopAction}
+                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{primaryActionLabel}</span>
+              </button>
+            </div>
+          )}
         </header>
 
-        <main className="flex-1 w-full max-w-[1360px] mx-auto px-4 sm:px-8 py-6">
-          {activeModule === 'dashboard' && (
+        <main className="flex-1 w-full px-4 sm:px-8 py-6">
+          {externalMenu ? (
+            <ExternalMenuView
+              node={externalMenu}
+              onBack={() => goModule('dashboard')}
+            />
+          ) : moduleBlocked ? (
+            <NoAccessPage onBack={() => goModule('dashboard')} />
+          ) : route.kind === 'quick' ? (
+            <QuickCreatePage
+              onSelect={(module) => goContent(module, 'new')}
+              onBack={() => goModule('dashboard')}
+            />
+          ) : route.kind === 'content' ? (
+            renderContentPage(route)
+          ) : route.module === 'dashboard' ? (
             <DashboardView
-              onNavigate={setActiveModule}
+              onNavigate={goModule}
               liveRefreshEnabled={user.liveRefresh}
             />
-          )}
-
-          {activeModule === 'videos' && (
+          ) : route.module === 'videos' ? (
             <VideoManagerView
               videos={videos}
-              onRefresh={loadAllContent}
-              externalUploadTrigger={videoUploadTrigger}
+              onRefresh={() => loadModule('videos', true)}
+              onOpen={(action, id) => goContent('videos', action, id)}
+              permissions={permissions}
             />
-          )}
-
-          {activeModule === 'imagetexts' && (
+          ) : route.module === 'imagetexts' ? (
             <ImageTextManagerView
               items={imagetexts}
-              onRefresh={loadAllContent}
-              externalUploadTrigger={imageTextUploadTrigger}
+              onRefresh={() => loadModule('imagetexts', true)}
+              onOpen={(action, id, slide) => goContent('imagetexts', action, id, slide)}
+              permissions={permissions}
             />
-          )}
-
-          {activeModule === 'articles' && (
+          ) : route.module === 'articles' ? (
             <ArticleManagerView
               articles={articles}
-              onRefresh={loadAllContent}
-              externalCreateTrigger={articleCreateTrigger}
+              onRefresh={() => loadModule('articles', true)}
+              onOpen={(action, id) => goContent('articles', action, id)}
+              permissions={permissions}
             />
-          )}
-
-          {activeModule === 'profile' && (
+          ) : route.module === 'category' ? (
+            <CategoryView permissions={permissions} />
+          ) : (
             <PersonalCenterView
               user={user}
-              logs={loginLogs}
               myCounts={{
                 videos: videos.filter((v) => v.authorId === user.id).length,
                 imagetexts: imagetexts.filter((i) => i.authorId === user.id).length,
@@ -225,92 +577,6 @@ export default function App() {
           )}
         </main>
       </div>
-
-      {/* Quick Upload Launcher Modal (from Dashboard or Profile top bar) */}
-      {quickUploadSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs">
-          <div className="w-full max-w-[460px] bg-white rounded-[22px] border border-[#E5E5EA] shadow-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-[18px] font-semibold text-[#1D1D1F]">选择要发布的内容类型</h2>
-                <p className="text-[13px] text-[#6E6E73] mt-0.5">
-                  直接跳转对应模块并开启上传创作面板
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQuickUploadSheetOpen(false)}
-                aria-label="关闭"
-                className="w-8 h-8 rounded-full bg-[#F5F5F7] hover:bg-[#E5E5EA] flex items-center justify-center text-[#6E6E73]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setQuickUploadSheetOpen(false);
-                  setActiveModule('videos');
-                  setVideoUploadTrigger((n) => n + 1);
-                }}
-                className="w-full p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#ECECF0] flex items-center gap-4 text-left transition-colors"
-              >
-                <div className="w-11 h-11 rounded-xl bg-[#0071E3]/12 text-[#0071E3] flex items-center justify-center shrink-0">
-                  <Film className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[14px] font-semibold text-[#1D1D1F]">上传视频作品</div>
-                  <div className="text-[12px] text-[#6E6E73]">
-                    支持拖入 MP4/MOV/WebM，自动识别时长与首帧封面
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setQuickUploadSheetOpen(false);
-                  setActiveModule('imagetexts');
-                  setImageTextUploadTrigger((n) => n + 1);
-                }}
-                className="w-full p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#ECECF0] flex items-center gap-4 text-left transition-colors"
-              >
-                <div className="w-11 h-11 rounded-xl bg-[#34C759]/12 text-[#16A34A] flex items-center justify-center shrink-0">
-                  <Images className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[14px] font-semibold text-[#1D1D1F]">发布多图图文</div>
-                  <div className="text-[12px] text-[#6E6E73]">
-                    批量拖入多张图片，自由排序与指定首页封面
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setQuickUploadSheetOpen(false);
-                  setActiveModule('articles');
-                  setArticleCreateTrigger((n) => n + 1);
-                }}
-                className="w-full p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#ECECF0] flex items-center gap-4 text-left transition-colors"
-              >
-                <div className="w-11 h-11 rounded-xl bg-[#5856D6]/12 text-[#5856D6] flex items-center justify-center shrink-0">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[14px] font-semibold text-[#1D1D1F]">撰写专栏文章</div>
-                  <div className="text-[12px] text-[#6E6E73]">
-                    沉浸式排版编辑器，支持实时预览与头图上传
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
