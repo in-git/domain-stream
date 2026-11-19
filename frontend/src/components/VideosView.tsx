@@ -10,9 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   Heart,
-  Layers,
   LayoutGrid,
+  Maximize,
   Maximize2,
+  Minimize,
   Pause,
   Play,
   Rows3,
@@ -21,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import type { VideoItem } from '../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
+import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
 import { Tooltip } from './Tooltip';
 import { ResilientImage } from './ResilientImage';
 
@@ -214,7 +215,7 @@ interface FeedSlideProps {
   saved: boolean;
   currentTime: number;
   duration: number;
-  showChapters: boolean;
+  isFullscreen: boolean;
   savedTime?: number;
   onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
   onTogglePlay: () => void;
@@ -222,7 +223,7 @@ interface FeedSlideProps {
   onSetRate: (rate: number) => void;
   onToggleLike: () => void;
   onToggleSave: () => void;
-  onToggleChapters: () => void;
+  onToggleFullscreen: () => void;
   onSeek: (time: number) => void;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
@@ -245,7 +246,7 @@ function FeedSlide({
   saved,
   currentTime,
   duration,
-  showChapters,
+  isFullscreen,
   savedTime,
   onRegisterPlayer,
   onTogglePlay,
@@ -253,7 +254,7 @@ function FeedSlide({
   onSetRate,
   onToggleLike,
   onToggleSave,
-  onToggleChapters,
+  onToggleFullscreen,
   onSeek,
   onTimeUpdate,
   onDurationChange,
@@ -498,19 +499,19 @@ function FeedSlide({
               </motion.button>
             </Tooltip>
 
-            <Tooltip label="章节" side="left">
+            <Tooltip label={isFullscreen ? '退出全屏' : '全屏'} side="left">
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.88 }}
-                onClick={onToggleChapters}
-                aria-label="查看章节"
-                className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
-                  showChapters
-                    ? 'bg-[#0A84FF] border-[#0A84FF] text-white'
-                    : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
-                }`}
+                onClick={onToggleFullscreen}
+                aria-label={isFullscreen ? '退出全屏' : '全屏播放'}
+                className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
               >
-                <Layers className="w-5 h-5" />
+                {isFullscreen ? (
+                  <Minimize className="w-5 h-5" />
+                ) : (
+                  <Maximize className="w-5 h-5" />
+                )}
               </motion.button>
             </Tooltip>
 
@@ -594,45 +595,6 @@ function FeedSlide({
             </div>
           </div>
 
-          {/* Slide-Up Chapters Overlay Drawer */}
-          <AnimatePresence>
-            {showChapters && !mini && (
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 24 }}
-                transition={SWIFTUI_SHEET}
-                className="absolute inset-x-4 bottom-20 sm:left-auto sm:right-4 sm:w-72 rounded-2xl bg-[#161618]/92 backdrop-blur-xl border border-white/15 p-4 text-white shadow-2xl z-20"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold">章节目录</span>
-                  <button
-                    type="button"
-                    onClick={onToggleChapters}
-                    className="p-1 rounded-full hover:bg-white/10"
-                    aria-label="关闭章节"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  {video.chapters.map((ch) => (
-                    <button
-                      key={ch.label}
-                      type="button"
-                      onClick={() => onSeek(ch.time)}
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.14] flex items-center justify-between text-xs transition-colors"
-                    >
-                      <span>{ch.label}</span>
-                      <span className="font-mono-tabular text-[#0A84FF]">
-                        {formatTime(ch.time)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </>
       )}
     </div>
@@ -673,11 +635,19 @@ export function VideosView({
   const [playbackRate, setPlaybackRate] = useState(typeof resumePlaybackRate === 'number' ? resumePlaybackRate : 1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [showChapters, setShowChapters] = useState(false);
   const [unmuteOnNextPlay, setUnmuteOnNextPlay] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const playersRef = useRef<Map<string, MediaPlayerInstance>>(new Map());
   const swiperRef = useRef<SwiperClass | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+
+  // 跟踪播放区的全屏状态，切换按钮图标
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredVideos = videos.filter((v) => {
@@ -694,7 +664,6 @@ export function VideosView({
   useEffect(() => {
     setActiveIndex(0);
     setCurrentTime(0);
-    setShowChapters(false);
   }, [category, normalizedQuery]);
 
   const safeIndex =
@@ -704,7 +673,6 @@ export function VideosView({
   useEffect(() => {
     setCurrentTime(0);
     setDuration(currentVideo?.durationSeconds ?? 0);
-    setShowChapters(false);
     // 只有用户播放过视频，才把当前视频交给悬浮迷你播放器；
     // 否则进入站点就会凭空出现迷你播放器
     if (viewMode === 'feed' && currentVideo && hasPlayed) {
@@ -759,11 +727,30 @@ export function VideosView({
   const handleSlideChange = (swiper: SwiperClass) => {
     setActiveIndex(swiper.realIndex);
     setCurrentTime(0);
-    setShowChapters(false);
   };
 
   const handleNext = () => swiperRef.current?.slideNext();
   const handlePrev = () => swiperRef.current?.slidePrev();
+
+  /** 将整个播放区（含右侧操作栏与底部进度条）切入全屏 */
+  const toggleFullscreen = () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.();
+      return;
+    }
+    const request = stage.requestFullscreen?.bind(stage);
+    if (request) {
+      void request().catch(() => {});
+      return;
+    }
+    // iOS Safari 不支持元素全屏，退化为原生视频全屏
+    const videoEl = stage.querySelector('video') as
+      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+      | null;
+    videoEl?.webkitEnterFullscreen?.();
+  };
 
   // 网格模式下沉浸式播放区虽然被隐藏，但 <video> 仍在运行，需要主动暂停避免后台出声
   useEffect(() => {
@@ -818,13 +805,13 @@ export function VideosView({
             : 'space-y-4'
       }
     >
-      {/* Compact Top Filter & View Mode Row */}
+      {/* Compact Top Filter & View Mode Row（移动端隐藏分类筛选与浏览方式切换） */}
       {!isMini && (
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="hidden sm:flex flex-wrap items-center justify-between gap-3">
         <div
           role="tablist"
           aria-label="视频分类"
-          className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] overflow-x-auto max-w-full"
+          className="inline-flex items-center p-0.5 sm:p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] overflow-x-auto max-w-full"
         >
           {(['全部', ...filterCategories] as CategoryFilter[]).map((item) => {
             const active = category === item;
@@ -835,7 +822,7 @@ export function VideosView({
                 role="tab"
                 aria-selected={active}
                 onClick={() => setCategory(item)}
-                className={`relative px-3.5 py-1.5 min-h-[36px] text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                className={`relative px-2.5 py-1 min-h-[30px] text-[11px] font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 sm:px-3.5 sm:py-1.5 sm:min-h-[36px] sm:text-xs ${
                   active
                     ? 'text-[#1D1D1F] dark:text-white'
                     : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
@@ -930,10 +917,11 @@ export function VideosView({
         >
           {/* Full-bleed carousel stage: every slide fills the whole container */}
           <div
+            ref={stageRef}
             className={
               isMini
                 ? 'relative w-full h-full overflow-hidden'
-                : 'relative flex-1 min-w-0 h-[calc(100dvh-14.25rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-3xl overflow-hidden bg-[#0A0A0C] border border-black/[0.08] dark:border-white/[0.1] shadow-lg select-none'
+                : 'relative flex-1 min-w-0 h-[calc(100dvh-10.5rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-3xl overflow-hidden bg-[#0A0A0C] border border-black/[0.08] dark:border-white/[0.1] shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
             <Swiper
@@ -966,7 +954,7 @@ export function VideosView({
                     saved={savedIds.includes(video.id)}
                     currentTime={currentTime}
                     duration={duration}
-                    showChapters={showChapters}
+                    isFullscreen={isFullscreen}
                     savedTime={progressById?.[video.id]}
                     onRegisterPlayer={registerPlayer}
                     onTogglePlay={togglePlayback}
@@ -974,7 +962,7 @@ export function VideosView({
                     onSetRate={setPlaybackRate}
                     onToggleLike={() => onToggleLike(video.id)}
                     onToggleSave={() => onToggleSave(video.id)}
-                    onToggleChapters={() => setShowChapters((s) => !s)}
+                    onToggleFullscreen={toggleFullscreen}
                     onSeek={seekTo}
                     onTimeUpdate={setCurrentTime}
                     onDurationChange={setDuration}
@@ -1031,7 +1019,6 @@ export function VideosView({
               onOpen={() => {
                 setActiveIndex(idx);
                 setCurrentTime(0);
-                setShowChapters(false);
                 setViewMode('feed');
               }}
             />

@@ -314,7 +314,7 @@ export default function MessagesView({
             </h2>
             <span className="text-[11px] text-[#AEAEB2] tabular-nums">{visibleMessages.length}</span>
           </div>
-          <div className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
+          <div className="inline-flex items-center p-0.5 sm:p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
             {(
               [
                 { key: 'latest', label: '最新' },
@@ -326,7 +326,7 @@ export default function MessagesView({
                 type="button"
                 onClick={() => setSortMode(item.key)}
                 aria-pressed={sortMode === item.key}
-                className={`relative px-3.5 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-colors ${
+                className={`relative px-2.5 py-1 min-h-[30px] rounded-lg text-[11px] font-medium transition-colors sm:px-3.5 sm:py-1.5 sm:min-h-[36px] sm:text-xs ${
                   sortMode === item.key
                     ? 'text-[#1D1D1F] dark:text-white'
                     : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'

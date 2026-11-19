@@ -33,6 +33,7 @@ import { GalleryView } from './components/GalleryView';
 import MessagesView from './components/MessagesView';
 import { ProfileView, type UserBasicInfo } from './components/ProfileView';
 import { ProfilePage } from './components/ProfilePage';
+import { SearchOverlay } from './components/SearchOverlay';
 import { PortalEmpty, PortalError, SectionSkeleton } from './components/PortalStates';
 import {
   authApi,
@@ -107,6 +108,8 @@ export default function App() {
     isSectionId
   );
   const [searchQuery, setSearchQuery] = useState('');
+  /** 移动端独立搜索模块是否展开 */
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const [route, setRoute] = useState<RouteInfo>(() => currentRoute());
   const [isDark, setIsDark] = usePersistentState<boolean>('lumina:dark', false);
@@ -167,8 +170,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
 
-  /* 悬浮迷你播放器：离开视频板块时继续播放 */
+  /* 悬浮迷你播放器：离开视频板块时继续播放（移动端不展示） */
   const [persistentVideo, setPersistentVideo] = useState<VideoItem | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const handleChange = (event: MediaQueryListEvent) => setIsMobileViewport(event.matches);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
   const [persistentMuted, setPersistentMuted] = useState(true);
   const [persistentRate, setPersistentRate] = useState(1);
   /* 按 videoId 记录播放进度，回到视频板块或迷你播放器续播 */
@@ -502,6 +515,7 @@ export default function App() {
           <MainHeader
             searchQuery={searchQuery}
             onChangeSearch={setSearchQuery}
+            onOpenSearch={() => setIsSearchOpen(true)}
             isDark={isDark}
             onToggleTheme={() => setIsDark((d) => !d)}
             account={{
@@ -533,7 +547,7 @@ export default function App() {
                   resumeVideoId={persistentVideo?.id}
                   resumeMuted={persistentMuted}
                   resumePlaybackRate={persistentRate}
-                  mode={persistentVideo ? 'mini' : 'hidden'}
+                  mode={persistentVideo && !isMobileViewport ? 'mini' : 'hidden'}
                   onMiniClose={() => setPersistentVideo(null)}
                   onMiniExpand={() => handleSelectSection('videos')}
                 />
@@ -707,6 +721,20 @@ export default function App() {
           activeSection={activeSection}
           onSelectSection={handleSelectSection}
         />
+
+        {/* 移动端独立搜索模块：按当前底部导航模块检索 */}
+        <AnimatePresence>
+          {isSearchOpen && (
+            <SearchOverlay
+              section={activeSection}
+              videos={videos}
+              articles={articles}
+              photos={photos}
+              messages={messages}
+              onClose={() => setIsSearchOpen(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </MotionConfig>
   );

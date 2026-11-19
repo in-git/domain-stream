@@ -305,7 +305,7 @@ export function GalleryView({
         <div
           role="tablist"
           aria-label="图集筛选"
-          className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] self-start md:self-auto overflow-x-auto max-w-full"
+          className="inline-flex items-center p-0.5 sm:p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] self-start md:self-auto overflow-x-auto max-w-full"
         >
           {(['全部', ...filterAlbums] as AlbumFilter[]).map((item) => {
             const active = album === item;
@@ -316,7 +316,7 @@ export function GalleryView({
                 role="tab"
                 aria-selected={active}
                 onClick={() => setAlbum(item)}
-                className={`relative px-3.5 py-2 min-h-[40px] text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+                className={`relative px-2.5 py-1.5 min-h-[32px] text-[11px] font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] sm:px-3.5 sm:py-2 sm:min-h-[40px] sm:text-xs ${
                   active
                     ? 'text-[#1D1D1F] dark:text-white'
                     : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'

@@ -160,7 +160,7 @@ export function FavoritesSection({
         <div
           role="tablist"
           aria-label="收藏类型筛选"
-          className="flex items-center gap-1 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] p-1"
+          className="flex items-center gap-1 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] p-0.5 sm:p-1"
         >
           {TABS.map((item) => {
             const isActive = tab === item.id;
@@ -171,7 +171,7 @@ export function FavoritesSection({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setTab(item.id)}
-                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`relative px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-xs ${
                   isActive
                     ? 'text-[#1D1D1F] dark:text-[#F5F5F7]'
                     : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'

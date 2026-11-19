@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   ArrowLeft,
   FileText,
@@ -314,9 +314,7 @@ export function SearchOverlay({
         )}
       </div>
 
-      <AnimatePresence>
-        <FavoriteDetailModal target={activeTarget} onClose={() => setActiveTarget(null)} />
-      </AnimatePresence>
+      <FavoriteDetailModal target={activeTarget} onClose={() => setActiveTarget(null)} />
     </motion.div>
   );
 }

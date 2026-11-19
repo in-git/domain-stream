@@ -6,6 +6,8 @@ import { Tooltip } from './Tooltip';
 interface MainHeaderProps {
   searchQuery: string;
   onChangeSearch: (value: string) => void;
+  /** 移动端点击搜索图标进入独立搜索模块 */
+  onOpenSearch: () => void;
   isDark: boolean;
   onToggleTheme: () => void;
   account: AccountMenuProps;
@@ -14,6 +16,7 @@ interface MainHeaderProps {
 export function MainHeader({
   searchQuery,
   onChangeSearch,
+  onOpenSearch,
   isDark,
   onToggleTheme,
   account,
@@ -27,8 +30,8 @@ export function MainHeader({
         </span>
       </div>
 
-      {/* Center: Douyin-style Compact Frosted Search Input */}
-      <div className="flex-1 max-w-md">
+      {/* Center: 桌面端内联搜索框（移动端改为图标入口） */}
+      <div className="hidden sm:block flex-1 max-w-md">
         <div className="relative flex items-center">
           <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 pointer-events-none" />
           <input
@@ -52,8 +55,19 @@ export function MainHeader({
         </div>
       </div>
 
-      {/* Right: Theme Toggle + Account */}
+      {/* Right: Mobile Search Entry + Theme Toggle + Account */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <Tooltip label="搜索" side="bottom">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            onClick={onOpenSearch}
+            aria-label="搜索"
+            className="sm:hidden w-9 h-9 flex items-center justify-center rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
+          >
+            <Search className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
         <Tooltip label={isDark ? '浅色外观' : '深色外观'} side="bottom">
           <motion.button
             type="button"

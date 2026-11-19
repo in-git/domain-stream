@@ -105,7 +105,7 @@ export function ArticlesView({
         <div
           role="tablist"
           aria-label="文章分类筛选"
-          className="flex items-center gap-2 self-start md:self-auto overflow-x-auto max-w-full pb-0.5"
+          className="flex items-center gap-1.5 sm:gap-2 self-start md:self-auto overflow-x-auto max-w-full pb-0.5"
         >
           {(['全部', ...filterCategories] as ArticleCategory[]).map((item) => {
             const active = category === item;
@@ -116,7 +116,7 @@ export function ArticlesView({
                 role="tab"
                 aria-selected={active}
                 onClick={() => setCategory(item)}
-                className={`px-3.5 py-1.5 min-h-[36px] rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+                className={`px-2.5 py-1 min-h-[30px] rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] sm:px-3.5 sm:py-1.5 sm:min-h-[36px] sm:text-xs ${
                   active
                     ? 'bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]'
                     : 'bg-[#F2F2F7] text-[#6E6E73] dark:bg-[#1C1C1E] dark:text-[#98989D] hover:bg-[#E8E8ED] dark:hover:bg-[#242426]'
