@@ -7,6 +7,17 @@ import { APPLE_EASE, SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../l
 
 type SortMode = 'latest' | 'hot';
 
+/** 卡片底部用的紧凑日期：同年省略年份 */
+function formatShortDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  if (d.getFullYear() === new Date().getFullYear()) return `${month}月${day}日`;
+  return `${d.getFullYear()}/${month}/${day}`;
+}
+
 function formatDate(iso: string): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -359,7 +370,6 @@ export default function MessagesView({
              避免宽屏下网格被拉满、卡片容器明显宽于内容 */
           <div className="grid w-full max-w-[480px] grid-cols-2 gap-2 sm:max-w-[484px] sm:gap-3 md:max-w-[732px] md:grid-cols-3 xl:max-w-[980px] xl:grid-cols-4 2xl:max-w-[1228px] 2xl:grid-cols-5">
             {visibleMessages.map((message, index) => {
-              const isLiked = likedIds.has(message.id);
               const messageReplies = repliesByMessage.get(message.id) || [];
               // 弹幕轨道：回复数超过轨道数时循环滚动
               const trackCount = Math.min(Math.max(messageReplies.length, 1), 4);
@@ -377,14 +387,18 @@ export default function MessagesView({
                   {/* 9:16 竖版卡片；参照小红书，高度不超过 420px、宽度不超过
                       420 × 9/16 ≈ 236px，避免宽屏下列宽变大后卡片被拉宽，
                       容器明显宽于中间的语录文字 */}
-                  <div className="group flex flex-col w-full max-w-[236px] aspect-[9/16] max-h-[420px] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  <div className="group relative flex flex-col w-full max-w-[236px] aspect-[9/16] max-h-[420px] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  {/* 时间固定在卡片右上角 */}
+                  <span className="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] text-[10px] leading-tight text-[#AEAEB2] dark:text-[#86868B] tabular-nums">
+                    {formatShortDate(message.createdAt)}
+                  </span>
                   {/* 语录区 + 弹幕层 */}
                   <div className="relative flex-1 min-h-0">
                   {/* 语录区：引号装饰 + 居中大字，点击打开详情 */}
                   <button
                     type="button"
                     onClick={() => openMessage(message.id)}
-                    className="flex flex-col h-full w-full px-4 pt-4 pb-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                    className="flex flex-col h-full w-full px-3 pt-3 pb-3 sm:px-4 sm:pt-4 sm:pb-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
                     aria-label={`查看留言详情：${message.nickname}`}
                   >
                     <span
@@ -442,50 +456,25 @@ export default function MessagesView({
                     </ul>
                   )}
 
-                  {/* 底部作者行：参考图的「作者 + 点赞」布局 */}
-                  <div className="mt-1 px-3 py-2 border-t border-[#F2F2F7] dark:border-white/[0.06] flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Avatar name={message.nickname} size="sm" />
-                      <div className="min-w-0">
-                        <div className="text-[11px] text-[#3A3A3C] dark:text-[#D1D1D6] truncate leading-tight">
-                          {message.nickname}
-                        </div>
-                        <div className="text-[10px] text-[#AEAEB2] dark:text-[#86868B] tabular-nums leading-tight">
-                          {formatDate(message.createdAt)}
-                        </div>
-                      </div>
-                    </div>
+                  {/* 作者：绝对定位左下角 */}
+                  <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1.5 min-w-0 max-w-[55%]">
+                    <Avatar name={message.nickname} size="sm" />
+                    <span className="min-w-0 truncate text-[11px] text-[#3A3A3C] dark:text-[#D1D1D6] leading-tight">
+                      {message.nickname}
+                    </span>
+                  </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openMessage(message.id)}
-                        aria-label="查看留言详情与回复"
-                        className="flex items-center gap-1 px-1 py-1 text-[11px] tabular-nums text-[#8E8E93] dark:text-[#98989D] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
-                        <span>{messageReplies.length}</span>
-                      </button>
-                      <motion.button
-                        type="button"
-                        whileTap={{ scale: 0.85 }}
-                        transition={SWIFTUI_BOUNCY}
-                        onClick={() => onToggleLike(message.id)}
-                        aria-label={isLiked ? '取消点赞' : '点赞'}
-                        aria-pressed={isLiked}
-                        className={`flex items-center gap-1 px-1 py-1 text-[11px] tabular-nums transition-colors ${
-                          isLiked
-                            ? 'text-[#FF2E4D]'
-                            : 'text-[#8E8E93] dark:text-[#98989D] hover:text-[#FF2E4D]'
-                        }`}
-                      >
-                        <Heart
-                          className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`}
-                          strokeWidth={1.8}
-                        />
-                        <span>{message.likes}</span>
-                      </motion.button>
-                    </div>
+                  {/* 操作按钮：绝对定位右下角 */}
+                  <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => openMessage(message.id)}
+                      aria-label="查看留言详情与回复"
+                      className="flex items-center gap-1 h-7 px-1.5 rounded-full text-[11px] tabular-nums text-[#8E8E93] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                      <span>{messageReplies.length}</span>
+                    </button>
                   </div>
                   </div>
                 </motion.article>

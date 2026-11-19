@@ -357,7 +357,10 @@ function FeedSlide({
   const progressValue = Math.min(currentTime, progressMax);
 
   // 必须缓存源对象：每次渲染新建对象会被 Vidstack 当成新源，导致播放请求被中断
-  const source = useMemo(() => ({ src: video.src, type: 'video/mp4' }), [video.src]);
+  const source = useMemo<{ src: string; type: 'video/mp4' }>(
+    () => ({ src: video.src, type: 'video/mp4' }),
+    [video.src]
+  );
 
   return (
     <div data-video-stage className="relative w-full h-full bg-black overflow-hidden">
@@ -438,7 +441,7 @@ function FeedSlide({
 
           {/* Top Status + Playback Rate */}
           {!mini && (
-            <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
+            <div className="absolute top-16 md:top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
               <div className="px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/10 text-[11px] text-white/90 tabular-nums whitespace-nowrap">
                 {index + 1} / {total} · {video.resolution}
               </div>
@@ -532,7 +535,9 @@ function FeedSlide({
           {/* Bottom Info + Progress Scrubber */}
           <div
             className={`absolute bottom-0 left-0 right-0 text-white z-10 pointer-events-none ${
-              mini ? 'p-2' : 'space-y-3 p-4 sm:p-6 pr-20 sm:pr-24'
+              mini
+                ? 'p-2'
+                : 'space-y-3 px-4 pt-4 pr-20 pb-[calc(3rem_+_max(0.5rem,env(safe-area-inset-bottom)))] sm:px-6 sm:pt-6 sm:pr-24 md:pb-6'
             }`}
           >
             {!mini && (
@@ -553,45 +558,51 @@ function FeedSlide({
               </div>
             )}
 
-            <div className={`flex items-center pointer-events-auto ${mini ? 'gap-1.5' : 'gap-3'}`}>
-              <button
-                type="button"
-                onClick={onTogglePlay}
-                aria-label={playing ? '暂停' : '播放'}
-                className={`rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0 ${
-                  mini ? 'w-6 h-6' : 'w-10 h-10'
-                }`}
-              >
-                {playing ? (
-                  <Pause className={`fill-white ${mini ? 'w-3 h-3' : 'w-5 h-5'}`} />
-                ) : (
-                  <Play className={`fill-white translate-x-[1px] ${mini ? 'w-3 h-3' : 'w-5 h-5'}`} />
-                )}
-              </button>
-              <span
-                className={`font-mono-tabular text-white/80 ${
-                  mini ? 'w-8 text-[10px]' : 'w-10 text-[11px]'
-                }`}
-              >
-                {formatTime(currentTime)}
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={progressMax}
-                step={0.05}
-                value={progressValue}
-                onChange={(e) => onSeek(Number(e.target.value))}
-                aria-label="播放进度"
-                className="flex-1 min-w-0 h-1 accent-white cursor-pointer rounded-full bg-white/25"
-              />
-              <span
-                className={`font-mono-tabular text-white/65 text-right ${
-                  mini ? 'w-8 text-[10px]' : 'w-10 text-[11px]'
-                }`}
-              >
-                {formatTime(progressMax)}
-              </span>
+            {/* 进度条：沉浸模式下铺满整行，只保留拖动条；迷你窗口保留播放键与时间 */}
+            <div className={`flex items-center pointer-events-auto ${mini ? 'gap-1.5' : ''}`}>
+              {mini && (
+                <button
+                  type="button"
+                  onClick={onTogglePlay}
+                  aria-label={playing ? '暂停' : '播放'}
+                  className="w-6 h-6 rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0"
+                >
+                  {playing ? (
+                    <Pause className="fill-white w-3 h-3" />
+                  ) : (
+                    <Play className="fill-white translate-x-[1px] w-3 h-3" />
+                  )}
+                </button>
+              )}
+              {mini && (
+                <span className="w-8 text-[10px] font-mono-tabular text-white/80">
+                  {formatTime(currentTime)}
+                </span>
+              )}
+              {/* 抖音风格纤细进度条：2px 细线 + 已播放高亮，不显示拖动圆点 */}
+              <div className="relative flex-1 min-w-0 flex items-center h-4">
+                <div className="relative w-full h-[2px] rounded-full bg-white/25 overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-white/90"
+                    style={{ width: `${Math.min(100, (progressValue / progressMax) * 100)}%` }}
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={progressMax}
+                  step={0.05}
+                  value={progressValue}
+                  onChange={(e) => onSeek(Number(e.target.value))}
+                  aria-label="播放进度"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+              {mini && (
+                <span className="w-8 text-[10px] font-mono-tabular text-white/65 text-right">
+                  {formatTime(progressMax)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -921,7 +932,7 @@ export function VideosView({
             className={
               isMini
                 ? 'relative w-full h-full overflow-hidden'
-                : 'relative flex-1 min-w-0 h-[calc(100dvh-10.5rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-3xl overflow-hidden bg-[#0A0A0C] border border-black/[0.08] dark:border-white/[0.1] shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                : 'relative flex-1 min-w-0 h-[100dvh] md:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
             <Swiper

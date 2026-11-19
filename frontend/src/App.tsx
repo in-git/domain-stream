@@ -511,13 +511,14 @@ export default function App() {
         />
 
         {/* Right Main Viewport Column */}
-        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+        <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh]">
           <MainHeader
             searchQuery={searchQuery}
             onChangeSearch={setSearchQuery}
             onOpenSearch={() => setIsSearchOpen(true)}
             isDark={isDark}
             onToggleTheme={() => setIsDark((d) => !d)}
+            overlay={activeSection === 'videos' && isMobileViewport}
             account={{
               isLoggedIn,
               displayName: profile.name,
@@ -528,7 +529,14 @@ export default function App() {
             }}
           />
 
-          <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-24 md:pb-8">
+          {/* 移动端视频板块全出血：去掉左右留白与顶部间距，让播放区贴满容器 */}
+          <main
+            className={`flex-1 w-full ${
+              activeSection === 'videos'
+                ? 'px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8'
+                : 'px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-20 md:pb-8'
+            }`}
+          >
             {/* 视频板块常驻挂载：切换板块时只改变播放器容器形态，
                 <video> 元素不会被销毁重建，避免重新加载造成的卡顿 */}
             <div className={activeSection === 'videos' ? 'block' : 'contents'}>
@@ -720,6 +728,7 @@ export default function App() {
         <MobileTabBar
           activeSection={activeSection}
           onSelectSection={handleSelectSection}
+          transparent={activeSection === 'videos'}
         />
 
         {/* 移动端独立搜索模块：按当前底部导航模块检索 */}

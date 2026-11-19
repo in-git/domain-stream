@@ -6,6 +6,8 @@ import { SWIFTUI_SNAPPY } from '../lib/motion';
 interface MobileTabBarProps {
   activeSection: SectionId;
   onSelectSection: (section: SectionId) => void;
+  /** 首页（视频板块）使用透明紧凑样式，让视频铺满全屏 */
+  transparent?: boolean;
 }
 
 const MOBILE_TABS: { id: SectionId; label: string; Icon: typeof Film }[] = [
@@ -15,44 +17,54 @@ const MOBILE_TABS: { id: SectionId; label: string; Icon: typeof Film }[] = [
   { id: 'messages', label: '留言', Icon: MessageCircleHeart },
 ];
 
-export function MobileTabBar({ activeSection, onSelectSection }: MobileTabBarProps) {
+export function MobileTabBar({
+  activeSection,
+  onSelectSection,
+  transparent = false,
+}: MobileTabBarProps) {
   return (
     <nav
       aria-label="底部导航"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-black/[0.08] dark:border-white/[0.1] bg-[#FBFBFD]/88 dark:bg-[#111113]/88 backdrop-blur-xl pb-safe"
+      className={`md:hidden fixed bottom-0 left-0 right-0 z-30 ${
+        transparent
+          ? 'bg-transparent'
+          : 'bg-[#FBFBFD]/95 dark:bg-black/85 backdrop-blur-xl'
+      }`}
     >
-      <div className="grid grid-cols-4 h-14 items-center px-2">
+      <div className="grid grid-cols-4 h-12 items-center px-1">
         {MOBILE_TABS.map(({ id, label, Icon }) => {
           const isActive = activeSection === id;
           return (
             <motion.button
               key={id}
               type="button"
-              whileTap={{ scale: 0.94 }}
+              whileTap={{ scale: 0.9 }}
               transition={SWIFTUI_SNAPPY}
               onClick={() => onSelectSection(id)}
-              className={`relative flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] rounded-xl select-none [-webkit-tap-highlight-color:transparent] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
-                isActive
-                  ? 'text-[#0071E3] dark:text-[#0A84FF]'
-                  : 'text-[#6E6E73] dark:text-[#98989D]'
+              className={`relative flex items-center justify-center gap-1.5 h-12 min-w-0 select-none [-webkit-tap-highlight-color:transparent] transition-colors focus-visible:outline-none ${
+                transparent
+                  ? isActive
+                    ? 'text-white'
+                    : 'text-white/55'
+                  : isActive
+                    ? 'text-[#1D1D1F] dark:text-white'
+                    : 'text-[#8E8E93] dark:text-white/55'
               }`}
               aria-current={isActive ? 'page' : undefined}
             >
-              {isActive && (
-                <motion.span
-                  layoutId="mobileTabHighlight"
-                  transition={SWIFTUI_SNAPPY}
-                  className="absolute inset-x-2 inset-y-1.5 rounded-full bg-[#0071E3]/[0.09] dark:bg-[#0A84FF]/[0.16]"
-                />
-              )}
               <motion.div
                 animate={{ scale: isActive ? 1.08 : 1 }}
                 transition={SWIFTUI_SNAPPY}
-                className="relative z-10 shrink-0"
+                className="shrink-0"
               >
-                <Icon className="w-5 h-5" strokeWidth={isActive ? 2.2 : 1.75} />
+                <Icon
+                  className="w-[22px] h-[22px]"
+                  strokeWidth={isActive ? 2.4 : 1.8}
+                  fill={isActive ? 'currentColor' : 'none'}
+                  fillOpacity={isActive ? 0.12 : 0}
+                />
               </motion.div>
-              <span className="relative z-10 text-[11px] font-medium tracking-tight whitespace-nowrap">
+              <span className="text-[10px] font-medium tracking-tight whitespace-nowrap">
                 {label}
               </span>
             </motion.button>

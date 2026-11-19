@@ -26,13 +26,6 @@ type ArticleCategory = string;
 // 文章封面统一按 16:9 横版展示，与 CMS 上传裁剪比例保持一致
 const ARTICLE_COVER_ASPECT = 'aspect-[16/9]';
 
-function formatLikes(count: number): string {
-  if (count >= 10000) {
-    return `${(count / 10000).toFixed(1).replace(/\.0$/, '')}万`;
-  }
-  return `${count}`;
-}
-
 export function ArticlesView({
   articles,
   categories,
@@ -130,10 +123,9 @@ export function ArticlesView({
       </div>
 
       {/* Xiaohongshu-style Two-Column Waterfall Feed */}
-      <div className="columns-2 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
+      <div className="columns-1 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
         {filteredArticles.map((article, idx) => {
           const isSaved = savedIds.includes(article.id);
-          const isLiked = likedIds.includes(article.id);
           return (
             <motion.article
               key={article.id}
@@ -143,79 +135,44 @@ export function ArticlesView({
               className="break-inside-avoid mb-3 sm:mb-4"
             >
               <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
-                <button
-                  type="button"
-                  onClick={() => openArticle(article)}
-                  className="relative block w-full overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
-                  aria-label={`阅读文章：${article.title}`}
-                >
-                  <ResilientImage
-                    src={article.cover}
-                    alt={article.title}
-                    fallbackTitle={article.title}
-                    className={`w-full ${ARTICLE_COVER_ASPECT} transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
-                  />
-                  <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
-                    {article.category}
-                  </span>
-                </button>
-
-                <div className="px-2.5 sm:px-3 pt-2 pb-2.5">
+                <div className="relative overflow-hidden">
                   <button
                     type="button"
                     onClick={() => openArticle(article)}
-                    className="block w-full text-left focus-visible:outline-none"
+                    className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                    aria-label={`阅读文章：${article.title}`}
                   >
-                    <h3 className="text-[13px] sm:text-sm font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
-                      {article.title}
-                    </h3>
+                    <ResilientImage
+                      src={article.cover}
+                      alt={article.title}
+                      fallbackTitle={article.title}
+                      className={`w-full ${ARTICLE_COVER_ASPECT} transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
+                    />
                   </button>
+                  <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
+                    {article.category}
+                  </span>
 
-                  <div className="mt-1.5 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="flex items-center justify-center w-4 h-4 shrink-0 rounded-full bg-gradient-to-br from-[#FF6B81] to-[#FF2E4D] text-[9px] font-semibold text-white">
-                        {article.author.slice(0, 1)}
-                      </span>
-                      <span className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
-                        {article.author}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <motion.button
-                        type="button"
-                        whileTap={{ scale: 0.85 }}
-                        transition={SWIFTUI_BOUNCY}
-                        onClick={() => onToggleLike(article.id)}
-                        aria-label={isLiked ? '取消点赞文章' : '点赞文章'}
-                        aria-pressed={isLiked}
-                        className={`flex items-center gap-1 px-1 py-1 text-[11px] tabular-nums transition-colors ${
-                          isLiked
-                            ? 'text-[#FF2E4D]'
-                            : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
-                        }`}
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
-                        <span>{formatLikes(article.likes + (isLiked ? 1 : 0))}</span>
-                      </motion.button>
-
-                      <motion.button
-                        type="button"
-                        whileTap={{ scale: 0.85 }}
-                        transition={SWIFTUI_BOUNCY}
-                        onClick={() => onToggleSave(article.id)}
-                        aria-label={isSaved ? '取消收藏文章' : '收藏文章'}
-                        aria-pressed={isSaved}
-                        className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-                          isSaved
-                            ? 'text-[#0071E3] dark:text-[#0A84FF]'
-                            : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-                        }`}
-                      >
-                        <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`} />
-                      </motion.button>
-                    </div>
-                  </div>
+                  {/* 底部渐变：标题在左下、收藏在右下 */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <h3 className="pointer-events-none absolute bottom-2 left-2.5 right-10 text-[12px] sm:text-[13px] font-medium leading-snug text-white line-clamp-2">
+                    {article.title}
+                  </h3>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    transition={SWIFTUI_BOUNCY}
+                    onClick={() => onToggleSave(article.id)}
+                    aria-label={isSaved ? '取消收藏文章' : '收藏文章'}
+                    aria-pressed={isSaved}
+                    className={`absolute bottom-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
+                      isSaved
+                        ? 'bg-[#0071E3] text-white'
+                        : 'bg-black/45 text-white hover:bg-black/60'
+                    }`}
+                  >
+                    <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                  </motion.button>
                 </div>
               </div>
             </motion.article>

@@ -41,10 +41,10 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         initial={{ opacity: 0, scale: 0.7 }}
         animate={{ opacity: 0.45, scale: 1.15 }}
         transition={{ duration: 1.4, ease: APPLE_EASE }}
-        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-radial from-[#0A84FF]/25 via-[#5E5CE6]/10 to-transparent blur-3xl"
+        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-radial from-[#0A84FF]/25 via-[#5E5CE6]/10 to-transparent blur-3xl -translate-y-[20dvh] md:translate-y-0"
       />
 
-      <div className="relative flex flex-col items-center">
+      <div className="relative flex flex-col items-center -translate-y-[20dvh] md:translate-y-0">
         {/* Vector Prism / Aperture Emblem with SVG stroke reveal */}
         <motion.div
           initial={{ scale: 0.84, opacity: 0 }}

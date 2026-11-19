@@ -10,6 +10,8 @@ export interface AccountMenuProps {
   onGoLogin: () => void;
   onGoProfile: () => void;
   onLogout: () => void;
+  /** 悬浮在视频上方时使用白色图标 */
+  overlay?: boolean;
 }
 
 /** 顶部右侧账号入口：未登录显示登录入口，登录后显示头像下拉 */
@@ -20,6 +22,7 @@ export function AccountMenu({
   onGoLogin,
   onGoProfile,
   onLogout,
+  overlay = false,
 }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,9 +41,15 @@ export function AccountMenu({
       <button
         type="button"
         onClick={onGoLogin}
-        className="h-8 px-3.5 sm:px-4 rounded-full bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[12px] font-medium hover:brightness-110 transition-all"
+        aria-label="登录"
+        title="登录"
+        className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+          overlay
+            ? 'text-white hover:bg-white/15'
+            : 'text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
+        }`}
       >
-        登录
+        <UserRound className="w-[18px] h-[18px]" />
       </button>
     );
   }
@@ -52,19 +61,35 @@ export function AccountMenu({
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label="账号菜单"
-        className="flex items-center gap-1.5 sm:gap-2 h-9 pl-1 pr-1.5 sm:pr-2.5 rounded-full hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
+        className={`flex items-center gap-1.5 sm:gap-2 h-9 pl-1 pr-1.5 sm:pr-2.5 rounded-full transition-colors ${
+          overlay ? 'hover:bg-white/15' : 'hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
+        }`}
       >
         {avatarUrl ? (
           <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover border border-black/[0.08] dark:border-white/[0.12]" />
         ) : (
-          <span className="w-7 h-7 rounded-full bg-[#0071E3]/10 text-[#0071E3] dark:text-[#0A84FF] flex items-center justify-center text-[12px] font-medium">
+          <span
+            className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-medium ${
+              overlay
+                ? 'bg-white/20 text-white'
+                : 'bg-[#0071E3]/10 text-[#0071E3] dark:text-[#0A84FF]'
+            }`}
+          >
             {displayName.slice(0, 1).toUpperCase()}
           </span>
         )}
-        <span className="hidden sm:block max-w-[110px] truncate text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <span
+          className={`hidden sm:block max-w-[110px] truncate text-[12px] font-medium ${
+            overlay ? 'text-white' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+          }`}
+        >
           {displayName}
         </span>
-        <ChevronDown className={`w-3.5 h-3.5 text-[#86868B] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-3.5 h-3.5 transition-transform ${overlay ? 'text-white/80' : 'text-[#86868B]'} ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
       </button>
 
       <AnimatePresence>
