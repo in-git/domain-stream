@@ -1,274 +1,163 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Clock,
-  Eye,
-  FileText,
-  Film,
-  Images,
-  Monitor,
-  Plus,
-  Smartphone,
-  Users,
-} from 'lucide-react';
+import { Clock, Eye, Monitor, Smartphone, Users } from 'lucide-react';
 import { api } from '../../lib/api.ts';
 import { formatNumber, formatReadableDuration } from '../../lib/format.ts';
 import { hasModulePerm } from '../../lib/menu.ts';
-import type { ContentModule } from '../../lib/router.ts';
 import type { DashboardPayload, ModuleKey, TrafficPoint } from '../../types/cms.ts';
+import ModuleFlowChart, {
+  type FlowChartEdge,
+  type FlowChartGroup,
+  type FlowChartNode,
+} from '../../components/ModuleFlowChart.tsx';
 
 interface DashboardViewProps {
   onNavigate: (module: ModuleKey) => void;
-  onQuickCreate: (module: ContentModule) => void;
   permissions: string[];
   liveRefreshEnabled: boolean;
 }
 
-/** 大号创作入口：三张中性材质卡片直达新增视频 / 图文 / 文章 */
-function QuickCreateSection({
-  onSelect,
-  permissions,
-}: {
-  onSelect: (module: ContentModule) => void;
-  permissions: string[];
-}) {
-  const options = [
-    {
-      module: 'videos' as const,
-      icon: Film,
-      title: '新增视频',
-      description: '上传作品，自动识别时长与首帧封面',
-      accent: '#0071E3',
-      tint: 'rgba(0, 113, 227, 0.08)',
-    },
-    {
-      module: 'imagetexts' as const,
-      icon: Images,
-      title: '新增图文',
-      description: '多图排版，自由排序并指定首页封面',
-      accent: '#1D9E5F',
-      tint: 'rgba(29, 158, 95, 0.08)',
-    },
-    {
-      module: 'articles' as const,
-      icon: FileText,
-      title: '新增文章',
-      description: '沉浸式编辑器，实时预览与头图上传',
-      accent: '#5E5CE6',
-      tint: 'rgba(94, 92, 230, 0.08)',
-    },
-  ].filter((option) => hasModulePerm(option.module, 'Add', permissions));
-
-  if (options.length === 0) return null;
-
-  return (
-    <section aria-label="快速开始">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">快速开始</h2>
-          <p className="mt-0.5 text-[13px] text-[#6E6E73]">选择内容类型，直接进入创作</p>
-        </div>
-        <span className="hidden sm:inline text-[12px] text-[#86868B]">点击卡片直接新建</span>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {options.map((option) => {
-          const Icon = option.icon;
-          return (
-            <button
-              key={option.module}
-              type="button"
-              onClick={() => onSelect(option.module)}
-              className="group relative flex min-h-[176px] flex-col justify-between rounded-[20px] border border-[#E5E5EA] bg-white p-6 text-left shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-[#D2D2D7] hover:shadow-[0_14px_32px_-16px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 focus-visible:ring-offset-2"
-            >
-              <div className="flex items-start justify-between">
-                <span
-                  className="flex h-12 w-12 items-center justify-center rounded-[14px]"
-                  style={{ background: option.tint, color: option.accent }}
-                >
-                  <Icon className="h-6 w-6" strokeWidth={1.7} />
-                </span>
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E5E5EA] text-[#86868B] transition-colors duration-300 group-hover:border-[#D2D2D7] group-hover:text-[#1D1D1F]">
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                </span>
-              </div>
-
-              <div className="mt-8">
-                <div className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">
-                  {option.title}
-                </div>
-                <div className="mt-1.5 text-[12.5px] leading-relaxed text-[#6E6E73]">
-                  {option.description}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/** 流程图中的单个可点击节点 */
-function FlowNode({
-  x,
-  y,
-  width,
-  height,
-  label,
-  color,
-  primary,
-  onClick,
-}: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  label: string;
-  color: string;
-  primary?: boolean;
-  onClick: () => void;
-}) {
-  const midY = y + height / 2;
-  return (
-    <g
-      role="button"
-      tabIndex={0}
-      aria-label={`进入${label}模块`}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className="cursor-pointer transition-opacity hover:opacity-85 focus:opacity-85 outline-none"
-    >
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx={16}
-        fill={primary ? color : '#FFFFFF'}
-        stroke={primary ? color : '#E5E5EA'}
-        strokeWidth={primary ? 0 : 1.5}
-      />
-      <circle cx={x + 30} cy={midY} r={14} fill={primary ? 'rgba(255,255,255,0.22)' : `${color}1A`} />
-      <text
-        x={x + 30}
-        y={midY + 5}
-        textAnchor="middle"
-        fontSize="13"
-        fontWeight="700"
-        fill={primary ? '#FFFFFF' : color}
-      >
-        {label.slice(0, 1)}
-      </text>
-      <text x={x + 54} y={midY - 2} fontSize="15" fontWeight="600" fill={primary ? '#FFFFFF' : '#1D1D1F'}>
-        {label}
-      </text>
-      <text x={x + 54} y={midY + 17} fontSize="11" fill={primary ? 'rgba(255,255,255,0.82)' : '#86868B'}>
-        点击进入 →
-      </text>
-    </g>
-  );
-}
-
-/** 模块关系导览：以「通用分类」为中心，箭头指向各内容模块，节点点击可跳转 */
-function ModuleFlowSection({
+/** 首页模块关系图：节点点击跳转到对应模块 */
+function ModuleFlowPanel({
   onNavigate,
   permissions,
 }: {
   onNavigate: (module: ModuleKey) => void;
   permissions: string[];
 }) {
-  const targets = [
-    { module: 'videos' as const, label: '视频', color: '#0071E3', cy: 80 },
-    { module: 'imagetexts' as const, label: '图文', color: '#1D9E5F', cy: 160 },
-    { module: 'articles' as const, label: '文章', color: '#5E5CE6', cy: 240 },
-  ].filter((n) => hasModulePerm(n.module, 'Detail', permissions));
-  const showCategory = hasModulePerm('category', 'Detail', permissions);
+  const can = (module: ModuleKey) => hasModulePerm(module, 'Detail', permissions);
 
-  if (!showCategory || targets.length === 0) return null;
+  const contents = [
+    { id: 'videos' as const, label: '视频', color: '#0071E3', y: 62 },
+    { id: 'imagetexts' as const, label: '图文', color: '#1D9E5F', y: 114 },
+    { id: 'articles' as const, label: '文章', color: '#5E5CE6', y: 166 },
+  ].filter((item) => can(item.id));
+  const showCategory = can('category');
+  const showFiles = can('files');
+  const showMaterials = can('materials');
+  const showMessages = can('messages');
 
-  const W = 920;
-  const H = 320;
-  const nodeW = 176;
-  const nodeH = 64;
-  const rootX = 40;
-  const rootY = 128;
-  const rootRight = rootX + nodeW;
-  const rootMidY = rootY + nodeH / 2;
-  const targetX = W - nodeW - 40;
+  const groups: FlowChartGroup[] = [];
+  const nodes: FlowChartNode[] = [];
+  const edges: FlowChartEdge[] = [];
+
+  const hasTopRow = showCategory || contents.length > 0 || showMessages;
+  const hasBottomRow = showFiles || showMaterials;
+  const bottomY = hasTopRow ? 246 : 18;
+
+  if (showCategory || contents.length > 0) {
+    groups.push({
+      x: 20,
+      y: 18,
+      width: 600,
+      height: 212,
+      fill: '#F5F8FF',
+      stroke: '#E6EDFB',
+    });
+    if (showCategory) {
+      nodes.push({
+        id: 'category',
+        label: '通用分类',
+        x: 48,
+        y: 106,
+        width: 164,
+        height: 60,
+        color: '#0071E3',
+        primary: true,
+        icon: '分',
+        onClick: () => onNavigate('category'),
+      });
+    }
+    contents.forEach((item) => {
+      nodes.push({
+        id: item.id,
+        label: item.label,
+        x: 352,
+        y: item.y,
+        width: 164,
+        height: 48,
+        color: item.color,
+        onClick: () => onNavigate(item.id),
+      });
+      if (showCategory) edges.push({ from: 'category', to: item.id });
+    });
+  }
+
+  if (showMessages) {
+    groups.push({
+      x: 636,
+      y: 18,
+      width: 224,
+      height: 212,
+      fill: '#FAFAFC',
+      stroke: '#EDEDF1',
+    });
+    nodes.push({
+      id: 'messages',
+      label: '留言',
+      x: 654,
+      y: 104,
+      width: 188,
+      height: 60,
+      color: '#8E8E93',
+      dashed: true,
+      icon: '留',
+      onClick: () => onNavigate('messages'),
+    });
+  }
+
+  if (showFiles || showMaterials) {
+    groups.push({
+      x: 20,
+      y: bottomY,
+      width: 580,
+      height: 116,
+      fill: '#F5FBF7',
+      stroke: '#E4F3E9',
+    });
+    if (showFiles) {
+      nodes.push({
+        id: 'files',
+        label: '文件中心',
+        x: 48,
+        y: bottomY + 28,
+        width: 180,
+        height: 60,
+        color: '#3478C0',
+        icon: '文',
+        onClick: () => onNavigate('files'),
+      });
+    }
+    if (showMaterials) {
+      nodes.push({
+        id: 'materials',
+        label: '素材中心',
+        x: 348,
+        y: bottomY + 28,
+        width: 180,
+        height: 60,
+        color: '#1D9E5F',
+        icon: '素',
+        onClick: () => onNavigate('materials'),
+      });
+    }
+    if (showFiles && showMaterials) {
+      edges.push({ from: 'files', to: 'materials' });
+    }
+  }
+
+  if (nodes.length === 0) return null;
+
+  const canvasHeight = hasTopRow && hasBottomRow ? 380 : hasTopRow ? 248 : 152;
 
   return (
-    <section aria-label="模块关系导览">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">模块关系导览</h2>
-          <p className="mt-0.5 text-[13px] text-[#6E6E73]">分类统一管理内容，点击节点进入对应模块</p>
-        </div>
-        <span className="hidden sm:inline text-[12px] text-[#86868B]">点击节点跳转</span>
-      </div>
-
-      <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 sm:p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[680px] block" role="img" aria-label="分类到内容模块的流程图">
-          <defs>
-            <marker
-              id="module-flow-arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#C7C7CC" />
-            </marker>
-          </defs>
-
-          {/* 分类 -> 内容模块 连线 */}
-          {targets.map((n) => {
-            const ty = n.cy;
-            return (
-              <path
-                key={n.module}
-                d={`M ${rootRight} ${rootMidY} C ${rootRight + 110} ${rootMidY}, ${targetX - 110} ${ty}, ${targetX} ${ty}`}
-                fill="none"
-                stroke="#D2D2D7"
-                strokeWidth="1.8"
-                markerEnd="url(#module-flow-arrow)"
-              />
-            );
-          })}
-
-          {/* 分类中心节点 */}
-          <FlowNode
-            x={rootX}
-            y={rootY}
-            width={nodeW}
-            height={nodeH}
-            label="分类"
-            color="#0071E3"
-            primary
-            onClick={() => onNavigate('category')}
-          />
-
-          {/* 内容节点 */}
-          {targets.map((n) => (
-            <FlowNode
-              key={n.module}
-              x={targetX}
-              y={n.cy - nodeH / 2}
-              width={nodeW}
-              height={nodeH}
-              label={n.label}
-              color={n.color}
-              onClick={() => onNavigate(n.module)}
-            />
-          ))}
-        </svg>
-      </div>
+    <section aria-label="模块关系导览" className="max-w-3xl">
+      <ModuleFlowChart
+        nodes={nodes}
+        edges={edges}
+        groups={groups}
+        width={880}
+        height={canvasHeight}
+      />
     </section>
   );
 }
@@ -291,7 +180,6 @@ function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
 
 export function DashboardView({
   onNavigate,
-  onQuickCreate,
   permissions,
   liveRefreshEnabled,
 }: DashboardViewProps) {
@@ -489,7 +377,7 @@ export function DashboardView({
   if (loading || !data) {
     return (
       <div className="space-y-6">
-        <QuickCreateSection onSelect={onQuickCreate} permissions={permissions} />
+        <ModuleFlowPanel onNavigate={onNavigate} permissions={permissions} />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="h-[132px] bg-white rounded-[18px] border border-[#E5E5EA] animate-pulse" />
@@ -516,9 +404,7 @@ export function DashboardView({
 
   return (
     <div className="space-y-6">
-      <QuickCreateSection onSelect={onQuickCreate} permissions={permissions} />
-
-      <ModuleFlowSection onNavigate={onNavigate} permissions={permissions} />
+      <ModuleFlowPanel onNavigate={onNavigate} permissions={permissions} />
 
       {/* KPI Strip: Real-time Visitor & Engagement Metrics */}
       <section aria-label="实时访客概览" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

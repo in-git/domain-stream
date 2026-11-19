@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
@@ -120,6 +121,8 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   const [formError, setFormError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 本次编辑会话中新上传但尚未保存的图片，移除时可直接清理
+  const sessionUploadsRef = useRef<Set<string>>(new Set());
 
   const {
     options: categoryOptions,
@@ -151,6 +154,7 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
         const webpFile = await convertToWebp(f);
         const res = await uploadFileWithProgress(webpFile);
         uploadedUrls.push(res.url);
+        sessionUploadsRef.current.add(res.url);
       }
       setImages((prev) => [...prev, ...uploadedUrls]);
     } catch (err) {
@@ -189,7 +193,13 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   }
 
   function removeImage(index: number) {
+    const target = images[index];
     setImages((prev) => prev.filter((_, idx) => idx !== index));
+    // 本次会话上传但尚未保存的图片，移除后即可彻底删除，避免产生垃圾文件
+    if (target && sessionUploadsRef.current.has(target)) {
+      sessionUploadsRef.current.delete(target);
+      void deleteFilesByUrls([target]);
+    }
   }
 
   async function handleSave() {
@@ -219,6 +229,8 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       };
       if (item) {
         await api.updateImageText(item.id, payload);
+        // 保存成功后彻底删除被移除/替换掉的历史图片，避免留下孤儿文件
+        void deleteFilesByUrls(removedUrls(item.images, images));
       } else {
         await api.createImageText(payload);
       }

@@ -25,6 +25,8 @@ export interface FlowChartNode {
   dashed?: boolean;
   /** 左侧圆形徽标文字，默认取 label 首字 */
   icon?: string;
+  /** 点击节点时触发（如跳转到对应模块） */
+  onClick?: () => void;
 }
 
 export interface FlowChartEdge {
@@ -40,7 +42,7 @@ export interface FlowChartGroup {
   y: number;
   width: number;
   height: number;
-  title: string;
+  title?: string;
   fill?: string;
   stroke?: string;
   titleColor?: string;
@@ -193,8 +195,8 @@ export default function ModuleFlowChart({
         </defs>
 
         <g transform={`translate(${offset.x} ${offset.y}) scale(${scale})`}>
-          {groups.map((group) => (
-            <g key={group.title}>
+          {groups.map((group, index) => (
+            <g key={group.title ?? `group-${index}`}>
               <rect
                 x={group.x}
                 y={group.y}
@@ -204,15 +206,17 @@ export default function ModuleFlowChart({
                 fill={group.fill ?? '#F8F9FC'}
                 stroke={group.stroke ?? '#EDEEF3'}
               />
-              <text
-                x={group.x + 18}
-                y={group.y + 24}
-                fontSize="12"
-                fontWeight="600"
-                fill={group.titleColor ?? '#8E8E93'}
-              >
-                {group.title}
-              </text>
+              {group.title && (
+                <text
+                  x={group.x + 18}
+                  y={group.y + 24}
+                  fontSize="12"
+                  fontWeight="600"
+                  fill={group.titleColor ?? '#8E8E93'}
+                >
+                  {group.title}
+                </text>
+              )}
             </g>
           ))}
 
@@ -269,7 +273,17 @@ export default function ModuleFlowChart({
             const fill = node.primary ? node.color : '#FFFFFF';
             const textColor = node.primary ? '#FFFFFF' : '#1D1D1F';
             return (
-              <g key={node.id}>
+              <g
+                key={node.id}
+                role={node.onClick ? 'button' : undefined}
+                aria-label={node.onClick ? node.label : undefined}
+                onClick={(event) => {
+                  if (!node.onClick) return;
+                  event.stopPropagation();
+                  node.onClick();
+                }}
+                className={node.onClick ? 'cursor-pointer transition-opacity hover:opacity-85' : undefined}
+              >
                 <rect
                   x={node.x}
                   y={node.y}
@@ -321,10 +335,6 @@ export default function ModuleFlowChart({
           })}
         </g>
       </svg>
-
-      <div className="pointer-events-none absolute bottom-3 left-3 text-[11px] text-[#AEAEB2]">
-        拖拽移动 · 滚轮缩放
-      </div>
 
       {showToolbar && (
         <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-xl border border-[#E5E5EA] bg-white/95 p-1 shadow-sm backdrop-blur">

@@ -12,6 +12,7 @@ import {
   Heart,
   Layers,
   LayoutGrid,
+  Maximize2,
   Pause,
   Play,
   Rows3,
@@ -39,6 +40,16 @@ interface VideosViewProps {
   resumeVideoId?: string | null;
   resumeMuted?: boolean;
   resumePlaybackRate?: number;
+  /**
+   * 展示形态：
+   * - immersive：视频板块内的沉浸刷看
+   * - mini：离开视频板块后的右下角迷你窗口
+   * - hidden：完全隐藏但保留播放器实例，避免切换时重建 <video> 导致卡顿
+   */
+  mode?: 'immersive' | 'mini' | 'hidden';
+  /** 迷你形态下的操作回调 */
+  onMiniClose?: () => void;
+  onMiniExpand?: () => void;
 }
 
 const DEFAULT_CATEGORIES = ['设计纪实', '城市影像', '自然声景'];
@@ -170,6 +181,10 @@ interface FeedSlideProps {
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
   onSaveProgress?: (time: number) => void;
+  /** 迷你窗口形态：精简界面，仅保留播放控制 */
+  mini?: boolean;
+  onMiniClose?: () => void;
+  onMiniExpand?: () => void;
 }
 
 /** One full-bleed page of the seamless vertical carousel. */
@@ -197,6 +212,9 @@ function FeedSlide({
   onTimeUpdate,
   onDurationChange,
   onSaveProgress,
+  mini,
+  onMiniClose,
+  onMiniExpand,
 }: FeedSlideProps) {
   const playerRef = useRef<MediaPlayerInstance | null>(null);
   const restoredRef = useRef<boolean>(false);
@@ -330,39 +348,70 @@ function FeedSlide({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.85 }}
                 transition={SWIFTUI_BOUNCY}
-                className="absolute inset-0 m-auto w-24 h-24 rounded-full bg-black/55 hover:bg-black/65 backdrop-blur-md border border-white/30 flex items-center justify-center text-white transition-colors"
+                className={`absolute inset-0 m-auto rounded-full bg-black/55 hover:bg-black/65 backdrop-blur-md border border-white/30 flex items-center justify-center text-white transition-colors ${
+                  mini ? 'w-14 h-14' : 'w-24 h-24'
+                }`}
               >
-                <Play className="w-11 h-11 fill-white translate-x-[3px]" />
+                <Play
+                  className={`fill-white translate-x-[3px] ${mini ? 'w-7 h-7' : 'w-11 h-11'}`}
+                />
               </motion.button>
             )}
           </AnimatePresence>
 
-          {/* Top Status + Playback Rate */}
-          <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
-            <div className="px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/10 text-[11px] text-white/90 tabular-nums whitespace-nowrap">
-              {index + 1} / {total} · {video.resolution}
-            </div>
+          {/* 迷你窗口控制条：关闭 / 回到视频板块 */}
+          {mini && (
+            <>
+              <button
+                type="button"
+                onClick={onMiniExpand}
+                aria-label="回到视频"
+                title="回到视频"
+                className="absolute top-2 left-2 z-30 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onMiniClose}
+                aria-label="关闭迷你播放器"
+                title="关闭"
+                className="absolute top-2 right-2 z-30 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
 
-            <div className="pointer-events-auto flex items-center gap-1 bg-black/45 backdrop-blur-md border border-white/10 p-1 rounded-full">
-              {[1, 1.5, 2].map((rate) => (
-                <button
-                  key={rate}
-                  type="button"
-                  onClick={() => onSetRate(rate)}
-                  className={`px-2 py-0.5 text-[11px] font-mono-tabular rounded-full transition-colors ${
-                    playbackRate === rate
-                      ? 'bg-white text-black font-medium'
-                      : 'text-white/75 hover:text-white'
-                  }`}
-                >
-                  {rate}x
-                </button>
-              ))}
+          {/* Top Status + Playback Rate */}
+          {!mini && (
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
+              <div className="px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/10 text-[11px] text-white/90 tabular-nums whitespace-nowrap">
+                {index + 1} / {total} · {video.resolution}
+              </div>
+
+              <div className="pointer-events-auto flex items-center gap-1 bg-black/45 backdrop-blur-md border border-white/10 p-1 rounded-full">
+                {[1, 1.5, 2].map((rate) => (
+                  <button
+                    key={rate}
+                    type="button"
+                    onClick={() => onSetRate(rate)}
+                    className={`px-2 py-0.5 text-[11px] font-mono-tabular rounded-full transition-colors ${
+                      playbackRate === rate
+                        ? 'bg-white text-black font-medium'
+                        : 'text-white/75 hover:text-white'
+                    }`}
+                  >
+                    {rate}x
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Douyin-style Right-Side Vertical Action Dock */}
-          <div className="absolute right-3 sm:right-5 bottom-20 flex flex-col items-center gap-4 z-20 text-white">
+          {!mini && (
+            <div className="absolute right-3 sm:right-5 bottom-20 flex flex-col items-center gap-4 z-20 text-white">
             <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
               <motion.button
                 type="button"
@@ -424,40 +473,61 @@ function FeedSlide({
                 {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </motion.button>
             </Tooltip>
-          </div>
+            </div>
+          )}
 
           {/* Bottom Info + Progress Scrubber */}
-          <div className="absolute bottom-0 left-0 right-0 text-white z-10 space-y-3 p-4 sm:p-6 pr-20 sm:pr-24 pointer-events-none">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
-                <span className="font-semibold text-white">@{video.director}</span>
-                <span aria-hidden="true">·</span>
-                <span>{video.category}</span>
-                <span aria-hidden="true">·</span>
-                <span>{video.date}</span>
+          <div
+            className={`absolute bottom-0 left-0 right-0 text-white z-10 pointer-events-none ${
+              mini ? 'p-2' : 'space-y-3 p-4 sm:p-6 pr-20 sm:pr-24'
+            }`}
+          >
+            {!mini && (
+              <div className="space-y-1.5 max-w-2xl">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
+                  <span className="font-semibold text-white">@{video.director}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{video.category}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{video.date}</span>
+                </div>
+                <h2 className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug">
+                  {video.title}
+                </h2>
+                <p className="text-xs sm:text-sm text-white/75 line-clamp-2 leading-relaxed">
+                  {video.subtitle}
+                </p>
               </div>
-              <h2 className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug">
-                {video.title}
-              </h2>
-              <p className="text-xs sm:text-sm text-white/75 line-clamp-2 leading-relaxed">
-                {video.subtitle}
-              </p>
-            </div>
+            )}
 
-            <div className="flex items-center gap-3 pt-1 pointer-events-auto">
+            {mini && (
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-[11px] font-medium text-white/90 truncate">
+                  {video.title}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pointer-events-auto">
               <button
                 type="button"
                 onClick={onTogglePlay}
                 aria-label={playing ? '暂停' : '播放'}
-                className="w-10 h-10 rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0"
+                className={`rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0 ${
+                  mini ? 'w-7 h-7' : 'w-10 h-10'
+                }`}
               >
                 {playing ? (
-                  <Pause className="w-5 h-5 fill-white" />
+                  <Pause className={`fill-white ${mini ? 'w-3.5 h-3.5' : 'w-5 h-5'}`} />
                 ) : (
-                  <Play className="w-5 h-5 fill-white translate-x-[1px]" />
+                  <Play
+                    className={`fill-white translate-x-[1px] ${mini ? 'w-3.5 h-3.5' : 'w-5 h-5'}`}
+                  />
                 )}
               </button>
-              <span className="text-[11px] font-mono-tabular text-white/80 w-10">
+              <span
+                className={`text-[11px] font-mono-tabular text-white/80 ${mini ? 'w-9' : 'w-10'}`}
+              >
                 {formatTime(currentTime)}
               </span>
               <input
@@ -470,7 +540,9 @@ function FeedSlide({
                 aria-label="播放进度"
                 className="flex-1 min-w-0 h-1 accent-white cursor-pointer rounded-full bg-white/25"
               />
-              <span className="text-[11px] font-mono-tabular text-white/65 text-right w-10">
+              <span
+                className={`text-[11px] font-mono-tabular text-white/65 text-right ${mini ? 'w-9' : 'w-10'}`}
+              >
                 {formatTime(progressMax)}
               </span>
             </div>
@@ -478,7 +550,7 @@ function FeedSlide({
 
           {/* Slide-Up Chapters Overlay Drawer */}
           <AnimatePresence>
-            {showChapters && (
+            {showChapters && !mini && (
               <motion.div
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -535,8 +607,13 @@ export function VideosView({
   resumeVideoId,
   resumeMuted,
   resumePlaybackRate,
+  mode = 'immersive',
+  onMiniClose,
+  onMiniExpand,
 }: VideosViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
+  const isMini = mode === 'mini';
+  const isHidden = mode === 'hidden';
 
   // 用持久化的状态初始化 activeIndex / 静音 / 倍速，让 MiniPlayer ↔ FeedSlide 状态一致
   const initialIndex = videos.findIndex((v) => v.id === resumeVideoId);

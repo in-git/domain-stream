@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { CheckCircle2, UploadCloud } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import {
@@ -119,6 +120,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  // 本次编辑会话中新上传但尚未保存的文件，被再次替换时可直接清理
+  const sessionUploadsRef = useRef<Set<string>>(new Set());
 
   const {
     options: categoryOptions,
@@ -191,6 +194,17 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     });
   }
 
+  /**
+   * 同一编辑会话内被再次替换的文件可以立即清理：
+   * 它只存在于前端内存，从未被保存到业务数据，删除不会影响已发布内容。
+   */
+  async function dropReplacedUpload(previousUrl: string | undefined, nextUrl: string) {
+    if (!previousUrl || previousUrl === nextUrl) return;
+    if (!sessionUploadsRef.current.has(previousUrl)) return;
+    sessionUploadsRef.current.delete(previousUrl);
+    await deleteFilesByUrls([previousUrl]);
+  }
+
   async function handleVideoFile(file: File) {
     if (!file.type.startsWith('video/')) {
       setFormError('请选择 MP4、MOV 或 WebM 格式的视频文件');
@@ -205,6 +219,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setTitle(file.name.replace(/\.[^/.]+$/, ''));
     }
 
+    const previousVideoUrl = videoUrl;
     setUploadProgress(5);
     try {
       const metaPromise = extractVideoMetadataAndFrame(file);
@@ -212,6 +227,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         setUploadProgress(pct);
       });
       setVideoUrl(uploaded.url);
+      sessionUploadsRef.current.add(uploaded.url);
+      await dropReplacedUpload(previousVideoUrl, uploaded.url);
       setFileSizeBytes(uploaded.size);
       // 视频上传成功后自动打开预览窗口
       setPreviewOpen(true);
@@ -225,6 +242,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         const webpCover = await convertToWebp(thumbFile);
         const uploadedCover = await uploadFileWithProgress(webpCover);
         setCoverUrl(uploadedCover.url);
+        sessionUploadsRef.current.add(uploadedCover.url);
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '视频上传失败');
@@ -239,10 +257,13 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     }
     setCoverUploading(true);
     setFormError('');
+    const previousCoverUrl = coverUrl;
     try {
       const webpFile = await convertToWebp(file);
       const uploaded = await uploadFileWithProgress(webpFile);
       setCoverUrl(uploaded.url);
+      sessionUploadsRef.current.add(uploaded.url);
+      await dropReplacedUpload(previousCoverUrl, uploaded.url);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '封面上传失败');
     } finally {
@@ -295,6 +316,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       };
       if (item) {
         await api.updateVideo(item.id, payload);
+        // 保存成功后彻底删除被替换掉的历史视频/封面，避免留下孤儿文件
+        void deleteFilesByUrls(removedUrls([item.videoUrl, item.coverUrl], [videoUrl, coverUrl]));
       } else {
         await api.createVideo(payload);
       }

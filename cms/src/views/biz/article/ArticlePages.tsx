@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { deleteFilesByUrls, imageUrlsInHtml, removedUrls } from '../../../lib/fileCenter.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import { plainText, renderRichContent } from '../../../lib/richtext.tsx';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
@@ -105,6 +106,8 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [formError, setFormError] = useState('');
 
   const coverInputRef = useRef<HTMLInputElement>(null);
+  // 本次编辑会话中新上传但尚未保存的文件，被再次替换时可直接清理
+  const sessionUploadsRef = useRef<Set<string>>(new Set());
 
   const {
     options: categoryOptions,
@@ -132,10 +135,21 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
     }
     setCoverUploading(true);
     setFormError('');
+    const previousCoverUrl = coverUrl;
     try {
       const webpFile = await convertToWebp(file);
       const uploaded = await uploadFileWithProgress(webpFile);
       setCoverUrl(uploaded.url);
+      sessionUploadsRef.current.add(uploaded.url);
+      // 同一会话内被再次替换的临时封面（尚未保存）可直接清理
+      if (
+        previousCoverUrl &&
+        previousCoverUrl !== uploaded.url &&
+        sessionUploadsRef.current.has(previousCoverUrl)
+      ) {
+        sessionUploadsRef.current.delete(previousCoverUrl);
+        void deleteFilesByUrls([previousCoverUrl]);
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '上传封面失败');
     } finally {
@@ -161,16 +175,25 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
     setSaving(true);
     setFormError('');
     try {
+      const finalCoverUrl =
+        coverUrl || '/src/assets/images/article_cover_typography_1795026087411.jpg';
       const payload: Partial<ArticleItem> = {
         title: title.trim(),
         summary: summary.trim() || plain.slice(0, 80),
         content: content.trim(),
         category: finalCategory,
-        coverUrl: coverUrl || '/src/assets/images/article_cover_typography_1795026087411.jpg',
+        coverUrl: finalCoverUrl,
         status,
       };
       if (item) {
         await api.updateArticle(item.id, payload);
+        // 保存成功后彻底删除被替换的封面，以及正文中被移除的图片，避免留下孤儿文件
+        void deleteFilesByUrls(
+          removedUrls(
+            [item.coverUrl, ...imageUrlsInHtml(item.content)],
+            [finalCoverUrl, ...imageUrlsInHtml(content)]
+          )
+        );
       } else {
         await api.createArticle(payload);
       }

@@ -187,4 +187,80 @@ export const fileCenterApi = {
       body: JSON.stringify(ids.map((id) => ({ id }))),
     });
   },
+
+  /**
+   * 物理删除：删记录的同时删除存储对象（后端会校验对象是否被其它记录复用）。
+   * 用于清理编辑过程中被替换掉的旧文件，避免留下孤儿文件。
+   */
+  removeAbsolute(id: string): Promise<void> {
+    return snowyRequest<void>(`${BASE}/deleteAbsolute`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  },
 };
+
+/* ------------------------------------------------------------------ */
+/* 旧文件清理                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 从后端下载地址中解析文件 id。
+ * downloadPath 形如 `http://host:91/api/dev/file/download?id=xxx&sign=...`，
+ * 前端存放的是经 /snowy 代理后的相对地址，但 id 参数保持不变。
+ */
+export function fileIdFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    const id = parsed.searchParams.get('id');
+    if (id) return id;
+  } catch {
+    // 非标准地址，退回正则解析
+  }
+  const match = /[?&]id=([^&#]+)/.exec(url);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/** 对比新旧地址集合，返回已不再被引用的旧地址 */
+export function removedUrls(
+  previous: Array<string | null | undefined>,
+  next: Array<string | null | undefined>
+): string[] {
+  const keep = new Set(next.filter((u): u is string => !!u));
+  return Array.from(new Set(previous.filter((u): u is string => !!u))).filter(
+    (u) => !keep.has(u)
+  );
+}
+
+/** 提取 HTML 正文中引用的图片地址 */
+export function imageUrlsInHtml(html?: string | null): string[] {
+  if (!html) return [];
+  const urls: string[] = [];
+  const re = /<img[^>]+src=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) urls.push(match[1]);
+  return urls;
+}
+
+/**
+ * 按地址批量彻底删除文件。
+ * 只处理能被解析出文件 id 的地址（外链、本地静态资源会被跳过），
+ * 删除失败仅告警，不影响业务主流程。
+ */
+export async function deleteFilesByUrls(
+  urls: Array<string | null | undefined>
+): Promise<string[]> {
+  const ids = Array.from(new Set(urls.map((u) => fileIdFromUrl(u)))).filter(
+    (id): id is string => !!id
+  );
+  if (!ids.length) return [];
+  const results = await Promise.allSettled(ids.map((id) => fileCenterApi.removeAbsolute(id)));
+  const failed = results
+    .map((result, idx) => (result.status === 'rejected' ? ids[idx] : ''))
+    .filter(Boolean);
+  if (failed.length) {
+    console.warn('[fileCenter] 旧文件清理失败：', failed);
+  }
+  return failed;
+}

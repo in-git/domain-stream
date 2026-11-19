@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Menu } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
+import { deleteFilesByUrls } from './lib/fileCenter.ts';
 import { getCachedMenu, onAuthExpired, type SnowyMenu } from './lib/snowy.ts';
 import {
   hasModulePerm,
@@ -432,11 +433,18 @@ export default function App() {
       <DeleteConfirmPage
         title={`确认删除该${CONTENT_NAMES[module]}？`}
         itemTitle={itemTitle}
-        description="此操作不可撤销，内容将从列表中永久移除。"
+        description={
+          video
+            ? '此操作不可撤销，视频记录、封面图与视频源文件将一并永久删除。'
+            : '此操作不可撤销，内容将从列表中永久移除。'
+        }
         onBack={back}
         onConfirm={async () => {
-          if (video) await api.deleteVideo(video.id);
-          else if (imageText) await api.deleteImageText(imageText.id);
+          if (video) {
+            await api.deleteVideo(video.id);
+            // 视频记录删除成功后，一并清理封面与视频源文件，避免留下孤儿文件
+            void deleteFilesByUrls([video.videoUrl, video.coverUrl]);
+          } else if (imageText) await api.deleteImageText(imageText.id);
           else if (article) await api.deleteArticle(article.id);
           await refresh();
         }}
@@ -532,7 +540,6 @@ export default function App() {
           ) : route.module === 'dashboard' ? (
             <DashboardView
               onNavigate={goModule}
-              onQuickCreate={(module) => goContent(module, 'new')}
               permissions={permissions}
               liveRefreshEnabled={user.liveRefresh}
             />
