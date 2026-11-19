@@ -87,7 +87,7 @@ export function AiRichEditor({
     <div
       ref={mountRef}
       className={className}
-      style={style ?? { height: 560 }}
+      style={style ?? { height: '100%' }}
     />
   );
 }

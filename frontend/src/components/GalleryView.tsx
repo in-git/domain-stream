@@ -16,6 +16,7 @@ import { ResilientImage } from './ResilientImage';
 
 interface GalleryViewProps {
   photos: PhotoItem[];
+  categories?: string[];
   savedIds: string[];
   likedIds: string[];
   searchQuery?: string;
@@ -25,8 +26,8 @@ interface GalleryViewProps {
   onClearExternalSelection?: () => void;
 }
 
-const ALBUMS = ['全部', '建筑', '自然', '静物', '光影'] as const;
-type AlbumFilter = (typeof ALBUMS)[number];
+const DEFAULT_ALBUMS = ['建筑', '自然', '静物', '光影'];
+type AlbumFilter = string;
 
 function getAspectClass(ratio: PhotoItem['aspectRatio']): string {
   switch (ratio) {
@@ -43,6 +44,7 @@ function getAspectClass(ratio: PhotoItem['aspectRatio']): string {
 
 export function GalleryView({
   photos,
+  categories,
   savedIds,
   likedIds,
   searchQuery = '',
@@ -51,6 +53,7 @@ export function GalleryView({
   externalSelectedId,
   onClearExternalSelection,
 }: GalleryViewProps) {
+  const filterAlbums = categories && categories.length ? categories : DEFAULT_ALBUMS;
   const [album, setAlbum] = useState<AlbumFilter>('全部');
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -137,7 +140,7 @@ export function GalleryView({
           aria-label="图集筛选"
           className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] self-start md:self-auto overflow-x-auto max-w-full"
         >
-          {ALBUMS.map((item) => {
+          {(['全部', ...filterAlbums] as AlbumFilter[]).map((item) => {
             const active = album === item;
             return (
               <button
@@ -185,7 +188,7 @@ export function GalleryView({
                   <button
                     type="button"
                     onClick={() => openPhoto(photo.id)}
-                    className={`relative block w-full overflow-hidden bg-[#EEEEF0] dark:bg-[#1C1C1E] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3] ${getAspectClass(
+                    className={`relative block w-full max-h-[360px] overflow-hidden bg-[#EEEEF0] dark:bg-[#1C1C1E] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3] ${getAspectClass(
                       photo.aspectRatio
                     )}`}
                     aria-label={`查看大图：${photo.title}`}

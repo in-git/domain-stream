@@ -25,6 +25,7 @@ import { ResilientImage } from './ResilientImage';
 
 interface VideosViewProps {
   videos: VideoItem[];
+  categories?: string[];
   savedIds: string[];
   likedIds: string[];
   searchQuery?: string;
@@ -32,8 +33,8 @@ interface VideosViewProps {
   onToggleLike: (id: string) => void;
 }
 
-const CATEGORIES = ['全部', '设计纪实', '城市影像', '自然声景'] as const;
-type CategoryFilter = (typeof CATEGORIES)[number];
+const DEFAULT_CATEGORIES = ['设计纪实', '城市影像', '自然声景'];
+type CategoryFilter = string;
 
 function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
@@ -105,13 +106,13 @@ function VideoGridCard({ video, index, onOpen }: VideoGridCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
       whileHover={{ y: -2 }}
-      className="group self-start rounded-2xl overflow-hidden bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08]"
+      className="group break-inside-avoid mb-5 rounded-2xl overflow-hidden bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08]"
     >
       <button
         type="button"
         onClick={onOpen}
         aria-label={`播放 ${video.title}`}
-        className="relative block w-full overflow-hidden text-left bg-black"
+        className="relative block w-full max-h-[360px] overflow-hidden text-left bg-black"
         style={{ aspectRatio: ratio }}
       >
         <ResilientImage
@@ -125,11 +126,11 @@ function VideoGridCard({ video, index, onOpen }: VideoGridCardProps) {
           {video.durationLabel}
         </span>
       </button>
-      <div className="p-4 space-y-1.5">
-        <div className="text-xs text-[#6E6E73] dark:text-[#98989D]">
+      <div className="px-3 pt-2.5 pb-3 space-y-1">
+        <div className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
           {video.category} · {video.director}
         </div>
-        <h3 className="text-sm font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-1">
+        <h3 className="text-[13px] sm:text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
           {video.title}
         </h3>
       </div>
@@ -464,12 +465,14 @@ function FeedSlide({
 
 export function VideosView({
   videos,
+  categories,
   savedIds,
   likedIds,
   searchQuery = '',
   onToggleSave,
   onToggleLike,
 }: VideosViewProps) {
+  const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
   const [category, setCategory] = useState<CategoryFilter>('全部');
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -579,7 +582,7 @@ export function VideosView({
           aria-label="视频分类"
           className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] overflow-x-auto max-w-full"
         >
-          {CATEGORIES.map((item) => {
+          {(['全部', ...filterCategories] as CategoryFilter[]).map((item) => {
             const active = category === item;
             return (
               <button
@@ -744,9 +747,9 @@ export function VideosView({
         </div>
       )}
 
-      {/* Mode 2: Discovery Grid */}
+      {/* Mode 2: Discovery Masonry */}
       {viewMode === 'grid' && filteredVideos.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 items-start">
+        <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-5">
           {filteredVideos.map((video, idx) => (
             <VideoGridCard
               key={video.id}

@@ -14,6 +14,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
   videos: '推荐视频',
   articles: '精选文章',
   gallery: '图文',
+  messages: '留言墙',
   profile: '个人中心',
 };
 
@@ -47,7 +48,7 @@ export function MainHeader({
             type="search"
             value={searchQuery}
             onChange={(e) => onChangeSearch(e.target.value)}
-            placeholder="搜索视频、文章或摄影作品"
+            placeholder="搜索视频、文章、作品或留言"
             aria-label="搜索内容"
             className="w-full h-9 pl-9 pr-8 rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-transparent focus:border-[#0071E3]/40 dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-xs sm:text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none transition-colors"
           />

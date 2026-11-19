@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
-  ARTICLES,
   INITIAL_PROFILE,
-  PHOTOS,
-  VIDEOS,
+  type ArticleItem,
+  type MessageItem,
+  type PhotoItem,
   type SectionId,
   type UserProfile,
+  type VideoItem,
 } from './data/content';
+import {
+  articleFromPortal,
+  categoriesForModule,
+  categoryNameMap,
+  graphicsToPhotos,
+  messageFromPortal,
+  portalApi,
+  videoFromPortal,
+} from './lib/api';
 import { SWIFTUI_SMOOTH } from './lib/motion';
 import { SplashScreen } from './components/SplashScreen';
 import { LeftSidebar } from './components/LeftSidebar';
@@ -16,7 +26,11 @@ import { MobileTabBar } from './components/MobileTabBar';
 import { VideosView } from './components/VideosView';
 import { ArticlesView } from './components/ArticlesView';
 import { GalleryView } from './components/GalleryView';
+import MessagesView from './components/MessagesView';
 import { ProfileView } from './components/ProfileView';
+import { PortalEmpty, PortalError, SectionSkeleton } from './components/PortalStates';
+
+type ContentSection = 'videos' | 'articles' | 'gallery' | 'messages';
 
 function usePersistentState<T>(
   key: string,
@@ -55,16 +69,66 @@ export default function App() {
   );
   const [profile, setProfile] = usePersistentState<UserProfile>('lumina:profile', INITIAL_PROFILE);
 
-  const [savedIds, setSavedIds] = usePersistentState<string[]>('lumina:saved', [
-    'vid-coast-horizon',
-    'art-swiftui-physics',
-    'pho-staircase',
-  ]);
-  const [likedIds, setLikedIds] = usePersistentState<string[]>('lumina:liked', [
-    'vid-tokyo-rain',
-    'pho-alpine-mist',
-    'pho-travertine',
-  ]);
+  const [savedIds, setSavedIds] = usePersistentState<string[]>('lumina:saved', []);
+  const [likedIds, setLikedIds] = usePersistentState<string[]>('lumina:liked', []);
+
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [videoCategories, setVideoCategories] = useState<string[]>([]);
+  const [articleCategories, setArticleCategories] = useState<string[]>([]);
+  const [graphicCategories, setGraphicCategories] = useState<string[]>([]);
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [articles, setArticles] = useState<ArticleItem[]>([]);
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
+
+  const loadFromBackend = useCallback(async () => {
+    setLoading(true);
+    setErrors({});
+    const results = await Promise.allSettled([
+      portalApi.categories(),
+      portalApi.videos(),
+      portalApi.articles(),
+      portalApi.graphics(),
+      portalApi.messages(),
+    ]);
+    const [categoryResult, videoResult, articleResult, graphicResult, messageResult] = results;
+    const nextErrors: Partial<Record<ContentSection, string>> = {};
+    const categories = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
+    const names = categoryNameMap(categories);
+
+    setVideoCategories(categoriesForModule(categories, 'VIDEO'));
+    setArticleCategories(categoriesForModule(categories, 'ARTICLE'));
+    setGraphicCategories(categoriesForModule(categories, 'GRAPHIC'));
+
+    if (videoResult.status === 'fulfilled') {
+      setVideos(videoResult.value.map((row, i) => videoFromPortal(row, i, names)));
+    } else {
+      nextErrors.videos = videoResult.reason?.message || '视频服务暂不可用';
+    }
+    if (articleResult.status === 'fulfilled') {
+      setArticles(articleResult.value.map((row, i) => articleFromPortal(row, i, names)));
+    } else {
+      nextErrors.articles = articleResult.reason?.message || '文章服务暂不可用';
+    }
+    if (graphicResult.status === 'fulfilled') {
+      setPhotos(graphicsToPhotos(graphicResult.value, names));
+    } else {
+      nextErrors.gallery = graphicResult.reason?.message || '图文服务暂不可用';
+    }
+    if (messageResult.status === 'fulfilled') {
+      setMessages(messageResult.value.map(messageFromPortal));
+    } else {
+      nextErrors.messages = messageResult.reason?.message || '留言服务暂不可用';
+    }
+
+    setErrors(nextErrors);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadFromBackend();
+  }, [loadFromBackend]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -101,6 +165,18 @@ export default function App() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+  };
+
+  const handleAddMessage = async (message: MessageItem) => {
+    await portalApi.addMessage({
+      nickname: message.nickname,
+      email: message.email,
+      content: message.content,
+    });
+    setMessages((prev) => [
+      { ...message, createdAt: new Date().toISOString(), status: 'PENDING' },
+      ...prev,
+    ]);
   };
 
   const handleSplashComplete = useCallback(() => {
@@ -143,14 +219,27 @@ export default function App() {
                   exit={{ opacity: 0, y: -8 }}
                   transition={SWIFTUI_SMOOTH}
                 >
-                  <VideosView
-                    videos={VIDEOS}
-                    savedIds={savedIds}
-                    likedIds={likedIds}
-                    searchQuery={searchQuery}
-                    onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
-                    onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
-                  />
+                  {loading ? (
+                    <SectionSkeleton section="videos" />
+                  ) : errors.videos ? (
+                    <PortalError
+                      section="videos"
+                      message={errors.videos}
+                      onRetry={() => void loadFromBackend()}
+                    />
+                  ) : videos.length === 0 ? (
+                    <PortalEmpty section="videos" onRetry={() => void loadFromBackend()} />
+                  ) : (
+                    <VideosView
+                      videos={videos}
+                      categories={videoCategories}
+                      savedIds={savedIds}
+                      likedIds={likedIds}
+                      searchQuery={searchQuery}
+                      onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                      onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
+                    />
+                  )}
                 </motion.div>
               )}
 
@@ -162,15 +251,28 @@ export default function App() {
                   exit={{ opacity: 0, y: -8 }}
                   transition={SWIFTUI_SMOOTH}
                 >
-                  <ArticlesView
-                    articles={ARTICLES}
-                    savedIds={savedIds}
-                    likedIds={likedIds}
-                    searchQuery={searchQuery}
-                    onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
-                    onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
-                    onReadArticle={() => {}}
-                  />
+                  {loading ? (
+                    <SectionSkeleton section="articles" />
+                  ) : errors.articles ? (
+                    <PortalError
+                      section="articles"
+                      message={errors.articles}
+                      onRetry={() => void loadFromBackend()}
+                    />
+                  ) : articles.length === 0 ? (
+                    <PortalEmpty section="articles" onRetry={() => void loadFromBackend()} />
+                  ) : (
+                    <ArticlesView
+                      articles={articles}
+                      categories={articleCategories}
+                      savedIds={savedIds}
+                      likedIds={likedIds}
+                      searchQuery={searchQuery}
+                      onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                      onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
+                      onReadArticle={() => {}}
+                    />
+                  )}
                 </motion.div>
               )}
 
@@ -182,14 +284,55 @@ export default function App() {
                   exit={{ opacity: 0, y: -8 }}
                   transition={SWIFTUI_SMOOTH}
                 >
-                  <GalleryView
-                    photos={PHOTOS}
-                    savedIds={savedIds}
-                    likedIds={likedIds}
-                    searchQuery={searchQuery}
-                    onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
-                    onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
-                  />
+                  {loading ? (
+                    <SectionSkeleton section="gallery" />
+                  ) : errors.gallery ? (
+                    <PortalError
+                      section="gallery"
+                      message={errors.gallery}
+                      onRetry={() => void loadFromBackend()}
+                    />
+                  ) : photos.length === 0 ? (
+                    <PortalEmpty section="gallery" onRetry={() => void loadFromBackend()} />
+                  ) : (
+                    <GalleryView
+                      photos={photos}
+                      categories={graphicCategories}
+                      savedIds={savedIds}
+                      likedIds={likedIds}
+                      searchQuery={searchQuery}
+                      onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                      onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
+                    />
+                  )}
+                </motion.div>
+              )}
+
+              {activeSection === 'messages' && (
+                <motion.div
+                  key="section-messages"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={SWIFTUI_SMOOTH}
+                >
+                  {loading ? (
+                    <SectionSkeleton section="messages" />
+                  ) : errors.messages ? (
+                    <PortalError
+                      section="messages"
+                      message={errors.messages}
+                      onRetry={() => void loadFromBackend()}
+                    />
+                  ) : (
+                    <MessagesView
+                      messages={messages}
+                      likedIds={new Set(likedIds)}
+                      searchQuery={searchQuery}
+                      onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
+                      onAddMessage={(message) => handleAddMessage(message)}
+                    />
+                  )}
                 </motion.div>
               )}
 

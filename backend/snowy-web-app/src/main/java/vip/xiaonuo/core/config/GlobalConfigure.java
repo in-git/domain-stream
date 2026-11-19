@@ -203,6 +203,15 @@ public class GlobalConfigure implements WebMvcConfigurer {
             "/biz/visitor/live",
             "/biz/visitor/track",
             "/biz/visitor/heartbeat",
+
+            /* 公共接口放行：public/** 下全部无需登录即可访问（前台内容只读 + 访客留言） */
+            "/public/**",
+            "/public/videos",
+            "/public/categories",
+            "/public/articles",
+            "/public/graphics",
+            "/public/messages",
+            "/biz/portal/**",
     };
 
     /**

@@ -3,6 +3,7 @@ import {
   BookOpen,
   Film,
   Image as ImageIcon,
+  MessageCircleHeart,
   Moon,
   Sun,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
   { id: 'videos', label: '视频', Icon: Film },
   { id: 'articles', label: '文章', Icon: BookOpen },
   { id: 'gallery', label: '图文', Icon: ImageIcon },
+  { id: 'messages', label: '留言', Icon: MessageCircleHeart },
 ];
 
 export function LeftSidebar({

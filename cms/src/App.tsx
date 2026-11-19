@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Menu, Plus } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
 import { getCachedMenu, onAuthExpired, type SnowyMenu } from './lib/snowy.ts';
 import {
@@ -126,7 +126,6 @@ export default function App() {
       go({ kind: 'content', module, action, id, slide }),
     [go]
   );
-  const goQuick = useCallback(() => go({ kind: 'quick' }), [go]);
 
   // 浏览器前进/后退或直接修改 hash 时同步视图
   useEffect(() => {
@@ -349,37 +348,6 @@ export default function App() {
     setExternalMenu(null);
   }
 
-  function handlePrimaryTopAction() {
-    if (activeModule === 'videos') goContent('videos', 'new');
-    else if (activeModule === 'imagetexts') goContent('imagetexts', 'new');
-    else if (activeModule === 'articles') goContent('articles', 'new');
-    else goQuick();
-  }
-
-  const primaryActionLabel =
-    activeModule === 'videos'
-      ? '上传视频'
-      : activeModule === 'imagetexts'
-        ? '发布图文'
-        : activeModule === 'articles'
-          ? '撰写文章'
-          : '快速上传';
-
-  // 顶栏主按钮：新增动作需有对应模块的新增权限；快速上传按任一新增权限开放
-  // 分类 / 留言页自带操作按钮，顶栏不再重复放置快速上传
-  const canPrimaryAction =
-    activeModule !== 'category' &&
-    activeModule !== 'messages' &&
-    (activeModule === 'videos'
-      ? hasModulePerm('videos', 'Add', permissions)
-      : activeModule === 'imagetexts'
-        ? hasModulePerm('imagetexts', 'Add', permissions)
-        : activeModule === 'articles'
-          ? hasModulePerm('articles', 'Add', permissions)
-          : (['videos', 'imagetexts', 'articles'] as ModuleKey[]).some((m) =>
-              hasModulePerm(m, 'Add', permissions)
-            ));
-
   function renderContentPage(activeRoute: Extract<AppRoute, { kind: 'content' }>): ReactNode {
     const { module, action, id, slide } = activeRoute;
     const back = () => goModule(module);
@@ -534,21 +502,15 @@ export default function App() {
             </div>
           </div>
 
-          {!externalMenu && route.kind === 'module' && canPrimaryAction && (
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={handlePrimaryTopAction}
-                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span>{primaryActionLabel}</span>
-              </button>
-            </div>
-          )}
         </header>
 
-        <main className="flex-1 w-full px-4 sm:px-8 py-6">
+        <main
+          className={`flex-1 w-full px-4 sm:px-8 py-6 ${
+            route.kind === 'content'
+              ? 'lg:h-[calc(100vh-64px)] lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col'
+              : ''
+          }`}
+        >
           {externalMenu ? (
             <ExternalMenuView
               node={externalMenu}

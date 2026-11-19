@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bookmark, Heart, Type, X } from 'lucide-react';
 import type { ArticleItem } from '../data/content';
+import { sanitizeRichHtml } from '../lib/richtext';
 import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
 import { ResilientImage } from './ResilientImage';
 
 interface ArticlesViewProps {
   articles: ArticleItem[];
+  categories?: string[];
   savedIds: string[];
   likedIds: string[];
   searchQuery?: string;
@@ -17,8 +19,8 @@ interface ArticlesViewProps {
   onClearExternalSelection?: () => void;
 }
 
-const ARTICLE_CATEGORIES = ['全部', '设计', '影像', '技术', '随笔'] as const;
-type ArticleCategory = (typeof ARTICLE_CATEGORIES)[number];
+const DEFAULT_ARTICLE_CATEGORIES = ['设计', '影像', '技术', '随笔'];
+type ArticleCategory = string;
 
 // 小红书式瀑布流：交替不同封面比例，形成错落的两列节奏
 const FEED_COVER_RATIOS = [
@@ -39,6 +41,7 @@ function formatLikes(count: number): string {
 
 export function ArticlesView({
   articles,
+  categories,
   savedIds,
   likedIds,
   searchQuery = '',
@@ -48,6 +51,7 @@ export function ArticlesView({
   externalSelectedId,
   onClearExternalSelection,
 }: ArticlesViewProps) {
+  const filterCategories = categories && categories.length ? categories : DEFAULT_ARTICLE_CATEGORIES;
   const [category, setCategory] = useState<ArticleCategory>('全部');
   const [activeArticle, setActiveArticle] = useState<ArticleItem | null>(null);
   const [largeFont, setLargeFont] = useState(false);
@@ -121,7 +125,7 @@ export function ArticlesView({
           aria-label="文章分类筛选"
           className="flex items-center gap-2 self-start md:self-auto overflow-x-auto max-w-full pb-0.5"
         >
-          {ARTICLE_CATEGORIES.map((item) => {
+          {(['全部', ...filterCategories] as ArticleCategory[]).map((item) => {
             const active = category === item;
             return (
               <button
@@ -167,7 +171,7 @@ export function ArticlesView({
                     src={article.cover}
                     alt={article.title}
                     fallbackTitle={article.title}
-                    className={`w-full ${
+                    className={`w-full max-h-[360px] ${
                       FEED_COVER_RATIOS[idx % FEED_COVER_RATIOS.length]
                     } transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
                   />
@@ -351,15 +355,26 @@ export function ArticlesView({
                     </p>
                   </blockquote>
 
-                  <div
-                    className={`space-y-5 leading-[1.85] text-[#2C2C2E] dark:text-[#D1D1D6] ${
-                      largeFont ? 'text-lg sm:text-[19px]' : 'text-[15px] sm:text-base'
-                    } ${serifMode ? 'font-editorial' : ''}`}
-                  >
-                    {activeArticle.paragraphs.map((p, index) => (
-                      <p key={index}>{p}</p>
-                    ))}
-                  </div>
+                  {activeArticle.content ? (
+                    <div
+                      className={`article-prose ${largeFont ? 'article-prose--lg' : ''} ${
+                        serifMode ? 'article-prose--serif' : ''
+                      }`}
+                      dangerouslySetInnerHTML={{
+                        __html: sanitizeRichHtml(activeArticle.content),
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className={`space-y-5 leading-[1.85] text-[#2C2C2E] dark:text-[#D1D1D6] ${
+                        largeFont ? 'text-lg sm:text-[19px]' : 'text-[15px] sm:text-base'
+                      } ${serifMode ? 'font-editorial' : ''}`}
+                    >
+                      {activeArticle.paragraphs.map((p, index) => (
+                        <p key={index}>{p}</p>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Reader Footer Actions */}
                   <div className="pt-8 mt-8 border-t border-black/[0.08] dark:border-white/[0.08] flex items-center justify-between">

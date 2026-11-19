@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { BookOpen, Film, Image as ImageIcon } from 'lucide-react';
+import { BookOpen, Film, Image as ImageIcon, MessageCircleHeart } from 'lucide-react';
 import type { SectionId } from '../data/content';
 import { SWIFTUI_SNAPPY } from '../lib/motion';
 
@@ -20,7 +20,7 @@ export function MobileTabBar({ activeSection, onSelectSection }: MobileTabBarPro
       aria-label="底部导航"
       className="md:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-black/[0.08] dark:border-white/[0.1] bg-[#FBFBFD]/88 dark:bg-[#111113]/88 backdrop-blur-xl pb-safe"
     >
-      <div className="grid grid-cols-3 h-14 items-center px-2">
+      <div className="grid grid-cols-4 h-14 items-center px-2">
         {MOBILE_TABS.map(({ id, label, Icon }) => {
           const isActive = activeSection === id;
           return (

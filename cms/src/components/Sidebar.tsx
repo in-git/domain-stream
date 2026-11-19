@@ -159,18 +159,15 @@ interface RenderCtx {
 
 function MenuNodes({
   nodes,
-  depth,
   ctx,
 }: {
   nodes: SnowyMenu[];
-  depth: number;
   ctx: RenderCtx;
 }) {
   const visible = nodes.filter((n) => !isHidden(n));
   return (
     <>
       {visible.map((node) => {
-        const padLeft = 12 + depth * 16;
         if (isBranch(node)) {
           const open = ctx.expanded.has(node.id);
           const Icon = iconForNode(node);
@@ -179,11 +176,12 @@ function MenuNodes({
               <button
                 type="button"
                 onClick={() => ctx.toggle(node.id)}
-                style={{ paddingLeft: padLeft }}
-                className="w-full h-9 pr-2.5 rounded-xl flex items-center gap-2 text-[13px] font-medium text-[#3A3A3C] hover:bg-[#F5F5F7] transition-colors"
+                className="w-full h-9 pl-2.5 pr-2.5 rounded-xl flex items-center gap-2.5 text-[13px] font-semibold text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
                 aria-expanded={open}
               >
-                <Icon className="w-4 h-4 shrink-0 text-[#86868B]" strokeWidth={1.8} />
+                <span className="w-6 h-6 rounded-lg bg-[#EFEFF1] flex items-center justify-center shrink-0">
+                  <Icon className="w-3.5 h-3.5 text-[#636366]" strokeWidth={2} />
+                </span>
                 <span className="flex-1 truncate text-left">{nodeTitle(node)}</span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 shrink-0 text-[#AEAEB2] transition-transform ${
@@ -192,7 +190,9 @@ function MenuNodes({
                 />
               </button>
               {open && (
-                <MenuNodes nodes={node.children || []} depth={depth + 1} ctx={ctx} />
+                <div className="ml-[23px] border-l border-[#E5E5EA] pl-2.5">
+                  <MenuNodes nodes={node.children || []} ctx={ctx} />
+                </div>
               )}
             </div>
           );
@@ -215,16 +215,16 @@ function MenuNodes({
               ctx.onSelectMenu(node);
               ctx.onCloseMobile();
             }}
-            style={{ paddingLeft: padLeft }}
-            className={`w-full h-9 pr-2.5 rounded-xl flex items-center gap-2 text-[13px] transition-colors ${
+            className={`relative w-full h-8 pl-2 pr-2.5 rounded-lg flex items-center gap-2 text-[12.5px] transition-colors ${
               active
                 ? 'bg-[#0071E3]/10 text-[#0071E3] font-semibold'
-                : 'text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium'
+                : 'text-[#48484A] hover:bg-[#F5F5F7] font-medium'
             }`}
             title={nodeTitle(node)}
           >
+            <span className="absolute -left-2.5 top-1/2 w-2 h-px bg-[#D1D1D6] pointer-events-none" />
             <Icon
-              className={`w-4 h-4 shrink-0 ${active ? 'text-[#0071E3]' : 'text-[#86868B]'}`}
+              className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-[#0071E3]' : 'text-[#9A9A9E]'}`}
               strokeWidth={1.8}
             />
             <span className="flex-1 truncate text-left">{nodeTitle(node)}</span>
@@ -374,8 +374,8 @@ export function Sidebar({
                 />
               </button>
               {open && (
-                <div className="mt-0.5 space-y-0.5">
-                  <MenuNodes nodes={mod.children || []} depth={0} ctx={ctx} />
+                <div className="mt-1 ml-3 border-l border-[#E5E5EA] pl-2.5 space-y-0.5">
+                  <MenuNodes nodes={mod.children || []} ctx={ctx} />
                 </div>
               )}
             </div>

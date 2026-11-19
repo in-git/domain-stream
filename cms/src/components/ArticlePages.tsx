@@ -186,22 +186,17 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
           </button>
         </>
       }
-      editor={
+      info={
         <div className="space-y-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3.5 rounded-2xl bg-[#F5F5F7]">
-          <div className="w-40 aspect-[16/9] rounded-xl overflow-hidden bg-[#E5E5EA] shrink-0">
-            <MediaImage
-              src={coverUrl}
-              alt="文章封面"
-              fallbackLabel="文章封面"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="flex-1">
-            <div className="text-[13px] font-medium text-[#1D1D1F]">文章头图封面</div>
-            <p className="text-[12px] text-[#6E6E73] mt-0.5">
-              建议上传 16:9 横版高清插图或摄影作品
-            </p>
+          <div>
+            <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#E5E5EA]">
+              <MediaImage
+                src={coverUrl}
+                alt="文章封面"
+                fallbackLabel="文章封面"
+                className="w-full h-full object-cover"
+              />
+            </div>
             <input
               ref={coverInputRef}
               type="file"
@@ -216,26 +211,27 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
               type="button"
               disabled={coverUploading}
               onClick={() => coverInputRef.current?.click()}
-              className="mt-2 px-3 py-1.5 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center gap-1.5"
+              className="mt-2 w-full px-3 py-2 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center justify-center gap-1.5"
             >
               <ImagePlus className="w-3.5 h-3.5" />
               <span>{coverUploading ? '正在上传...' : '上传文章封面'}</span>
             </button>
+            <p className="text-[11px] text-[#86868B] mt-1.5">
+              建议 16:9 横版高清插图或摄影作品
+            </p>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">文章标题</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="输入具有吸引力的文章标题"
-            className="w-full h-11 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[15px] font-medium"
-          />
-        </div>
+          <div>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">文章标题</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="输入具有吸引力的文章标题"
+              className="w-full h-11 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[15px] font-medium"
+            />
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">文章栏目</label>
             <select
@@ -250,6 +246,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
               ))}
             </select>
           </div>
+
           <div>
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
             <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
@@ -273,54 +270,41 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
               </button>
             </div>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">导语摘要</label>
-          <input
-            type="text"
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="一句话概括文章核心观点（留空将自动截取正文前段）"
-            className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px]"
-          />
-        </div>
+          <div>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">导语摘要</label>
+            <textarea
+              rows={3}
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="一句话概括文章核心观点（留空将自动截取正文前段）"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px] resize-none"
+            />
+          </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-[13px] font-medium text-[#1D1D1F]">
-              正文内容
-            </label>
-            <span className="text-[11px] text-[#86868B]">
-              富文本编辑器 · 支持标题 / 图片 / 表格 / 代码块
-            </span>
-          </div>
-          <div className="rounded-2xl overflow-hidden border border-[#E5E5EA]">
-            <Suspense
-              fallback={
-                <div
-                  className="flex items-center justify-center bg-[#F5F5F7] text-[13px] text-[#86868B]"
-                  style={{ height: 560 }}
-                >
-                  正在加载富文本编辑器...
-                </div>
-              }
-            >
-              <AiRichEditor
-                value={content}
-                onChange={setContent}
-                className="article-ai-editor"
-                style={{ height: 560 }}
-              />
-            </Suspense>
-          </div>
+          {formError && (
+            <div className="rounded-xl bg-[#FF3B30]/8 px-3.5 py-2 text-[13px] text-[#D70015]">
+              {formError}
+            </div>
+          )}
         </div>
-
-        {formError && (
-          <div className="rounded-xl bg-[#FF3B30]/8 px-3.5 py-2 text-[13px] text-[#D70015]">
-            {formError}
-          </div>
-        )}
+      }
+      editor={
+        <div className="relative h-full min-h-0 rounded-xl overflow-hidden border border-[#E5E5EA] bg-white">
+          <Suspense
+            fallback={
+              <div className="absolute inset-0 flex items-center justify-center bg-[#F5F5F7] text-[13px] text-[#86868B]">
+                正在加载富文本编辑器...
+              </div>
+            }
+          >
+            <AiRichEditor
+              value={content}
+              onChange={setContent}
+              className="article-ai-editor absolute inset-0"
+              style={{ height: '100%' }}
+            />
+          </Suspense>
         </div>
       }
       preview={(device) => (
