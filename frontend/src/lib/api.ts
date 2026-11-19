@@ -394,23 +394,24 @@ export function graphicsToPhotos(
       rawCategory ||
       ALBUMS[index % ALBUMS.length];
 
-    images.forEach((src, imageIndex) => {
-      result.push({
-        id: images.length === 1 ? String(row.id) : `${row.id}-${imageIndex + 1}`,
-        title: images.length === 1 ? row.title || '未命名作品' : `${row.title || '未命名作品'} · ${imageIndex + 1}`,
-        album: str(ext.album, album) as PhotoItem['album'],
-        src,
-        aspectRatio: (ASPECT_RATIOS.includes(ext.aspectRatio as PhotoItem['aspectRatio'])
-          ? ext.aspectRatio
-          : ASPECT_RATIOS[index % ASPECT_RATIOS.length]) as PhotoItem['aspectRatio'],
-        location: str(ext.location, row.summary || ''),
-        date: formatYearMonth(row.publishTime || row.createTime),
-        camera: str(ext.camera),
-        lens: str(ext.lens),
-        settings: str(ext.settings),
-      });
-      index += 1;
+    // 一条图文对应一张卡片：多图不再拆成多张卡片，交由列表用封面轮播展示
+    if (!images.length) continue;
+    result.push({
+      id: String(row.id),
+      title: row.title || '未命名作品',
+      album: str(ext.album, album) as PhotoItem['album'],
+      src: images[0],
+      images,
+      aspectRatio: (ASPECT_RATIOS.includes(ext.aspectRatio as PhotoItem['aspectRatio'])
+        ? ext.aspectRatio
+        : ASPECT_RATIOS[index % ASPECT_RATIOS.length]) as PhotoItem['aspectRatio'],
+      location: str(ext.location, row.summary || ''),
+      date: formatYearMonth(row.publishTime || row.createTime),
+      camera: str(ext.camera),
+      lens: str(ext.lens),
+      settings: str(ext.settings),
     });
+    index += 1;
   }
   return result;
 }

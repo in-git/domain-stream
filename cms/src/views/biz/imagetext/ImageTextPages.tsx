@@ -1,12 +1,30 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   ChevronLeft,
   ChevronRight,
   ImagePlus,
-  Star,
   X,
 } from 'lucide-react';
-import { api, convertToWebp } from '../../../lib/api.ts';
+import { api } from '../../../lib/api.ts';
 import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
 import {
   createPendingFile,
@@ -20,6 +38,7 @@ import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/ca
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
 import { CategorySelect } from '../../../components/CategorySelect.tsx';
+import { CoverCropper } from '../../../components/CoverCropper.tsx';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
 import {
@@ -171,6 +190,96 @@ function entriesFromUrls(urls: string[]): ImageEntry[] {
   }));
 }
 
+interface SortableImageCardProps {
+  entry: ImageEntry;
+  index: number;
+  total: number;
+  onMove: (delta: number) => void;
+  onRemove: () => void;
+}
+
+/**
+ * 单张图片卡片（dnd-kit 可排序项）
+ * 拖拽时由框架接管 transform，其余卡片通过 transition 平滑让位。
+ */
+function SortableImageCard({
+  entry,
+  index,
+  total,
+  onMove,
+  onRemove,
+}: SortableImageCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: entry.key,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        touchAction: 'none',
+        zIndex: isDragging ? 20 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+      className={`relative group aspect-[9/16] rounded-xl overflow-hidden border border-[#E5E5EA] bg-[#F2F2F7] cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/50 ${
+        isDragging ? 'opacity-30' : ''
+      }`}
+    >
+      <MediaImage
+        src={entry.previewUrl}
+        alt={`图片 ${index + 1}`}
+        className="w-full h-full object-cover pointer-events-none select-none"
+      />
+      {index === 0 && (
+        <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-[#0071E3] text-white text-[10px] font-medium">
+          封面
+        </div>
+      )}
+      {entry.pending && (
+        <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
+          待上传
+        </div>
+      )}
+      <div
+        className="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(-1)}
+            disabled={index === 0}
+            aria-label="左移"
+            className="w-6 h-6 rounded-md bg-white/90 text-[#1D1D1F] disabled:opacity-40 flex items-center justify-center"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(1)}
+            disabled={index === total - 1}
+            aria-label="右移"
+            className="w-6 h-6 rounded-md bg-white/90 text-[#1D1D1F] disabled:opacity-40 flex items-center justify-center"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="移除图片"
+          className="w-6 h-6 rounded-md bg-[#FF3B30] text-white flex items-center justify-center"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface ImageTextEditorPageProps {
   item?: ImageTextItem;
   onSaved: () => Promise<void>;
@@ -185,9 +294,23 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   // 图片先在浏览器本地暂存，点击保存时才真正上传到服务器
   const [images, setImages] = useState<ImageEntry[]>(() => entriesFromUrls(item?.images ?? []));
-  const [preparingHint, setPreparingHint] = useState<string | null>(null);
+  // 逐张裁剪队列：批量选择后依次弹出 9:16 裁剪弹窗
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+  const [cropTotal, setCropTotal] = useState(0);
   const [saveProgress, setSaveProgress] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // 正在拖拽的图片 key，用于 DragOverlay 跟随效果
+  const [activeImageKey, setActiveImageKey] = useState<string | null>(null);
+  const activeImage = activeImageKey
+    ? images.find((entry) => entry.key === activeImageKey) ?? null
+    : null;
+  const imageSensors = useSensors(
+    // 鼠标移动 5px 才启动拖拽，避免误触按钮点击
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // 触屏需长按 150ms，保留页面滚动
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -218,29 +341,32 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
 
   const categoryLabel = publishCategoryName(categoryOptions, category);
 
-  async function handleImageFiles(fileList: FileList | File[]) {
+  function handleImageFiles(fileList: FileList | File[]) {
     const validFiles = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
     if (validFiles.length === 0) {
       setFormError('请选择 JPG、PNG、WebP 等图片文件');
       return;
     }
     setFormError('');
-    const entries: ImageEntry[] = [];
-    try {
-      for (let i = 0; i < validFiles.length; i++) {
-        setPreparingHint(`正在本地处理第 ${i + 1} / ${validFiles.length} 张图片...`);
-        // 只在本地压缩为 WebP 并生成预览，文件暂存在浏览器内，不发起上传
-        const webpFile = await convertToWebp(validFiles[i]);
-        const pending = createPendingFile(webpFile);
-        entries.push({ key: pending.key, url: '', pending, previewUrl: pending.previewUrl });
-      }
-      setImages((prev) => [...prev, ...entries]);
-    } catch (err) {
-      releasePendingFiles(entries.map((entry) => entry.pending));
-      setFormError(err instanceof Error ? err.message : '图片处理失败');
-    } finally {
-      setPreparingHint(null);
-    }
+    // 每张图片都要按 9:16 逐个裁剪，裁剪结果直接作为本地待上传文件
+    setCropTotal(validFiles.length);
+    setCropQueue(validFiles);
+  }
+
+  /** 单张裁剪完成：本地暂存后继续处理队列中的下一张 */
+  function handleCropComplete(cropped: File) {
+    const pending = createPendingFile(cropped);
+    setImages((prev) => [
+      ...prev,
+      { key: pending.key, url: '', pending, previewUrl: pending.previewUrl },
+    ]);
+    setCropQueue((prev) => prev.slice(1));
+  }
+
+  /** 取消裁剪：结束剩余队列，已裁剪的图片保留 */
+  function handleCropCancel() {
+    setCropQueue([]);
+    setCropTotal(0);
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -262,12 +388,16 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
     });
   }
 
-  function setAsCover(index: number) {
-    if (index === 0) return;
+  /** 拖拽结束：按 dnd-kit 给出的目标位置重排图片（首张即封面） */
+  function handleImageDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveImageKey(null);
+    if (!over || active.id === over.id) return;
     setImages((prev) => {
-      const copy = [...prev];
-      const [picked] = copy.splice(index, 1);
-      return [picked, ...copy];
+      const from = prev.findIndex((entry) => entry.key === active.id);
+      const to = prev.findIndex((entry) => entry.key === over.id);
+      if (from < 0 || to < 0) return prev;
+      return arrayMove(prev, from, to);
     });
   }
 
@@ -344,7 +474,8 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   }
 
   return (
-    <EditorWorkspace
+    <>
+      <EditorWorkspace
       title={item ? '编辑图文内容' : '上传并编排图文'}
       subtitle="支持一次批量拖入多张图片，点击星标即可设为首页封面图"
       onBack={onBack}
@@ -359,7 +490,7 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           </button>
           <button
             type="button"
-            disabled={saving || !!preparingHint}
+            disabled={saving}
             onClick={() => void handleSave()}
             className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
           >
@@ -377,6 +508,8 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
         <div className="space-y-5">
         <div
           onDragOver={(e) => {
+            // 只响应文件拖入，忽略图片卡片之间的排序拖拽
+            if (!e.dataTransfer.types.includes('Files')) return;
             e.preventDefault();
             setDragOver(true);
           }}
@@ -407,82 +540,61 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
             点击批量选择或拖拽多张图片至此
           </div>
           <div className="text-[12px] text-[#86868B] mt-0.5">
-            {preparingHint || '仅支持图片（JPG / PNG / WebP），首张自动作为封面 · 保存时才上传'}
+            仅支持图片（JPG / PNG / WebP），选图后按 9:16 逐张裁剪 · 保存时才上传
           </div>
         </div>
 
         {images.length > 0 && (
           <div>
-            <div className="flex items-center justify-between text-[12px] text-[#6E6E73] mb-2">
+            <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73] mb-2">
               <span>已添加 {images.length} 张图片（第 1 张为展示封面）</span>
+              <span className="text-[#86868B] shrink-0">拖拽图片可调整顺序</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {images.map((entry, idx) => (
-                <div
-                  key={entry.key}
-                  className="relative group aspect-[4/3] rounded-xl overflow-hidden border border-[#E5E5EA] bg-[#F2F2F7]"
-                >
-                  <MediaImage
-                    src={entry.previewUrl}
-                    alt={`图片 ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  {idx === 0 && (
-                    <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-[#0071E3] text-white text-[10px] font-medium">
-                      封面
-                    </div>
-                  )}
-                  {entry.pending && (
-                    <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
-                      待上传
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveImage(idx, -1)}
-                        disabled={idx === 0}
-                        aria-label="左移"
-                        className="w-6 h-6 rounded-md bg-white/90 text-[#1D1D1F] disabled:opacity-40 flex items-center justify-center"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveImage(idx, 1)}
-                        disabled={idx === images.length - 1}
-                        aria-label="右移"
-                        className="w-6 h-6 rounded-md bg-white/90 text-[#1D1D1F] disabled:opacity-40 flex items-center justify-center"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {idx !== 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setAsCover(idx)}
-                          aria-label="设为封面"
-                          title="设为封面"
-                          className="w-6 h-6 rounded-md bg-white/90 text-[#FF9500] flex items-center justify-center"
-                        >
-                          <Star className="w-3.5 h-3.5 fill-current" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        aria-label="移除图片"
-                        className="w-6 h-6 rounded-md bg-[#FF3B30] text-white flex items-center justify-center"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+            <DndContext
+              sensors={imageSensors}
+              collisionDetection={closestCenter}
+              onDragStart={(event) => setActiveImageKey(String(event.active.id))}
+              onDragCancel={() => setActiveImageKey(null)}
+              onDragEnd={handleImageDragEnd}
+            >
+              <SortableContext
+                items={images.map((entry) => entry.key)}
+                strategy={rectSortingStrategy}
+              >
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {images.map((entry, idx) => (
+                    <SortableImageCard
+                      key={entry.key}
+                      entry={entry}
+                      index={idx}
+                      total={images.length}
+                      onMove={(delta) => moveImage(idx, delta)}
+                      onRemove={() => removeImage(idx)}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+
+              {/* 拖拽中的浮层卡片：跟随指针并带落位回弹动画 */}
+              <DragOverlay
+                dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}
+              >
+                {activeImage && (
+                  <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-[#0071E3] bg-[#F2F2F7] shadow-[0_16px_40px_rgba(0,0,0,0.24)] rotate-1 scale-[1.02]">
+                    <MediaImage
+                      src={activeImage.previewUrl}
+                      alt=""
+                      className="w-full h-full object-cover pointer-events-none select-none"
+                    />
+                    {activeImage.pending && (
+                      <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
+                        待上传
+                      </div>
+                    )}
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
           </div>
         )}
 
@@ -560,7 +672,22 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           status={status}
         />
       )}
-    />
+      />
+      {/* 批量选图后按 9:16 逐张裁剪，裁剪结果直接作为本地待上传文件 */}
+      <CoverCropper
+        file={cropQueue[0] ?? null}
+        aspect={9 / 16}
+        outputWidth={1080}
+        heading={
+          cropTotal > 1
+            ? `裁剪第 ${cropTotal - cropQueue.length + 1} / ${cropTotal} 张（9:16）`
+            : '裁剪图文图片（9:16）'
+        }
+        confirmText="使用此图片"
+        onCancel={handleCropCancel}
+        onComplete={handleCropComplete}
+      />
+    </>
   );
 }
 

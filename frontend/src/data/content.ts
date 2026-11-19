@@ -45,7 +45,10 @@ export interface PhotoItem {
   id: string;
   title: string;
   album: string;
+  /** 封面图（等于 images[0]） */
   src: string;
+  /** 该图文的全部图片：列表用封面轮播，详情按此顺序浏览 */
+  images: string[];
   aspectRatio: '3:4' | '4:3' | '1:1' | '16:9';
   location: string;
   date: string;

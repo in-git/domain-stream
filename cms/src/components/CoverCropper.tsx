@@ -11,6 +11,8 @@ interface CoverCropperProps {
   /** 输出图片宽度（px），高度按比例自动计算 */
   outputWidth?: number;
   heading?: string;
+  /** 确认按钮文案，默认「使用此封面」 */
+  confirmText?: string;
   onCancel: () => void;
   /** 裁剪完成回调，返回 Promise 时会保持按钮 loading 直到完成 */
   onComplete: (file: File) => void | Promise<void>;
@@ -75,6 +77,7 @@ export function CoverCropper({
   aspect = 16 / 9,
   outputWidth = 1440,
   heading,
+  confirmText,
   onCancel,
   onComplete,
 }: CoverCropperProps) {
@@ -243,7 +246,7 @@ export function CoverCropper({
               className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium inline-flex items-center gap-1.5"
             >
               {processing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {processing ? '正在处理...' : '使用此封面'}
+              {processing ? '正在处理...' : confirmText || '使用此封面'}
             </button>
           </div>
         </div>
