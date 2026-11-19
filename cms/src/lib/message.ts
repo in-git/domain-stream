@@ -38,15 +38,11 @@ export interface BizMessage {
   parentId?: string;
   /** 被回复者昵称，用于展示「回复 @xxx」 */
   replyToNickname?: string;
+  /** 由 USER_ID 反查的展示昵称，不落库 */
   nickname?: string;
-  avatar?: string;
-  email?: string;
-  phone?: string;
+  userId?: string;
   content?: string;
   status?: string;
-  reply?: string;
-  replyTime?: string;
-  replyUser?: string;
   ip?: string;
   userAgent?: string;
   sortCode?: number;
@@ -62,15 +58,9 @@ export interface BizMessage {
 /** add / edit 允许提交的业务字段（不含审计字段） */
 export interface MessagePayload {
   id?: string;
-  nickname?: string;
-  avatar?: string;
-  email?: string;
-  phone?: string;
+  userId?: string;
   content?: string;
   status?: string;
-  reply?: string;
-  replyTime?: string;
-  replyUser?: string;
   ip?: string;
   userAgent?: string;
   sortCode?: number;
@@ -128,15 +118,9 @@ export function hasMessagePerm(
 export function toMessagePayload(item: BizMessage): MessagePayload {
   return {
     id: item.id,
-    nickname: item.nickname || '',
-    avatar: item.avatar || '',
-    email: item.email || '',
-    phone: item.phone || '',
+    userId: item.userId || '',
     content: item.content || '',
     status: item.status || 'APPROVED',
-    reply: item.reply || '',
-    replyTime: item.replyTime || '',
-    replyUser: item.replyUser || '',
     ip: item.ip || '',
     userAgent: item.userAgent || '',
     sortCode: item.sortCode ?? 0,
@@ -170,7 +154,7 @@ export const messageApi = {
     });
   },
 
-  /** 编辑（审核 / 回复也走此接口，payload 必须带 id） */
+  /** 编辑（payload 必须带 id） */
   edit(payload: MessagePayload): Promise<string> {
     return snowyRequest<string>(`${BASE}/edit`, {
       method: 'POST',

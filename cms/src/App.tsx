@@ -560,7 +560,7 @@ export default function App() {
           ) : route.module === 'messages' ? (
             <MessageView permissions={permissions} />
           ) : route.module === 'files' ? (
-            <FileCenterView permissions={permissions} />
+            <FileCenterView />
           ) : (
             <PersonalCenterView
               user={user}

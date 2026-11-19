@@ -12,6 +12,14 @@ import {
 import { api, uploadFileWithProgress } from '../../lib/api.ts';
 import type { ModuleKey, UserProfile } from '../../types/cms.ts';
 import { MediaImage } from '../../components/MediaImage.tsx';
+import { SelectField, type SelectFieldOption } from '../../components/SelectField.tsx';
+
+const DEFAULT_MODULE_OPTIONS: SelectFieldOption[] = [
+  { value: 'dashboard', label: '首页看板' },
+  { value: 'videos', label: '视频管理' },
+  { value: 'imagetexts', label: '图文管理' },
+  { value: 'articles', label: '文章管理' },
+];
 
 interface PersonalCenterViewProps {
   user: UserProfile;
@@ -300,16 +308,13 @@ export function PersonalCenterView({
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
               登录后默认进入模块
             </label>
-            <select
+            <SelectField
               value={defaultModule}
-              onChange={(e) => setDefaultModule(e.target.value as ModuleKey)}
-              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] focus:outline-none"
-            >
-              <option value="dashboard">首页看板</option>
-              <option value="videos">视频管理</option>
-              <option value="imagetexts">图文管理</option>
-              <option value="articles">文章管理</option>
-            </select>
+              onChange={(value) => setDefaultModule(value as ModuleKey)}
+              ariaLabel="登录后默认进入模块"
+              className="w-full"
+              options={DEFAULT_MODULE_OPTIONS}
+            />
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-xl bg-[#F5F5F7]">

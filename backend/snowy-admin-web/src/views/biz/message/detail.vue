@@ -7,17 +7,8 @@
 		@close="onClose"
 	>
 		<a-descriptions :column="1" bordered size="small">
-			<a-descriptions-item label="留言人昵称">
-				{{ formData.nickname }}
-			</a-descriptions-item>
-			<a-descriptions-item label="留言人头像">
-				{{ formData.avatar }}
-			</a-descriptions-item>
-			<a-descriptions-item label="邮箱">
-				{{ formData.email }}
-			</a-descriptions-item>
-			<a-descriptions-item label="联系电话">
-				{{ formData.phone }}
+			<a-descriptions-item label="用户ID">
+				{{ formData.userId }}
 			</a-descriptions-item>
 			<a-descriptions-item label="留言内容">
 				{{ formData.content }}

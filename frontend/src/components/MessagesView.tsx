@@ -2,8 +2,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, Heart, MessageCircle, Send, X } from 'lucide-react';
 import type { MessageItem, MessageReply } from '../data/content.ts';
 import type { ReplyDraft } from '../lib/api.ts';
-import { useMemo, useState, type FormEvent } from 'react';
-import { APPLE_EASE, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion.ts';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { APPLE_EASE, SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion.ts';
 
 type SortMode = 'latest' | 'hot';
 
@@ -18,36 +18,21 @@ function formatDate(iso: string): string {
   });
 }
 
-function Avatar({ name, src }: { name: string; src?: string }) {
+function Avatar({ name, src, size = 'md' }: { name: string; src?: string; size?: 'sm' | 'md' }) {
+  const sizeClass = size === 'sm' ? 'w-7 h-7 text-[11px]' : 'w-9 h-9 text-[13px]';
   if (src) {
     return (
       <img
         src={src}
         alt={name}
-        className="w-9 h-9 rounded-full object-cover bg-[#F2F2F7] dark:bg-white/10 shrink-0"
+        className={`${sizeClass} rounded-full object-cover bg-[#F2F2F7] dark:bg-white/10 shrink-0`}
       />
     );
   }
   return (
-    <div className="w-9 h-9 rounded-full bg-[#F2F2F7] dark:bg-white/[0.08] flex items-center justify-center text-[#6E6E73] dark:text-[#D1D1D6] text-[13px] font-medium shrink-0">
-      {(name || '访').slice(0, 1).toUpperCase()}
-    </div>
-  );
-}
-
-/** 回复条目里的小头像 */
-function SmallAvatar({ name, src }: { name: string; src?: string }) {
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt=""
-        className="w-5 h-5 rounded-full object-cover bg-white dark:bg-white/10 shrink-0"
-      />
-    );
-  }
-  return (
-    <div className="w-5 h-5 rounded-full bg-white dark:bg-white/10 flex items-center justify-center text-[#6E6E73] dark:text-[#D1D1D6] text-[10px] font-medium shrink-0">
+    <div
+      className={`${sizeClass} rounded-full bg-[#F2F2F7] dark:bg-white/[0.08] flex items-center justify-center text-[#6E6E73] dark:text-[#D1D1D6] font-medium shrink-0`}
+    >
       {(name || '访').slice(0, 1).toUpperCase()}
     </div>
   );
@@ -55,6 +40,7 @@ function SmallAvatar({ name, src }: { name: string; src?: string }) {
 
 export interface MessageAuthor {
   name: string;
+  userId?: string;
   email?: string;
   avatar?: string;
 }
@@ -98,7 +84,10 @@ export default function MessagesView({
   const [replyText, setReplyText] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  /** 打开详情的留言 id，null 表示模态框关闭 */
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [replySuccess, setReplySuccess] = useState<string | null>(null);
 
   /** 按留言 id 分组，组内按时间升序（后端已排好，本地乐观追加后再兜一次底） */
   const repliesByMessage = useMemo(() => {
@@ -119,7 +108,7 @@ export default function MessagesView({
     const list = messages.filter((m) => {
       if (!q) return true;
       const related = repliesByMessage.get(m.id) || [];
-      return [m.nickname, m.content, m.reply, ...related.map((r) => `${r.nickname} ${r.content}`)]
+      return [m.nickname, m.content, ...related.map((r) => `${r.nickname} ${r.content}`)]
         .filter(Boolean)
         .some((field) => (field as string).toLowerCase().includes(q));
     });
@@ -129,6 +118,44 @@ export default function MessagesView({
         : b.createdAt.localeCompare(a.createdAt)
     );
   }, [messages, searchQuery, sortMode, repliesByMessage]);
+
+  const activeMessage = useMemo(
+    () => messages.find((m) => m.id === activeMessageId) || null,
+    [messages, activeMessageId]
+  );
+
+  /** 模态框内的回复弹幕 */
+  const modalReplies = useMemo(
+    () => (activeMessageId ? repliesByMessage.get(activeMessageId) || [] : []),
+    [activeMessageId, repliesByMessage]
+  );
+  const modalTrackCount = Math.min(Math.max(modalReplies.length, 1), 4);
+  const modalDanmaku =
+    modalReplies.length > modalTrackCount
+      ? [...modalReplies, ...modalReplies]
+      : modalReplies;
+
+  /** 模态框打开时锁定背景滚动，并支持 ESC 关闭 */
+  useEffect(() => {
+    if (!activeMessageId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveMessageId(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeMessageId]);
+
+  /** 回复成功后短暂提示 */
+  useEffect(() => {
+    if (!replySuccess) return;
+    const timer = window.setTimeout(() => setReplySuccess(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [replySuccess]);
 
   function openComposer() {
     if (!isLoggedIn) {
@@ -152,8 +179,7 @@ export default function MessagesView({
     const newMessage: MessageItem = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       nickname: currentUser.name,
-      email: currentUser.email || undefined,
-      avatar: currentUser.avatar,
+      userId: currentUser.userId,
       content: text,
       createdAt: new Date().toISOString(),
       likes: 0,
@@ -173,40 +199,25 @@ export default function MessagesView({
     }
   }
 
-  /** 任何登录访客都能回复任意留言（包括自己发布的），未登录先引导登录 */
-  function startReply(messageId: string, target?: MessageReply) {
-    if (!isLoggedIn) {
-      onRequireLogin();
-      return;
-    }
+  /** 打开留言详情模态框，底部带回复输入框 */
+  function openMessage(messageId: string) {
+    setActiveMessageId(messageId);
     setReplyError(null);
+    setReplySuccess(null);
     setReplyText('');
-    setReplyTarget({
-      messageId,
-      parentReplyId: target?.id,
-      replyToNickname: target?.nickname,
-    });
+    setReplyTarget({ messageId });
   }
 
-  function cancelReply() {
+  function closeMessage() {
+    setActiveMessageId(null);
     setReplyTarget(null);
     setReplyText('');
     setReplyError(null);
   }
 
-  function toggleExpanded(messageId: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(messageId)) next.delete(messageId);
-      else next.add(messageId);
-      return next;
-    });
-  }
-
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const target = replyTarget;
-    if (!target || replySubmitting) return;
+    if (!activeMessageId || replySubmitting) return;
     const text = replyText.trim();
     if (!text) {
       setReplyError('请填写回复内容');
@@ -221,17 +232,14 @@ export default function MessagesView({
     setReplyError(null);
     try {
       await onAddReply({
-        messageId: target.messageId,
-        nickname: currentUser.name,
-        email: currentUser.email,
-        avatar: currentUser.avatar,
+        messageId: activeMessageId,
+        userId: currentUser.userId,
         content: text,
-        parentReplyId: target.parentReplyId,
-        replyToNickname: target.replyToNickname,
+        parentReplyId: replyTarget?.parentReplyId,
+        replyToNickname: replyTarget?.replyToNickname,
       });
-      setExpanded((prev) => new Set(prev).add(target.messageId));
-      cancelReply();
-      setHint('回复已发布');
+      setReplyText('');
+      setReplySuccess('回复已发布');
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : '回复失败，请稍后重试');
     } finally {
@@ -241,7 +249,7 @@ export default function MessagesView({
 
   return (
     <section aria-labelledby="messages-heading" className="space-y-6">
-      <div className="max-w-[1440px] mx-auto">
+      <div>
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -278,7 +286,7 @@ export default function MessagesView({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
               className={`mb-6 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[13px] ${
-                hint.startsWith('留言已') || hint.startsWith('回复已')
+                hint.startsWith('留言已')
                   ? 'bg-[#16A34A]/10 text-[#16A34A]'
                   : 'bg-[#FF3B30]/10 text-[#D70015]'
               }`}
@@ -347,199 +355,133 @@ export default function MessagesView({
             </p>
           </div>
         ) : (
-          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 sm:gap-5">
+          <div className="columns-2 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
             {visibleMessages.map((message, index) => {
               const isLiked = likedIds.has(message.id);
               const messageReplies = repliesByMessage.get(message.id) || [];
-              const isExpanded = expanded.has(message.id);
-              const shownReplies = isExpanded ? messageReplies : messageReplies.slice(0, 3);
+              // 弹幕轨道：回复数超过轨道数时循环滚动
+              const trackCount = Math.min(Math.max(messageReplies.length, 1), 4);
+              const danmakuStream =
+                messageReplies.length > trackCount
+                  ? [...messageReplies, ...messageReplies]
+                  : messageReplies;
               return (
                 <motion.article
                   key={message.id}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-                  whileHover={{ y: -2 }}
-                  className="break-inside-avoid mb-5 group"
+                  className="break-inside-avoid mb-3 sm:mb-4"
                 >
-                  <div className="overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
-                  <div className="px-3 sm:px-3.5 pt-3 pb-2.5">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <Avatar name={message.nickname} src={message.avatar} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
-                        {message.nickname}
-                      </div>
-                      <div className="text-[11px] text-[#8E8E93] dark:text-[#98989D] mt-0.5 tabular-nums">
-                        {formatDate(message.createdAt)}
-                      </div>
-                    </div>
-                  </div>
+                  <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  {/* 语录区 + 弹幕层 */}
+                  <div className="relative">
+                  {/* 语录区：引号装饰 + 居中大字，点击打开详情 */}
+                  <button
+                    type="button"
+                    onClick={() => openMessage(message.id)}
+                    className="flex flex-col w-full px-4 pt-4 pb-4 min-h-[180px] sm:min-h-[210px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                    aria-label={`查看留言详情：${message.nickname}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
+                    >
+                      &ldquo;
+                    </span>
 
-                  <p className="text-[13px] sm:text-sm leading-6 text-[#3A3A3C] dark:text-[#D1D1D6] whitespace-pre-wrap break-words">
-                    {message.content}
-                  </p>
-
-                  {/* 管理员（站长）在后台填写的回复，保留原有展示 */}
-                  {message.reply && (
-                    <div className="mt-3 rounded-xl bg-[#F5F5F7] dark:bg-white/[0.05] px-3.5 py-2.5">
-                      <div className="text-[11px] font-medium text-[#0071E3] dark:text-[#0A84FF] mb-1">
-                        站长回复 · {message.replyAt ? formatDate(message.replyAt) : ''}
-                      </div>
-                      <p className="text-[12px] leading-5 text-[#6E6E73] dark:text-[#A1A1A6] whitespace-pre-wrap break-words">
-                        {message.reply}
+                    <div className="flex-1 flex items-center justify-center py-4">
+                      <p className="text-center font-editorial text-[19px] sm:text-[23px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words">
+                        {message.content}
                       </p>
                     </div>
-                  )}
+                  </button>
 
-                  {/* 访客之间的公开回复：谁都可以回复，自己也能回复自己 */}
-                  {messageReplies.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <div className="text-[11px] font-medium text-[#8E8E93] dark:text-[#98989D] tabular-nums">
-                        {messageReplies.length} 条回复
-                      </div>
-                      {shownReplies.map((replyItem) => (
-                        <div
-                          key={replyItem.id}
-                          className="rounded-xl bg-[#F5F5F7] dark:bg-white/[0.05] px-3 py-2.5"
-                        >
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <SmallAvatar name={replyItem.nickname} src={replyItem.avatar} />
-                            <span className="text-[11px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate min-w-0">
-                              {replyItem.nickname}
-                            </span>
-                            {replyItem.nickname === message.nickname && (
-                              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[#0071E3]/10 text-[#0071E3] dark:text-[#0A84FF]">
-                                作者
-                              </span>
-                            )}
-                            <span className="ml-auto shrink-0 text-[10px] text-[#AEAEB2] tabular-nums">
-                              {formatDate(replyItem.createdAt)}
-                            </span>
-                          </div>
-                          <p className="text-[12px] leading-5 text-[#3A3A3C] dark:text-[#D1D1D6] whitespace-pre-wrap break-words">
-                            {replyItem.replyToNickname && (
-                              <span className="mr-1 text-[#0071E3] dark:text-[#0A84FF]">
-                                @{replyItem.replyToNickname}
-                              </span>
-                            )}
-                            {replyItem.content}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => startReply(message.id, replyItem)}
-                            className="mt-1 text-[11px] text-[#8E8E93] dark:text-[#98989D] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors"
+                  {/* 弹幕层：其他人的回复以弹幕形式飘过语录区 */}
+                  {danmakuStream.length > 0 && (
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-0 overflow-hidden pointer-events-none"
+                    >
+                      {danmakuStream.map((danmaku, danmakuIndex) => {
+                        const lane = danmakuIndex % trackCount;
+                        return (
+                          <span
+                            key={`${danmaku.id}-${danmakuIndex}`}
+                            className="absolute left-0 inline-flex items-center gap-1 max-w-[92%] rounded-md bg-black/55 dark:bg-black/70 backdrop-blur-[2px] px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-tight text-white/95 shadow-sm animate-[danmaku_9s_linear_infinite] group-hover:[animation-play-state:paused]"
+                            style={{
+                              top: `${8 + lane * (82 / trackCount)}%`,
+                              animationDelay: `${-(lane * (9 / trackCount))}s`,
+                            }}
                           >
-                            回复
-                          </button>
-                        </div>
-                      ))}
-                      {messageReplies.length > 3 && (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpanded(message.id)}
-                          className="text-[11px] text-[#0071E3] dark:text-[#0A84FF] hover:underline"
-                        >
-                          {isExpanded ? '收起回复' : `查看全部 ${messageReplies.length} 条回复`}
-                        </button>
-                      )}
+                            <span className="font-medium text-[#8FC0FF] shrink-0">
+                              {danmaku.nickname}
+                            </span>
+                            <span className="truncate">{danmaku.content}</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
+                  </div>
 
-                  {/* 回复输入框：对任意留言开放，包括自己的留言 */}
-                  {replyTarget?.messageId === message.id && (
-                    <form
-                      onSubmit={(event) => void submitReply(event)}
-                      className="mt-3 rounded-xl bg-[#F5F5F7] dark:bg-white/[0.05] p-3"
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[11px] text-[#6E6E73] dark:text-[#A1A1A6] truncate">
-                          {replyTarget.replyToNickname ? (
-                            <>
-                              回复{' '}
-                              <span className="text-[#0071E3] dark:text-[#0A84FF]">
-                                @{replyTarget.replyToNickname}
-                              </span>
-                            </>
-                          ) : (
-                            <>以 {currentUser.name} 身份回复</>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={cancelReply}
-                          aria-label="取消回复"
-                          className="text-[#8E8E93] hover:text-[#1D1D1F] dark:hover:text-white"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <textarea
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        maxLength={500}
-                        rows={2}
-                        autoFocus
-                        placeholder="写下你的回复..."
-                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-white/[0.09] border border-transparent text-[12px] leading-5 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all resize-none"
-                      />
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-[#AEAEB2] tabular-nums">
-                          {replyText.length} / 500
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={cancelReply}
-                            className="h-7 px-2.5 rounded-lg text-[11px] text-[#6E6E73] dark:text-[#98989D] hover:bg-[#EDEDF0] dark:hover:bg-white/[0.08] transition-colors"
-                          >
-                            取消
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={replySubmitting || !replyText.trim()}
-                            className="h-7 px-3 rounded-lg bg-[#0071E3] hover:bg-[#0077ED] text-white text-[11px] font-medium inline-flex items-center gap-1 disabled:opacity-50 transition-colors"
-                          >
-                            <Send className="w-3 h-3" strokeWidth={2} />
-                            {replySubmitting ? '发送中' : '发送'}
-                          </button>
-                        </div>
-                      </div>
-                      {replyError && (
-                        <p className="mt-2 text-[11px] text-[#D70015]">{replyError}</p>
-                      )}
-                    </form>
+                  {/* 弹幕内容对读屏软件不可见，额外提供一份纯文本回复列表 */}
+                  {messageReplies.length > 0 && (
+                    <ul className="sr-only">
+                      {messageReplies.map((replyItem) => (
+                        <li key={replyItem.id}>
+                          {replyItem.nickname}
+                          {replyItem.replyToNickname ? ` 回复 ${replyItem.replyToNickname}` : ''}：
+                          {replyItem.content}
+                        </li>
+                      ))}
+                    </ul>
                   )}
 
-                  <div className="mt-3 pt-3 border-t border-[#F2F2F7] dark:border-white/[0.06] flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startReply(message.id)}
-                      className="inline-flex items-center gap-1.5 text-[12px] text-[#6E6E73] dark:text-[#98989D] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
-                      <span>{messageReplies.length ? `${messageReplies.length} 条回复` : '回复'}</span>
-                    </button>
-                    <motion.button
-                      type="button"
-                      onClick={() => onToggleLike(message.id)}
-                      whileTap={{ scale: 0.88 }}
-                      transition={SWIFTUI_SNAPPY}
-                      aria-label={isLiked ? '取消点赞' : '点赞'}
-                      aria-pressed={isLiked}
-                      className={`inline-flex items-center gap-1 text-[12px] transition-colors ${
-                        isLiked
-                          ? 'text-[#FF2E4D]'
-                          : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
-                      }`}
-                    >
-                      <Heart
-                        className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`}
-                        strokeWidth={1.8}
-                      />
-                      <span className="tabular-nums">{message.likes}</span>
-                    </motion.button>
-                  </div>
+                  {/* 底部作者行：参考图的「作者 + 点赞」布局 */}
+                  <div className="mt-1 px-3 py-2 border-t border-[#F2F2F7] dark:border-white/[0.06] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Avatar name={message.nickname} size="sm" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] text-[#3A3A3C] dark:text-[#D1D1D6] truncate leading-tight">
+                          {message.nickname}
+                        </div>
+                        <div className="text-[10px] text-[#AEAEB2] dark:text-[#86868B] tabular-nums leading-tight">
+                          {formatDate(message.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openMessage(message.id)}
+                        aria-label="查看留言详情与回复"
+                        className="flex items-center gap-1 px-1 py-1 text-[11px] tabular-nums text-[#8E8E93] dark:text-[#98989D] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                        <span>{messageReplies.length}</span>
+                      </button>
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.85 }}
+                        transition={SWIFTUI_BOUNCY}
+                        onClick={() => onToggleLike(message.id)}
+                        aria-label={isLiked ? '取消点赞' : '点赞'}
+                        aria-pressed={isLiked}
+                        className={`flex items-center gap-1 px-1 py-1 text-[11px] tabular-nums transition-colors ${
+                          isLiked
+                            ? 'text-[#FF2E4D]'
+                            : 'text-[#8E8E93] dark:text-[#98989D] hover:text-[#FF2E4D]'
+                        }`}
+                      >
+                        <Heart
+                          className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`}
+                          strokeWidth={1.8}
+                        />
+                        <span>{message.likes}</span>
+                      </motion.button>
+                    </div>
                   </div>
                   </div>
                 </motion.article>
@@ -660,6 +602,178 @@ export default function MessagesView({
                     )}
                     {submitting ? '提交中' : '提交留言'}
                   </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 留言详情模态框：底部为留言输入框 */}
+      <AnimatePresence>
+        {activeMessage && (
+          <motion.div
+            key="message-detail"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-[2px]"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeMessage();
+            }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="留言详情"
+              initial={{ opacity: 0, y: 32, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.98 }}
+              transition={SWIFTUI_SMOOTH}
+              className="relative w-full sm:max-w-lg max-h-[88vh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-xl"
+            >
+              <button
+                type="button"
+                onClick={closeMessage}
+                aria-label="关闭"
+                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-lg flex items-center justify-center text-[#86868B] hover:bg-[#F5F5F7] dark:hover:bg-white/[0.06] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* 语录展示区 */}
+              <div className="relative px-6 pt-7 pb-5 min-h-[240px] flex flex-col">
+                <span
+                  aria-hidden="true"
+                  className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
+                >
+                  &ldquo;
+                </span>
+
+                <div className="flex-1 flex items-center justify-center py-4">
+                  <p className="text-center font-editorial text-[21px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words">
+                    {activeMessage.content}
+                  </p>
+                </div>
+
+                {/* 弹幕层 */}
+                {modalDanmaku.length > 0 && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 overflow-hidden pointer-events-none"
+                  >
+                    {modalDanmaku.map((danmaku, danmakuIndex) => {
+                      const lane = danmakuIndex % modalTrackCount;
+                      return (
+                        <span
+                          key={`${danmaku.id}-${danmakuIndex}`}
+                          className="absolute left-0 inline-flex items-center gap-1 max-w-[92%] rounded-md bg-black/55 dark:bg-black/70 backdrop-blur-[2px] px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-tight text-white/95 shadow-sm animate-[danmaku_9s_linear_infinite]"
+                          style={{
+                            top: `${8 + lane * (78 / modalTrackCount)}%`,
+                            animationDelay: `${-(lane * (9 / modalTrackCount))}s`,
+                          }}
+                        >
+                          <span className="font-medium text-[#8FC0FF] shrink-0">
+                            {danmaku.nickname}
+                          </span>
+                          <span className="truncate">{danmaku.content}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 作者行 */}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar name={activeMessage.nickname} size="sm" />
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+                        {activeMessage.nickname}
+                      </div>
+                      <div className="text-[10px] text-[#AEAEB2] tabular-nums">
+                        {formatDate(activeMessage.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    transition={SWIFTUI_BOUNCY}
+                    onClick={() => onToggleLike(activeMessage.id)}
+                    aria-label={likedIds.has(activeMessage.id) ? '取消点赞' : '点赞'}
+                    aria-pressed={likedIds.has(activeMessage.id)}
+                    className={`flex items-center gap-1 px-1 py-1 text-[12px] tabular-nums transition-colors ${
+                      likedIds.has(activeMessage.id)
+                        ? 'text-[#FF2E4D]'
+                        : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
+                    }`}
+                  >
+                    <Heart
+                      className={`w-4 h-4 ${likedIds.has(activeMessage.id) ? 'fill-current' : ''}`}
+                      strokeWidth={1.8}
+                    />
+                    <span>{activeMessage.likes}</span>
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* 底部留言输入框 */}
+              <form
+                onSubmit={(event) => void submitReply(event)}
+                className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-[#F5F5F7] dark:bg-white/[0.03] p-3"
+              >
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 min-w-0 rounded-xl bg-white dark:bg-white/[0.07] border border-transparent focus-within:ring-2 focus-within:ring-[#0071E3]/25 transition-all">
+                    <textarea
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      maxLength={500}
+                      rows={2}
+                      placeholder={isLoggedIn ? '写下你的留言...' : '登录后可留言'}
+                      disabled={!isLoggedIn}
+                      onFocus={() => {
+                        if (!isLoggedIn) onRequireLogin();
+                      }}
+                      className="w-full px-3 py-2 bg-transparent rounded-xl text-[13px] leading-5 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:outline-none resize-none disabled:opacity-60"
+                    />
+                  </div>
+
+                  <motion.button
+                    type="submit"
+                    disabled={replySubmitting || !replyText.trim() || !isLoggedIn}
+                    whileTap={{ scale: 0.96 }}
+                    transition={SWIFTUI_SNAPPY}
+                    className="h-10 px-4 shrink-0 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" strokeWidth={2} />
+                    {replySubmitting ? '发送中' : '发送'}
+                  </motion.button>
+                </div>
+
+                <div className="mt-1.5 flex items-center justify-between gap-2 min-h-[16px]">
+                  <span className="text-[11px] text-[#AEAEB2] tabular-nums">
+                    {replyText.length} / 500
+                  </span>
+                  {replyError && (
+                    <span className="text-[11px] text-[#D70015] truncate">{replyError}</span>
+                  )}
+                  <AnimatePresence>
+                    {replySuccess && (
+                      <motion.span
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.2 }}
+                        className="ml-auto inline-flex items-center gap-1 text-[11px] text-[#16A34A]"
+                      >
+                        <Check className="w-3 h-3" />
+                        {replySuccess}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
               </form>
             </motion.div>

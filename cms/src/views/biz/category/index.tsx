@@ -45,6 +45,7 @@ import {
   CategoryFormDialog,
   CategoryImportDialog,
 } from './dialogs.tsx';
+import { SelectField } from '../../../components/SelectField.tsx';
 
 const PAGE_SIZE = 10;
 const GRID_CLASS =
@@ -349,30 +350,28 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
           </div>
-          <select
+          <SelectField
             value={moduleFilter}
-            onChange={(e) => setModuleFilter(e.target.value)}
-            aria-label="按适用模块筛选"
-            className="h-9 px-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#3A3A3C] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25"
-          >
-            <option value="all">全部模块</option>
-            {CATEGORY_MODULES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-            <option value="">未设置模块</option>
-          </select>
-          <select
+            onChange={setModuleFilter}
+            ariaLabel="按适用模块筛选"
+            className="w-[140px]"
+            options={[
+              { value: 'all', label: '全部模块' },
+              ...CATEGORY_MODULES.map((m) => ({ value: m.value, label: m.label })),
+              { value: '', label: '未设置模块' },
+            ]}
+          />
+          <SelectField
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="按状态筛选"
-            className="h-9 px-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#3A3A3C] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25"
-          >
-            <option value="all">全部状态</option>
-            <option value="ENABLE">已启用</option>
-            <option value="DISABLE">已禁用</option>
-          </select>
+            onChange={setStatusFilter}
+            ariaLabel="按状态筛选"
+            className="w-[124px]"
+            options={[
+              { value: 'all', label: '全部状态' },
+              { value: 'ENABLE', label: '已启用' },
+              { value: 'DISABLE', label: '已禁用' },
+            ]}
+          />
           {hasFilter && (
             <button
               type="button"

@@ -43,21 +43,14 @@ public class BizMessage {
     @Schema(description = "被回复者昵称")
     private String replyToNickname;
 
-    /** 留言人昵称 */
-    @Schema(description = "留言人昵称")
+    /** 留言用户ID */
+    @Schema(description = "留言用户ID")
+    private String userId;
+
+    /** 留言人昵称：按 USER_ID 从用户服务回填，仅用于展示，不落库 */
+    @Schema(description = "留言人昵称（派生展示字段）")
+    @TableField(exist = false)
     private String nickname;
-
-    /** 留言人头像 */
-    @Schema(description = "留言人头像")
-    private String avatar;
-
-    /** 邮箱 */
-    @Schema(description = "邮箱")
-    private String email;
-
-    /** 联系电话 */
-    @Schema(description = "联系电话")
-    private String phone;
 
     /** 留言内容 */
     @Schema(description = "留言内容")

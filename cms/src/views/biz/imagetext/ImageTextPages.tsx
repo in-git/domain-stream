@@ -14,6 +14,7 @@ import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
+import { SelectField } from '../../../components/SelectField.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
@@ -378,25 +379,24 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
               主题分类 <span className="text-[#D70015]">*</span>
             </label>
-            <select
+            <SelectField
               value={category}
-              disabled={categoryLoading || !!categoryError}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none disabled:opacity-60"
-            >
-              <option value="">
-                {categoryLoading
+              onChange={setCategory}
+              isDisabled={categoryLoading || !!categoryError}
+              placeholder={
+                categoryLoading
                   ? '正在加载分类...'
                   : categoryError
                     ? '分类加载失败'
-                    : '请选择分类'}
-              </option>
-              {categoryOptions.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+                    : '请选择分类'
+              }
+              ariaLabel="主题分类"
+              className="w-full"
+              options={categoryOptions.map((option) => ({
+                value: option.code,
+                label: option.label,
+              }))}
+            />
             {categoryError && (
               <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
             )}

@@ -5,7 +5,7 @@
  * 接口：vip.xiaonuo.biz.modular.message（BizMessageController）
  *
  * 参照通用分类模块的自包含结构：本页自行加载 / 筛选 / 分页 / 增删改，
- * 审核与回复复用 /biz/message/edit 接口（整体提交实体字段）。
+ * 编辑复用 /biz/message/edit 接口（整体提交实体字段）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -36,17 +36,16 @@ import {
   type MessagePermAction,
 } from '../../../lib/message.ts';
 import { formatDateTime } from '../../../lib/format.ts';
-import { MediaImage } from '../../../components/MediaImage.tsx';
 import {
   MessageDeleteDialog,
   MessageDetailDialog,
   MessageFormDialog,
-  MessageReplyDialog,
 } from './dialogs.tsx';
+import { SelectField } from '../../../components/SelectField.tsx';
 
 const PAGE_SIZE = 10;
 const GRID_CLASS =
-  'grid grid-cols-[36px_minmax(200px,1.4fr)_minmax(240px,2fr)_92px_130px_140px_112px] gap-3 items-center';
+  'grid grid-cols-[36px_minmax(320px,3.4fr)_92px_130px_140px_112px] gap-3 items-center';
 
 /** 树形行：顶级留言为 depth 0，访客回复按 parentId 嵌套 */
 interface MessageRow {
@@ -82,6 +81,20 @@ function buildTreeRows(items: BizMessage[], collapsed: Set<string>): MessageRow[
     return -byCreateTime(a, b);
   });
 
+  // 先按完整父子关系标记可达节点（不受折叠影响）。这样「因折叠而被跳过」的子节点
+  // 不会被下面的环/断链兜底误当成孤儿捞回顶级——否则折叠只会压平层级而藏不住行。
+  const reachable = new Set<string>();
+  const markReachable = (list: BizMessage[]) => {
+    list.forEach((item) => {
+      if (reachable.has(item.id)) return;
+      reachable.add(item.id);
+      markReachable(childrenOf.get(item.id) || []);
+    });
+  };
+  markReachable(roots);
+  // 仅把真正的孤儿节点（父级链断裂/成环）兜底挂到顶级
+  const orphans = items.filter((i) => !reachable.has(i.id)).sort(byCreateTime);
+
   const rows: MessageRow[] = [];
   const visited = new Set<string>();
   const walk = (list: BizMessage[], depth: number) => {
@@ -93,19 +106,13 @@ function buildTreeRows(items: BizMessage[], collapsed: Set<string>): MessageRow[
       if (children.length && !collapsed.has(item.id)) walk(children, depth + 1);
     });
   };
-  walk(roots, 0);
-  // 有环或父级链断裂时，兜底把未访问到的节点挂到顶级
-  items
-    .filter((i) => !visited.has(i.id))
-    .sort(byCreateTime)
-    .forEach((item) => rows.push({ item, depth: 0, hasChildren: false, childCount: 0 }));
+  walk([...roots, ...orphans], 0);
   return rows;
 }
 
 type DialogState =
   | { kind: 'form'; item: BizMessage | null }
   | { kind: 'detail'; id: string }
-  | { kind: 'reply'; item: BizMessage }
   | { kind: 'delete'; items: BizMessage[] }
   | null;
 
@@ -170,7 +177,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
       .filter((item) => {
         if (statusFilter !== 'all' && (item.status || '') !== statusFilter) return false;
         if (!q) return true;
-        return [item.nickname, item.email, item.phone, item.content, item.replyToNickname]
+        return [item.nickname, item.userId, item.content, item.replyToNickname]
           .some((v) => (v || '').toLowerCase().includes(q));
       })
       .sort((a, b) => {
@@ -276,13 +283,6 @@ export default function MessageView({ permissions }: { permissions?: string[] })
     notify('success', payload.id ? '留言已更新' : '留言已创建');
   }
 
-  async function handleReply(payload: MessagePayload) {
-    await messageApi.edit(payload);
-    await load();
-    setDialog(null);
-    notify('success', `已${messageStatusLabel(payload.status)}并回复`);
-  }
-
   async function handleDelete(targets: BizMessage[]) {
     await messageApi.remove(targets.map((t) => t.id));
     await load();
@@ -328,23 +328,20 @@ export default function MessageView({ permissions }: { permissions?: string[] })
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索昵称、邮箱、电话、内容..."
+              placeholder="搜索昵称、用户 ID、内容..."
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
           </div>
-          <select
+          <SelectField
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="按审核状态筛选"
-            className="h-9 px-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#3A3A3C] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25"
-          >
-            <option value="all">全部状态</option>
-            {MESSAGE_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+            onChange={setStatusFilter}
+            ariaLabel="按审核状态筛选"
+            className="w-[132px]"
+            options={[
+              { value: 'all', label: '全部状态' },
+              ...MESSAGE_STATUSES.map((s) => ({ value: s.value, label: s.label })),
+            ]}
+          />
           {hasFilter && (
             <button
               type="button"
@@ -447,10 +444,9 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                 onChange={toggleSelectPage}
                 className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
               />
-              <span>留言人</span>
               <span>留言内容</span>
               <span>审核状态</span>
-              <span>联系方式</span>
+              <span>用户 ID</span>
               <span>提交时间</span>
               <span className="text-right">操作</span>
             </div>
@@ -519,66 +515,47 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                       ) : (
                         <span className="w-5 shrink-0" />
                       )}
-                      <div className="w-8 h-8 rounded-lg bg-[#F2F2F7] overflow-hidden shrink-0 flex items-center justify-center">
-                        <MediaImage
-                          src={item.avatar || ''}
-                          alt={item.nickname || '访客'}
-                          fallbackLabel={(item.nickname || '访客').slice(0, 1)}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => can('detail') && setDialog({ kind: 'detail', id: item.id })}
-                          className={`block max-w-full truncate text-left transition-colors ${
-                            depth > 0
-                              ? 'text-[13px] text-[#3A3A3C] hover:text-[#0071E3]'
-                              : 'font-medium text-[#1D1D1F] hover:text-[#0071E3]'
-                          }`}
-                          title={item.nickname || '匿名访客'}
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="truncate text-[13px] leading-5"
+                          title={`${item.nickname || '匿名访客'}：${item.content || ''}`}
                         >
-                          {item.nickname || '匿名访客'}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => can('detail') && setDialog({ kind: 'detail', id: item.id })}
+                            className={`transition-colors hover:text-[#0071E3] ${
+                              depth > 0
+                                ? 'text-[#3A3A3C]'
+                                : 'font-medium text-[#1D1D1F]'
+                            }`}
+                          >
+                            {item.nickname || '匿名访客'}
+                          </button>
+                          <span className="text-[#AEAEB2]">：</span>
+                          {depth > 0 && (
+                            <CornerDownRight className="w-3 h-3 inline-block mr-1 text-[#AEAEB2] align-[-1px]" />
+                          )}
+                          <span className="text-[#3A3A3C]">{item.content || '-'}</span>
+                        </p>
                         <div className="text-[11px] text-[#AEAEB2] truncate">
                           {depth > 0
                             ? `回复 @${item.replyToNickname || '匿名访客'}`
                             : item.ip
-                              ? `${item.ip}${childCount ? ` · ${childCount} 条回复` : ''}`
-                              : `ID ${item.id}${childCount ? ` · ${childCount} 条回复` : ''}`}
+                              ? item.ip
+                              : `ID ${item.id}`}
+                          {childCount ? ` · ${childCount} 条回复` : ''}
                         </div>
                       </div>
                     </div>
 
-                    <div className="min-w-0">
-                      <p
-                        className="truncate text-[13px] text-[#3A3A3C]"
-                        title={item.content || ''}
-                      >
-                        {depth > 0 && (
-                          <CornerDownRight className="w-3 h-3 inline-block mr-1 text-[#AEAEB2] align-[-1px]" />
-                        )}
-                        {item.content || '-'}
-                      </p>
-                      {item.reply && (
-                        <p className="mt-0.5 truncate text-[11px] text-[#16A34A]" title={item.reply}>
-                          站长回复：{item.reply}
-                        </p>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => can('edit') && setDialog({ kind: 'reply', item })}
-                      disabled={!can('edit')}
-                      title={can('edit') ? '点击审核回复' : messageStatusLabel(item.status)}
-                      className={`inline-flex w-fit px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${messageStatusClass(item.status)} disabled:cursor-default`}
+                    <span
+                      className={`inline-flex w-fit px-2 py-0.5 rounded-md text-[11px] font-medium ${messageStatusClass(item.status)}`}
                     >
                       {messageStatusLabel(item.status)}
-                    </button>
+                    </span>
 
-                    <span className="text-[12px] text-[#6E6E73] truncate" title={item.email || item.phone || ''}>
-                      {item.email || item.phone || '-'}
+                    <span className="text-[12px] text-[#6E6E73] truncate" title={item.userId || ''}>
+                      {item.userId || '-'}
                     </span>
                     <span className="text-[12px] text-[#86868B] tabular-nums">
                       {item.createTime ? formatDateTime(item.createTime) : '-'}
@@ -599,9 +576,9 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                       {can('edit') && (
                         <button
                           type="button"
-                          onClick={() => setDialog({ kind: 'reply', item })}
-                          aria-label={`审核回复 ${item.nickname || '留言'}`}
-                          title="审核回复"
+                          onClick={() => setDialog({ kind: 'form', item })}
+                          aria-label={`编辑 ${item.nickname || '留言'}`}
+                          title="编辑留言"
                           className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
                         >
                           <Pencil className="w-4 h-4" />
@@ -678,13 +655,6 @@ export default function MessageView({ permissions }: { permissions?: string[] })
       )}
       {dialog?.kind === 'detail' && (
         <MessageDetailDialog id={dialog.id} onClose={() => setDialog(null)} />
-      )}
-      {dialog?.kind === 'reply' && (
-        <MessageReplyDialog
-          item={dialog.item}
-          onClose={() => setDialog(null)}
-          onSubmit={handleReply}
-        />
       )}
       {dialog?.kind === 'delete' && (
         <MessageDeleteDialog

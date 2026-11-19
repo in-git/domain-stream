@@ -168,26 +168,3 @@ export const fileCenterApi = {
     });
   },
 };
-
-/** 文件中心动作权限码，兼容 Snowy 按钮码与路径码两种写法 */
-export type FilePermAction = 'page' | 'detail' | 'upload' | 'delete';
-
-const PERM_CODES: Record<FilePermAction, string[]> = {
-  page: ['bizFilePage', '/dev/file/page'],
-  detail: ['bizFileDetail', '/dev/file/detail'],
-  upload: ['bizFileAdd', 'bizFileUpload', '/dev/file/uploadDynamicReturnId', '/dev/file/uploadLocalReturnId'],
-  delete: ['bizFileDelete', 'bizFileBatchDelete', '/dev/file/delete'],
-};
-
-/**
- * 菜单可见即代表有该模块的访问权限；权限列表为空（超管/未下发按钮码）时
- * 不隐藏按钮，由后端 @SaCheckPermission 兜底，避免有菜单却无法操作。
- */
-export function hasFilePerm(
-  permissions: string[] | undefined | null,
-  action: FilePermAction
-): boolean {
-  if (!permissions || permissions.length === 0) return true;
-  const codes = PERM_CODES[action];
-  return permissions.some((c) => c === '*' || codes.includes(c));
-}

@@ -29,11 +29,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import cn.dev33.satoken.stp.StpUtil;
+import vip.xiaonuo.auth.api.SaBaseLoginUserApi;
+import vip.xiaonuo.auth.core.pojo.SaBaseClientLoginUser;
 import vip.xiaonuo.auth.core.util.StpLoginUserUtil;
 import vip.xiaonuo.common.util.CommonServletUtil;
 import vip.xiaonuo.common.util.CommonSqlUtil;
@@ -56,7 +59,11 @@ import vip.xiaonuo.common.util.CommonResponseUtil;
 import java.io.File;
 import java.io.Serializable;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 留言Service接口实现类
@@ -66,6 +73,28 @@ import java.util.List;
  **/
 @Service
 public class BizMessageServiceImpl extends ServiceImpl<BizMessageMapper, BizMessage> implements BizMessageService {
+
+    @Resource(name = "clientLoginUserApi")
+    private SaBaseLoginUserApi clientLoginUserApi;
+
+    /** 按 USER_ID 回填展示昵称（昵称不落库） */
+    private void fillNickname(List<BizMessage> messages) {
+        if (CollectionUtil.isEmpty(messages)) {
+            return;
+        }
+        Set<String> userIds = new HashSet<>();
+        messages.forEach(message -> {
+            if (StrUtil.isNotBlank(message.getUserId())) {
+                userIds.add(message.getUserId());
+            }
+        });
+        Map<String, String> nicknameByUserId = new HashMap<>();
+        userIds.forEach(userId -> {
+            SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(userId);
+            nicknameByUserId.put(userId, user == null ? null : user.getNickname());
+        });
+        messages.forEach(message -> message.setNickname(nicknameByUserId.get(message.getUserId())));
+    }
 
     @Override
     public Page<BizMessage> page(BizMessagePageParam bizMessagePageParam) {
@@ -86,7 +115,9 @@ public class BizMessageServiceImpl extends ServiceImpl<BizMessageMapper, BizMess
             // 根据业务需要，取消下面注释并修改为实际的数据范围字段，例如：orgId
             // CommonSqlUtil.scopeIn(queryWrapper.lambda(), BizMessage::getOrgId, StpUtil.getLoginIdAsString(), CommonServletUtil.getRequest().getServletPath());
         }
-        return this.page(CommonPageRequest.defaultPage(), queryWrapper);
+        Page<BizMessage> page = this.page(CommonPageRequest.defaultPage(), queryWrapper);
+        fillNickname(page.getRecords());
+        return page;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -158,6 +189,10 @@ public class BizMessageServiceImpl extends ServiceImpl<BizMessageMapper, BizMess
         BizMessage bizMessage = this.getById(id);
         if(ObjectUtil.isEmpty(bizMessage)) {
             throw new CommonException("留言不存在，id值为：{}", id);
+        }
+        if (StrUtil.isNotBlank(bizMessage.getUserId())) {
+            SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(bizMessage.getUserId());
+            bizMessage.setNickname(user == null ? null : user.getNickname());
         }
         return bizMessage;
     }

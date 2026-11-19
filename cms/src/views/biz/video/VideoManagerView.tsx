@@ -162,7 +162,7 @@ export function VideoManagerView({
           )}
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {filtered.map((item) => (
             <article
               key={item.id}
@@ -170,7 +170,7 @@ export function VideoManagerView({
             >
               <div
                 onClick={() => onOpen('view', item.id)}
-                className="relative aspect-[2/1] bg-[#F2F2F7] overflow-hidden cursor-pointer group"
+                className="relative aspect-[5/2] bg-[#F2F2F7] overflow-hidden cursor-pointer group"
               >
                 <MediaImage
                   src={item.coverUrl}
@@ -180,8 +180,8 @@ export function VideoManagerView({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent opacity-90" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-[#1D1D1F] shadow-md group-hover:scale-105 transition-transform">
-                    <Play className="w-4 h-4 ml-0.5 fill-current" />
+                  <div className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-[#1D1D1F] shadow-md group-hover:scale-105 transition-transform">
+                    <Play className="w-3.5 h-3.5 ml-0.5 fill-current" />
                   </div>
                 </div>
                 <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[12px] text-white/95 font-mono tabular-nums">
@@ -190,7 +190,7 @@ export function VideoManagerView({
                 </div>
               </div>
 
-              <div className="p-4 flex-1 flex flex-col justify-between">
+              <div className="p-3 flex-1 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73] mb-1">
                     <div className="flex items-center gap-1.5 truncate">
@@ -209,25 +209,25 @@ export function VideoManagerView({
 
                   <h3
                     onClick={() => onOpen('view', item.id)}
-                    className="text-[16px] font-semibold text-[#1D1D1F] leading-snug line-clamp-1 cursor-pointer hover:text-[#0071E3] transition-colors"
+                    className="text-[14px] font-semibold text-[#1D1D1F] leading-snug line-clamp-1 cursor-pointer hover:text-[#0071E3] transition-colors"
                   >
                     {item.title}
                   </h3>
-                  <p className="mt-1 text-[13px] text-[#6E6E73] line-clamp-2 leading-relaxed">
+                  <p className="mt-0.5 text-[12px] text-[#6E6E73] line-clamp-1 leading-relaxed">
                     {item.description || '暂无视频简介说明'}
                   </p>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-[#F2F2F7] flex items-center justify-between gap-2">
-                  <div className="text-[12px] text-[#86868B] tabular-nums">
+                <div className="mt-2 pt-2 border-t border-[#F2F2F7] flex items-center justify-between gap-2">
+                  <div className="min-w-0 truncate text-[12px] text-[#86868B] tabular-nums">
                     {formatNumber(item.views)} 次播放 · {formatFileSize(item.fileSizeBytes)}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {canEdit && (
                       <button
                         type="button"
                         onClick={() => void handleToggleStatus(item)}
-                        className="px-2.5 py-1 rounded-lg text-[12px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                        className="px-2 py-1 rounded-lg text-[12px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors whitespace-nowrap"
                       >
                         {item.status === 'published' ? '转草稿' : '发布'}
                       </button>

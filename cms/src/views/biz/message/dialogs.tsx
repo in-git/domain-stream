@@ -1,25 +1,22 @@
 /**
- * 留言管理弹窗集合：新增/编辑、详情、审核回复、删除确认
+ * 留言管理弹窗集合：新增/编辑、详情、删除确认
  * 供 biz/message/index 使用，UI 风格与 CueStudio 工作台保持一致。
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
-  CheckCircle2,
   Loader2,
-  MessageSquareText,
   X,
 } from 'lucide-react';
 import {
   MESSAGE_STATUSES,
   messageApi,
   messageStatusLabel,
-  toMessagePayload,
   type BizMessage,
   type MessagePayload,
-  type MessageStatus,
 } from '../../../lib/message.ts';
 import { formatDateTime } from '../../../lib/format.ts';
+import { SelectField } from '../../../components/SelectField.tsx';
 
 const INPUT_CLASS =
   'w-full h-9 px-3 rounded-xl bg-[#F5F5F7] border border-transparent text-[13px] text-[#1D1D1F] placeholder:text-[#AEAEB2] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 focus:border-[#0071E3]/30 transition-all';
@@ -164,10 +161,7 @@ export function MessageFormDialog({
   onSubmit: (payload: MessagePayload) => Promise<void>;
 }) {
   const isEdit = !!item;
-  const [nickname, setNickname] = useState(item?.nickname || '');
-  const [avatar, setAvatar] = useState(item?.avatar || '');
-  const [email, setEmail] = useState(item?.email || '');
-  const [phone, setPhone] = useState(item?.phone || '');
+  const [userId, setUserId] = useState(item?.userId || '');
   const [content, setContent] = useState(item?.content || '');
   const [status, setStatus] = useState<string>(item?.status || 'APPROVED');
   const [sortCode, setSortCode] = useState(String(item?.sortCode ?? 0));
@@ -177,13 +171,8 @@ export function MessageFormDialog({
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit() {
-    const trimmedNickname = nickname.trim();
     const trimmedContent = content.trim();
-    if (!trimmedNickname) return setError('请填写留言人昵称');
     if (!trimmedContent) return setError('请填写留言内容');
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      return setError('邮箱格式不正确');
-    }
     const parsedSort = Number(sortCode);
     if (!Number.isFinite(parsedSort)) return setError('排序需为数字');
     if (extJson.trim()) {
@@ -196,10 +185,7 @@ export function MessageFormDialog({
 
     const payload: MessagePayload = {
       ...(item ? { id: item.id } : {}),
-      nickname: trimmedNickname,
-      avatar: avatar.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
+      userId: userId.trim(),
       content: trimmedContent,
       status,
       sortCode: Math.trunc(parsedSort),
@@ -238,76 +224,28 @@ export function MessageFormDialog({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={LABEL_CLASS} htmlFor="msg-nickname">
-              留言人昵称 <span className="text-[#D70015]">*</span>
+            <label className={LABEL_CLASS} htmlFor="msg-user-id">
+              用户 ID
             </label>
             <input
-              id="msg-nickname"
+              id="msg-user-id"
               className={INPUT_CLASS}
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="如：访客小李"
-              maxLength={100}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="msg-status">
-              审核状态
-            </label>
-            <select
-              id="msg-status"
-              className={INPUT_CLASS}
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {MESSAGE_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="msg-email">
-              邮箱
-            </label>
-            <input
-              id="msg-email"
-              type="email"
-              className={INPUT_CLASS}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              maxLength={100}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="msg-phone">
-              联系电话
-            </label>
-            <input
-              id="msg-phone"
-              className={INPUT_CLASS}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
               placeholder="选填"
-              maxLength={30}
+              maxLength={20}
             />
           </div>
-        </div>
-
-        <div>
-          <label className={LABEL_CLASS} htmlFor="msg-avatar">
-            头像地址
-          </label>
-          <input
-            id="msg-avatar"
-            className={INPUT_CLASS}
-            value={avatar}
-            onChange={(e) => setAvatar(e.target.value)}
-            placeholder="图片 URL，选填"
-            maxLength={500}
-          />
+          <div>
+            <label className={LABEL_CLASS}>审核状态</label>
+            <SelectField
+              value={status}
+              onChange={setStatus}
+              ariaLabel="审核状态"
+              className="w-full"
+              options={MESSAGE_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+            />
+          </div>
         </div>
 
         <div>
@@ -397,23 +335,16 @@ export function MessageDetailDialog({
 
   const rows: Array<{ label: string; value: ReactNode }> = item
     ? [
-        { label: '留言人', value: item.nickname || '-' },
+        { label: '用户 ID', value: item.userId || '-' },
+        { label: '用户昵称', value: item.nickname || '-' },
         {
           label: '留言层级',
           value: item.parentId
             ? `访客回复（回复 @${item.replyToNickname || '匿名访客'}，父 ID ${item.parentId}）`
             : '顶级留言',
         },
-        { label: '邮箱', value: item.email || '-' },
-        { label: '联系电话', value: item.phone || '-' },
         { label: '审核状态', value: messageStatusLabel(item.status) },
         { label: '留言内容', value: item.content || '-' },
-        { label: '管理员回复', value: item.reply || '暂无回复' },
-        {
-          label: '回复时间',
-          value: item.replyTime ? formatDateTime(item.replyTime) : '-',
-        },
-        { label: '回复人', value: item.replyUser || '-' },
         { label: 'IP', value: item.ip || '-' },
         { label: '浏览器 UA', value: item.userAgent || '-' },
         { label: '排序', value: item.sortCode ?? '-' },
@@ -457,126 +388,6 @@ export function MessageDetailDialog({
           ))}
         </dl>
       )}
-    </MessageModal>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* 审核 / 回复                                                         */
-/* ------------------------------------------------------------------ */
-
-function localDateTime(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-export function MessageReplyDialog({
-  item,
-  onClose,
-  onSubmit,
-}: {
-  item: BizMessage;
-  onClose: () => void;
-  onSubmit: (payload: MessagePayload) => Promise<void>;
-}) {
-  const [reply, setReply] = useState(item.reply || '');
-  const [status, setStatus] = useState<MessageStatus>(
-    (item.status as MessageStatus) || 'APPROVED'
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function handleSubmit() {
-    if (!reply.trim()) return setError('请填写回复内容');
-    const payload: MessagePayload = {
-      ...toMessagePayload(item),
-      reply: reply.trim(),
-      replyTime: localDateTime(),
-      replyUser: '',
-      status,
-    };
-    setBusy(true);
-    setError(null);
-    try {
-      await onSubmit(payload);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <MessageModal
-      title="审核回复"
-      subtitle={`${item.nickname || '匿名访客'} · ${item.createTime ? formatDateTime(item.createTime) : ''}`}
-      onClose={onClose}
-      width="max-w-xl"
-      footer={
-        <>
-          <SecondaryButton onClick={onClose} disabled={busy}>
-            取消
-          </SecondaryButton>
-          <PrimaryButton onClick={() => void handleSubmit()} busy={busy}>
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            提交审核
-          </PrimaryButton>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        {error && <InlineError>{error}</InlineError>}
-
-        <div className="rounded-xl bg-[#F5F5F7] p-4">
-          <div className="flex items-center gap-2 text-[12px] font-medium text-[#86868B]">
-            <MessageSquareText className="w-3.5 h-3.5" />
-            留言内容
-          </div>
-          <p className="mt-2 text-[13px] text-[#1D1D1F] leading-6 whitespace-pre-wrap">
-            {item.content || '-'}
-          </p>
-          {(item.email || item.phone) && (
-            <p className="mt-2 text-[12px] text-[#86868B]">
-              联系方式：{[item.email, item.phone].filter(Boolean).join(' / ')}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className={LABEL_CLASS} htmlFor="msg-reply">
-            回复内容 <span className="text-[#D70015]">*</span>
-          </label>
-          <textarea
-            id="msg-reply"
-            className={`${INPUT_CLASS} h-auto min-h-[100px] py-2.5 leading-relaxed resize-y`}
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            placeholder="请输入回复内容"
-            maxLength={2000}
-          />
-        </div>
-
-        <div>
-          <label className={LABEL_CLASS}>审核结果</label>
-          <div className="flex flex-wrap gap-2">
-            {MESSAGE_STATUSES.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => setStatus(s.value)}
-                className={`h-9 px-4 rounded-xl text-[13px] font-medium border transition-colors ${
-                  status === s.value
-                    ? 'bg-[#0071E3] text-white border-[#0071E3]'
-                    : 'bg-white text-[#3A3A3C] border-[#E5E5EA] hover:bg-[#F5F5F7]'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
     </MessageModal>
   );
 }

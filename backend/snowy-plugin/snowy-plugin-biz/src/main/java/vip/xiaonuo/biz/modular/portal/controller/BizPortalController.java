@@ -35,14 +35,22 @@ import vip.xiaonuo.biz.modular.message.mapper.BizMessageMapper;
 import vip.xiaonuo.biz.modular.message.param.BizMessageAddParam;
 import vip.xiaonuo.biz.modular.video.entity.BizVideo;
 import vip.xiaonuo.biz.modular.video.mapper.BizVideoMapper;
+import vip.xiaonuo.auth.api.SaBaseLoginUserApi;
+import vip.xiaonuo.auth.core.pojo.SaBaseClientLoginUser;
+import vip.xiaonuo.auth.core.util.StpClientUtil;
 import vip.xiaonuo.common.pojo.CommonResult;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 前台门户接口控制器
  *
- * 面向未登录访客，提供「已发布」内容的只读列表、留言提交，以及访客之间的留言回复。
+ * 提供「已发布」内容的只读列表与留言墙；留言提交要求 C 端已登录，
+ * 留言人身份由登录态 USER_ID 决定，不再接收昵称/邮箱/电话。
  * 所有接口已在 GlobalConfigure.NO_LOGIN_PATH_ARR 中放行，禁止在此暴露管理接口。
  *
  * @author wuwenlong
@@ -67,6 +75,9 @@ public class BizPortalController {
 
     @Resource
     private BizCategoryMapper bizCategoryMapper;
+
+    @Resource(name = "clientLoginUserApi")
+    private SaBaseLoginUserApi clientLoginUserApi;
 
     /**
      * 全部分类列表（仅启用），前端按 MODULE 字段自行筛选
@@ -149,7 +160,26 @@ public class BizPortalController {
         queryWrapper.eq(BizMessage::getStatus, "APPROVED")
                 .orderByAsc(BizMessage::getCreateTime)
                 .orderByAsc(BizMessage::getId);
-        return CommonResult.data(bizMessageMapper.selectList(queryWrapper));
+        List<BizMessage> messages = bizMessageMapper.selectList(queryWrapper);
+        Set<String> userIds = new HashSet<>();
+        messages.forEach(message -> {
+            if (StrUtil.isNotBlank(message.getUserId())) {
+                userIds.add(message.getUserId());
+            }
+        });
+        Map<String, String> nicknameByUserId = new HashMap<>();
+        userIds.forEach(userId -> nicknameByUserId.put(userId, nicknameOf(userId)));
+        messages.forEach(message -> message.setNickname(nicknameByUserId.get(message.getUserId())));
+        return CommonResult.data(messages);
+    }
+
+    /** 按用户 ID 反查昵称，仅用于展示；用户不存在时返回空 */
+    private String nicknameOf(String userId) {
+        if (StrUtil.isBlank(userId)) {
+            return null;
+        }
+        SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(userId);
+        return user == null ? null : user.getNickname();
     }
 
     /**
@@ -164,19 +194,20 @@ public class BizPortalController {
     @PostMapping("/public/messages")
     public CommonResult<String> addMessage(@RequestBody BizMessageAddParam bizMessageAddParam,
                                             HttpServletRequest request) {
-        if (bizMessageAddParam == null || StrUtil.isBlank(bizMessageAddParam.getNickname())
-                || StrUtil.isBlank(bizMessageAddParam.getContent())) {
-            return CommonResult.error("昵称和留言内容不能为空");
+        if (bizMessageAddParam == null || StrUtil.isBlank(bizMessageAddParam.getContent())) {
+            return CommonResult.error("留言内容不能为空");
         }
         if (bizMessageAddParam.getContent().length() > 500) {
             return CommonResult.error("留言内容不能超过500字");
         }
+        Object loginId = StpClientUtil.getLoginIdDefaultNull();
+        if (loginId == null) {
+            return CommonResult.error("请先登录后再留言");
+        }
+        String loginUserId = String.valueOf(loginId);
 
         BizMessage bizMessage = new BizMessage();
-        bizMessage.setNickname(StrUtil.maxLength(bizMessageAddParam.getNickname().trim(), 100));
-        bizMessage.setAvatar(bizMessageAddParam.getAvatar());
-        bizMessage.setEmail(bizMessageAddParam.getEmail());
-        bizMessage.setPhone(bizMessageAddParam.getPhone());
+        bizMessage.setUserId(StrUtil.maxLength(loginUserId, 20));
         bizMessage.setContent(bizMessageAddParam.getContent().trim());
         bizMessage.setStatus("APPROVED");
 
@@ -189,7 +220,7 @@ public class BizPortalController {
             }
             bizMessage.setParentId(parent.getId());
             String replyTo = StrUtil.isBlank(bizMessageAddParam.getReplyToNickname())
-                    ? parent.getNickname() : bizMessageAddParam.getReplyToNickname();
+                    ? nicknameOf(parent.getUserId()) : bizMessageAddParam.getReplyToNickname();
             bizMessage.setReplyToNickname(StrUtil.isBlank(replyTo)
                     ? null : StrUtil.maxLength(replyTo.trim(), 100));
         }

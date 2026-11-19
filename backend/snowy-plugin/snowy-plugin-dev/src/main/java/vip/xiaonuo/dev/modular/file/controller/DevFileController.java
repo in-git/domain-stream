@@ -13,7 +13,6 @@
 package vip.xiaonuo.dev.modular.file.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -309,7 +308,6 @@ public class DevFileController {
      * @date 2022/4/24 20:00
      */
     @Operation(summary = "获取文件分页列表")
-    @SaCheckPermission("/dev/file/page")
     @GetMapping("/dev/file/page")
     public CommonResult<Page<DevFile>> page(DevFilePageParam devFilePageParam) {
         return CommonResult.data(devFileService.page(devFilePageParam));
@@ -322,7 +320,6 @@ public class DevFileController {
      * @date 2022/4/24 20:00
      */
     @Operation(summary = "获取文件列表")
-    @SaCheckPermission("/dev/file/list")
     @GetMapping("/dev/file/list")
     public CommonResult<List<DevFile>> list(DevFileListParam devFileListParam) {
         return CommonResult.data(devFileService.list(devFileListParam));
@@ -376,7 +373,6 @@ public class DevFileController {
      */
     @Operation(summary = "删除文件")
     @CommonLog("删除文件")
-    @SaCheckPermission("/dev/file/delete")
     @PostMapping(value = "/dev/file/delete")
     public CommonResult<String> delete(@RequestBody @Valid @NotEmpty(message = "集合不能为空")
                                                List<DevFileIdParam> devFileIdParamList) {
@@ -405,7 +401,6 @@ public class DevFileController {
      * @date 2022/6/21 15:44
      **/
     @Operation(summary = "获取文件详情")
-    @SaCheckPermission("/dev/file/detail")
     @GetMapping("/dev/file/detail")
     public CommonResult<DevFile> detail(@Valid DevFileIdParam devFileIdParam) {
         return CommonResult.data(devFileService.detail(devFileIdParam));

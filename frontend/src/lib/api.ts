@@ -2,11 +2,12 @@
  * 前台门户数据接口层
  * ------------------------------------------------------------------
  * 通过 Vite 代理 /api -> http://localhost:82，请求 /api/public/** 会被 rewrite 为 /public/**。
- * 所有接口无需登录，对应后端 /public/** 白名单。
+ * 只读接口无需登录；留言提交需携带登录 token，后端按登录态写入 USER_ID。
  * 这里同时负责把后端实体字段映射为前台视图模型。
  */
 import type { ArticleItem, PhotoItem, VideoItem, MessageItem, MessageReply } from '../data/content';
 import { isRichHtml, markdownToHtml, richTextToPlain } from './richtext';
+import { getSnowyToken } from './snowyAuth';
 
 const API_BASE =
   ((import.meta as { env?: Record<string, string> }).env?.VITE_API_BASE_URL as string) || '/api';
@@ -18,10 +19,12 @@ interface Envelope<T> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getSnowyToken();
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { token } : {}),
       ...(init?.headers || {}),
     },
   });
@@ -115,10 +118,9 @@ export interface PortalMessage {
   parentId?: string;
   /** 被回复者昵称，用于展示「回复 @xxx」 */
   replyToNickname?: string;
+  /** 由 USER_ID 反查的展示昵称，不落库 */
   nickname?: string;
-  avatar?: string;
-  email?: string;
-  phone?: string;
+  userId?: string;
   content?: string;
   status?: string;
   reply?: string;
@@ -417,16 +419,13 @@ export function messageFromPortal(row: PortalMessage): MessageItem {
   return {
     id: String(row.id),
     nickname: row.nickname || '匿名访客',
-    email: row.email,
-    avatar: row.avatar,
+    userId: row.userId,
     content: row.content || '',
     createdAt: row.createTime || '',
     likes: row.likeCount || 0,
     status: (['PENDING', 'APPROVED', 'REJECTED'].includes(row.status || '')
       ? row.status
       : 'APPROVED') as MessageItem['status'],
-    reply: row.reply,
-    replyAt: row.replyTime,
   };
 }
 
@@ -440,8 +439,7 @@ export function replyFromPortal(row: PortalMessage, rootMessageId: string): Mess
     id: String(row.id),
     messageId: rootMessageId,
     nickname: row.nickname || '匿名访客',
-    avatar: row.avatar,
-    email: row.email,
+    userId: row.userId,
     content: row.content || '',
     createdAt: row.createTime || '',
     replyToNickname: row.replyToNickname || undefined,
@@ -453,8 +451,7 @@ export function replyFromPortal(row: PortalMessage, rootMessageId: string): Mess
 /* ------------------------------------------------------------------ */
 
 export interface MessageDraft {
-  nickname: string;
-  email?: string;
+  userId?: string;
   content: string;
 }
 
@@ -464,9 +461,7 @@ export interface MessageDraft {
  */
 export interface ReplyDraft {
   messageId: string;
-  nickname: string;
-  email?: string;
-  avatar?: string;
+  userId?: string;
   content: string;
   parentReplyId?: string;
   replyToNickname?: string;
@@ -488,9 +483,7 @@ export const portalApi = {
     request<string>('/public/messages', {
       method: 'POST',
       body: JSON.stringify({
-        nickname: draft.nickname,
-        email: draft.email,
-        avatar: draft.avatar,
+        userId: draft.userId,
         content: draft.content,
         parentId: draft.parentReplyId || draft.messageId,
         replyToNickname: draft.replyToNickname,

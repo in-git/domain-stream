@@ -12,6 +12,7 @@ import {
 import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
+import { SelectField } from '../../../components/SelectField.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
@@ -446,25 +447,24 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
               所属分类 <span className="text-[#D70015]">*</span>
             </label>
-            <select
+            <SelectField
               value={category}
-              disabled={categoryLoading || !!categoryError}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none disabled:opacity-60"
-            >
-              <option value="">
-                {categoryLoading
+              onChange={setCategory}
+              isDisabled={categoryLoading || !!categoryError}
+              placeholder={
+                categoryLoading
                   ? '正在加载分类...'
                   : categoryError
                     ? '分类加载失败'
-                    : '请选择分类'}
-              </option>
-              {categoryOptions.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+                    : '请选择分类'
+              }
+              ariaLabel="所属分类"
+              className="w-full"
+              options={categoryOptions.map((option) => ({
+                value: option.code,
+                label: option.label,
+              }))}
+            />
             {categoryError && (
               <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
             )}
@@ -550,17 +550,19 @@ export function VideoViewPage({ item, onRefresh, onBack }: VideoViewPageProps) {
       onBack={onBack}
       maxWidth="max-w-[900px]"
     >
-      <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex items-center justify-center">
+      <div className="relative rounded-2xl overflow-hidden bg-black flex items-center justify-center">
         {item.videoUrl ? (
+          // 视频横向铺满容器宽度，高度按自身宽高比自适应；容器贴合视频尺寸，不产生黑边
           <video
             src={item.videoUrl}
             poster={item.coverUrl}
             controls
             autoPlay
-            className="w-full h-full object-contain"
+            className="block w-full h-auto"
           />
         ) : (
-          <>
+          // 无视频源时用封面占位，保持 16:9 容器以承载提示层
+          <div className="relative w-full aspect-video">
             <MediaImage
               src={item.coverUrl}
               alt={item.title}
@@ -571,7 +573,7 @@ export function VideoViewPage({ item, onRefresh, onBack }: VideoViewPageProps) {
                 示例演示条目 · 可点击「编辑视频」传入本地 MP4/MOV 实现原生播放
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 

@@ -82,6 +82,7 @@ export default function App() {
   const [route, setRoute] = useState<RouteInfo>(() => currentRoute());
   const [isDark, setIsDark] = usePersistentState<boolean>('lumina:dark', false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSnowyToken());
+  const [currentUserId, setCurrentUserId] = useState(() => getCachedClientUser()?.id || '');
   const [accountEmail, setAccountEmail] = useState(() => {
     const cached = getCachedClientUser();
     return cached?.account || cached?.email || '';
@@ -254,6 +255,7 @@ export default function App() {
   };
 
   const applyUser = useCallback((user: SnowyClientUser) => {
+    setCurrentUserId(user.id || '');
     setAccountEmail(user.account || user.email || '');
     setUserInfo({
       email: user.email || '',
@@ -314,6 +316,7 @@ export default function App() {
   const handleLogout = useCallback(() => {
     void authApi.logout().finally(() => {
       setIsLoggedIn(false);
+      setCurrentUserId('');
       setAccountEmail('');
       setUserInfo({});
       setProfile(INITIAL_PROFILE);
@@ -330,8 +333,7 @@ export default function App() {
 
   const handleAddMessage = async (message: MessageItem) => {
     const realId = await portalApi.addMessage({
-      nickname: message.nickname,
-      email: message.email,
+      userId: message.userId,
       content: message.content,
     });
     setMessages((prev) => [
@@ -345,9 +347,9 @@ export default function App() {
     const optimistic: MessageReply = {
       id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       messageId: draft.messageId,
-      nickname: draft.nickname,
-      avatar: draft.avatar,
-      email: draft.email,
+      // 回复提交只带用户 ID，乐观列表先用当前登录用户昵称占位
+      nickname: profile.name,
+      userId: draft.userId,
       content: draft.content,
       createdAt: new Date().toISOString(),
       replyToNickname: draft.replyToNickname,
@@ -556,6 +558,7 @@ export default function App() {
                       isLoggedIn={isLoggedIn}
                       currentUser={{
                         name: isLoggedIn ? profile.name : '',
+                        userId: isLoggedIn ? currentUserId : undefined,
                         email: isLoggedIn ? accountEmail : undefined,
                         avatar: isLoggedIn ? profile.avatar : undefined,
                       }}

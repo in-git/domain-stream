@@ -28,7 +28,6 @@ import {
   categoryLabel,
   fileCenterApi,
   FILE_CATEGORIES,
-  hasFilePerm,
   isAudioFile,
   isImageFile,
   isVideoFile,
@@ -69,12 +68,7 @@ function coverIcon(file: DevFile) {
   return FileIcon;
 }
 
-export default function FileCenterView({ permissions }: { permissions?: string[] }) {
-  const can = useCallback(
-    (action: Parameters<typeof hasFilePerm>[1]) => hasFilePerm(permissions, action),
-    [permissions]
-  );
-
+export default function FileCenterView() {
   const [records, setRecords] = useState<DevFile[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -306,7 +300,7 @@ export default function FileCenterView({ permissions }: { permissions?: string[]
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {can('delete') && selected.size > 0 && (
+          {selected.size > 0 && (
             <button
               type="button"
               onClick={() =>
@@ -321,38 +315,34 @@ export default function FileCenterView({ permissions }: { permissions?: string[]
               批量删除 ({selected.size})
             </button>
           )}
-          {can('upload') && (
-            <>
-              <input
-                ref={uploadInputRef}
-                type="file"
-                multiple
-                accept="video/*,audio/*,image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.length) void handleUpload(e.target.files);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => uploadInputRef.current?.click()}
-                disabled={uploading}
-                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    上传中 {uploadPercent}%
-                  </>
-                ) : (
-                  <>
-                    <ImagePlus className="w-4 h-4" />
-                    上传素材
-                  </>
-                )}
-              </button>
-            </>
-          )}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            multiple
+            accept="video/*,audio/*,image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) void handleUpload(e.target.files);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={uploading}
+            className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60"
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                上传中 {uploadPercent}%
+              </>
+            ) : (
+              <>
+                <ImagePlus className="w-4 h-4" />
+                上传素材
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -438,7 +428,7 @@ export default function FileCenterView({ permissions }: { permissions?: string[]
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (can('detail')) setDialog({ kind: 'preview', file });
+                        setDialog({ kind: 'preview', file });
                       }}
                       title="预览"
                       className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 opacity-0 group-hover:opacity-100 transition-all"
@@ -465,7 +455,7 @@ export default function FileCenterView({ permissions }: { permissions?: string[]
                     className="mt-2.5 pt-2.5 border-t border-[#F2F2F7] flex items-center justify-end gap-0.5"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {(isVideoFile(file) || isAudioFile(file) || isImageFile(file)) && can('detail') && (
+                    {(isVideoFile(file) || isAudioFile(file) || isImageFile(file)) && (
                       <button
                         type="button"
                         onClick={() => setDialog({ kind: 'preview', file })}
@@ -476,17 +466,15 @@ export default function FileCenterView({ permissions }: { permissions?: string[]
                         <Eye className="w-4 h-4" />
                       </button>
                     )}
-                    {can('detail') && (
-                      <button
-                        type="button"
-                        onClick={() => setDialog({ kind: 'detail', file })}
-                        aria-label={`详情 ${file.name}`}
-                        title="详情"
-                        className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDialog({ kind: 'detail', file })}
+                      aria-label={`详情 ${file.name}`}
+                      title="详情"
+                      className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
                     {file.downloadPath && (
                       <a
                         href={toOpenUrl(file)}
@@ -511,17 +499,15 @@ export default function FileCenterView({ permissions }: { permissions?: string[]
                         </svg>
                       </a>
                     )}
-                    {can('delete') && (
-                      <button
-                        type="button"
-                        onClick={() => setDialog({ kind: 'delete', files: [file] })}
-                        aria-label={`删除 ${file.name}`}
-                        title="删除"
-                        className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDialog({ kind: 'delete', files: [file] })}
+                      aria-label={`删除 ${file.name}`}
+                      title="删除"
+                      className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>

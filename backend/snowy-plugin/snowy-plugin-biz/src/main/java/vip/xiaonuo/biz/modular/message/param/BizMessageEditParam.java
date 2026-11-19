@@ -39,25 +39,10 @@ public class BizMessageEditParam {
     @NotBlank(message = "id不能为空")
     private String id;
 
-    /** 留言人昵称 */
-    @ExcelProperty("留言人昵称")
-    @Schema(description = "留言人昵称")
-    private String nickname;
-
-    /** 留言人头像 */
-    @ExcelProperty("留言人头像")
-    @Schema(description = "留言人头像")
-    private String avatar;
-
-    /** 邮箱 */
-    @ExcelProperty("邮箱")
-    @Schema(description = "邮箱")
-    private String email;
-
-    /** 联系电话 */
-    @ExcelProperty("联系电话")
-    @Schema(description = "联系电话")
-    private String phone;
+    /** 留言用户ID */
+    @ExcelProperty("用户ID")
+    @Schema(description = "留言用户ID")
+    private String userId;
 
     /** 留言内容 */
     @ExcelProperty("留言内容")

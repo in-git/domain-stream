@@ -110,23 +110,35 @@ function MessagesSkeleton() {
         <Block className="h-5 w-24" />
         <Block className="h-9 w-28 rounded-xl" />
       </div>
-      <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 sm:gap-5">
-        {[0, 1, 2, 3, 4, 5].map((index) => (
+      <div className="columns-2 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
           <div
             key={index}
-            className="break-inside-avoid mb-4 sm:mb-5 rounded-2xl border border-black/[0.05] dark:border-white/[0.07] bg-white dark:bg-[#161618] p-4 sm:p-5 space-y-4"
+            className="break-inside-avoid mb-3 sm:mb-4 overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.07] bg-white dark:bg-[#161618]"
           >
-            <div className="flex items-center gap-2.5">
-              <Block className="w-9 h-9 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Block className="h-3.5 w-24" />
-                <Block className="h-3 w-16" />
+            {/* 语录区占位 */}
+            <div className="flex flex-col px-4 pt-4 pb-4 min-h-[180px] sm:min-h-[210px]">
+              <Block className="h-6 w-6 rounded-md" />
+              <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
+                <Block className="h-4 w-4/5" />
+                <Block className="h-4 w-3/5" />
               </div>
             </div>
-            <Block className="h-3.5 w-full" />
-            <Block className="h-3.5 w-5/6" />
-            <Block className="h-3.5 w-2/3" />
-            <Block className="h-8 w-full rounded-xl" />
+
+            {/* 作者行占位 */}
+            <div className="px-3 py-2 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Block className="w-7 h-7 rounded-full" />
+                <div className="space-y-1">
+                  <Block className="h-2.5 w-16" />
+                  <Block className="h-2 w-12" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Block className="h-3 w-6" />
+                <Block className="h-3 w-7" />
+              </div>
+            </div>
           </div>
         ))}
       </div>

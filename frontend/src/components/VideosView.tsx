@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -285,7 +285,7 @@ function FeedSlide({
   const source = useMemo(() => ({ src: video.src, type: 'video/mp4' }), [video.src]);
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden">
+    <div data-video-stage className="relative w-full h-full bg-black overflow-hidden">
       <MediaPlayer
         ref={setPlayerRef}
         // 流式地址没有扩展名，显式声明类型，避免播放器无法匹配加载器

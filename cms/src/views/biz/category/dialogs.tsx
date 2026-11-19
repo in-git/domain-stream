@@ -26,6 +26,7 @@ import {
   type CategoryPayload,
 } from '../../../lib/category.ts';
 import { formatDateShort } from '../../../lib/format.ts';
+import { SelectField } from '../../../components/SelectField.tsx';
 
 const INPUT_CLASS =
   'w-full h-9 px-3 rounded-xl bg-[#F5F5F7] border border-transparent text-[13px] text-[#1D1D1F] placeholder:text-[#AEAEB2] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 focus:border-[#0071E3]/30 transition-all';
@@ -404,56 +405,43 @@ export function CategoryFormDialog({
             <div className="mt-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="cat-parent">
-                    父级分类
-                  </label>
-                  <select
-                    id="cat-parent"
-                    className={INPUT_CLASS}
+                  <label className={LABEL_CLASS}>父级分类</label>
+                  <SelectField
                     value={parentId}
-                    onChange={(e) => setParentId(e.target.value)}
-                  >
-                    <option value="0">顶级分类</option>
-                    {parentOptions.map(({ item: c, depth }) => (
-                      <option key={c.id} value={c.id}>
-                        {depth > 0 ? `${'　'.repeat(depth)}└ ${c.name || c.id}` : c.name || c.id}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setParentId}
+                    ariaLabel="父级分类"
+                    className="w-full"
+                    options={[
+                      { value: '0', label: '顶级分类' },
+                      ...parentOptions.map(({ item: c, depth }) => ({
+                        value: c.id,
+                        label:
+                          depth > 0
+                            ? `${'　'.repeat(depth)}└ ${c.name || c.id}`
+                            : c.name || c.id,
+                      })),
+                    ]}
+                  />
                 </div>
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="cat-module">
-                    适用模块
-                  </label>
-                  <select
-                    id="cat-module"
-                    className={INPUT_CLASS}
+                  <label className={LABEL_CLASS}>适用模块</label>
+                  <SelectField
                     value={module}
-                    onChange={(e) => setModule(e.target.value)}
-                  >
-                    {CATEGORY_MODULES.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setModule}
+                    ariaLabel="适用模块"
+                    className="w-full"
+                    options={CATEGORY_MODULES.map((m) => ({ value: m.value, label: m.label }))}
+                  />
                 </div>
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="cat-status">
-                    状态
-                  </label>
-                  <select
-                    id="cat-status"
-                    className={INPUT_CLASS}
+                  <label className={LABEL_CLASS}>状态</label>
+                  <SelectField
                     value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                  >
-                    {CATEGORY_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setStatus}
+                    ariaLabel="状态"
+                    className="w-full"
+                    options={CATEGORY_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                  />
                 </div>
                 <div>
                   <label className={LABEL_CLASS} htmlFor="cat-sort">

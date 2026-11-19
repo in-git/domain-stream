@@ -70,20 +70,8 @@
 	const toolConfig = { refresh: true, height: true, columnSetting: true, striped: false }
 	const columns = [
 		{
-			title: '留言人昵称',
-			dataIndex: 'nickname'
-		},
-		{
-			title: '留言人头像',
-			dataIndex: 'avatar'
-		},
-		{
-			title: '邮箱',
-			dataIndex: 'email'
-		},
-		{
-			title: '联系电话',
-			dataIndex: 'phone'
+			title: '用户ID',
+			dataIndex: 'userId'
 		},
 		{
 			title: '留言内容',

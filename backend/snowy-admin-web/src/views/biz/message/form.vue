@@ -7,17 +7,8 @@
 		@close="onClose"
 	>
 		<a-form ref="formRef" :model="formData" :rules="formRules" layout="vertical">
-			<a-form-item label="留言人昵称：" name="nickname">
-				<a-input v-model:value="formData.nickname" placeholder="请输入留言人昵称" allow-clear />
-			</a-form-item>
-			<a-form-item label="留言人头像：" name="avatar">
-				<a-input v-model:value="formData.avatar" placeholder="请输入留言人头像" allow-clear />
-			</a-form-item>
-			<a-form-item label="邮箱：" name="email">
-				<a-input v-model:value="formData.email" placeholder="请输入邮箱" allow-clear />
-			</a-form-item>
-			<a-form-item label="联系电话：" name="phone">
-				<a-input v-model:value="formData.phone" placeholder="请输入联系电话" allow-clear />
+			<a-form-item label="用户ID：" name="userId">
+				<a-input v-model:value="formData.userId" placeholder="请输入用户ID" allow-clear />
 			</a-form-item>
 			<a-form-item label="留言内容：" name="content">
 				<a-input v-model:value="formData.content" placeholder="请输入留言内容" allow-clear />

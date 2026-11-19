@@ -64,24 +64,22 @@ export interface UserProfile {
 
 export interface MessageItem {
   id: string;
+  /** 由 USER_ID 反查的展示昵称，不落库 */
   nickname: string;
-  email?: string;
-  avatar?: string;
+  userId?: string;
   content: string;
   createdAt: string;
   likes: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  reply?: string;
-  replyAt?: string;
 }
 
 /** 留言下的公开回复：任何登录访客都可发表，也可以回复自己发布的留言 */
 export interface MessageReply {
   id: string;
   messageId: string;
+  /** 由 USER_ID 反查的展示昵称，不落库 */
   nickname: string;
-  avatar?: string;
-  email?: string;
+  userId?: string;
   content: string;
   createdAt: string;
   /** 被回复者昵称，用于展示「回复 @xxx」 */
