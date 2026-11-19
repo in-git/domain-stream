@@ -211,7 +211,6 @@ public class GlobalConfigure implements WebMvcConfigurer {
             "/public/articles",
             "/public/graphics",
             "/public/messages",
-            "/public/messageReplies",
             "/biz/portal/**",
     };
 
@@ -237,10 +236,7 @@ public class GlobalConfigure implements WebMvcConfigurer {
             "/dev/email/page",
             "/dev/email/delete",
             "/dev/email/detail",
-            "/dev/file/page",
-            "/dev/file/list",
-            "/dev/file/delete",
-            "/dev/file/detail",
+            // /dev/file 的 page/list/delete/detail 已改走 @SaCheckPermission 权限码（素材库需授权给普通角色）
             "/dev/job/**",
             "/dev/log/**",
             "/dev/message/page",

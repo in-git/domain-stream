@@ -359,8 +359,11 @@ export default function MessagesView({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-                  className="break-inside-avoid mb-4 sm:mb-5 rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] p-4 sm:p-5 transition-shadow hover:shadow-md"
+                  whileHover={{ y: -2 }}
+                  className="break-inside-avoid mb-5 group"
                 >
+                  <div className="overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  <div className="px-3 sm:px-3.5 pt-3 pb-2.5">
                   <div className="flex items-center gap-2.5 mb-3">
                     <Avatar name={message.nickname} src={message.avatar} />
                     <div className="flex-1 min-w-0">
@@ -536,6 +539,8 @@ export default function MessagesView({
                       />
                       <span className="tabular-nums">{message.likes}</span>
                     </motion.button>
+                  </div>
+                  </div>
                   </div>
                 </motion.article>
               );

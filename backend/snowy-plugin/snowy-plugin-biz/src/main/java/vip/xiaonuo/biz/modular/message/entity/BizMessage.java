@@ -35,6 +35,14 @@ public class BizMessage {
     @Schema(description = "主键")
     private String id;
 
+    /** 父留言ID：顶级留言为空；访客回复指向被回复的留言或回复，单表递归 */
+    @Schema(description = "父留言ID，顶级留言为空")
+    private String parentId;
+
+    /** 被回复者昵称，用于前台展示「回复 @xxx」 */
+    @Schema(description = "被回复者昵称")
+    private String replyToNickname;
+
     /** 留言人昵称 */
     @Schema(description = "留言人昵称")
     private String nickname;

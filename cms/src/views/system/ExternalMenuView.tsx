@@ -1,5 +1,5 @@
 import { ArrowLeft, ExternalLink, Info, Layers, Link2, Tag } from 'lucide-react';
-import type { SnowyMenu } from '../lib/snowy.ts';
+import type { SnowyMenu } from '../../lib/snowy.ts';
 
 /** 小诺后台管理前端（snowy-admin-web）默认端口；未启动时外链按钮不可用属正常 */
 const ADMIN_WEB_ORIGIN = `http://${window.location.hostname}:8081`;

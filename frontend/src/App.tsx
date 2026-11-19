@@ -19,6 +19,7 @@ import {
   portalApi,
   replyFromPortal,
   videoFromPortal,
+  type PortalMessage,
   type ReplyDraft,
 } from './lib/api';
 import { SWIFTUI_SMOOTH } from './lib/motion';
@@ -145,10 +146,8 @@ export default function App() {
       portalApi.articles(),
       portalApi.graphics(),
       portalApi.messages(),
-      portalApi.messageReplies(),
     ]);
-    const [categoryResult, videoResult, articleResult, graphicResult, messageResult, replyResult] =
-      results;
+    const [categoryResult, videoResult, articleResult, graphicResult, messageResult] = results;
     const nextErrors: Partial<Record<ContentSection, string>> = {};
     const categories = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
     const names = categoryNameMap(categories);
@@ -200,15 +199,28 @@ export default function App() {
       nextErrors.gallery = graphicResult.reason?.message || '图文服务暂不可用';
     }
     if (messageResult.status === 'fulfilled') {
-      setMessages(messageResult.value.map(messageFromPortal));
+      /* 留言与回复同表存储（单表递归）：parentId 为空为顶级留言，否则沿
+         parentId 链向上追溯到顶级留言后分组展示；父级缺失的回复直接丢弃 */
+      const rows = messageResult.value;
+      const byId = new Map(rows.map((row) => [String(row.id), row]));
+      const rootIdOf = (row: PortalMessage): string => {
+        let current: PortalMessage | undefined = row;
+        while (current?.parentId) {
+          const parent = byId.get(current.parentId);
+          if (!parent) return '';
+          current = parent;
+        }
+        return String(current?.id ?? '');
+      };
+      setMessages(rows.filter((row) => !row.parentId).map(messageFromPortal));
+      setReplies(
+        rows
+          .filter((row) => !!row.parentId)
+          .filter((row) => rootIdOf(row))
+          .map((row) => replyFromPortal(row, rootIdOf(row)))
+      );
     } else {
       nextErrors.messages = messageResult.reason?.message || '留言服务暂不可用';
-    }
-    /* 回复是增量能力：后端尚未部署 / 接口报错时静默降级，
-       留言与站长回复仍可正常使用，只是暂时没有用户评论区 */
-    if (replyResult.status === 'fulfilled') {
-      setReplies(replyResult.value.map(replyFromPortal));
-    } else {
       setReplies([]);
     }
 
@@ -317,13 +329,13 @@ export default function App() {
   }, []);
 
   const handleAddMessage = async (message: MessageItem) => {
-    await portalApi.addMessage({
+    const realId = await portalApi.addMessage({
       nickname: message.nickname,
       email: message.email,
       content: message.content,
     });
     setMessages((prev) => [
-      { ...message, createdAt: new Date().toISOString(), status: 'APPROVED' },
+      { ...message, id: realId, createdAt: new Date().toISOString(), status: 'APPROVED' },
       ...prev,
     ]);
   };
@@ -342,7 +354,10 @@ export default function App() {
     };
     setReplies((prev) => [...prev, optimistic]);
     try {
-      await portalApi.addReply(draft);
+      const realId = await portalApi.addReply(draft);
+      setReplies((prev) =>
+        prev.map((item) => (item.id === optimistic.id ? { ...item, id: realId } : item))
+      );
     } catch (err) {
       setReplies((prev) => prev.filter((item) => item.id !== optimistic.id));
       throw err;

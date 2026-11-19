@@ -398,6 +398,12 @@ export function MessageDetailDialog({
   const rows: Array<{ label: string; value: ReactNode }> = item
     ? [
         { label: '留言人', value: item.nickname || '-' },
+        {
+          label: '留言层级',
+          value: item.parentId
+            ? `访客回复（回复 @${item.replyToNickname || '匿名访客'}，父 ID ${item.parentId}）`
+            : '顶级留言',
+        },
         { label: '邮箱', value: item.email || '-' },
         { label: '联系电话', value: item.phone || '-' },
         { label: '审核状态', value: messageStatusLabel(item.status) },

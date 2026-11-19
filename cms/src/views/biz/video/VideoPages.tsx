@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { CheckCircle2, UploadCloud } from 'lucide-react';
-import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
-import { publishCategoryName, resolvePublishCategoryCode } from '../lib/category.ts';
-import { usePublishCategories } from '../lib/usePublishCategories.ts';
+import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
+import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import {
   formatDateShort,
   formatDuration,
   formatFileSize,
   formatNumber,
-} from '../lib/format.ts';
-import type { ContentStatus, VideoItem } from '../types/cms.ts';
-import { MediaImage } from './MediaImage.tsx';
-import { PageShell } from './PageShell.tsx';
+} from '../../../lib/format.ts';
+import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
+import { MediaImage } from '../../../components/MediaImage.tsx';
+import { PageShell } from '../../../components/PageShell.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
-} from './EditorWorkspace.tsx';
+} from '../../../components/EditorWorkspace.tsx';
 
 /** 视频最大上传体积：1 GB */
 const MAX_VIDEO_SIZE = 1024 * 1024 * 1024;

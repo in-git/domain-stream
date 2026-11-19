@@ -10,11 +10,11 @@ import {
   Smartphone,
   Users,
 } from 'lucide-react';
-import { api } from '../lib/api.ts';
-import { formatNumber, formatReadableDuration } from '../lib/format.ts';
-import { hasModulePerm } from '../lib/menu.ts';
-import type { ContentModule } from '../lib/router.ts';
-import type { DashboardPayload, ModuleKey, TrafficPoint } from '../types/cms.ts';
+import { api } from '../../lib/api.ts';
+import { formatNumber, formatReadableDuration } from '../../lib/format.ts';
+import { hasModulePerm } from '../../lib/menu.ts';
+import type { ContentModule } from '../../lib/router.ts';
+import type { DashboardPayload, ModuleKey, TrafficPoint } from '../../types/cms.ts';
 
 interface DashboardViewProps {
   onNavigate: (module: ModuleKey) => void;

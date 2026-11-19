@@ -203,9 +203,14 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
     return buildTreeRows(items, collapsed);
   }, [filtered, hasFilter, items, collapsed]);
 
+  // 树形模式完整展示整棵树（分页会把父子层级切碎）；仅筛选后的平铺列表分页
+  const isTreeMode = !hasFilter;
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageRows = isTreeMode
+    ? rows
+    : rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const rootCount = useMemo(() => rows.filter((r) => r.depth === 0).length, [rows]);
 
   useEffect(() => {
     setPage(1);
@@ -248,6 +253,20 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
       else next.add(id);
       return next;
     });
+  }
+
+  /** 有子分类的节点 id（用于展开/折叠全部） */
+  const collapsibleIds = useMemo(
+    () => new Set(rows.filter((r) => r.hasChildren).map((r) => r.item.id)),
+    [rows]
+  );
+
+  function expandAll() {
+    setCollapsed(new Set());
+  }
+
+  function collapseAll() {
+    setCollapsed(new Set(collapsibleIds));
   }
 
   async function handleSave(payload: CategoryPayload) {
@@ -371,6 +390,28 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isTreeMode && collapsibleIds.size > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={expandAll}
+                disabled={collapsed.size === 0}
+                className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                展开全部
+              </button>
+              <button
+                type="button"
+                onClick={collapseAll}
+                disabled={collapsed.size === collapsibleIds.size}
+                className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+                折叠全部
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => void load()}
@@ -621,34 +662,44 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
           </div>
         </div>
 
-        {/* 分页 */}
+        {/* 分页：树形模式完整展示整棵树，不分组分页 */}
         {!loading && rows.length > 0 && (
           <div className="px-5 py-3 border-t border-[#F2F2F7] flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#86868B]">
-            <span>
-              共 {rows.length} 条{selected.size ? ` · 已选 ${selected.size} 条` : ''} · 第{' '}
-              {currentPage}/{totalPages} 页
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
-                aria-label="上一页"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-2 tabular-nums text-[#3A3A3C]">{currentPage}</span>
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
-                aria-label="下一页"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            {isTreeMode ? (
+              <span>
+                共 {rows.length} 个分类（{rootCount} 个顶级分类）
+                {selected.size ? ` · 已选 ${selected.size} 条` : ''}
+                {collapsed.size ? ` · 已折叠 ${collapsed.size} 组` : ''}
+              </span>
+            ) : (
+              <>
+                <span>
+                  共 {rows.length} 条{selected.size ? ` · 已选 ${selected.size} 条` : ''} · 第{' '}
+                  {currentPage}/{totalPages} 页
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+                    aria-label="上一页"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-2 tabular-nums text-[#3A3A3C]">{currentPage}</span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+                    aria-label="下一页"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

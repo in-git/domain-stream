@@ -9,9 +9,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
+  CornerDownRight,
   Eye,
   Loader2,
   MessageSquareText,
@@ -46,6 +48,60 @@ const PAGE_SIZE = 10;
 const GRID_CLASS =
   'grid grid-cols-[36px_minmax(200px,1.4fr)_minmax(240px,2fr)_92px_130px_140px_112px] gap-3 items-center';
 
+/** 树形行：顶级留言为 depth 0，访客回复按 parentId 嵌套 */
+interface MessageRow {
+  item: BizMessage;
+  depth: number;
+  hasChildren: boolean;
+  childCount: number;
+}
+
+/** 回复按提交时间正序展示（与前台留言墙一致） */
+function byCreateTime(a: BizMessage, b: BizMessage): number {
+  const diff = (a.createTime || '').localeCompare(b.createTime || '');
+  return diff !== 0 ? diff : (a.id || '').localeCompare(b.id || '');
+}
+
+/** 无筛选条件时按 parentId 组装树（单表递归：顶级留言 + 访客回复），并应用折叠状态 */
+function buildTreeRows(items: BizMessage[], collapsed: Set<string>): MessageRow[] {
+  const ids = new Set(items.map((i) => i.id));
+  const isRoot = (item: BizMessage) =>
+    !item.parentId || item.parentId === '0' || !ids.has(item.parentId);
+
+  const childrenOf = new Map<string, BizMessage[]>();
+  items.forEach((item) => {
+    const key = isRoot(item) ? '__root__' : item.parentId!;
+    const list = childrenOf.get(key) || [];
+    list.push(item);
+    childrenOf.set(key, list);
+  });
+  childrenOf.forEach((list) => list.sort(byCreateTime));
+
+  const roots = [...(childrenOf.get('__root__') || [])].sort((a, b) => {
+    // 顶级留言保持原有展示顺序：时间倒序（新留言在前）
+    return -byCreateTime(a, b);
+  });
+
+  const rows: MessageRow[] = [];
+  const visited = new Set<string>();
+  const walk = (list: BizMessage[], depth: number) => {
+    list.forEach((item) => {
+      if (visited.has(item.id)) return; // 防御脏数据造成的环
+      visited.add(item.id);
+      const children = childrenOf.get(item.id) || [];
+      rows.push({ item, depth, hasChildren: children.length > 0, childCount: children.length });
+      if (children.length && !collapsed.has(item.id)) walk(children, depth + 1);
+    });
+  };
+  walk(roots, 0);
+  // 有环或父级链断裂时，兜底把未访问到的节点挂到顶级
+  items
+    .filter((i) => !visited.has(i.id))
+    .sort(byCreateTime)
+    .forEach((item) => rows.push({ item, depth: 0, hasChildren: false, childCount: 0 }));
+  return rows;
+}
+
 type DialogState =
   | { kind: 'form'; item: BizMessage | null }
   | { kind: 'detail'; id: string }
@@ -73,6 +129,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -113,7 +170,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
       .filter((item) => {
         if (statusFilter !== 'all' && (item.status || '') !== statusFilter) return false;
         if (!q) return true;
-        return [item.nickname, item.email, item.phone, item.content]
+        return [item.nickname, item.email, item.phone, item.content, item.replyToNickname]
           .some((v) => (v || '').toLowerCase().includes(q));
       })
       .sort((a, b) => {
@@ -124,13 +181,55 @@ export default function MessageView({ permissions }: { permissions?: string[] })
       });
   }, [items, search, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const rows = useMemo<MessageRow[]>(() => {
+    if (hasFilter) {
+      // 筛选时平铺展示匹配结果（含回复），不做层级嵌套
+      return filtered.map((item) => ({
+        item,
+        depth: 0,
+        hasChildren: false,
+        childCount: 0,
+      }));
+    }
+    return buildTreeRows(items, collapsed);
+  }, [filtered, hasFilter, items, collapsed]);
+
+  // 树形模式完整展示整棵树（分页会把父子层级切碎）；仅筛选后的平铺列表分页
+  const isTreeMode = !hasFilter;
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageRows = isTreeMode
+    ? rows
+    : rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const rootCount = useMemo(() => rows.filter((r) => r.depth === 0).length, [rows]);
+  const replyCount = rows.length - rootCount;
 
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter]);
+
+  /** 有回复的留言 id（用于展开/折叠全部） */
+  const collapsibleIds = useMemo(
+    () => new Set(rows.filter((r) => r.hasChildren).map((r) => r.item.id)),
+    [rows]
+  );
+
+  function toggleCollapse(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function expandAll() {
+    setCollapsed(new Set());
+  }
+
+  function collapseAll() {
+    setCollapsed(new Set(collapsibleIds));
+  }
 
   const counts = useMemo(() => {
     const result: Record<string, number> = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
@@ -141,8 +240,15 @@ export default function MessageView({ permissions }: { permissions?: string[] })
     return result;
   }, [items]);
 
+  /** 顶级留言 / 访客回复数量（按数据本身统计，不受折叠影响） */
+  const statRootCount = useMemo(
+    () => items.filter((i) => !i.parentId || i.parentId === '0').length,
+    [items]
+  );
+  const statReplyCount = items.length - statRootCount;
+
   const allPageSelected =
-    pageItems.length > 0 && pageItems.every((item) => selected.has(item.id));
+    pageRows.length > 0 && pageRows.every((row) => selected.has(row.item.id));
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -156,8 +262,8 @@ export default function MessageView({ permissions }: { permissions?: string[] })
   function toggleSelectPage() {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allPageSelected) pageItems.forEach((item) => next.delete(item.id));
-      else pageItems.forEach((item) => next.add(item.id));
+      if (allPageSelected) pageRows.forEach((row) => next.delete(row.item.id));
+      else pageRows.forEach((row) => next.add(row.item.id));
       return next;
     });
   }
@@ -188,9 +294,10 @@ export default function MessageView({ permissions }: { permissions?: string[] })
   return (
     <div className="space-y-5">
       {/* 概览 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: '全部留言', value: items.length, icon: MessageSquareText },
+          { label: '全部留言', value: statRootCount, icon: MessageSquareText },
+          { label: '访客回复', value: statReplyCount, icon: CornerDownRight },
           { label: '待审核', value: counts.PENDING || 0, icon: Loader2 },
           { label: '已通过', value: counts.APPROVED || 0, icon: CheckCircle2 },
           { label: '已拒绝', value: counts.REJECTED || 0, icon: X },
@@ -254,6 +361,28 @@ export default function MessageView({ permissions }: { permissions?: string[] })
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isTreeMode && collapsibleIds.size > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={expandAll}
+                disabled={collapsed.size === 0}
+                className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                展开全部
+              </button>
+              <button
+                type="button"
+                onClick={collapseAll}
+                disabled={collapsed.size === collapsibleIds.size}
+                className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+                折叠全部
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => void load()}
@@ -331,7 +460,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                 <Loader2 className="w-6 h-6 animate-spin text-[#0071E3]" />
                 <span className="text-[13px]">正在加载留言数据...</span>
               </div>
-            ) : pageItems.length === 0 ? (
+            ) : pageRows.length === 0 ? (
               <div className="py-20 px-6 text-center">
                 <MessageSquareText
                   className="w-10 h-10 text-[#C7C7CC] mx-auto mb-3"
@@ -358,10 +487,12 @@ export default function MessageView({ permissions }: { permissions?: string[] })
               </div>
             ) : (
               <div className="divide-y divide-[#F2F2F7]">
-                {pageItems.map((item) => (
+                {pageRows.map(({ item, depth, hasChildren, childCount }) => (
                   <div
                     key={item.id}
-                    className={`${GRID_CLASS} px-5 py-2.5 text-[13px] hover:bg-[#FAFAFC] transition-colors`}
+                    className={`${GRID_CLASS} px-5 py-2.5 text-[13px] hover:bg-[#FAFAFC] transition-colors ${
+                      depth > 0 ? 'bg-[#FAFAFC]/60' : ''
+                    }`}
                   >
                     <input
                       type="checkbox"
@@ -371,7 +502,23 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                       className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
                     />
 
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0" style={{ paddingLeft: depth * 18 }}>
+                      {isTreeMode && hasChildren ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleCollapse(item.id)}
+                          aria-label={collapsed.has(item.id) ? '展开回复' : '折叠回复'}
+                          className="w-5 h-5 shrink-0 rounded flex items-center justify-center text-[#86868B] hover:bg-[#F2F2F7]"
+                        >
+                          {collapsed.has(item.id) ? (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="w-5 shrink-0" />
+                      )}
                       <div className="w-8 h-8 rounded-lg bg-[#F2F2F7] overflow-hidden shrink-0 flex items-center justify-center">
                         <MediaImage
                           src={item.avatar || ''}
@@ -384,13 +531,21 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                         <button
                           type="button"
                           onClick={() => can('detail') && setDialog({ kind: 'detail', id: item.id })}
-                          className="block max-w-full truncate text-left font-medium text-[#1D1D1F] hover:text-[#0071E3] transition-colors"
+                          className={`block max-w-full truncate text-left transition-colors ${
+                            depth > 0
+                              ? 'text-[13px] text-[#3A3A3C] hover:text-[#0071E3]'
+                              : 'font-medium text-[#1D1D1F] hover:text-[#0071E3]'
+                          }`}
                           title={item.nickname || '匿名访客'}
                         >
                           {item.nickname || '匿名访客'}
                         </button>
                         <div className="text-[11px] text-[#AEAEB2] truncate">
-                          {item.ip || `ID ${item.id}`}
+                          {depth > 0
+                            ? `回复 @${item.replyToNickname || '匿名访客'}`
+                            : item.ip
+                              ? `${item.ip}${childCount ? ` · ${childCount} 条回复` : ''}`
+                              : `ID ${item.id}${childCount ? ` · ${childCount} 条回复` : ''}`}
                         </div>
                       </div>
                     </div>
@@ -400,11 +555,14 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                         className="truncate text-[13px] text-[#3A3A3C]"
                         title={item.content || ''}
                       >
+                        {depth > 0 && (
+                          <CornerDownRight className="w-3 h-3 inline-block mr-1 text-[#AEAEB2] align-[-1px]" />
+                        )}
                         {item.content || '-'}
                       </p>
                       {item.reply && (
                         <p className="mt-0.5 truncate text-[11px] text-[#16A34A]" title={item.reply}>
-                          回复：{item.reply}
+                          站长回复：{item.reply}
                         </p>
                       )}
                     </div>
@@ -468,34 +626,44 @@ export default function MessageView({ permissions }: { permissions?: string[] })
           </div>
         </div>
 
-        {/* 分页 */}
-        {!loading && filtered.length > 0 && (
+        {/* 分页：树形模式完整展示整棵树，不分组分页 */}
+        {!loading && rows.length > 0 && (
           <div className="px-5 py-3 border-t border-[#F2F2F7] flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#86868B]">
-            <span>
-              共 {filtered.length} 条{selected.size ? ` · 已选 ${selected.size} 条` : ''} · 第{' '}
-              {currentPage}/{totalPages} 页
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
-                aria-label="上一页"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-2 tabular-nums text-[#3A3A3C]">{currentPage}</span>
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
-                aria-label="下一页"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            {isTreeMode ? (
+              <span>
+                共 {rows.length} 条（{rootCount} 条留言 · {replyCount} 条回复）
+                {selected.size ? ` · 已选 ${selected.size} 条` : ''}
+                {collapsed.size ? ` · 已折叠 ${collapsed.size} 组` : ''}
+              </span>
+            ) : (
+              <>
+                <span>
+                  共 {rows.length} 条{selected.size ? ` · 已选 ${selected.size} 条` : ''} · 第{' '}
+                  {currentPage}/{totalPages} 页
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+                    aria-label="上一页"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-2 tabular-nums text-[#3A3A3C]">{currentPage}</span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+                    aria-label="下一页"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

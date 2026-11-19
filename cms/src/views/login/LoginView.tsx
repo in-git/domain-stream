@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ArrowRight, Check, Eye, EyeOff, Loader2, Lock, ShieldCheck, UserRound } from 'lucide-react';
-import { api } from '../lib/api.ts';
-import type { UserProfile } from '../types/cms.ts';
+import { api } from '../../lib/api.ts';
+import type { UserProfile } from '../../types/cms.ts';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserProfile) => void;

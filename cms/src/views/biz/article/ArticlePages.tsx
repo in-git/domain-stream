@@ -1,21 +1,21 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
-import { formatDateShort, formatNumber } from '../lib/format.ts';
-import { plainText, renderRichContent } from '../lib/richtext.tsx';
-import { publishCategoryName, resolvePublishCategoryCode } from '../lib/category.ts';
-import { usePublishCategories } from '../lib/usePublishCategories.ts';
-import type { ArticleItem, ContentStatus } from '../types/cms.ts';
-import { MediaImage } from './MediaImage.tsx';
-import { PageShell } from './PageShell.tsx';
+import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { formatDateShort, formatNumber } from '../../../lib/format.ts';
+import { plainText, renderRichContent } from '../../../lib/richtext.tsx';
+import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
+import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
+import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
+import { MediaImage } from '../../../components/MediaImage.tsx';
+import { PageShell } from '../../../components/PageShell.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
-} from './EditorWorkspace.tsx';
+} from '../../../components/EditorWorkspace.tsx';
 
 // 富文本编辑器体积较大，按写作页懒加载，避免拖慢列表/首屏
 const AiRichEditor = lazy(() =>
-  import('./AiRichEditor.tsx').then((m) => ({ default: m.AiRichEditor }))
+  import('../../../components/AiRichEditor.tsx').then((m) => ({ default: m.AiRichEditor }))
 );
 
 interface ArticlePreviewProps {

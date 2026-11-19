@@ -10,18 +10,18 @@ import {
   Trash2,
   UploadCloud,
 } from 'lucide-react';
-import { api } from '../lib/api.ts';
-import { hasModulePerm } from '../lib/menu.ts';
+import { api } from '../../../lib/api.ts';
+import { hasModulePerm } from '../../../lib/menu.ts';
 import {
   formatDateShort,
   formatDuration,
   formatFileSize,
   formatNumber,
-} from '../lib/format.ts';
-import type { ContentStatus, VideoItem } from '../types/cms.ts';
-import { publishCategoryName } from '../lib/category.ts';
-import { usePublishCategories } from '../lib/usePublishCategories.ts';
-import { MediaImage } from './MediaImage.tsx';
+} from '../../../lib/format.ts';
+import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
+import { publishCategoryName } from '../../../lib/category.ts';
+import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
+import { MediaImage } from '../../../components/MediaImage.tsx';
 
 interface VideoManagerViewProps {
   videos: VideoItem[];

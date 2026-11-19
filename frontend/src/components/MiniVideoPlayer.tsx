@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react';
 import { Pause, Play, X } from 'lucide-react';
@@ -32,6 +32,9 @@ export function MiniVideoPlayer({
   const [duration, setDuration] = useState(video.durationSeconds || 0);
   const restoredRef = useRef<boolean>(false);
   const lastSaveRef = useRef<number>(0);
+
+  // 缓存源对象，避免每次渲染被 Vidstack 当作新源中断播放
+  const source = useMemo(() => ({ src: video.src, type: 'video/mp4' }), [video.src]);
 
   // 恢复进度：等元数据就绪后 seek（Vidstack 没有 EventTarget.on()，用 setTimeout 轮询）
   useEffect(() => {
@@ -121,7 +124,7 @@ export function MiniVideoPlayer({
           <MediaPlayer
             key={video.id}
             ref={setPlayerRef}
-            src={{ src: video.src, type: 'video/mp4' }}
+            src={source}
             poster={video.cover}
             playsInline
             autoPlay

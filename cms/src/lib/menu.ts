@@ -33,6 +33,7 @@ const DEFAULT_PATHS: Record<ModuleKey, string> = {
   articles: '/biz/article',
   category: '/biz/category',
   messages: '/biz/message',
+  files: '/biz/file',
   profile: '/profile',
 };
 
@@ -58,6 +59,8 @@ const MATCHERS: ModuleMatcher[] = [
   { key: 'category', label: '通用分类', keywords: ['biz/category', 'bizcategory'] },
   // 留言管理：菜单 component = biz/message/index，path = /biz/message
   { key: 'messages', label: '留言管理', keywords: ['biz/message', 'bizmessage'] },
+  // 文件中心（素材库）：菜单 component = biz/file/index，path = /biz/file
+  { key: 'files', label: '文件中心', keywords: ['biz/file', 'bizfile'] },
 ];
 
 function matchModule(node: SnowyMenu): ModuleMatcher | undefined {
@@ -180,6 +183,7 @@ const MODULE_PERM_PREFIX: Record<Exclude<ModuleKey, 'dashboard' | 'profile'>, st
   articles: 'bizArticle',
   category: 'bizCategory',
   messages: 'bizMessage',
+  files: 'bizFile',
 };
 
 /** 判断当前用户对某模块是否有某动作（add/edit/delete/detail）权限 */

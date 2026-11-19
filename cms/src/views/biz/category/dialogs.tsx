@@ -183,6 +183,45 @@ function selfAndDescendants(categories: BizCategory[], rootId: string): Set<stri
   return blocked;
 }
 
+function byCategorySort(a: BizCategory, b: BizCategory): number {
+  const diff = (a.sortCode ?? 9999) - (b.sortCode ?? 9999);
+  return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '', 'zh-CN');
+}
+
+/** 父级下拉候选：按 parentId 组装树形层级展开（缩进展示），排除不可选节点 */
+function flattenParentOptions(
+  categories: BizCategory[],
+  exclude: Set<string>
+): Array<{ item: BizCategory; depth: number }> {
+  const ids = new Set(categories.map((c) => c.id));
+  const childrenOf = new Map<string, BizCategory[]>();
+  categories.forEach((c) => {
+    const key = c.parentId && ids.has(c.parentId) ? c.parentId : '__root__';
+    const list = childrenOf.get(key) || [];
+    list.push(c);
+    childrenOf.set(key, list);
+  });
+  childrenOf.forEach((list) => list.sort(byCategorySort));
+
+  const out: Array<{ item: BizCategory; depth: number }> = [];
+  const visited = new Set<string>();
+  const walk = (list: BizCategory[], depth: number) => {
+    list.forEach((c) => {
+      if (visited.has(c.id)) return; // 防御脏数据环形父子
+      visited.add(c.id);
+      if (!exclude.has(c.id)) out.push({ item: c, depth });
+      walk(childrenOf.get(c.id) || [], depth + 1);
+    });
+  };
+  walk(childrenOf.get('__root__') || [], 0);
+  // 环形或断链节点兜底平铺
+  categories
+    .filter((c) => !visited.has(c.id) && !exclude.has(c.id))
+    .sort(byCategorySort)
+    .forEach((c) => out.push({ item: c, depth: 0 }));
+  return out;
+}
+
 /* ------------------------------------------------------------------ */
 /* 新增 / 编辑                                                         */
 /* ------------------------------------------------------------------ */
@@ -214,7 +253,7 @@ export function CategoryFormDialog({
   const [uploading, setUploading] = useState(false);
 
   const blocked = item ? selfAndDescendants(categories, item.id) : new Set<string>();
-  const parentOptions = categories.filter((c) => !blocked.has(c.id));
+  const parentOptions = flattenParentOptions(categories, blocked);
 
   async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -375,9 +414,9 @@ export function CategoryFormDialog({
                     onChange={(e) => setParentId(e.target.value)}
                   >
                     <option value="0">顶级分类</option>
-                    {parentOptions.map((c) => (
+                    {parentOptions.map(({ item: c, depth }) => (
                       <option key={c.id} value={c.id}>
-                        {c.name || c.id}
+                        {depth > 0 ? `${'　'.repeat(depth)}└ ${c.name || c.id}` : c.name || c.id}
                       </option>
                     ))}
                   </select>
@@ -505,14 +544,31 @@ export function CategoryDetailDialog({
     };
   }, [id]);
 
-  const parentName = item?.parentId
-    ? categories.find((c) => c.id === item.parentId)?.name || item.parentId
-    : '顶级分类';
+  /** 从父级沿 parentId 向上追溯完整层级路径（防御环形数据） */
+  const ancestorPath = (() => {
+    if (!item?.parentId) return [];
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    const chain: string[] = [];
+    let cur: string | undefined = item.parentId;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const parent = byId.get(cur);
+      if (!parent) {
+        chain.push(cur); // 父级数据缺失时展示原始 ID
+        break;
+      }
+      chain.push(parent.name || cur);
+      cur = parent.parentId;
+    }
+    return chain.reverse();
+  })();
+  const parentName = ancestorPath.length ? ancestorPath.join(' / ') : '顶级分类';
 
   const rows: Array<{ label: string; value: ReactNode }> = item
     ? [
         { label: '分类名称', value: item.name || '-' },
-        { label: '父级分类', value: parentName },
+        { label: '层级路径', value: parentName },
         { label: '适用模块', value: `${categoryModuleLabel(item.module)}（${item.module || '-'}）` },
         { label: '状态', value: categoryStatusLabel(item.status) },
         { label: '排序', value: item.sortCode ?? '-' },

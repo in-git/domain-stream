@@ -27,28 +27,29 @@ import type {
   UserProfile,
   VideoItem,
 } from './types/cms.ts';
-import { LoginView } from './components/LoginView.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
-import { DashboardView } from './components/DashboardView.tsx';
-import { VideoManagerView } from './components/VideoManagerView.tsx';
-import { ImageTextManagerView } from './components/ImageTextManagerView.tsx';
-import { ArticleManagerView } from './components/ArticleManagerView.tsx';
-import { PersonalCenterView } from './components/PersonalCenterView.tsx';
-import { ExternalMenuView } from './components/ExternalMenuView.tsx';
-import { VideoEditorPage, VideoViewPage } from './components/VideoPages.tsx';
-import {
-  ImageTextEditorPage,
-  ImageViewPage,
-} from './components/ImageTextPages.tsx';
-import {
-  ArticleEditorPage,
-  ArticleReaderPage,
-} from './components/ArticlePages.tsx';
 import { DeleteConfirmPage } from './components/DeleteConfirmPage.tsx';
 import { QuickCreatePage } from './components/QuickCreatePage.tsx';
 import { NoAccessPage, PageNotFound } from './components/PageShell.tsx';
+import { LoginView } from './views/login/LoginView.tsx';
+import { DashboardView } from './views/dashboard/DashboardView.tsx';
+import { VideoManagerView } from './views/biz/video/VideoManagerView.tsx';
+import { ImageTextManagerView } from './views/biz/imagetext/ImageTextManagerView.tsx';
+import { ArticleManagerView } from './views/biz/article/ArticleManagerView.tsx';
+import { PersonalCenterView } from './views/profile/PersonalCenterView.tsx';
+import { ExternalMenuView } from './views/system/ExternalMenuView.tsx';
+import { VideoEditorPage, VideoViewPage } from './views/biz/video/VideoPages.tsx';
+import {
+  ImageTextEditorPage,
+  ImageViewPage,
+} from './views/biz/imagetext/ImageTextPages.tsx';
+import {
+  ArticleEditorPage,
+  ArticleReaderPage,
+} from './views/biz/article/ArticlePages.tsx';
 import CategoryView from './views/biz/category/index.tsx';
 import MessageView from './views/biz/message/index.tsx';
+import FileCenterView from './views/biz/file/index.tsx';
 
 const MODULE_TITLES: Record<ModuleKey, string> = {
   dashboard: '首页看板',
@@ -57,6 +58,7 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   articles: '文章管理',
   category: '通用分类',
   messages: '留言管理',
+  files: '文件中心',
   profile: '个人中心',
 };
 
@@ -557,6 +559,8 @@ export default function App() {
             <CategoryView permissions={permissions} />
           ) : route.module === 'messages' ? (
             <MessageView permissions={permissions} />
+          ) : route.module === 'files' ? (
+            <FileCenterView permissions={permissions} />
           ) : (
             <PersonalCenterView
               user={user}

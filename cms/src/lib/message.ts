@@ -34,6 +34,10 @@ export function messageStatusClass(value?: string): string {
 /** BIZ_MESSAGE 实体（后端字段为驼峰） */
 export interface BizMessage {
   id: string;
+  /** 父留言ID：顶级留言为空；访客回复指向被回复的留言或回复（单表递归） */
+  parentId?: string;
+  /** 被回复者昵称，用于展示「回复 @xxx」 */
+  replyToNickname?: string;
   nickname?: string;
   avatar?: string;
   email?: string;

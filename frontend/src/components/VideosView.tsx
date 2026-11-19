@@ -151,7 +151,6 @@ interface FeedSlideProps {
   index: number;
   total: number;
   active: boolean;
-  isPlaying: boolean;
   isMuted: boolean;
   playbackRate: number;
   liked: boolean;
@@ -170,8 +169,6 @@ interface FeedSlideProps {
   onSeek: (time: number) => void;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
-  onPlay: () => void;
-  onPause: () => void;
   onSaveProgress?: (time: number) => void;
 }
 
@@ -181,7 +178,6 @@ function FeedSlide({
   index,
   total,
   active,
-  isPlaying,
   isMuted,
   playbackRate,
   liked,
@@ -200,13 +196,13 @@ function FeedSlide({
   onSeek,
   onTimeUpdate,
   onDurationChange,
-  onPlay,
-  onPause,
   onSaveProgress,
 }: FeedSlideProps) {
   const playerRef = useRef<MediaPlayerInstance | null>(null);
   const restoredRef = useRef<boolean>(false);
   const lastSaveRef = useRef<number>(0);
+  // 每个 Slide 自己持有播放状态，由真实 onPlay/onPause 事件驱动
+  const [playing, setPlaying] = useState(false);
 
   const setPlayerRef = useCallback(
     (player: MediaPlayerInstance | null) => {
@@ -255,12 +251,15 @@ function FeedSlide({
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
-    if (active) {
-      player.muted = isMuted;
-      player.playbackRate = playbackRate;
-      void player.play().catch(() => {});
-    } else {
+    if (!active) {
       player.pause();
+      return;
+    }
+    player.playbackRate = playbackRate;
+    player.muted = isMuted;
+    // 未静音时浏览器会拒绝自动播放（控制台报 play request failed），交给用户点击触发
+    if (isMuted) {
+      void player.play().catch(() => {});
     }
   }, [active, isMuted, playbackRate]);
 
@@ -282,12 +281,15 @@ function FeedSlide({
   const progressMax = Math.max(duration, video.durationSeconds, 1);
   const progressValue = Math.min(currentTime, progressMax);
 
+  // 必须缓存源对象：每次渲染新建对象会被 Vidstack 当成新源，导致播放请求被中断
+  const source = useMemo(() => ({ src: video.src, type: 'video/mp4' }), [video.src]);
+
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
       <MediaPlayer
         ref={setPlayerRef}
         // 流式地址没有扩展名，显式声明类型，避免播放器无法匹配加载器
-        src={{ src: video.src, type: 'video/mp4' }}
+        src={source}
         poster={video.cover}
         title={video.title}
         playsInline
@@ -297,10 +299,10 @@ function FeedSlide({
         className="absolute inset-0 w-full h-full"
         onClick={active ? onTogglePlay : undefined}
         onPlay={() => {
-          if (active) onPlay();
+          setPlaying(true);
         }}
         onPause={() => {
-          if (active) onPause();
+          setPlaying(false);
         }}
         onTimeUpdate={(detail) => {
           handleTimeUpdate(detail.currentTime);
@@ -319,7 +321,7 @@ function FeedSlide({
 
           {/* Center Paused Indicator — big Play icon when paused */}
           <AnimatePresence>
-            {!isPlaying && (
+            {!playing && (
               <motion.button
                 type="button"
                 onClick={onTogglePlay}
@@ -446,10 +448,10 @@ function FeedSlide({
               <button
                 type="button"
                 onClick={onTogglePlay}
-                aria-label={isPlaying ? '暂停' : '播放'}
+                aria-label={playing ? '暂停' : '播放'}
                 className="w-10 h-10 rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0"
               >
-                {isPlaying ? (
+                {playing ? (
                   <Pause className="w-5 h-5 fill-white" />
                 ) : (
                   <Play className="w-5 h-5 fill-white translate-x-[1px]" />
@@ -569,7 +571,6 @@ export function VideosView({
     setActiveIndex(0);
     setCurrentTime(0);
     setShowChapters(false);
-    setIsPlaying(true);
   }, [category, normalizedQuery]);
 
   const safeIndex =
@@ -580,7 +581,6 @@ export function VideosView({
     setCurrentTime(0);
     setDuration(currentVideo?.durationSeconds ?? 0);
     setShowChapters(false);
-    setIsPlaying(true);
     // 悬浮迷你播放器在离开本板块时继续播放；此处同步当前视频引用
     if (viewMode === 'feed' && currentVideo) {
       onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
@@ -634,7 +634,6 @@ export function VideosView({
     setActiveIndex(swiper.realIndex);
     setCurrentTime(0);
     setShowChapters(false);
-    setIsPlaying(true);
   };
 
   const handleNext = () => swiperRef.current?.slideNext();
@@ -781,7 +780,6 @@ export function VideosView({
                     index={idx}
                     total={filteredVideos.length}
                     active={idx === safeIndex}
-                    isPlaying={isPlaying}
                     isMuted={isMuted}
                     playbackRate={playbackRate}
                     liked={likedIds.includes(video.id)}
@@ -800,8 +798,6 @@ export function VideosView({
                     onSeek={seekTo}
                     onTimeUpdate={setCurrentTime}
                     onDurationChange={setDuration}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
                     onSaveProgress={onSaveProgress ? (t) => onSaveProgress(video.id, t) : undefined}
                   />
                 </SwiperSlide>

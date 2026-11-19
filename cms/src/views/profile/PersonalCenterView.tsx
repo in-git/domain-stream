@@ -9,9 +9,9 @@ import {
   LogOut,
   X,
 } from 'lucide-react';
-import { api, uploadFileWithProgress } from '../lib/api.ts';
-import type { ModuleKey, UserProfile } from '../types/cms.ts';
-import { MediaImage } from './MediaImage.tsx';
+import { api, uploadFileWithProgress } from '../../lib/api.ts';
+import type { ModuleKey, UserProfile } from '../../types/cms.ts';
+import { MediaImage } from '../../components/MediaImage.tsx';
 
 interface PersonalCenterViewProps {
   user: UserProfile;

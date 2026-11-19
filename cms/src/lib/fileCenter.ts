@@ -1,0 +1,193 @@
+/**
+ * 文件中心（小诺 DEV_FILE）接口对接层
+ * ------------------------------------------------------------------
+ * 后端：vip.xiaonuo.dev.modular.file（DevFileController）
+ * 路由：/dev/file/*（GET page / detail / authDownload，
+ *       POST delete；上传走 /dev/file/uploadLocalReturnUrl）
+ * 前端统一经 /snowy 代理访问，与登录态 token 保持一致。
+ *
+ * 素材按 CATEGORY 分类（IMAGE/VIDEO/AUDIO/DOC/OTHER），由后端按后缀推断落库。
+ */
+import { snowyFetch, snowyRequest, snowyUpload } from './snowy.ts';
+
+const BASE = '/dev/file';
+
+/** 素材分类：与 DEV_FILE.CATEGORY 注释一致 */
+export const FILE_CATEGORIES = [
+  { value: 'VIDEO', label: '视频' },
+  { value: 'AUDIO', label: '音频' },
+  { value: 'IMAGE', label: '图片' },
+  { value: 'DOC', label: '文档' },
+  { value: 'OTHER', label: '其他' },
+] as const;
+
+export type FileCategory = (typeof FILE_CATEGORIES)[number]['value'];
+
+export function categoryLabel(value?: string): string {
+  return FILE_CATEGORIES.find((c) => c.value === value)?.label || value || '其他';
+}
+
+const VIDEO_SUFFIXES = [
+  'mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'ogv', 'm4v', 'wmv', '3gp', 'mpg', 'mpeg', 'ts',
+];
+const AUDIO_SUFFIXES = ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'wma', 'opus'];
+const IMAGE_SUFFIXES = [
+  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'ico', 'svg', 'psd', 'tif', 'tiff',
+];
+
+function suffixOf(file: DevFile): string {
+  return (file.suffix || '').toLowerCase().replace('.', '');
+}
+
+export function isVideoFile(file: DevFile): boolean {
+  return file.category === 'VIDEO' || VIDEO_SUFFIXES.includes(suffixOf(file));
+}
+export function isAudioFile(file: DevFile): boolean {
+  return file.category === 'AUDIO' || AUDIO_SUFFIXES.includes(suffixOf(file));
+}
+export function isImageFile(file: DevFile): boolean {
+  return file.category === 'IMAGE' || IMAGE_SUFFIXES.includes(suffixOf(file));
+}
+
+/** DEV_FILE 实体（后端字段为驼峰） */
+export interface DevFile {
+  id: string;
+  engine?: string;
+  bucket?: string;
+  fileKey?: string;
+  name?: string;
+  suffix?: string;
+  category?: string;
+  sizeKb?: string;
+  sizeInfo?: string;
+  objName?: string;
+  storagePath?: string;
+  downloadPath?: string;
+  isDownloadAuth?: boolean;
+  thumbnail?: string;
+  extJson?: string;
+  createTime?: string;
+  createUser?: string;
+  updateTime?: string;
+  updateUser?: string;
+}
+
+/** MyBatis-Plus 分页对象 */
+export interface DevFilePage {
+  records: DevFile[];
+  total: number;
+  size: number;
+  current: number;
+  pages: number;
+}
+
+function qs(params: Record<string, unknown> = {}): string {
+  const entries = Object.entries(params).filter(
+    ([, v]) => v !== undefined && v !== null && v !== ''
+  );
+  if (!entries.length) return '';
+  return (
+    '?' +
+    entries
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join('&')
+  );
+}
+
+/** 把小诺返回的 URL 规范化为走 cms 代理的相对地址（去 /api 前缀，挂到 /snowy） */
+function normalizeFileUrl(raw?: string): string {
+  if (!raw) return '';
+  try {
+    const u = new URL(raw, window.location.origin);
+    const path = u.pathname.replace(/^\/api/, '');
+    return `/snowy${path}${u.search}`;
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * 公开文件（downloadPath 带 sign 签名）可转成流式播放地址，
+ * 后端 /public/file/stream 支持 HTTP Range，视频音频可直接拖动进度。
+ */
+export function toStreamUrl(file: DevFile): string {
+  const url = normalizeFileUrl(file.downloadPath);
+  if (!url.includes('sign=')) return '';
+  return url.replace('/dev/file/download', '/public/file/stream');
+}
+
+/** 文件在浏览器中直接打开的地址（新窗口下载/查看），公开文件可用 */
+export function toOpenUrl(file: DevFile): string {
+  return normalizeFileUrl(file.downloadPath);
+}
+
+/**
+ * 拉取文件二进制（授权文件无公开地址，走 authDownload 带 token 下载）。
+ * 后端异常时响应可能是 JSON，需要给出可读提示。
+ */
+export async function fetchFileBlob(file: DevFile): Promise<Blob> {
+  const res = await snowyFetch(`${BASE}/authDownload${qs({ id: file.id })}`);
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.msg || `文件加载失败 (${res.status})`);
+  }
+  if (!res.ok) throw new Error(`文件加载失败 (${res.status})`);
+  return res.blob();
+}
+
+/** 上传素材（本地引擎，返回下载 URL）；上传完成后由调用方刷新列表 */
+export function uploadMaterial(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ url: string }> {
+  return snowyUpload(file, onProgress);
+}
+
+export const fileCenterApi = {
+  /** 分页（后端支持 category / searchKey 过滤） */
+  page(params: {
+    current?: number;
+    size?: number;
+    category?: string;
+    searchKey?: string;
+  } = {}): Promise<DevFilePage> {
+    return snowyRequest<DevFilePage>(`${BASE}/page${qs(params)}`);
+  },
+
+  /** 详情 */
+  detail(id: string): Promise<DevFile> {
+    return snowyRequest<DevFile>(`${BASE}/detail${qs({ id })}`);
+  },
+
+  /** 删除：后端要求 [{"id":"..."}] 数组，支持批量（仅删记录，不动存储对象） */
+  remove(ids: string[]): Promise<void> {
+    return snowyRequest<void>(`${BASE}/delete`, {
+      method: 'POST',
+      body: JSON.stringify(ids.map((id) => ({ id }))),
+    });
+  },
+};
+
+/** 文件中心动作权限码，兼容 Snowy 按钮码与路径码两种写法 */
+export type FilePermAction = 'page' | 'detail' | 'upload' | 'delete';
+
+const PERM_CODES: Record<FilePermAction, string[]> = {
+  page: ['bizFilePage', '/dev/file/page'],
+  detail: ['bizFileDetail', '/dev/file/detail'],
+  upload: ['bizFileAdd', 'bizFileUpload', '/dev/file/uploadDynamicReturnId', '/dev/file/uploadLocalReturnId'],
+  delete: ['bizFileDelete', 'bizFileBatchDelete', '/dev/file/delete'],
+};
+
+/**
+ * 菜单可见即代表有该模块的访问权限；权限列表为空（超管/未下发按钮码）时
+ * 不隐藏按钮，由后端 @SaCheckPermission 兜底，避免有菜单却无法操作。
+ */
+export function hasFilePerm(
+  permissions: string[] | undefined | null,
+  action: FilePermAction
+): boolean {
+  if (!permissions || permissions.length === 0) return true;
+  const codes = PERM_CODES[action];
+  return permissions.some((c) => c === '*' || codes.includes(c));
+}

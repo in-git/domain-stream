@@ -7,17 +7,17 @@ import {
   Star,
   X,
 } from 'lucide-react';
-import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
-import { formatDateShort, formatNumber } from '../lib/format.ts';
-import { publishCategoryName, resolvePublishCategoryCode } from '../lib/category.ts';
-import { usePublishCategories } from '../lib/usePublishCategories.ts';
-import type { ContentStatus, ImageTextItem } from '../types/cms.ts';
-import { MediaImage } from './MediaImage.tsx';
-import { PageShell } from './PageShell.tsx';
+import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { formatDateShort, formatNumber } from '../../../lib/format.ts';
+import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
+import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
+import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
+import { MediaImage } from '../../../components/MediaImage.tsx';
+import { PageShell } from '../../../components/PageShell.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
-} from './EditorWorkspace.tsx';
+} from '../../../components/EditorWorkspace.tsx';
 
 interface ImageTextPreviewProps {
   device: PreviewDevice;

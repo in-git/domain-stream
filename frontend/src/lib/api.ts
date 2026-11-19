@@ -111,6 +111,10 @@ export type CategoryModule = 'VIDEO' | 'ARTICLE' | 'GRAPHIC' | 'IMAGE' | 'COMMON
 
 export interface PortalMessage {
   id: string;
+  /** 父留言ID：顶级留言为空，访客回复指向被回复的留言或回复（单表递归） */
+  parentId?: string;
+  /** 被回复者昵称，用于展示「回复 @xxx」 */
+  replyToNickname?: string;
   nickname?: string;
   avatar?: string;
   email?: string;
@@ -121,20 +125,6 @@ export interface PortalMessage {
   replyTime?: string;
   createTime?: string;
   likeCount?: number;
-}
-
-/** 后端 BIZ_MESSAGE_REPLY 实体（驼峰字段） */
-export interface PortalReply {
-  id: string;
-  messageId?: string;
-  parentReplyId?: string;
-  replyToNickname?: string;
-  nickname?: string;
-  avatar?: string;
-  email?: string;
-  content?: string;
-  createTime?: string;
-  createUser?: string;
 }
 
 /**
@@ -440,10 +430,15 @@ export function messageFromPortal(row: PortalMessage): MessageItem {
   };
 }
 
-export function replyFromPortal(row: PortalReply): MessageReply {
+/**
+ * 把回复记录（parentId 指向被回复的留言或回复）映射为视图模型。
+ * rootMessageId 由调用方沿 parentId 链向上追溯顶级留言后传入，
+ * 用于与顶级留言分组展示。
+ */
+export function replyFromPortal(row: PortalMessage, rootMessageId: string): MessageReply {
   return {
     id: String(row.id),
-    messageId: String(row.messageId || ''),
+    messageId: rootMessageId,
     nickname: row.nickname || '匿名访客',
     avatar: row.avatar,
     email: row.email,
@@ -463,7 +458,10 @@ export interface MessageDraft {
   content: string;
 }
 
-/** 提交一条留言回复；parentReplyId / replyToNickname 用于「回复某条回复」 */
+/**
+ * 提交一条留言回复：parentReplyId 为被回复的留言/回复ID（为空时视为直接
+ * 回复顶级留言，取 messageId）；replyToNickname 用于展示「回复 @xxx」。
+ */
 export interface ReplyDraft {
   messageId: string;
   nickname: string;
@@ -479,16 +477,24 @@ export const portalApi = {
   videos: () => request<PortalVideo[]>('/public/videos'),
   articles: () => request<PortalArticle[]>('/public/articles'),
   graphics: () => request<PortalGraphic[]>('/public/graphics'),
+  /** 顶级留言与回复同在一张表，一次拉取后由调用方按 parentId 组装 */
   messages: () => request<PortalMessage[]>('/public/messages'),
-  messageReplies: () => request<PortalReply[]>('/public/messageReplies'),
   addMessage: (draft: MessageDraft) =>
     request<string>('/public/messages', {
       method: 'POST',
       body: JSON.stringify({ ...draft, status: 'APPROVED' }),
     }),
   addReply: (draft: ReplyDraft) =>
-    request<string>('/public/messageReplies', {
+    request<string>('/public/messages', {
       method: 'POST',
-      body: JSON.stringify(draft),
+      body: JSON.stringify({
+        nickname: draft.nickname,
+        email: draft.email,
+        avatar: draft.avatar,
+        content: draft.content,
+        parentId: draft.parentReplyId || draft.messageId,
+        replyToNickname: draft.replyToNickname,
+        status: 'APPROVED',
+      }),
     }),
 };

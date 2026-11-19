@@ -7,13 +7,13 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import { api } from '../lib/api.ts';
-import { hasModulePerm } from '../lib/menu.ts';
-import { formatDateShort, formatNumber } from '../lib/format.ts';
-import type { ArticleItem, ContentStatus } from '../types/cms.ts';
-import { publishCategoryName } from '../lib/category.ts';
-import { usePublishCategories } from '../lib/usePublishCategories.ts';
-import { MediaImage } from './MediaImage.tsx';
+import { api } from '../../../lib/api.ts';
+import { hasModulePerm } from '../../../lib/menu.ts';
+import { formatDateShort, formatNumber } from '../../../lib/format.ts';
+import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
+import { publishCategoryName } from '../../../lib/category.ts';
+import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
+import { MediaImage } from '../../../components/MediaImage.tsx';
 
 interface ArticleManagerViewProps {
   articles: ArticleItem[];

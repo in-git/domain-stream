@@ -2,8 +2,8 @@
 -- domain-stream 业务升级脚本（合并版）
 -- 内容：
 --   一、业务模块建表：通用分类(BIZ_CATEGORY)、文章(BIZ_ARTICLE)、视频(BIZ_VIDEO)、
---       图文(BIZ_GRAPHIC)、访客访问事件明细(BIZ_VISITOR_EVENT)、留言(BIZ_MESSAGE)、
---       留言回复(BIZ_MESSAGE_REPLY)
+--       图文(BIZ_GRAPHIC)、访客访问事件明细(BIZ_VISITOR_EVENT)、留言(BIZ_MESSAGE，
+--       含 PARENT_ID 递归回复结构，无独立回复表)
 --   二、素材库改造：DEV_FILE 增加素材分类字段并按后缀回填存量数据
 -- 规范：遵循小诺 Snowy 框架数据库约定
 --   - 分类关联：BIZ_ARTICLE/BIZ_VIDEO/BIZ_GRAPHIC 的 CATEGORY 字段存 BIZ_CATEGORY.CODE
@@ -200,11 +200,15 @@ CREATE TABLE `BIZ_VISITOR_EVENT`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '访客访问事件明细' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Table structure for BIZ_MESSAGE  留言
+-- Table structure for BIZ_MESSAGE  留言（单表递归：PARENT_ID 为空为顶级留言，否则为访客回复）
 -- ----------------------------
+-- 若历史库中存在已废弃的独立回复表，先清理
+DROP TABLE IF EXISTS `BIZ_MESSAGE_REPLY`;
 DROP TABLE IF EXISTS `BIZ_MESSAGE`;
 CREATE TABLE `BIZ_MESSAGE`  (
   `ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '主键',
+  `PARENT_ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '父留言ID，顶级留言为空，访客回复指向被回复的留言或回复（单表递归）',
+  `REPLY_TO_NICKNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '被回复者昵称，用于前台展示「回复 @xxx」',
   `NICKNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '留言人昵称',
   `AVATAR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '留言人头像',
   `EMAIL` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '邮箱',
@@ -225,34 +229,10 @@ CREATE TABLE `BIZ_MESSAGE`  (
   `UPDATE_TIME` datetime NULL DEFAULT NULL COMMENT '更新时间',
   `UPDATE_USER` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '更新用户',
   PRIMARY KEY (`ID`) USING BTREE,
+  INDEX `IDX_MESSAGE_PARENT_ID` (`PARENT_ID`) USING BTREE,
   INDEX `IDX_MESSAGE_STATUS` (`STATUS`) USING BTREE,
   INDEX `IDX_MESSAGE_CREATE_TIME` (`CREATE_TIME`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '留言' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Table structure for BIZ_MESSAGE_REPLY  留言回复（访客互评，含回复自己的留言）
--- 用途：让前台任何登录访客都能回复任意一条已通过的留言（包括自己发布的留言），
---       回复默认即时展示；独立于 BIZ_MESSAGE.REPLY 的管理员回复。
--- ----------------------------
-DROP TABLE IF EXISTS `BIZ_MESSAGE_REPLY`;
-CREATE TABLE `BIZ_MESSAGE_REPLY`  (
-  `ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '主键',
-  `MESSAGE_ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属留言ID',
-  `PARENT_REPLY_ID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '被回复的回复ID（可空）',
-  `REPLY_TO_NICKNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '被回复者昵称',
-  `NICKNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复人昵称',
-  `AVATAR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复人头像',
-  `EMAIL` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复人邮箱',
-  `CONTENT` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回复内容',
-  `DELETE_FLAG` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT 'NOT_DELETE' COMMENT '删除标志：NOT_DELETE正常/DELETED删除',
-  `CREATE_TIME` datetime NULL DEFAULT NULL COMMENT '创建时间',
-  `CREATE_USER` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '创建用户',
-  `UPDATE_TIME` datetime NULL DEFAULT NULL COMMENT '更新时间',
-  `UPDATE_USER` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '更新用户',
-  PRIMARY KEY (`ID`) USING BTREE,
-  INDEX `IDX_REPLY_MESSAGE_ID` (`MESSAGE_ID`) USING BTREE,
-  INDEX `IDX_REPLY_CREATE_TIME` (`CREATE_TIME`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '留言回复' ROW_FORMAT = Dynamic;
 
 -- ============================================================
 -- 二、素材库改造：DEV_FILE 增加素材分类字段，并按后缀回填存量数据
