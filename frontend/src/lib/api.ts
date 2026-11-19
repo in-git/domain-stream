@@ -199,6 +199,8 @@ export function categoryNameMap(categories: PortalCategory[]): Map<string, strin
   const map = new Map<string, string>();
   categories.forEach((item) => {
     if (item.code && item.name) map.set(item.code, item.name);
+    // 历史内容可能直接存了分类名称，这里做一次名称归一
+    if (item.name) map.set(item.name, item.name);
   });
   return map;
 }
@@ -271,12 +273,12 @@ export function videoFromPortal(
         { time: Math.max(2, durationSeconds - 1), label: '结尾' },
       ];
   const rawCategory = row.category || '';
+  // 优先使用后端分类名称；未收录的新分类保持原值，避免被静态默认值覆盖
   const category =
     categoryNames?.get(rawCategory) ||
     VIDEO_CATEGORY_MAP[rawCategory] ||
-    (VIDEO_CATEGORIES.includes(rawCategory)
-      ? rawCategory
-      : VIDEO_CATEGORIES[index % VIDEO_CATEGORIES.length]);
+    rawCategory ||
+    VIDEO_CATEGORIES[index % VIDEO_CATEGORIES.length];
 
   return {
     id: String(row.id),
@@ -321,9 +323,8 @@ export function articleFromPortal(
   const category =
     categoryNames?.get(rawCategory) ||
     ARTICLE_CATEGORY_MAP[rawCategory] ||
-    (ARTICLE_CATEGORIES.includes(rawCategory)
-      ? rawCategory
-      : ARTICLE_CATEGORIES[index % ARTICLE_CATEGORIES.length]);
+    rawCategory ||
+    ARTICLE_CATEGORIES[index % ARTICLE_CATEGORIES.length];
 
   return {
     id: String(row.id),
@@ -365,7 +366,8 @@ export function graphicsToPhotos(
     const album =
       categoryNames?.get(rawCategory) ||
       ALBUM_MAP[rawCategory] ||
-      (ALBUMS.includes(rawCategory) ? rawCategory : ALBUMS[index % ALBUMS.length]);
+      rawCategory ||
+      ALBUMS[index % ALBUMS.length];
 
     images.forEach((src, imageIndex) => {
       result.push({

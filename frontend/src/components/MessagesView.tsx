@@ -1,14 +1,14 @@
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  AtSign,
   Check,
   Heart,
+  LogIn,
   MessageCircleHeart,
   Send,
-  SmilePlus,
+  X,
 } from 'lucide-react';
 import type { MessageItem } from '../data/content.ts';
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { APPLE_EASE, SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../lib/motion.ts';
 
 type SortMode = 'latest' | 'hot';
@@ -56,26 +56,36 @@ function StatusBadge({ status }: { status: MessageItem['status'] }) {
   );
 }
 
+export interface MessageAuthor {
+  name: string;
+  email?: string;
+  avatar?: string;
+}
+
 export default function MessagesView({
   messages,
   likedIds,
   searchQuery,
+  isLoggedIn,
+  currentUser,
+  onRequireLogin,
   onToggleLike,
   onAddMessage,
 }: {
   messages: MessageItem[];
   likedIds: Set<string>;
   searchQuery: string;
+  isLoggedIn: boolean;
+  currentUser: MessageAuthor;
+  onRequireLogin: () => void;
   onToggleLike: (id: string) => void;
   onAddMessage: (message: MessageItem) => void | Promise<void>;
 }) {
-  const [nickname, setNickname] = useState('');
-  const [email, setEmail] = useState('');
+  const [composerOpen, setComposerOpen] = useState(false);
   const [content, setContent] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('latest');
   const [submitting, setSubmitting] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const visibleMessages = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -94,16 +104,20 @@ export default function MessagesView({
 
   const approvedCount = messages.filter((m) => m.status === 'APPROVED').length;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = nickname.trim();
-    const text = content.trim();
-    if (!name || !text) {
-      setHint('请填写昵称和留言内容');
+  function openComposer() {
+    if (!isLoggedIn) {
+      onRequireLogin();
       return;
     }
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setHint('邮箱格式不正确');
+    setHint(null);
+    setComposerOpen(true);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = content.trim();
+    if (!text) {
+      setHint('请填写留言内容');
       return;
     }
 
@@ -111,8 +125,9 @@ export default function MessagesView({
     setHint(null);
     const newMessage: MessageItem = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      nickname: name,
-      email: email.trim() || undefined,
+      nickname: currentUser.name,
+      email: currentUser.email || undefined,
+      avatar: currentUser.avatar,
       content: text,
       createdAt: new Date().toISOString(),
       likes: 0,
@@ -121,13 +136,10 @@ export default function MessagesView({
 
     try {
       await onAddMessage(newMessage);
-      setNickname('');
-      setEmail('');
       setContent('');
       setSortMode('latest');
+      setComposerOpen(false);
       setHint('留言已提交，审核通过后将展示在留言墙');
-      contentRef.current?.focus();
-      window.setTimeout(() => setHint(null), 4000);
     } catch (err) {
       setHint(err instanceof Error ? err.message : '提交失败，请稍后重试');
     } finally {
@@ -142,135 +154,71 @@ export default function MessagesView({
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: APPLE_EASE }}
-          className="mb-10"
+          className="flex flex-wrap items-start justify-between gap-4 mb-10"
         >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#0071E3] to-[#5E5CE6] flex items-center justify-center shadow-[0_6px_18px_rgba(0,113,227,0.25)]">
-              <MessageCircleHeart className="w-5 h-5 text-white" strokeWidth={1.8} />
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#0071E3] to-[#5E5CE6] flex items-center justify-center shadow-[0_6px_18px_rgba(0,113,227,0.25)]">
+                <MessageCircleHeart className="w-5 h-5 text-white" strokeWidth={1.8} />
+              </div>
+              <div>
+                <h1 className="text-[28px] sm:text-[34px] lg:text-[38px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] leading-tight">
+                  留言墙
+                </h1>
+                <p className="text-[13px] text-[#86868B] dark:text-[#A1A1A6]">
+                  关于作品、技术或任何想聊的，都可以在这里留下声音
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-[28px] sm:text-[34px] lg:text-[38px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] leading-tight">
-                留言墙
-              </h1>
-              <p className="text-[13px] text-[#86868B] dark:text-[#A1A1A6]">
-                关于作品、技术或任何想聊的，都可以在这里留下声音
-              </p>
+            <div className="flex items-center gap-4 text-[12px] text-[#86868B] dark:text-[#98989D]">
+              <span>{messages.length} 条留言</span>
+              <span className="w-px h-3 bg-[#D2D2D7]/60 dark:bg-[#424245]" />
+              <span>{approvedCount} 条已展示</span>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-[12px] text-[#86868B] dark:text-[#98989D]">
-            <span>{messages.length} 条留言</span>
-            <span className="w-px h-3 bg-[#D2D2D7]/60 dark:bg-[#424245]" />
-            <span>{approvedCount} 条已展示</span>
-          </div>
+
+          <motion.button
+            type="button"
+            onClick={openComposer}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            transition={SWIFTUI_BOUNCY}
+            className="h-11 px-5 rounded-[14px] bg-[#0071E3] hover:bg-[#0077ED] text-white text-[14px] font-medium inline-flex items-center gap-2 shadow-[0_6px_16px_rgba(0,113,227,0.25)]"
+          >
+           { '留言'}
+           
+          </motion.button>
         </motion.div>
 
-        <motion.form
-          onSubmit={(event) => void handleSubmit(event)}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: APPLE_EASE, delay: 0.05 }}
-          className="relative rounded-[24px] overflow-hidden border border-[#E8E8ED] dark:border-white/10 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.05)] dark:shadow-none p-6 sm:p-8 mb-8"
-        >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#0071E3]/30 to-transparent" />
-          <div className="flex items-center gap-2 mb-5">
-            <SmilePlus className="w-4 h-4 text-[#0071E3]" strokeWidth={1.8} />
-            <h2 className="text-[15px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-              写下留言
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <label className="block">
-              <span className="block text-[12px] font-medium text-[#6E6E73] dark:text-[#A1A1A6] mb-2">
-                昵称 <span className="text-[#D70015]">*</span>
-              </span>
-              <input
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                maxLength={40}
-                placeholder="怎么称呼你"
-                className="w-full h-11 px-4 rounded-[14px] bg-[#F5F5F7] dark:bg-white/[0.06] border border-transparent text-[14px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:bg-white dark:focus:bg-white/[0.09] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30 transition-all"
-              />
-            </label>
-            <label className="block">
-              <span className="block text-[12px] font-medium text-[#6E6E73] dark:text-[#A1A1A6] mb-2">
-                邮箱 <span className="font-normal text-[#AEAEB2]">（选填，仅用于回复通知）</span>
-              </span>
-              <div className="relative">
-                <AtSign className="w-4 h-4 text-[#AEAEB2] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  maxLength={100}
-                  placeholder="name@example.com"
-                  className="w-full h-11 pl-10 pr-4 rounded-[14px] bg-[#F5F5F7] dark:bg-white/[0.06] border border-transparent text-[14px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:bg-white dark:focus:bg-white/[0.09] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30 transition-all"
-                />
-              </div>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="block text-[12px] font-medium text-[#6E6E73] dark:text-[#A1A1A6] mb-2">
-              留言内容 <span className="text-[#D70015]">*</span>
-            </span>
-            <textarea
-              ref={contentRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              maxLength={500}
-              rows={4}
-              placeholder="说说你的想法..."
-              className="w-full px-4 py-3 rounded-[14px] bg-[#F5F5F7] dark:bg-white/[0.06] border border-transparent text-[14px] leading-6 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:bg-white dark:focus:bg-white/[0.09] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30 transition-all resize-none"
-            />
-            <span className="block mt-1.5 text-right text-[11px] text-[#AEAEB2] tabular-nums">
-              {content.length} / 500
-            </span>
-          </label>
-
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <AnimatePresence mode="wait">
-              {hint && (
-                <motion.span
-                  key={hint}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.2 }}
-                  className={`inline-flex items-center gap-1.5 text-[12px] ${
-                    hint.startsWith('留言已') ? 'text-[#16A34A]' : 'text-[#D70015]'
-                  }`}
-                >
-                  {hint.startsWith('留言已') ? (
-                    <Check className="w-3.5 h-3.5" />
-                  ) : (
-                    <AtSign className="w-3.5 h-3.5" />
-                  )}
-                  {hint}
-                </motion.span>
-              )}
-            </AnimatePresence>
-            <motion.button
-              type="submit"
-              disabled={submitting}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SWIFTUI_BOUNCY}
-              className="ml-auto h-11 px-6 rounded-[14px] bg-[#0071E3] hover:bg-[#0077ED] text-white text-[14px] font-medium inline-flex items-center gap-2 shadow-[0_6px_16px_rgba(0,113,227,0.25)] disabled:opacity-60"
+        <AnimatePresence>
+          {hint && !composerOpen && (
+            <motion.div
+              key={hint}
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className={`mb-6 flex items-center justify-between gap-3 rounded-[14px] px-4 py-3 text-[13px] ${
+                hint.startsWith('留言已')
+                  ? 'bg-[#16A34A]/10 text-[#16A34A]'
+                  : 'bg-[#FF3B30]/10 text-[#D70015]'
+              }`}
             >
-              {submitting ? (
-                <motion.span
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                  className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white"
-                />
-              ) : (
-                <Send className="w-4 h-4" strokeWidth={2} />
-              )}
-              {submitting ? '提交中' : '提交留言'}
-            </motion.button>
-          </div>
-        </motion.form>
+              <span className="inline-flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                {hint}
+              </span>
+              <button
+                type="button"
+                onClick={() => setHint(null)}
+                aria-label="关闭提示"
+                className="opacity-70 hover:opacity-100"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="flex items-center justify-between gap-4 mb-5">
           <div className="flex items-center gap-2">
@@ -400,6 +348,131 @@ export default function MessagesView({
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {composerOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !submitting) setComposerOpen(false);
+            }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="写下留言"
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={SWIFTUI_SMOOTH}
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[24px] border border-[#E8E8ED] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-[0_24px_70px_rgba(0,0,0,0.24)]"
+            >
+              <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-[#F2F2F7] dark:border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-[11px] bg-[#0071E3]/10 flex items-center justify-center">
+                    <MessageCircleHeart className="w-4 h-4 text-[#0071E3]" strokeWidth={1.9} />
+                  </div>
+                  <h2 className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    写下留言
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setComposerOpen(false)}
+                  disabled={submitting}
+                  aria-label="关闭"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[#86868B] hover:bg-[#F5F5F7] dark:hover:bg-white/[0.06] disabled:opacity-50 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={(event) => void handleSubmit(event)} className="p-6">
+                <div className="flex items-center gap-3 mb-5 rounded-[14px] bg-[#F5F5F7] dark:bg-white/[0.05] p-3">
+                  <Avatar name={currentUser.name} src={currentUser.avatar} />
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+                      {currentUser.name}
+                    </div>
+                    <div className="text-[12px] text-[#86868B] truncate">
+                      {currentUser.email || '以登录身份发布'}
+                    </div>
+                  </div>
+                  <Check className="w-4 h-4 ml-auto shrink-0 text-[#16A34A]" />
+                </div>
+
+                <label className="block">
+                  <span className="block text-[12px] font-medium text-[#6E6E73] dark:text-[#A1A1A6] mb-2">
+                    留言内容 <span className="text-[#D70015]">*</span>
+                  </span>
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    maxLength={500}
+                    rows={5}
+                    autoFocus
+                    placeholder="说说你的想法..."
+                    className="w-full px-4 py-3 rounded-[14px] bg-[#F5F5F7] dark:bg-white/[0.06] border border-transparent text-[14px] leading-6 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:bg-white dark:focus:bg-white/[0.09] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30 transition-all resize-none"
+                  />
+                  <span className="block mt-1.5 text-right text-[11px] text-[#AEAEB2] tabular-nums">
+                    {content.length} / 500
+                  </span>
+                </label>
+
+                <AnimatePresence mode="wait">
+                  {hint && (
+                    <motion.p
+                      key={hint}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.2 }}
+                      className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-[#D70015]"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      {hint}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setComposerOpen(false)}
+                    disabled={submitting}
+                    className="h-10 px-4 rounded-[13px] bg-[#F5F5F7] dark:bg-white/[0.06] text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] hover:bg-[#EDEDF0] dark:hover:bg-white/[0.1] disabled:opacity-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <motion.button
+                    type="submit"
+                    disabled={submitting}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={SWIFTUI_BOUNCY}
+                    className="h-10 px-5 rounded-[13px] bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-2 shadow-[0_6px_16px_rgba(0,113,227,0.25)] disabled:opacity-60"
+                  >
+                    {submitting ? (
+                      <motion.span
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                        className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white"
+                      />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" strokeWidth={2} />
+                    )}
+                    {submitting ? '提交中' : '提交留言'}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { VideoItem } from '../data/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
+import { Tooltip } from './Tooltip';
 import { ResilientImage } from './ResilientImage';
 
 interface VideosViewProps {
@@ -294,15 +295,13 @@ function FeedSlide({
 
           {/* Douyin-style Right-Side Vertical Action Dock */}
           <div className="absolute right-3 sm:right-5 bottom-20 flex flex-col items-center gap-4 z-10 text-white">
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.84 }}
-              transition={SWIFTUI_BOUNCY}
-              onClick={onToggleLike}
-              aria-label={liked ? '取消喜欢' : '喜欢'}
-              className="flex flex-col items-center gap-1 min-w-[44px]"
-            >
-              <span
+            <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.84 }}
+                transition={SWIFTUI_BOUNCY}
+                onClick={onToggleLike}
+                aria-label={liked ? '取消喜欢' : '喜欢'}
                 className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
                   liked
                     ? 'bg-[#FF2C55]/25 border-[#FF2C55]/60 text-[#FF2C55]'
@@ -310,21 +309,16 @@ function FeedSlide({
                 }`}
               >
                 <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
-              </span>
-              <span className="text-[11px] font-medium tabular-nums drop-shadow">
-                {liked ? '已赞' : '喜欢'}
-              </span>
-            </motion.button>
+              </motion.button>
+            </Tooltip>
 
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.84 }}
-              transition={SWIFTUI_BOUNCY}
-              onClick={onToggleSave}
-              aria-label={saved ? '取消收藏' : '收藏'}
-              className="flex flex-col items-center gap-1 min-w-[44px]"
-            >
-              <span
+            <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.84 }}
+                transition={SWIFTUI_BOUNCY}
+                onClick={onToggleSave}
+                aria-label={saved ? '取消收藏' : '收藏'}
                 className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
                   saved
                     ? 'bg-[#FFB800]/25 border-[#FFB800]/60 text-[#FFD60A]'
@@ -332,20 +326,15 @@ function FeedSlide({
                 }`}
               >
                 <Bookmark className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
-              </span>
-              <span className="text-[11px] font-medium drop-shadow">
-                {saved ? '已收藏' : '收藏'}
-              </span>
-            </motion.button>
+              </motion.button>
+            </Tooltip>
 
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.88 }}
-              onClick={onToggleChapters}
-              aria-label="查看章节"
-              className="flex flex-col items-center gap-1 min-w-[44px]"
-            >
-              <span
+            <Tooltip label="章节" side="left">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.88 }}
+                onClick={onToggleChapters}
+                aria-label="查看章节"
                 className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
                   showChapters
                     ? 'bg-[#0A84FF] border-[#0A84FF] text-white'
@@ -353,19 +342,20 @@ function FeedSlide({
                 }`}
               >
                 <Layers className="w-5 h-5" />
-              </span>
-              <span className="text-[11px] font-medium drop-shadow">章节</span>
-            </motion.button>
+              </motion.button>
+            </Tooltip>
 
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.88 }}
-              onClick={onToggleMute}
-              aria-label={isMuted ? '取消静音' : '静音'}
-              className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
-            >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </motion.button>
+            <Tooltip label={isMuted ? '取消静音' : '静音'} side="left">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.88 }}
+                onClick={onToggleMute}
+                aria-label={isMuted ? '取消静音' : '静音'}
+                className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
+              >
+                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </motion.button>
+            </Tooltip>
           </div>
 
           {/* Bottom Info + Progress Scrubber */}
@@ -611,46 +601,50 @@ export function VideosView({
         </div>
 
         {/* Feed vs Grid Switcher */}
-        <div className="inline-flex items-center p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
-          <button
-            type="button"
-            onClick={() => setViewMode('feed')}
-            className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-              viewMode === 'feed'
-                ? 'text-[#1D1D1F] dark:text-white'
-                : 'text-[#6E6E73] dark:text-[#98989D]'
-            }`}
-          >
-            {viewMode === 'feed' && (
-              <motion.span
-                layoutId="videoModeSwitch"
-                transition={SWIFTUI_SNAPPY}
-                className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-              />
-            )}
-            <Rows3 className="relative z-10 w-3.5 h-3.5" />
-            <span className="relative z-10">沉浸刷看</span>
-          </button>
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
+          <Tooltip label="沉浸刷看" side="bottom">
+            <button
+              type="button"
+              onClick={() => setViewMode('feed')}
+              aria-label="沉浸刷看"
+              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                viewMode === 'feed'
+                  ? 'text-[#1D1D1F] dark:text-white'
+                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+              }`}
+            >
+              {viewMode === 'feed' && (
+                <motion.span
+                  layoutId="videoModeSwitch"
+                  transition={SWIFTUI_SNAPPY}
+                  className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
+                />
+              )}
+              <Rows3 className="relative z-10 w-4 h-4" />
+            </button>
+          </Tooltip>
 
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-              viewMode === 'grid'
-                ? 'text-[#1D1D1F] dark:text-white'
-                : 'text-[#6E6E73] dark:text-[#98989D]'
-            }`}
-          >
-            {viewMode === 'grid' && (
-              <motion.span
-                layoutId="videoModeSwitch"
-                transition={SWIFTUI_SNAPPY}
-                className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-              />
-            )}
-            <LayoutGrid className="relative z-10 w-3.5 h-3.5" />
-            <span className="relative z-10">发现网格</span>
-          </button>
+          <Tooltip label="发现网格" side="bottom">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-label="发现网格"
+              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                viewMode === 'grid'
+                  ? 'text-[#1D1D1F] dark:text-white'
+                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+              }`}
+            >
+              {viewMode === 'grid' && (
+                <motion.span
+                  layoutId="videoModeSwitch"
+                  transition={SWIFTUI_SNAPPY}
+                  className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
+                />
+              )}
+              <LayoutGrid className="relative z-10 w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 

@@ -1,6 +1,8 @@
 import { motion } from 'motion/react';
 import { Moon, Search, Sun, X } from 'lucide-react';
 import type { SectionId } from '../data/content';
+import { AccountMenu, type AccountMenuProps } from './AccountMenu';
+import { Tooltip } from './Tooltip';
 
 interface MainHeaderProps {
   activeSection: SectionId;
@@ -8,6 +10,7 @@ interface MainHeaderProps {
   onChangeSearch: (value: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
+  account: AccountMenuProps;
 }
 
 const SECTION_LABELS: Record<SectionId, string> = {
@@ -24,6 +27,7 @@ export function MainHeader({
   onChangeSearch,
   isDark,
   onToggleTheme,
+  account,
 }: MainHeaderProps) {
   return (
     <header className="sticky top-0 z-20 h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl">
@@ -65,17 +69,20 @@ export function MainHeader({
         </div>
       </div>
 
-      {/* Right: Mobile Theme Toggle */}
-      <div className="flex items-center gap-2 shrink-0">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.92 }}
-          onClick={onToggleTheme}
-          aria-label={isDark ? '切换至浅色外观' : '切换至深色外观'}
-          className="md:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"
-        >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </motion.button>
+      {/* Right: Theme Toggle + Account */}
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <Tooltip label={isDark ? '浅色外观' : '深色外观'} side="bottom">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            onClick={onToggleTheme}
+            aria-label={isDark ? '切换至浅色外观' : '切换至深色外观'}
+            className="w-9 h-9 flex items-center justify-center rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
+          >
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </motion.button>
+        </Tooltip>
+        <AccountMenu {...account} />
       </div>
     </header>
   );

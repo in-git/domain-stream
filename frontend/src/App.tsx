@@ -29,6 +29,18 @@ import { GalleryView } from './components/GalleryView';
 import MessagesView from './components/MessagesView';
 import { ProfileView } from './components/ProfileView';
 import { PortalEmpty, PortalError, SectionSkeleton } from './components/PortalStates';
+import {
+  authApi,
+  cacheClientUser,
+  getCachedClientUser,
+  getSnowyToken,
+  setSnowyToken,
+  type SnowyClientUser,
+} from './lib/snowyAuth';
+import { currentRoute, navigate, subscribeRoute, type RouteInfo } from './lib/router';
+import { LoginView } from './components/LoginView';
+import { RegisterView } from './components/RegisterView';
+import { CallbackView } from './components/CallbackView';
 
 type ContentSection = 'videos' | 'articles' | 'gallery' | 'messages';
 
@@ -61,12 +73,13 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('videos');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [route, setRoute] = useState<RouteInfo>(() => currentRoute());
   const [isDark, setIsDark] = usePersistentState<boolean>('lumina:dark', false);
-  const [isLoggedIn, setIsLoggedIn] = usePersistentState<boolean>('lumina:logged-in', true);
-  const [accountEmail, setAccountEmail] = usePersistentState<string>(
-    'lumina:account-email',
-    'linyu@lumina.studio'
-  );
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSnowyToken());
+  const [accountEmail, setAccountEmail] = useState(() => {
+    const cached = getCachedClientUser();
+    return cached?.email || cached?.account || '';
+  });
   const [profile, setProfile] = usePersistentState<UserProfile>('lumina:profile', INITIAL_PROFILE);
 
   const [savedIds, setSavedIds] = usePersistentState<string[]>('lumina:saved', []);
@@ -97,22 +110,49 @@ export default function App() {
     const categories = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
     const names = categoryNameMap(categories);
 
-    setVideoCategories(categoriesForModule(categories, 'VIDEO'));
-    setArticleCategories(categoriesForModule(categories, 'ARTICLE'));
-    setGraphicCategories(categoriesForModule(categories, 'GRAPHIC'));
+    const videoItems =
+      videoResult.status === 'fulfilled'
+        ? videoResult.value.map((row, i) => videoFromPortal(row, i, names))
+        : [];
+    const articleItems =
+      articleResult.status === 'fulfilled'
+        ? articleResult.value.map((row, i) => articleFromPortal(row, i, names))
+        : [];
+    const photoItems =
+      graphicResult.status === 'fulfilled'
+        ? graphicsToPhotos(graphicResult.value, names)
+        : [];
+
+    /* 分类接口不可用时，退回到内容自身携带的分类，保证筛选标签与内容一致 */
+    const pickCategories = (fromApi: string[], fromContent: (string | undefined)[]) => {
+      if (fromApi.length) return fromApi;
+      return Array.from(
+        new Set(fromContent.map((item) => (item || '').trim()).filter(Boolean))
+      );
+    };
+
+    setVideoCategories(
+      pickCategories(categoriesForModule(categories, 'VIDEO'), videoItems.map((item) => item.category))
+    );
+    setArticleCategories(
+      pickCategories(categoriesForModule(categories, 'ARTICLE'), articleItems.map((item) => item.category))
+    );
+    setGraphicCategories(
+      pickCategories(categoriesForModule(categories, 'GRAPHIC'), photoItems.map((item) => item.album))
+    );
 
     if (videoResult.status === 'fulfilled') {
-      setVideos(videoResult.value.map((row, i) => videoFromPortal(row, i, names)));
+      setVideos(videoItems);
     } else {
       nextErrors.videos = videoResult.reason?.message || '视频服务暂不可用';
     }
     if (articleResult.status === 'fulfilled') {
-      setArticles(articleResult.value.map((row, i) => articleFromPortal(row, i, names)));
+      setArticles(articleItems);
     } else {
       nextErrors.articles = articleResult.reason?.message || '文章服务暂不可用';
     }
     if (graphicResult.status === 'fulfilled') {
-      setPhotos(graphicsToPhotos(graphicResult.value, names));
+      setPhotos(photoItems);
     } else {
       nextErrors.gallery = graphicResult.reason?.message || '图文服务暂不可用';
     }
@@ -151,21 +191,72 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLogin = (email: string, nickname?: string) => {
-    setAccountEmail(email);
-    if (nickname) {
-      setProfile((prev) => ({
-        ...prev,
-        name: nickname,
-        handle: `@${email.split('@')[0] || 'lumina.user'}`,
-      }));
-    }
+  const applyUser = useCallback((user: SnowyClientUser) => {
+    setAccountEmail(user.email || user.account || '');
+    cacheClientUser(user);
+    setProfile((prev) => ({
+      ...prev,
+      name: user.nickname || user.name || user.account,
+      handle: `@${user.account}`,
+      bio: user.signature || prev.bio,
+      avatar: user.avatar || prev.avatar,
+    }));
     setIsLoggedIn(true);
-  };
+  }, []);
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-  };
+  // 登录 / 三方回调成功后统一落地：保存 token → 拉用户信息 → 回首页
+  const handleAuthSuccess = useCallback(
+    (token: string) => {
+      setSnowyToken(token);
+      setIsLoggedIn(true);
+      authApi
+        .getLoginUser()
+        .then(applyUser)
+        .catch(() => {
+          // token 已保存，用户信息暂不可用时仍允许进入站点
+        })
+        .finally(() => navigate('/', true));
+    },
+    [applyUser]
+  );
+
+  useEffect(() => subscribeRoute(() => setRoute(currentRoute())), []);
+
+  // 刷新页面时用已有 token 恢复登录态
+  useEffect(() => {
+    if (!getSnowyToken()) return undefined;
+    let cancelled = false;
+    authApi
+      .getLoginUser()
+      .then((user) => {
+        if (!cancelled) applyUser(user);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSnowyToken(null);
+        setIsLoggedIn(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyUser]);
+
+  const handleLogout = useCallback(() => {
+    void authApi.logout().finally(() => {
+      setIsLoggedIn(false);
+      setAccountEmail('');
+      setProfile(INITIAL_PROFILE);
+      navigate('/', true);
+    });
+  }, []);
+
+  const goLogin = useCallback(() => navigate('/login'), []);
+  const goRegister = useCallback(() => navigate('/register'), []);
+  const goProfile = useCallback(() => {
+    setActiveSection('profile');
+    navigate('/');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const handleAddMessage = async (message: MessageItem) => {
     await portalApi.addMessage({
@@ -183,6 +274,16 @@ export default function App() {
     setShowSplash(false);
   }, []);
 
+  if (route.kind === 'login') {
+    return <LoginView onSuccess={handleAuthSuccess} />;
+  }
+  if (route.kind === 'register') {
+    return <RegisterView />;
+  }
+  if (route.kind === 'callback') {
+    return <CallbackView platform={route.platform || ''} onSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen flex bg-[#FBFBFD] text-[#1D1D1F] dark:bg-[#000000] dark:text-[#F5F5F7] transition-colors duration-300">
@@ -195,8 +296,6 @@ export default function App() {
         <LeftSidebar
           activeSection={activeSection}
           onSelectSection={handleSelectSection}
-          isDark={isDark}
-          onToggleTheme={() => setIsDark((d) => !d)}
         />
 
         {/* Right Main Viewport Column */}
@@ -207,6 +306,15 @@ export default function App() {
             onChangeSearch={setSearchQuery}
             isDark={isDark}
             onToggleTheme={() => setIsDark((d) => !d)}
+            account={{
+              isLoggedIn,
+              displayName: profile.name,
+              avatarUrl: profile.avatar,
+              onGoLogin: goLogin,
+              onGoRegister: goRegister,
+              onGoProfile: goProfile,
+              onLogout: handleLogout,
+            }}
           />
 
           <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-24 md:pb-8">
@@ -329,6 +437,13 @@ export default function App() {
                       messages={messages}
                       likedIds={new Set(likedIds)}
                       searchQuery={searchQuery}
+                      isLoggedIn={isLoggedIn}
+                      currentUser={{
+                        name: isLoggedIn ? profile.name : '',
+                        email: isLoggedIn ? accountEmail : undefined,
+                        avatar: isLoggedIn ? profile.avatar : undefined,
+                      }}
+                      onRequireLogin={goLogin}
                       onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
                       onAddMessage={(message) => handleAddMessage(message)}
                     />
@@ -348,7 +463,8 @@ export default function App() {
                     isLoggedIn={isLoggedIn}
                     accountEmail={accountEmail}
                     profile={profile}
-                    onLogin={handleLogin}
+                    onGoLogin={goLogin}
+                    onGoRegister={goRegister}
                     onLogout={handleLogout}
                     onUpdateProfile={setProfile}
                     isDark={isDark}

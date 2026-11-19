@@ -58,30 +58,23 @@ function VideosSkeleton() {
   return (
     <div className="space-y-6">
       <FilterChips />
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 space-y-3">
-          <Block className="aspect-[16/9] rounded-[22px]" />
-          <Block className="h-5 w-3/4" />
-          <Block className="h-3.5 w-full" />
-          <Block className="h-3.5 w-2/3" />
-        </div>
-        <div className="lg:col-span-4 space-y-3">
-          {[0, 1, 2].map((item) => (
-            <div key={item} className="flex gap-3">
-              <Block className="w-28 h-20 rounded-[14px] shrink-0" />
-              <div className="flex-1 space-y-2 py-1">
-                <Block className="h-3.5 w-full" />
-                <Block className="h-3 w-2/3" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-        {[0, 1, 2, 3, 4, 5].map((item) => (
-          <div key={item} className="space-y-3">
-            <Block className="aspect-video rounded-[18px]" />
-            <Block className="h-4 w-4/5" />
+      {/* 沉浸刷看：整块舞台 */}
+      <Block className="w-full h-[calc(100dvh-14.25rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-[24px]" />
+    </div>
+  );
+}
+
+const CARD_HEIGHTS = ['h-44', 'h-[340px]', 'h-52', 'h-[300px]', 'h-48', 'h-64', 'h-56', 'h-[320px]'];
+
+function ArticlesSkeleton() {
+  return (
+    <div className="space-y-6">
+      <FilterChips />
+      <div className="columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-3 sm:gap-4 xl:gap-5">
+        {CARD_HEIGHTS.map((height, index) => (
+          <div key={index} className="break-inside-avoid mb-3 sm:mb-4 xl:mb-5 space-y-2">
+            <Block className={`w-full ${height} rounded-[16px]`} />
+            <Block className="h-3.5 w-4/5" />
             <Block className="h-3 w-1/2" />
           </div>
         ))}
@@ -90,48 +83,12 @@ function VideosSkeleton() {
   );
 }
 
-function ArticlesSkeleton() {
-  return (
-    <div className="space-y-6">
-      <FilterChips />
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <Block className="lg:col-span-7 aspect-[16/10] rounded-[22px]" />
-        <div className="lg:col-span-5 space-y-4 py-2">
-          <Block className="h-4 w-20 rounded-full" />
-          <Block className="h-8 w-full" />
-          <Block className="h-8 w-4/5" />
-          <Block className="h-3.5 w-full" />
-          <Block className="h-3.5 w-full" />
-          <Block className="h-3.5 w-3/4" />
-          <Block className="h-10 w-32 rounded-full" />
-        </div>
-      </div>
-      <div className="divide-y divide-[#F2F2F7] dark:divide-white/[0.06]">
-        {[0, 1, 2, 3].map((item) => (
-          <div key={item} className="flex gap-5 py-5">
-            <Block className="hidden sm:block w-44 h-28 rounded-[16px] shrink-0" />
-            <div className="flex-1 space-y-3 py-1">
-              <Block className="h-3 w-16 rounded-full" />
-              <Block className="h-5 w-3/4" />
-              <Block className="h-3.5 w-full" />
-              <Block className="h-3.5 w-2/3" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function GallerySkeleton() {
-  const heights = [
-    'h-64', 'h-80', 'h-56', 'h-72', 'h-60', 'h-[336px]', 'h-52', 'h-[304px]',
-  ];
   return (
     <div className="space-y-6">
       <FilterChips />
-      <div className="columns-1 sm:columns-2 xl:columns-3 gap-5">
-        {heights.map((height, index) => (
+      <div className="columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-5 xl:gap-6">
+        {CARD_HEIGHTS.map((height, index) => (
           <div key={index} className="break-inside-avoid mb-5 space-y-3">
             <Block className={`w-full ${height} rounded-[20px]`} />
             <Block className="h-3.5 w-2/3" />
@@ -146,16 +103,8 @@ function MessagesSkeleton() {
   return (
     <div className="space-y-6">
       <HeaderSkeleton />
-      <div className="rounded-[24px] border border-[#E8E8ED] dark:border-white/10 bg-white/70 dark:bg-[#1C1C1E]/70 p-6 sm:p-8 space-y-5">
-        <Block className="h-4 w-24" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Block className="h-11 rounded-[14px]" />
-          <Block className="h-11 rounded-[14px]" />
-        </div>
-        <Block className="h-28 rounded-[14px]" />
-        <div className="flex justify-end">
-          <Block className="h-11 w-32 rounded-[14px]" />
-        </div>
+      <div className="flex justify-end">
+        <Block className="h-11 w-32 rounded-[14px]" />
       </div>
       <div className="flex items-center justify-between">
         <Block className="h-6 w-28" />

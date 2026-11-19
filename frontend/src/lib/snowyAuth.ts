@@ -1,7 +1,7 @@
 /**
- * 小诺 Snowy 后端认证对接层（C 端）
+ * 后端认证对接层（C 端）
  * ------------------------------------------------------------------
- * 视觉与流程参照 backend/snowy-admin-web：SM2 加密密码、token 请求头、
+ * 流程参照 backend/snowy-admin-web：SM2 加密密码、token 请求头、
  * {code,msg,data} 统一响应、QQ / 微信 OAuth 全流程。
  * 请求经 Vite 代理 /snowy -> http://<SNOWY_HOST>:<SNOWY_PORT>/api。
  */
@@ -233,6 +233,18 @@ export const authApi = {
       validCode: payload.validCode || '',
       validCodeReqNo: payload.validCodeReqNo || '',
     });
+  },
+
+  /** 系统基础配置（用于判断登录验证码等开关） */
+  async sysBaseConfig(): Promise<Record<string, string>> {
+    const list = await get<Array<{ configKey?: string; configValue?: string }>>(
+      '/dev/config/sysBaseList'
+    );
+    const result: Record<string, string> = {};
+    (list || []).forEach((item) => {
+      if (item.configKey) result[item.configKey] = String(item.configValue ?? '');
+    });
+    return result;
   },
 
   /** 后台配置的第三方登录开关（失败时由调用方回退为全部显示） */

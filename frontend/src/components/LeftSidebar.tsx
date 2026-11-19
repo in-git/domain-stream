@@ -4,8 +4,6 @@ import {
   Film,
   Image as ImageIcon,
   MessageCircleHeart,
-  Moon,
-  Sun,
 } from 'lucide-react';
 import type { SectionId } from '../data/content';
 import { SWIFTUI_SNAPPY } from '../lib/motion';
@@ -13,8 +11,6 @@ import { SWIFTUI_SNAPPY } from '../lib/motion';
 interface LeftSidebarProps {
   activeSection: SectionId;
   onSelectSection: (section: SectionId) => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
 }
 
 const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
@@ -24,12 +20,7 @@ const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
   { id: 'messages', label: '留言', Icon: MessageCircleHeart },
 ];
 
-export function LeftSidebar({
-  activeSection,
-  onSelectSection,
-  isDark,
-  onToggleTheme,
-}: LeftSidebarProps) {
+export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
   return (
     <aside
       aria-label="左侧主导航"
@@ -93,22 +84,6 @@ export function LeftSidebar({
             );
           })}
         </nav>
-      </div>
-
-      {/* Bottom Utilities */}
-      <div className="space-y-2 pt-4 border-t border-black/[0.06] dark:border-white/[0.08]">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={onToggleTheme}
-          title={isDark ? '切换至浅色外观' : '切换至深色外观'}
-          className="w-full flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#515154] dark:text-[#A1A1A6] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] transition-colors"
-        >
-          {isDark ? <Sun className="w-4 h-4 shrink-0" /> : <Moon className="w-4 h-4 shrink-0" />}
-          <span className="hidden lg:inline whitespace-nowrap">
-            {isDark ? '浅色外观' : '深色外观'}
-          </span>
-        </motion.button>
       </div>
     </aside>
   );

@@ -6,18 +6,19 @@ import {
   LogOut,
   Moon,
   Sun,
-  UserPlus,
+  UserRound,
   X,
 } from 'lucide-react';
 import type { UserProfile } from '../data/content';
-import { SWIFTUI_SHEET, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
+import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
 import { ResilientImage } from './ResilientImage';
 
 interface ProfileViewProps {
   isLoggedIn: boolean;
   accountEmail: string;
   profile: UserProfile;
-  onLogin: (email: string, name?: string) => void;
+  onGoLogin: () => void;
+  onGoRegister: () => void;
   onLogout: () => void;
   onUpdateProfile: (next: UserProfile) => void;
   isDark: boolean;
@@ -28,48 +29,17 @@ export function ProfileView({
   isLoggedIn,
   accountEmail,
   profile,
-  onLogin,
+  onGoLogin,
+  onGoRegister,
   onLogout,
   onUpdateProfile,
   isDark,
   onToggleTheme,
 }: ProfileViewProps) {
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [nameInput, setNameInput] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
   const [draftLocation, setDraftLocation] = useState(profile.location);
   const [draftBio, setDraftBio] = useState(profile.bio);
-
-  const handleAuthSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanEmail = emailInput.trim();
-    if (!cleanEmail) {
-      setErrorMsg('请输入账号或邮箱');
-      return;
-    }
-    if (passwordInput.length < 6) {
-      setErrorMsg('密码长度至少为 6 位');
-      return;
-    }
-    if (authMode === 'register' && !nameInput.trim()) {
-      setErrorMsg('请填写用户昵称');
-      return;
-    }
-
-    setErrorMsg('');
-    onLogin(cleanEmail, authMode === 'register' ? nameInput.trim() : undefined);
-    setPasswordInput('');
-  };
-
-  const handleQuickDemoLogin = () => {
-    setErrorMsg('');
-    onLogin('linyu@lumina.studio', '林屿');
-  };
 
   const openEditModal = () => {
     setDraftName(profile.name);
@@ -102,127 +72,34 @@ export function ProfileView({
             transition={SWIFTUI_SMOOTH}
             className="max-w-md mx-auto mt-4 sm:mt-10 rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-sm space-y-6"
           >
-            <div className="text-center space-y-1.5">
-              <h1 className="text-2xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {authMode === 'login' ? '登录 Lumina 账号' : '注册新账号'}
-              </h1>
-              <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-                登录后即可管理个人资料与账号信息
-              </p>
-            </div>
-
-            {/* Segmented Switch: 登录 / 注册 */}
-            <div className="grid grid-cols-2 p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#242426]">
-              {(['login', 'register'] as const).map((mode) => {
-                const active = authMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => {
-                      setAuthMode(mode);
-                      setErrorMsg('');
-                    }}
-                    className={`relative py-2 min-h-[40px] text-xs font-medium rounded-lg transition-colors ${
-                      active
-                        ? 'text-[#1D1D1F] dark:text-white'
-                        : 'text-[#6E6E73] dark:text-[#98989D]'
-                    }`}
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="authModePill"
-                        transition={SWIFTUI_SNAPPY}
-                        className="absolute inset-0 rounded-lg bg-white dark:bg-[#3A3A3C] shadow-xs"
-                      />
-                    )}
-                    <span className="relative z-10">
-                      {mode === 'login' ? '登录' : '注册'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              {authMode === 'register' && (
-                <div>
-                  <label
-                    htmlFor="auth-nickname"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
-                  >
-                    昵称
-                  </label>
-                  <input
-                    id="auth-nickname"
-                    type="text"
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="输入您的昵称"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#242426] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label
-                  htmlFor="auth-email"
-                  className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
-                >
-                  账号 / 邮箱
-                </label>
-                <input
-                  id="auth-email"
-                  type="text"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#242426] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
-                />
+            <div className="mx-auto max-w-sm py-10 text-center space-y-6">
+              <div className="w-16 h-16 rounded-[20px] bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] flex items-center justify-center mx-auto">
+                <UserRound className="w-7 h-7" />
               </div>
-
-              <div>
-                <label
-                  htmlFor="auth-password"
-                  className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
-                >
-                  密码
-                </label>
-                <input
-                  id="auth-password"
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="至少 6 位字符"
-                  className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#242426] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
-                />
-              </div>
-
-              {errorMsg && (
-                <p className="text-xs text-[#FF3B30] dark:text-[#FF453A]" role="alert">
-                  {errorMsg}
+              <div className="space-y-2">
+                <h1 className="text-[22px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  登录后查看个人中心
+                </h1>
+                <p className="text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+                  使用账号密码或 QQ / 微信登录，即可管理个人资料、收藏与留言。
                 </p>
-              )}
-
-              <motion.button
-                type="submit"
-                whileTap={{ scale: 0.97 }}
-                className="w-full py-2.5 min-h-[44px] rounded-xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-sm font-medium hover:brightness-110 transition-all"
-              >
-                {authMode === 'login' ? '立即登录' : '创建并登录'}
-              </motion.button>
-            </form>
-
-            <div className="pt-4 border-t border-black/[0.06] dark:border-white/[0.08]">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.97 }}
-                onClick={handleQuickDemoLogin}
-                className="w-full inline-flex items-center justify-center gap-2 py-2.5 min-h-[44px] rounded-xl bg-[#F2F2F7] dark:bg-[#242426] text-[#1D1D1F] dark:text-[#F5F5F7] text-xs font-medium hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors"
-              >
-                <UserPlus className="w-4 h-4 text-[#0071E3] dark:text-[#0A84FF]" />
-                <span>使用示例账号一键登录</span>
-              </motion.button>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  type="button"
+                  onClick={onGoLogin}
+                  className="h-11 px-6 rounded-xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[14px] font-medium hover:brightness-110 transition-all"
+                >
+                  立即登录
+                </button>
+                <button
+                  type="button"
+                  onClick={onGoRegister}
+                  className="h-11 px-6 rounded-xl bg-[#F5F5F7] dark:bg-[#242426] text-[#1D1D1F] dark:text-[#F5F5F7] text-[14px] font-medium hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors"
+                >
+                  注册账号
+                </button>
+              </div>
             </div>
           </motion.div>
         ) : (

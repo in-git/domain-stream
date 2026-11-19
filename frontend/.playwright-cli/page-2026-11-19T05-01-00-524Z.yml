@@ -1,0 +1,51 @@
+- generic [ref=e7]:
+  - banner [ref=e8]:
+    - button "返回首页" [ref=e9]
+    - generic [ref=e12]:
+      - generic [ref=e13]: W
+      - generic [ref=e14]:
+        - paragraph [ref=e15]: 吴文龙的私域
+        - paragraph [ref=e16]: CONTENT · VISION · DESIGN
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - paragraph [ref=e20]: Member Access
+        - heading "让好内容， 被对的人看见。" [level=2] [ref=e21]: 让好内容，被对的人看见。
+        - paragraph [ref=e22]: 登录后即可收藏喜欢的视频与文章，参与留言互动，并管理你的个人资料。
+        - list [ref=e23]:
+          - listitem [ref=e24]: 微信扫码一键登录注册
+          - listitem [ref=e26]: 收藏与点赞同步到账号
+          - listitem [ref=e28]: 留言互动与回复提醒
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - heading "账号密码登录" [level=1] [ref=e70]
+            - paragraph [ref=e34]: 使用账号密码登录你的账号
+          - generic [ref=e35]:
+            - generic [ref=e71]:
+              - generic [ref=e72]:
+                - generic [ref=e73]: 账号
+                - textbox "账号" [ref=e75]:
+                  - /placeholder: 请输入账号
+              - generic [ref=e76]:
+                - generic [ref=e77]: 密码
+                - generic [ref=e78]:
+                  - textbox "密码" [ref=e79]:
+                    - /placeholder: 请输入密码
+                  - button "显示密码" [ref=e80]
+              - generic [ref=e84]:
+                - generic [ref=e85]: 验证码
+                - generic [ref=e86]:
+                  - textbox "验证码" [ref=e87]:
+                    - /placeholder: 请输入图中字符
+                  - button [ref=e88]:
+                    - img "图形验证码" [ref=e89]
+                  - button "刷新验证码" [ref=e90]
+              - button "登录" [ref=e96]
+            - button "返回微信扫码登录" [ref=e99]
+        - generic [ref=e100]:
+          - text: 还没有账号？
+          - button "立即注册" [ref=e101]
+  - contentinfo [ref=e63]:
+    - generic [ref=e64]: 账号数据已加密保护
+    - generic [ref=e68]: © 2026 吴文龙的私域

@@ -1,0 +1,35 @@
+- generic [ref=e7]:
+  - banner [ref=e8]:
+    - button "返回首页" [ref=e9]
+    - generic [ref=e12]:
+      - generic [ref=e13]: W
+      - generic [ref=e14]:
+        - paragraph [ref=e15]: 吴文龙的私域
+        - paragraph [ref=e16]: CONTENT · VISION · DESIGN
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - paragraph [ref=e20]: Member Access
+        - heading "让好内容， 被对的人看见。" [level=2] [ref=e21]: 让好内容，被对的人看见。
+        - paragraph [ref=e22]: 登录后即可收藏喜欢的视频与文章，参与留言互动，并管理你的个人资料。
+        - list [ref=e23]:
+          - listitem [ref=e24]: 微信扫码一键登录注册
+          - listitem [ref=e26]: 收藏与点赞同步到账号
+          - listitem [ref=e28]: 留言互动与回复提醒
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - heading "微信扫码登录" [level=1] [ref=e33]
+            - paragraph [ref=e34]: 微信扫一扫，登录或注册一步完成
+          - generic [ref=e35]:
+            - generic [ref=e46]:
+              - paragraph [ref=e47]: 微信扫码登录 / 注册
+              - paragraph [ref=e48]: 点击下方按钮，在微信中扫码确认即可登录，新用户将自动完成注册
+            - button "微信扫码登录 / 注册" [ref=e49]
+            - generic [ref=e56]:
+              - button "QQ 快捷登录" [ref=e57]
+              - button "使用账号密码登录" [ref=e58]
+        - generic [ref=e62]: 首次微信扫码将自动创建账号，无需额外注册
+  - contentinfo [ref=e63]:
+    - generic [ref=e64]: 账号数据已加密保护
+    - generic [ref=e68]: © 2026 吴文龙的私域
