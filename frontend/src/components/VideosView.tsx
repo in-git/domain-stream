@@ -111,10 +111,22 @@ function getFallbackMeta(video: VideoItem | null): VideoMeta {
 interface VideoGridCardProps {
   video: VideoItem;
   index: number;
+  liked: boolean;
+  saved: boolean;
   onOpen: () => void;
+  onToggleLike: () => void;
+  onToggleSave: () => void;
 }
 
-function VideoGridCard({ video, index, onOpen }: VideoGridCardProps) {
+function VideoGridCard({
+  video,
+  index,
+  liked,
+  saved,
+  onOpen,
+  onToggleLike,
+  onToggleSave,
+}: VideoGridCardProps) {
   const meta = useVideoMeta(video.src);
   const fallback = getFallbackMeta(video);
   const ratio = meta ? meta.width / meta.height : fallback.width / fallback.height;
@@ -149,9 +161,43 @@ function VideoGridCard({ video, index, onOpen }: VideoGridCardProps) {
         <div className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
           {video.category} · {video.director}
         </div>
-        <h3 className="text-[13px] sm:text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
-          {video.title}
-        </h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="flex-1 text-[13px] sm:text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
+            {video.title}
+          </h3>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              transition={SWIFTUI_BOUNCY}
+              onClick={onToggleLike}
+              aria-label={liked ? '取消点赞视频' : '点赞视频'}
+              aria-pressed={liked}
+              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                liked
+                  ? 'text-[#FF2E4D]'
+                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-current' : ''}`} />
+            </motion.button>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              transition={SWIFTUI_BOUNCY}
+              onClick={onToggleSave}
+              aria-label={saved ? '取消收藏视频' : '收藏视频'}
+              aria-pressed={saved}
+              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                saved
+                  ? 'text-[#0071E3] dark:text-[#0A84FF]'
+                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+              }`}
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
+            </motion.button>
+          </div>
+        </div>
       </div>
     </motion.article>
   );
@@ -347,9 +393,9 @@ function FeedSlide({
           {/* 轻度渐层保证底部文字可读，不压暗画面 */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
 
-          {/* Center Paused Indicator — big Play icon when paused */}
+          {/* Center Paused Indicator — mini 窗口已经有底部播放按钮，不再叠加大图标 */}
           <AnimatePresence>
-            {!playing && (
+            {!playing && !mini && (
               <motion.button
                 type="button"
                 onClick={onTogglePlay}
@@ -358,13 +404,9 @@ function FeedSlide({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.85 }}
                 transition={SWIFTUI_BOUNCY}
-                className={`absolute inset-0 m-auto rounded-full bg-black/55 hover:bg-black/65 backdrop-blur-md border border-white/30 flex items-center justify-center text-white transition-colors ${
-                  mini ? 'w-14 h-14' : 'w-24 h-24'
-                }`}
+                className="absolute inset-0 m-auto w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-black/55 hover:bg-black/65 backdrop-blur-md border border-white/30 flex items-center justify-center text-white transition-colors"
               >
-                <Play
-                  className={`fill-white translate-x-[3px] ${mini ? 'w-7 h-7' : 'w-11 h-11'}`}
-                />
+                <Play className="fill-white translate-x-[2px] w-6 h-6 sm:w-8 sm:h-8" />
               </motion.button>
             )}
           </AnimatePresence>
@@ -377,18 +419,18 @@ function FeedSlide({
                 onClick={onMiniExpand}
                 aria-label="回到视频"
                 title="回到视频"
-                className="absolute top-2 left-2 z-30 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
+                className="absolute top-1.5 left-1.5 z-30 w-6 h-6 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
               >
-                <Maximize2 className="w-3.5 h-3.5" />
+                <Maximize2 className="w-3 h-3" />
               </button>
               <button
                 type="button"
                 onClick={onMiniClose}
                 aria-label="关闭迷你播放器"
                 title="关闭"
-                className="absolute top-2 right-2 z-30 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
+                className="absolute top-1.5 right-1.5 z-30 w-6 h-6 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             </>
           )}
@@ -510,33 +552,25 @@ function FeedSlide({
               </div>
             )}
 
-            {mini && (
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[11px] font-medium text-white/90 truncate">
-                  {video.title}
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 pointer-events-auto">
+            <div className={`flex items-center pointer-events-auto ${mini ? 'gap-1.5' : 'gap-3'}`}>
               <button
                 type="button"
                 onClick={onTogglePlay}
                 aria-label={playing ? '暂停' : '播放'}
                 className={`rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0 ${
-                  mini ? 'w-7 h-7' : 'w-10 h-10'
+                  mini ? 'w-6 h-6' : 'w-10 h-10'
                 }`}
               >
                 {playing ? (
-                  <Pause className={`fill-white ${mini ? 'w-3.5 h-3.5' : 'w-5 h-5'}`} />
+                  <Pause className={`fill-white ${mini ? 'w-3 h-3' : 'w-5 h-5'}`} />
                 ) : (
-                  <Play
-                    className={`fill-white translate-x-[1px] ${mini ? 'w-3.5 h-3.5' : 'w-5 h-5'}`}
-                  />
+                  <Play className={`fill-white translate-x-[1px] ${mini ? 'w-3 h-3' : 'w-5 h-5'}`} />
                 )}
               </button>
               <span
-                className={`text-[11px] font-mono-tabular text-white/80 ${mini ? 'w-9' : 'w-10'}`}
+                className={`font-mono-tabular text-white/80 ${
+                  mini ? 'w-8 text-[10px]' : 'w-10 text-[11px]'
+                }`}
               >
                 {formatTime(currentTime)}
               </span>
@@ -551,7 +585,9 @@ function FeedSlide({
                 className="flex-1 min-w-0 h-1 accent-white cursor-pointer rounded-full bg-white/25"
               />
               <span
-                className={`text-[11px] font-mono-tabular text-white/65 text-right ${mini ? 'w-9' : 'w-10'}`}
+                className={`font-mono-tabular text-white/65 text-right ${
+                  mini ? 'w-8 text-[10px]' : 'w-10 text-[11px]'
+                }`}
               >
                 {formatTime(progressMax)}
               </span>
@@ -630,7 +666,8 @@ export function VideosView({
   const [category, setCategory] = useState<CategoryFilter>('全部');
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
   const [activeIndex, setActiveIndex] = useState(Math.max(0, initialIndex));
-  const [isPlaying, setIsPlaying] = useState(false); // 初始：未播放；onPlay/onPause 回调会修正
+  /** 用户是否真正播放过视频：只有播放过才把当前视频交给迷你播放器 */
+  const [hasPlayed, setHasPlayed] = useState(false);
   // Autoplay is only allowed when muted, so the feed starts silent like Douyin.
   const [isMuted, setIsMuted] = useState(typeof resumeMuted === 'boolean' ? resumeMuted : true);
   const [playbackRate, setPlaybackRate] = useState(typeof resumePlaybackRate === 'number' ? resumePlaybackRate : 1);
@@ -668,18 +705,19 @@ export function VideosView({
     setCurrentTime(0);
     setDuration(currentVideo?.durationSeconds ?? 0);
     setShowChapters(false);
-    // 悬浮迷你播放器在离开本板块时继续播放；此处同步当前视频引用
-    if (viewMode === 'feed' && currentVideo) {
+    // 只有用户播放过视频，才把当前视频交给悬浮迷你播放器；
+    // 否则进入站点就会凭空出现迷你播放器
+    if (viewMode === 'feed' && currentVideo && hasPlayed) {
       onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
     }
-  }, [currentVideo?.id]);
+  }, [currentVideo?.id, hasPlayed]);
 
   // 同步静音/倍速设置到悬浮迷你播放器
   useEffect(() => {
-    if (viewMode === 'feed' && currentVideo) {
+    if (viewMode === 'feed' && currentVideo && hasPlayed) {
       onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
     }
-  }, [isMuted, playbackRate]);
+  }, [isMuted, playbackRate, hasPlayed]);
 
   const registerPlayer = useCallback(
     (id: string, player: MediaPlayerInstance | null) => {
@@ -701,6 +739,7 @@ export function VideosView({
         setIsMuted(false);
         player.muted = false;
       }
+      setHasPlayed(true);
       void player.play().catch(() => {});
     } else {
       player.pause();
@@ -775,7 +814,7 @@ export function VideosView({
         isHidden
           ? 'hidden'
           : isMini
-            ? 'fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60] w-[min(92vw,360px)] h-[208px] rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
+            ? 'fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
             : 'space-y-4'
       }
     >
@@ -985,10 +1024,13 @@ export function VideosView({
               key={video.id}
               video={video}
               index={idx}
+              liked={likedIds.includes(video.id)}
+              saved={savedIds.includes(video.id)}
+              onToggleLike={() => onToggleLike(video.id)}
+              onToggleSave={() => onToggleSave(video.id)}
               onOpen={() => {
                 setActiveIndex(idx);
                 setCurrentTime(0);
-                setIsPlaying(true);
                 setShowChapters(false);
                 setViewMode('feed');
               }}

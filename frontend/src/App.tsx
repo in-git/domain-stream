@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   INITIAL_PROFILE,
@@ -33,7 +33,6 @@ import { GalleryView } from './components/GalleryView';
 import MessagesView from './components/MessagesView';
 import { ProfileView, type UserBasicInfo } from './components/ProfileView';
 import { ProfilePage } from './components/ProfilePage';
-import type { FavoriteKind } from './components/FavoritesSection';
 import { PortalEmpty, PortalError, SectionSkeleton } from './components/PortalStates';
 import {
   authApi,
@@ -87,6 +86,19 @@ function isSectionId(value: unknown): value is SectionId {
   return typeof value === 'string' && (SECTION_IDS as string[]).includes(value);
 }
 
+/** 收藏存储结构：用户ID -> 收藏的内容ID列表（未登录用 guest 作为键） */
+type FavoriteBuckets = Record<string, string[]>;
+const FAVORITES_KEY = 'lumina:favorites';
+/** 旧版本用过的全站共享收藏键，首次加载时迁移到 guest 桶 */
+const LEGACY_FAVORITES_KEY = 'lumina:saved';
+
+function isFavoriteBuckets(value: unknown): value is FavoriteBuckets {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return Object.values(value as Record<string, unknown>).every(
+    (list) => Array.isArray(list) && list.every((item) => typeof item === 'string')
+  );
+}
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [activeSection, setActiveSection] = usePersistentState<SectionId>(
@@ -115,10 +127,34 @@ export default function App() {
       latestLoginAddress: cached?.latestLoginAddress || '',
     };
   });
-  const [profile, setProfile] = usePersistentState<UserProfile>('lumina:profile', INITIAL_PROFILE);
+  // 换 key 以丢弃旧版本缓存里的示例资料（昵称、简介、常驻地区等静态描述）
+  const [profile, setProfile] = usePersistentState<UserProfile>('lumina:profile:v2', INITIAL_PROFILE);
 
-  const [savedIds, setSavedIds] = usePersistentState<string[]>('lumina:saved', []);
+  /* 收藏按用户隔离存储：{ [userId]: 内容ID[] }，未登录时写入 guest 桶 */
+  const [favoriteBuckets, setFavoriteBuckets] = usePersistentState<FavoriteBuckets>(
+    FAVORITES_KEY,
+    {},
+    isFavoriteBuckets
+  );
+  const favoriteOwner = currentUserId || 'guest';
+  const savedIds = useMemo(
+    () => favoriteBuckets[favoriteOwner] ?? [],
+    [favoriteBuckets, favoriteOwner]
+  );
   const [likedIds, setLikedIds] = usePersistentState<string[]>('lumina:liked', []);
+
+  /** 切换收藏：写入当前用户（未登录为 guest）对应的收藏桶 */
+  const toggleFavorite = useCallback(
+    (id: string) => {
+      setFavoriteBuckets((prev) => {
+        const owner = currentUserId || 'guest';
+        const list = prev[owner] ?? [];
+        const next = list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
+        return { ...prev, [owner]: next };
+      });
+    },
+    [currentUserId, setFavoriteBuckets]
+  );
 
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [replies, setReplies] = useState<MessageReply[]>([]);
@@ -259,6 +295,25 @@ export default function App() {
     }
   }, [isDark]);
 
+  /* 旧版本把收藏存在全站共享的 lumina:saved，首次加载时并入 guest 桶后清理 */
+  useEffect(() => {
+    try {
+      const legacy = window.localStorage.getItem(LEGACY_FAVORITES_KEY);
+      if (!legacy) return;
+      window.localStorage.removeItem(LEGACY_FAVORITES_KEY);
+      const parsed: unknown = JSON.parse(legacy);
+      if (!Array.isArray(parsed)) return;
+      const ids = parsed.filter((item): item is string => typeof item === 'string');
+      if (!ids.length) return;
+      setFavoriteBuckets((prev) => ({
+        ...prev,
+        guest: Array.from(new Set([...(prev.guest ?? []), ...ids])),
+      }));
+    } catch {
+      window.localStorage.removeItem(LEGACY_FAVORITES_KEY);
+    }
+  }, [setFavoriteBuckets]);
+
   const toggleIdInList = (
     setter: React.Dispatch<React.SetStateAction<string[]>>,
     id: string
@@ -286,12 +341,22 @@ export default function App() {
     setProfile((prev) => ({
       ...prev,
       name: user.nickname || user.name || user.account,
-      handle: `@${user.account}`,
-      bio: user.signature || prev.bio,
+      handle: user.account ? `@${user.account}` : '',
+      bio: user.signature || '',
       avatar: user.avatar || prev.avatar,
     }));
     setIsLoggedIn(true);
-  }, []);
+    /* 未登录期间的收藏并入当前账号，避免登录后收藏“消失” */
+    setFavoriteBuckets((prev) => {
+      const guest = prev.guest ?? [];
+      if (!user.id || !guest.length) return prev;
+      return {
+        ...prev,
+        [user.id]: Array.from(new Set([...(prev[user.id] ?? []), ...guest])),
+        guest: [],
+      };
+    });
+  }, [setFavoriteBuckets]);
 
   // 登录 / 三方回调成功后统一落地：保存 token → 拉用户信息 → 进入个人中心
   const handleAuthSuccess = useCallback(
@@ -347,14 +412,6 @@ export default function App() {
     navigate('/profile');
     window.scrollTo({ top: 0 });
   }, []);
-
-  /** 从个人中心收藏列表跳转到对应板块：清空搜索词，避免目标内容被筛掉 */
-  const handleOpenFavorite = (kind: FavoriteKind) => {
-    setSearchQuery('');
-    setActiveSection(kind === 'video' ? 'videos' : kind === 'article' ? 'articles' : 'gallery');
-    navigate('/');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   const handleAddMessage = async (message: MessageItem) => {
     const realId = await portalApi.addMessage({
@@ -421,8 +478,7 @@ export default function App() {
         articles={articles}
         photos={photos}
         savedIds={savedIds}
-        onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
-        onOpenFavorite={handleOpenFavorite}
+        onToggleSave={toggleFavorite}
       />
     );
   }
@@ -444,7 +500,6 @@ export default function App() {
         {/* Right Main Viewport Column */}
         <div className="flex-1 min-w-0 flex flex-col min-h-screen">
           <MainHeader
-            activeSection={activeSection}
             searchQuery={searchQuery}
             onChangeSearch={setSearchQuery}
             isDark={isDark}
@@ -454,7 +509,6 @@ export default function App() {
               displayName: profile.name,
               avatarUrl: profile.avatar,
               onGoLogin: goLogin,
-              onGoRegister: goRegister,
               onGoProfile: goProfile,
               onLogout: handleLogout,
             }}
@@ -471,7 +525,7 @@ export default function App() {
                   savedIds={savedIds}
                   likedIds={likedIds}
                   searchQuery={searchQuery}
-                  onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                  onToggleSave={toggleFavorite}
                   onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
                   onPlayVideo={handlePlayVideo}
                   progressById={videoProgress}
@@ -500,7 +554,7 @@ export default function App() {
                       savedIds={savedIds}
                       likedIds={likedIds}
                       searchQuery={searchQuery}
-                      onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                      onToggleSave={toggleFavorite}
                       onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
                       onPlayVideo={handlePlayVideo}
                       progressById={videoProgress}
@@ -539,7 +593,7 @@ export default function App() {
                       savedIds={savedIds}
                       likedIds={likedIds}
                       searchQuery={searchQuery}
-                      onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                      onToggleSave={toggleFavorite}
                       onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
                       onReadArticle={() => {}}
                     />
@@ -572,7 +626,7 @@ export default function App() {
                       savedIds={savedIds}
                       likedIds={likedIds}
                       searchQuery={searchQuery}
-                      onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                      onToggleSave={toggleFavorite}
                       onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
                     />
                   )}
@@ -640,8 +694,7 @@ export default function App() {
                     articles={articles}
                     photos={photos}
                     savedIds={savedIds}
-                    onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
-                    onOpenFavorite={handleOpenFavorite}
+                    onToggleSave={toggleFavorite}
                   />
                 </motion.div>
               )}

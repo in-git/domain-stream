@@ -299,21 +299,9 @@ export function GalleryView({
   }, [activeItem, activeSlideIndex, slideList]);
 
   return (
-    <section aria-labelledby="gallery-heading" className="space-y-10">
-      {/* Header & Album Filter */}
+    <section aria-label="图文列表" className="space-y-10">
+      {/* Album Filter */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-5">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-[#0071E3] dark:text-[#0A84FF] mb-1.5">
-            影像图文志
-          </p>
-          <h1
-            id="gallery-heading"
-            className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
-          >
-            图文
-          </h1>
-        </div>
-
         <div
           role="tablist"
           aria-label="图集筛选"

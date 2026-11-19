@@ -8,18 +8,16 @@ export interface AccountMenuProps {
   displayName: string;
   avatarUrl?: string;
   onGoLogin: () => void;
-  onGoRegister: () => void;
   onGoProfile: () => void;
   onLogout: () => void;
 }
 
-/** 顶部右侧账号入口：未登录显示登录/注册，登录后显示头像下拉 */
+/** 顶部右侧账号入口：未登录显示登录入口，登录后显示头像下拉 */
 export function AccountMenu({
   isLoggedIn,
   displayName,
   avatarUrl,
   onGoLogin,
-  onGoRegister,
   onGoProfile,
   onLogout,
 }: AccountMenuProps) {
@@ -37,22 +35,13 @@ export function AccountMenu({
 
   if (!isLoggedIn) {
     return (
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <button
-          type="button"
-          onClick={onGoLogin}
-          className="h-8 px-2.5 sm:px-3.5 rounded-full text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
-        >
-          登录
-        </button>
-        <button
-          type="button"
-          onClick={onGoRegister}
-          className="h-8 px-2.5 sm:px-3.5 rounded-full bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[12px] font-medium hover:brightness-110 transition-all"
-        >
-          注册
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onGoLogin}
+        className="h-8 px-3.5 sm:px-4 rounded-full bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[12px] font-medium hover:brightness-110 transition-all"
+      >
+        登录
+      </button>
     );
   }
 

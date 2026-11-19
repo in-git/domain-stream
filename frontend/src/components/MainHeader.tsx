@@ -1,11 +1,9 @@
 import { motion } from 'motion/react';
 import { Moon, Search, Sun, X } from 'lucide-react';
-import type { SectionId } from '../data/content';
 import { AccountMenu, type AccountMenuProps } from './AccountMenu';
 import { Tooltip } from './Tooltip';
 
 interface MainHeaderProps {
-  activeSection: SectionId;
   searchQuery: string;
   onChangeSearch: (value: string) => void;
   isDark: boolean;
@@ -13,16 +11,7 @@ interface MainHeaderProps {
   account: AccountMenuProps;
 }
 
-const SECTION_LABELS: Record<SectionId, string> = {
-  videos: '推荐视频',
-  articles: '精选文章',
-  gallery: '图文',
-  messages: '留言墙',
-  profile: '个人中心',
-};
-
 export function MainHeader({
-  activeSection,
   searchQuery,
   onChangeSearch,
   isDark,
@@ -31,16 +20,10 @@ export function MainHeader({
 }: MainHeaderProps) {
   return (
     <header className="sticky top-0 z-20 h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl">
-      {/* Left: Mobile Brand + Active Section Title */}
+      {/* Left: Mobile Brand */}
       <div className="flex items-center gap-2.5 shrink-0">
         <span className="md:hidden text-base font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
           吴文龙的私域
-        </span>
-        <span className="md:hidden text-black/20 dark:text-white/20" aria-hidden="true">
-          /
-        </span>
-        <span className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7] whitespace-nowrap">
-          {SECTION_LABELS[activeSection]}
         </span>
       </div>
 

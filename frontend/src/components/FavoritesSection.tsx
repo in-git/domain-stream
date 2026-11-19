@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { BookmarkX, FileText, Film, Image as ImageIcon } from 'lucide-react';
 import type { ArticleItem, PhotoItem, VideoItem } from '../data/content';
 import { SWIFTUI_SMOOTH } from '../lib/motion';
+import { FavoriteDetailModal, type FavoriteTarget } from './FavoriteDetailModal';
 import { ResilientImage } from './ResilientImage';
 
 export type FavoriteKind = 'video' | 'article' | 'graphic';
@@ -13,7 +14,6 @@ interface FavoritesSectionProps {
   photos: PhotoItem[];
   savedIds: string[];
   onToggleSave: (id: string) => void;
-  onOpenFavorite: (kind: FavoriteKind, id: string) => void;
 }
 
 const KIND_META: Record<FavoriteKind, { label: string; Icon: typeof Film }> = {
@@ -95,9 +95,24 @@ export function FavoritesSection({
   photos,
   savedIds,
   onToggleSave,
-  onOpenFavorite,
 }: FavoritesSectionProps) {
   const [tab, setTab] = useState<'all' | FavoriteKind>('all');
+  /** 当前在弹窗中查看的收藏项 */
+  const [activeItem, setActiveItem] = useState<{ kind: FavoriteKind; id: string } | null>(null);
+
+  const activeTarget = useMemo<FavoriteTarget>(() => {
+    if (!activeItem) return null;
+    if (activeItem.kind === 'video') {
+      const video = videos.find((item) => item.id === activeItem.id);
+      return video ? { kind: 'video', video } : null;
+    }
+    if (activeItem.kind === 'article') {
+      const article = articles.find((item) => item.id === activeItem.id);
+      return article ? { kind: 'article', article } : null;
+    }
+    const photo = photos.find((item) => item.id === activeItem.id);
+    return photo ? { kind: 'graphic', photo } : null;
+  }, [activeItem, videos, articles, photos]);
 
   const entries = useMemo(
     () => buildEntries(videos, articles, photos, savedIds),
@@ -124,6 +139,7 @@ export function FavoritesSection({
       : `还没有收藏的${KIND_META[tab].label}`;
 
   return (
+    <>
     <section
       aria-labelledby="favorites-heading"
       className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 space-y-5"
@@ -210,7 +226,7 @@ export function FavoritesSection({
                 >
                   <button
                     type="button"
-                    onClick={() => onOpenFavorite(entry.kind, entry.id)}
+                    onClick={() => setActiveItem({ kind: entry.kind, id: entry.id })}
                     className="block w-full text-left"
                     aria-label={`查看${label}：${entry.title}`}
                   >
@@ -249,5 +265,13 @@ export function FavoritesSection({
         )}
       </AnimatePresence>
     </section>
+
+    {/* 收藏详情：直接在当前页以弹窗打开，不跳转板块 */}
+    <FavoriteDetailModal
+      target={activeTarget}
+      onClose={() => setActiveItem(null)}
+      onRemove={onToggleSave}
+    />
+    </>
   );
 }

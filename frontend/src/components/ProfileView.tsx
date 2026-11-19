@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../data/content';
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
-import { FavoritesSection, type FavoriteKind } from './FavoritesSection';
+import { FavoritesSection } from './FavoritesSection';
 import { ResilientImage } from './ResilientImage';
 
 export interface UserBasicInfo {
@@ -52,7 +52,6 @@ interface ProfileViewProps {
   photos?: PhotoItem[];
   savedIds?: string[];
   onToggleSave?: (id: string) => void;
-  onOpenFavorite?: (kind: FavoriteKind, id: string) => void;
 }
 
 export function ProfileView({
@@ -71,7 +70,6 @@ export function ProfileView({
   photos = [],
   savedIds = [],
   onToggleSave,
-  onOpenFavorite,
 }: ProfileViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
@@ -165,27 +163,42 @@ export function ProfileView({
                   <div className="space-y-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h1 className="text-xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {profile.name}
+                        {profile.name || accountEmail}
                       </h1>
-                      <span className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-                        {profile.handle}
-                      </span>
+                      {profile.handle && (
+                        <span className="text-xs text-[#6E6E73] dark:text-[#98989D]">
+                          {profile.handle}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm text-[#515154] dark:text-[#A1A1A6] leading-relaxed">
-                      {profile.bio}
-                    </p>
+                    {profile.bio && (
+                      <p className="text-sm text-[#515154] dark:text-[#A1A1A6] leading-relaxed">
+                        {profile.bio}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.96 }}
-                  onClick={openEditModal}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C] transition-colors shrink-0 self-start sm:self-center"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>编辑资料</span>
-                </motion.button>
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={openEditModal}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C] transition-colors"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>编辑资料</span>
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={onLogout}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl bg-[#FF3B30]/[0.08] dark:bg-[#FF453A]/[0.14] text-xs font-medium text-[#FF3B30] dark:text-[#FF453A] hover:bg-[#FF3B30]/[0.14] dark:hover:bg-[#FF453A]/[0.22] transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>退出登录</span>
+                  </motion.button>
+                </div>
               </div>
             </div>
 
@@ -243,12 +256,14 @@ export function ProfileView({
                 </div>
               )}
 
-              <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">常驻地区</span>
-                <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {profile.location}
-                </span>
-              </div>
+              {profile.location && (
+                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
+                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">常驻地区</span>
+                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    {profile.location}
+                  </span>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -269,19 +284,7 @@ export function ProfileView({
               photos={photos}
               savedIds={savedIds}
               onToggleSave={onToggleSave || (() => {})}
-              onOpenFavorite={onOpenFavorite || (() => {})}
             />
-
-            {/* Sign Out Button */}
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={onLogout}
-              className="w-full py-3.5 min-h-[48px] rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] text-sm font-medium text-[#FF3B30] dark:text-[#FF453A] inline-flex items-center justify-center gap-2 hover:bg-[#FF3B30]/[0.05] transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>退出登录</span>
-            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>

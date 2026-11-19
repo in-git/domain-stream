@@ -99,21 +99,9 @@ export function ArticlesView({
   };
 
   return (
-    <section aria-labelledby="articles-heading" className="space-y-6">
-      {/* Header & Filter */}
+    <section aria-label="文章列表" className="space-y-6">
+      {/* Filter */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-[#0071E3] dark:text-[#0A84FF] mb-1.5">
-            深度专题与设计志
-          </p>
-          <h1
-            id="articles-heading"
-            className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
-          >
-            精选文章
-          </h1>
-        </div>
-
         <div
           role="tablist"
           aria-label="文章分类筛选"

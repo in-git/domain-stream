@@ -89,10 +89,11 @@ export interface MessageReply {
   replyToNickname?: string;
 }
 
+/** 个人资料默认值：除头像外的文本信息全部留空，交由登录用户数据填充 */
 export const INITIAL_PROFILE: UserProfile = {
-  name: '林屿',
-  handle: '@linyu.atelier',
-  bio: '视觉导演与交互设计师。关注极简建筑、物理动效与光学影像。',
-  location: '上海 / 京都',
+  name: '',
+  handle: '',
+  bio: '',
+  location: '',
   avatar: '/src/assets/images/profile_avatar_studio_1795019175018.jpg',
 };
