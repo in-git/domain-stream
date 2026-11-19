@@ -6,7 +6,7 @@ import { AlertCircle, Crop, Loader2, Minus, Plus, RotateCcw, X } from 'lucide-re
 interface CoverCropperProps {
   /** 待裁剪的原始文件；为 null 时不渲染 */
   file: File | null;
-  /** 目标宽高比，文章封面为 9 / 16 */
+  /** 目标宽高比，文章封面为 16 / 9 */
   aspect?: number;
   /** 输出图片宽度（px），高度按比例自动计算 */
   outputWidth?: number;
@@ -22,8 +22,8 @@ export async function cropImageToFile(
   area: Area,
   options: { aspect?: number; outputWidth?: number; quality?: number } = {}
 ): Promise<File> {
-  const aspect = options.aspect ?? 9 / 16;
-  const outputWidth = Math.max(1, Math.round(options.outputWidth ?? 900));
+  const aspect = options.aspect ?? 16 / 9;
+  const outputWidth = Math.max(1, Math.round(options.outputWidth ?? 1440));
   const outputHeight = Math.round(outputWidth / aspect);
 
   const bitmap = await createImageBitmap(file);
@@ -57,7 +57,7 @@ export async function cropImageToFile(
   });
 }
 
-/** 把 0.5625 这类比例值还原成 9:16 这样的可读文案 */
+/** 把 1.7778 这类比例值还原成 16:9 这样的可读文案 */
 function formatRatio(aspect: number): string {
   for (let h = 1; h <= 16; h++) {
     const w = aspect * h;

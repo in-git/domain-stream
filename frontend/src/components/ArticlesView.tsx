@@ -331,7 +331,7 @@ export function ArticlesView({
                     </div>
                   </header>
 
-                  <div className="rounded-2xl overflow-hidden aspect-[16/10]">
+                  <div className="rounded-2xl overflow-hidden aspect-[16/9]">
                     <ResilientImage
                       src={activeArticle.cover}
                       alt={activeArticle.title}
