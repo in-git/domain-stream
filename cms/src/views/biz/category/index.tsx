@@ -48,7 +48,7 @@ import {
 
 const PAGE_SIZE = 10;
 const GRID_CLASS =
-  'grid grid-cols-[36px_minmax(220px,1.7fr)_minmax(120px,1fr)_110px_92px_64px_120px_132px] gap-3 items-center';
+  'grid grid-cols-[36px_minmax(220px,1.7fr)_110px_92px_64px_120px_132px] gap-3 items-center';
 
 type DialogState =
   | { kind: 'form'; item: BizCategory | null }
@@ -187,7 +187,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
       if (moduleFilter !== 'all' && (item.module || '') !== moduleFilter) return false;
       if (statusFilter !== 'all' && (item.status || '') !== statusFilter) return false;
       if (!q) return true;
-      return [item.name, item.code, item.description, item.remark]
+      return [item.name, item.description, item.remark]
         .some((v) => (v || '').toLowerCase().includes(q));
     });
   }, [items, search, moduleFilter, statusFilter]);
@@ -272,7 +272,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
     try {
       await categoryApi.edit(payload);
       await load();
-      notify('success', `已${payload.status === 'ENABLE' ? '启用' : '禁用'}「${item.name || item.code}」`);
+      notify('success', `已${payload.status === 'ENABLE' ? '启用' : '禁用'}「${item.name || item.id}」`);
     } catch (err) {
       notify('error', errorMessage(err));
     }
@@ -326,7 +326,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索名称、编码、描述..."
+              placeholder="搜索名称、描述、备注..."
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
           </div>
@@ -449,7 +449,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
       {/* 列表 */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
         <div className="overflow-x-auto">
-          <div className="min-w-[1020px]">
+          <div className="min-w-[900px]">
             <div
               className={`${GRID_CLASS} px-5 h-10 bg-[#FAFAFC] border-b border-[#F2F2F7] text-[12px] font-medium text-[#86868B]`}
             >
@@ -461,7 +461,6 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                 className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
               />
               <span>分类名称</span>
-              <span>分类编码</span>
               <span>适用模块</span>
               <span>状态</span>
               <span>排序</span>
@@ -483,7 +482,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                 <p className="text-[13px] text-[#6E6E73] mt-1">
                   {hasFilter
                     ? '试试调整搜索词或筛选条件'
-                    : '创建分类后，文章、视频与图文即可按分类编码归类'}
+                    : '创建分类后，文章、视频与图文即可按分类归类'}
                 </p>
                 {!hasFilter && can('add') && (
                   <button
@@ -505,7 +504,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                   >
                     <input
                       type="checkbox"
-                      aria-label={`选择 ${item.name || item.code}`}
+                      aria-label={`选择 ${item.name || item.id}`}
                       checked={selected.has(item.id)}
                       onChange={() => toggleSelect(item.id)}
                       className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
@@ -550,10 +549,6 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                         </div>
                       </div>
                     </div>
-
-                    <code className="text-[12px] text-[#6E6E73] truncate" title={item.code}>
-                      {item.code || '-'}
-                    </code>
 
                     <span
                       className={`inline-flex w-fit px-2 py-0.5 rounded-md text-[11px] font-medium ${

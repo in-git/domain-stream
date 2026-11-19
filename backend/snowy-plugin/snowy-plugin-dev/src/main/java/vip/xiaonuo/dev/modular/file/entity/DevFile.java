@@ -53,6 +53,10 @@ public class DevFile extends CommonEntity {
     @Schema(description = "文件后缀")
     private String suffix;
 
+    /** 素材分类（IMAGE/VIDEO/AUDIO/DOC/OTHER） */
+    @Schema(description = "素材分类")
+    private String category;
+
     /** 文件大小kb */
     @Schema(description = "文件大小kb")
     private String sizeKb;

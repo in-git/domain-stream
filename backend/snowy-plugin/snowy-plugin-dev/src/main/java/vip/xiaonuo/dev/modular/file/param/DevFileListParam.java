@@ -30,6 +30,10 @@ public class DevFileListParam {
     @Schema(description = "文件引擎")
     private String engine;
 
+    /** 素材分类（IMAGE/VIDEO/AUDIO/DOC/OTHER） */
+    @Schema(description = "素材分类")
+    private String category;
+
     /** 文件名关键词 */
     @Schema(description = "文件名关键词")
     private String searchKey;

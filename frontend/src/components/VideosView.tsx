@@ -32,6 +32,13 @@ interface VideosViewProps {
   searchQuery?: string;
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
+  onPlayVideo?: (video: VideoItem, opts?: { muted?: boolean; playbackRate?: number }) => void;
+  progressById?: Record<string, number>;
+  onSaveProgress?: (id: string, time: number) => void;
+  /** 离开视频模块时 MiniPlayer 里还在播的那条——返回时直接切到它并沿用它的静音/倍速 */
+  resumeVideoId?: string | null;
+  resumeMuted?: boolean;
+  resumePlaybackRate?: number;
 }
 
 const DEFAULT_CATEGORIES = ['设计纪实', '城市影像', '自然声景'];
@@ -152,6 +159,7 @@ interface FeedSlideProps {
   currentTime: number;
   duration: number;
   showChapters: boolean;
+  savedTime?: number;
   onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
   onTogglePlay: () => void;
   onToggleMute: () => void;
@@ -164,6 +172,7 @@ interface FeedSlideProps {
   onDurationChange: (duration: number) => void;
   onPlay: () => void;
   onPause: () => void;
+  onSaveProgress?: (time: number) => void;
 }
 
 /** One full-bleed page of the seamless vertical carousel. */
@@ -180,6 +189,7 @@ function FeedSlide({
   currentTime,
   duration,
   showChapters,
+  savedTime,
   onRegisterPlayer,
   onTogglePlay,
   onToggleMute,
@@ -192,8 +202,11 @@ function FeedSlide({
   onDurationChange,
   onPlay,
   onPause,
+  onSaveProgress,
 }: FeedSlideProps) {
   const playerRef = useRef<MediaPlayerInstance | null>(null);
+  const restoredRef = useRef<boolean>(false);
+  const lastSaveRef = useRef<number>(0);
 
   const setPlayerRef = useCallback(
     (player: MediaPlayerInstance | null) => {
@@ -203,7 +216,42 @@ function FeedSlide({
     [onRegisterPlayer, video.id],
   );
 
-  // Only the visible page plays; the rest stay paused at the first frame.
+  // 恢复播放进度：等元数据就绪后 seek 到保存的位置
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (!savedTime || savedTime <= 1) {
+      restoredRef.current = true;
+      return;
+    }
+    // 轮询 duration 就绪（Vidstack 没有 EventTarget.on()，用 setTimeout 简单可靠）
+    let cancelled = false;
+    let timer: number | undefined;
+    const tryRestore = () => {
+      if (cancelled || restoredRef.current) return;
+      const d = player.duration;
+      if (!d || d <= 0) {
+        timer = window.setTimeout(tryRestore, 150);
+        return;
+      }
+      const safe = Math.min(savedTime, d - 3);
+      if (safe > 0 && safe < d) player.currentTime = safe;
+      restoredRef.current = true;
+    };
+    // 最多等 4s，防止卡死
+    timer = window.setTimeout(tryRestore, 100);
+    const giveUp = window.setTimeout(() => {
+      restoredRef.current = true;
+      if (timer) window.clearTimeout(timer);
+    }, 4000);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.clearTimeout(giveUp);
+    };
+  }, [video.id, savedTime]);
+
+  // Only the visible page plays; others stay paused (保留进度，不再重置到 0)
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -213,9 +261,23 @@ function FeedSlide({
       void player.play().catch(() => {});
     } else {
       player.pause();
-      player.currentTime = 0;
     }
   }, [active, isMuted, playbackRate]);
+
+  // video 切换时重置恢复标记
+  useEffect(() => {
+    restoredRef.current = false;
+  }, [video.id]);
+
+  // 防抖保存播放进度（1s 一次）
+  const handleTimeUpdate = useCallback((t: number) => {
+    onTimeUpdate(t);
+    if (!active || !onSaveProgress) return;
+    const now = Date.now();
+    if (now - lastSaveRef.current < 1000) return;
+    lastSaveRef.current = now;
+    onSaveProgress(t);
+  }, [onTimeUpdate, onSaveProgress, active]);
 
   const progressMax = Math.max(duration, video.durationSeconds, 1);
   const progressValue = Math.min(currentTime, progressMax);
@@ -224,7 +286,8 @@ function FeedSlide({
     <div className="relative w-full h-full bg-black overflow-hidden">
       <MediaPlayer
         ref={setPlayerRef}
-        src={video.src}
+        // 流式地址没有扩展名，显式声明类型，避免播放器无法匹配加载器
+        src={{ src: video.src, type: 'video/mp4' }}
         poster={video.cover}
         title={video.title}
         playsInline
@@ -240,7 +303,7 @@ function FeedSlide({
           if (active) onPause();
         }}
         onTimeUpdate={(detail) => {
-          if (active) onTimeUpdate(detail.currentTime);
+          handleTimeUpdate(detail.currentTime);
         }}
         onDurationChange={(value) => {
           if (active) onDurationChange(value);
@@ -251,21 +314,24 @@ function FeedSlide({
 
       {active && (
         <>
-          {/* Subtle cinematic contrast scrims */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-black/30" />
+          {/* 轻度渐层保证底部文字可读，不压暗画面 */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
 
-          {/* Center Paused Indicator */}
+          {/* Center Paused Indicator — big Play icon when paused */}
           <AnimatePresence>
             {!isPlaying && (
-              <motion.div
+              <motion.button
+                type="button"
+                onClick={onTogglePlay}
+                aria-label="播放"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.85 }}
                 transition={SWIFTUI_BOUNCY}
-                className="pointer-events-none absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/45 backdrop-blur-md border border-white/25 flex items-center justify-center text-white"
+                className="absolute inset-0 m-auto w-24 h-24 rounded-full bg-black/55 hover:bg-black/65 backdrop-blur-md border border-white/30 flex items-center justify-center text-white transition-colors"
               >
-                <Play className="w-7 h-7 fill-white translate-x-[2px]" />
-              </motion.div>
+                <Play className="w-11 h-11 fill-white translate-x-[3px]" />
+              </motion.button>
             )}
           </AnimatePresence>
 
@@ -294,7 +360,7 @@ function FeedSlide({
           </div>
 
           {/* Douyin-style Right-Side Vertical Action Dock */}
-          <div className="absolute right-3 sm:right-5 bottom-20 flex flex-col items-center gap-4 z-10 text-white">
+          <div className="absolute right-3 sm:right-5 bottom-20 flex flex-col items-center gap-4 z-20 text-white">
             <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
               <motion.button
                 type="button"
@@ -359,7 +425,7 @@ function FeedSlide({
           </div>
 
           {/* Bottom Info + Progress Scrubber */}
-          <div className="absolute bottom-0 left-0 right-0 text-white z-10 space-y-3 p-4 sm:p-6 pr-20 sm:pr-24">
+          <div className="absolute bottom-0 left-0 right-0 text-white z-10 space-y-3 p-4 sm:p-6 pr-20 sm:pr-24 pointer-events-none">
             <div className="space-y-1.5 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
                 <span className="font-semibold text-white">@{video.director}</span>
@@ -376,17 +442,17 @@ function FeedSlide({
               </p>
             </div>
 
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-3 pt-1 pointer-events-auto">
               <button
                 type="button"
                 onClick={onTogglePlay}
                 aria-label={isPlaying ? '暂停' : '播放'}
-                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0"
+                className="w-10 h-10 rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0"
               >
                 {isPlaying ? (
-                  <Pause className="w-3.5 h-3.5 fill-white" />
+                  <Pause className="w-5 h-5 fill-white" />
                 ) : (
-                  <Play className="w-3.5 h-3.5 fill-white translate-x-[1px]" />
+                  <Play className="w-5 h-5 fill-white translate-x-[1px]" />
                 )}
               </button>
               <span className="text-[11px] font-mono-tabular text-white/80 w-10">
@@ -461,18 +527,28 @@ export function VideosView({
   searchQuery = '',
   onToggleSave,
   onToggleLike,
+  onPlayVideo,
+  progressById,
+  onSaveProgress,
+  resumeVideoId,
+  resumeMuted,
+  resumePlaybackRate,
 }: VideosViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
+
+  // 用持久化的状态初始化 activeIndex / 静音 / 倍速，让 MiniPlayer ↔ FeedSlide 状态一致
+  const initialIndex = videos.findIndex((v) => v.id === resumeVideoId);
   const [category, setCategory] = useState<CategoryFilter>('全部');
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(Math.max(0, initialIndex));
+  const [isPlaying, setIsPlaying] = useState(false); // 初始：未播放；onPlay/onPause 回调会修正
   // Autoplay is only allowed when muted, so the feed starts silent like Douyin.
-  const [isMuted, setIsMuted] = useState(true);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isMuted, setIsMuted] = useState(typeof resumeMuted === 'boolean' ? resumeMuted : true);
+  const [playbackRate, setPlaybackRate] = useState(typeof resumePlaybackRate === 'number' ? resumePlaybackRate : 1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showChapters, setShowChapters] = useState(false);
+  const [unmuteOnNextPlay, setUnmuteOnNextPlay] = useState(false);
 
   const playersRef = useRef<Map<string, MediaPlayerInstance>>(new Map());
   const swiperRef = useRef<SwiperClass | null>(null);
@@ -505,7 +581,18 @@ export function VideosView({
     setDuration(currentVideo?.durationSeconds ?? 0);
     setShowChapters(false);
     setIsPlaying(true);
+    // 悬浮迷你播放器在离开本板块时继续播放；此处同步当前视频引用
+    if (viewMode === 'feed' && currentVideo) {
+      onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
+    }
   }, [currentVideo?.id]);
+
+  // 同步静音/倍速设置到悬浮迷你播放器
+  useEffect(() => {
+    if (viewMode === 'feed' && currentVideo) {
+      onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
+    }
+  }, [isMuted, playbackRate]);
 
   const registerPlayer = useCallback(
     (id: string, player: MediaPlayerInstance | null) => {
@@ -522,6 +609,11 @@ export function VideosView({
     const player = getActivePlayer();
     if (!player) return;
     if (player.paused) {
+      // 用户主动播放时，解除静音（如果之前是自动播放被静音）
+      if (isMuted) {
+        setIsMuted(false);
+        player.muted = false;
+      }
       void player.play().catch(() => {});
     } else {
       player.pause();
@@ -697,6 +789,7 @@ export function VideosView({
                     currentTime={currentTime}
                     duration={duration}
                     showChapters={showChapters}
+                    savedTime={progressById?.[video.id]}
                     onRegisterPlayer={registerPlayer}
                     onTogglePlay={togglePlayback}
                     onToggleMute={() => setIsMuted((m) => !m)}
@@ -709,6 +802,7 @@ export function VideosView({
                     onDurationChange={setDuration}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
+                    onSaveProgress={onSaveProgress ? (t) => onSaveProgress(video.id, t) : undefined}
                   />
                 </SwiperSlide>
               ))}

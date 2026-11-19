@@ -305,10 +305,14 @@ export interface PublishCategoryOption {
 }
 
 /**
- * 拉取发布表单可选分类。
+ * 拉取发布表单可选分类（数据源为后端通用分类模块 BIZ_CATEGORY）。
  *
  * 优先使用门户只读接口 `/public/categories`（后端仅返回 ENABLE，免登录），
- * 避免发布页依赖分类管理权限；接口不可用（如旧环境未部署）时回退到管理分页接口。
+ * 接口不可用（如旧环境未部署）时回退到 CMS 分类管理分页接口 `/biz/category/page`。
+ *
+ * 注意：分类表单已把「适用模块」收进默认折叠的「更多选项」，新建分类默认
+ * ARTICLE。若按 MODULE 硬过滤，视频 / 图文发布页会选不到任何分类。因此这里
+ * 展示全部启用分类，MODULE 仅用于把本模块 / COMMON 分类排在前面，不做过滤。
  */
 export async function fetchPublishCategories(
   module: PublishCategoryModule
@@ -328,9 +332,8 @@ export async function fetchPublishCategories(
     }))
     .filter((item) => {
       if (!item.code) return false;
-      if (item.status && item.status !== 'ENABLE') return false;
-      const itemModule = (item.module || '').toUpperCase();
-      return !itemModule || itemModule === module || itemModule === 'COMMON';
+      // 仅排除明确禁用的分类；适用模块不作为硬过滤条件
+      return !item.status || item.status === 'ENABLE';
     });
 
   const byId = new Map(usable.map((item) => [item.id, item]));
@@ -349,7 +352,13 @@ export async function fetchPublishCategories(
     }
   }
 
+  // 本模块 / COMMON / 未设置模块的分类优先，其余模块靠后但仍可选
+  const moduleRank = (item: (typeof usable)[number]) => {
+    const m = (item.module || '').toUpperCase();
+    return !m || m === 'COMMON' || m === module ? 0 : 1;
+  };
   const compare = (a: (typeof usable)[number], b: (typeof usable)[number]) =>
+    moduleRank(a) - moduleRank(b) ||
     (a.sortCode ?? 0) - (b.sortCode ?? 0) ||
     a.name.localeCompare(b.name, 'zh-CN');
   roots.sort(compare);

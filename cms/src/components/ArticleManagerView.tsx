@@ -11,6 +11,8 @@ import { api } from '../lib/api.ts';
 import { hasModulePerm } from '../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../lib/format.ts';
 import type { ArticleItem, ContentStatus } from '../types/cms.ts';
+import { publishCategoryName } from '../lib/category.ts';
+import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import { MediaImage } from './MediaImage.tsx';
 
 interface ArticleManagerViewProps {
@@ -31,6 +33,8 @@ export function ArticleManagerView({
   const canDelete = hasModulePerm('articles', 'Delete', permissions);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
+  const { options: categoryOptions } = usePublishCategories('ARTICLE');
+  const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -40,10 +44,11 @@ export function ArticleManagerView({
       return (
         a.title.toLowerCase().includes(q) ||
         a.summary.toLowerCase().includes(q) ||
-        a.category.toLowerCase().includes(q)
+        a.category.toLowerCase().includes(q) ||
+        categoryName(a.category).toLowerCase().includes(q)
       );
     });
-  }, [articles, search, statusFilter]);
+  }, [articles, search, statusFilter, categoryOptions]);
 
   async function handleToggleStatus(item: ArticleItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -144,7 +149,7 @@ export function ArticleManagerView({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#6E6E73] mb-1.5 tabular-nums">
-                    <span>{item.category}</span>
+                    <span>{categoryName(item.category)}</span>
                     <span aria-hidden="true">·</span>
                     <span>{formatDateShort(item.updatedAt)}</span>
                     <span aria-hidden="true">·</span>

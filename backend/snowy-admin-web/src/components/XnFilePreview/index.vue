@@ -45,6 +45,14 @@
 					</template>
 					<div v-else-if="renderType === 'pptx'" ref="pptxRef" class="xn-ht82 xn-pptx-wrap" />
 					<img v-else-if="renderType === 'image'" :src="imageSource" class="xn-mwh" />
+					<video
+						v-else-if="renderType === 'video'"
+						:src="mediaSource"
+						class="xn-video"
+						controls
+						controlsList="nodownload"
+					></video>
+					<audio v-else-if="renderType === 'audio'" :src="mediaSource" controls class="xn-audio"></audio>
 					<div v-else-if="renderType === 'text'">
 						<a-alert
 							v-if="textTruncated"
@@ -107,6 +115,24 @@
 		xml: 'text',
 		yml: 'text',
 		yaml: 'text',
+		mp4: 'video',
+		webm: 'video',
+		mov: 'video',
+		avi: 'video',
+		mkv: 'video',
+		flv: 'video',
+		ogv: 'video',
+		m4v: 'video',
+		wmv: 'video',
+		'3gp': 'video',
+		mp3: 'audio',
+		wav: 'audio',
+		ogg: 'audio',
+		m4a: 'audio',
+		flac: 'audio',
+		aac: 'audio',
+		wma: 'audio',
+		opus: 'audio',
 		doc: 'unsupported',
 		ppt: 'unsupported',
 		wps: 'unsupported',
@@ -200,6 +226,8 @@
 	const pdfSource = computed(() => (isDataMode.value ? pdfData.value : srcWithToken.value))
 	// 图片渲染来源
 	const imageSource = computed(() => (isDataMode.value ? objectUrl.value : srcWithToken.value))
+	// 视频/音频渲染来源，二进制模式用自管临时地址，地址模式带 token
+	const mediaSource = computed(() => (isDataMode.value ? objectUrl.value : srcWithToken.value))
 
 	// 取消未完成的 PPT 渲染并销毁查看器
 	const releasePptx = () => {
@@ -386,6 +414,15 @@
 <style lang="less" scoped>
 	.xn-mwh {
 		max-width: 100%;
+	}
+	.xn-video {
+		width: 100%;
+		max-height: 82vh;
+		background: #000;
+	}
+	.xn-audio {
+		width: 100%;
+		margin-top: 12px;
 	}
 	.xn-ht82 {
 		height: 82vh;

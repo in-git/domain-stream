@@ -6,9 +6,11 @@ import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   FileSpreadsheet,
   ImagePlus,
   Loader2,
+  Settings2,
   Upload,
   X,
 } from 'lucide-react';
@@ -31,6 +33,14 @@ const LABEL_CLASS = 'block text-[12px] font-medium text-[#3A3A3C] mb-1.5';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败，请稍后重试';
+}
+
+/**
+ * 分类编码不再由用户填写：新增时系统自动生成，编辑时保留原值。
+ * 业务表 CATEGORY 仍以该编码关联分类，故不能留空。
+ */
+function generateCategoryCode(): string {
+  return `cat_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /** 通用弹窗外框 */
@@ -189,17 +199,16 @@ export function CategoryFormDialog({
   onSubmit: (payload: CategoryPayload) => Promise<void>;
 }) {
   const isEdit = !!item;
-  const [parentId, setParentId] = useState(item?.parentId || '0');
   const [name, setName] = useState(item?.name || '');
-  const [code, setCode] = useState(item?.code || '');
+  const [image, setImage] = useState(item?.image || '');
+  const [parentId, setParentId] = useState(item?.parentId || '0');
   const [module, setModule] = useState(item?.module || 'ARTICLE');
   const [status, setStatus] = useState(item?.status || 'ENABLE');
   const [sortCode, setSortCode] = useState(String(item?.sortCode ?? categories.length + 1));
-  const [image, setImage] = useState(item?.image || '');
   const [icon, setIcon] = useState(item?.icon || '');
   const [description, setDescription] = useState(item?.description || '');
   const [remark, setRemark] = useState(item?.remark || '');
-  const [extJson, setExtJson] = useState(item?.extJson || '');
+  const [moreOpen, setMoreOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -225,37 +234,16 @@ export function CategoryFormDialog({
 
   async function handleSubmit() {
     const trimmedName = name.trim();
-    const trimmedCode = code.trim();
     if (!trimmedName) return setError('请填写分类名称');
-    if (!trimmedCode) return setError('请填写分类编码');
-    if (!/^[A-Za-z0-9_-]{1,50}$/.test(trimmedCode)) {
-      return setError('分类编码仅支持字母、数字、下划线和连字符，且不超过 50 位');
-    }
-    if (
-      categories.some(
-        (c) =>
-          c.id !== item?.id &&
-          c.code === trimmedCode &&
-          (c.module || '') === module
-      )
-    ) {
-      return setError(`同一适用模块下已存在编码 ${trimmedCode}`);
-    }
     const parsedSort = Number(sortCode);
     if (!Number.isFinite(parsedSort)) return setError('排序需为数字');
-    if (extJson.trim()) {
-      try {
-        JSON.parse(extJson.trim());
-      } catch {
-        return setError('扩展信息需为合法 JSON 字符串');
-      }
-    }
 
     const payload: CategoryPayload = {
       ...(item ? { id: item.id } : {}),
       parentId: parentId || '0',
       name: trimmedName,
-      code: trimmedCode,
+      // 编码不再由用户填写：编辑保留原值（历史数据为空时补生成），新增自动生成
+      code: item?.code?.trim() || generateCategoryCode(),
       image: image.trim(),
       icon: icon.trim(),
       module,
@@ -263,7 +251,8 @@ export function CategoryFormDialog({
       status,
       sortCode: Math.trunc(parsedSort),
       remark: remark.trim(),
-      extJson: extJson.trim(),
+      // 扩展信息不再维护，编辑时原样回传避免后端整体复制时丢数据
+      extJson: item?.extJson || '',
     };
     setBusy(true);
     setError(null);
@@ -279,7 +268,7 @@ export function CategoryFormDialog({
   return (
     <CategoryModal
       title={isEdit ? '编辑分类' : '新增分类'}
-      subtitle="分类编码用于文章 / 视频 / 图文的 CATEGORY 字段关联"
+      subtitle="填写名称与图片即可，其余设置可展开「更多选项」调整"
       onClose={onClose}
       footer={
         <>
@@ -295,99 +284,18 @@ export function CategoryFormDialog({
       <div className="space-y-4">
         {error && <InlineError>{error}</InlineError>}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-name">
-              分类名称 <span className="text-[#D70015]">*</span>
-            </label>
-            <input
-              id="cat-name"
-              className={INPUT_CLASS}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="如：设计方法论"
-              maxLength={100}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-code">
-              分类编码 <span className="text-[#D70015]">*</span>
-            </label>
-            <input
-              id="cat-code"
-              className={INPUT_CLASS}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="如：design_method"
-              maxLength={50}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-parent">
-              父级分类
-            </label>
-            <select
-              id="cat-parent"
-              className={INPUT_CLASS}
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-            >
-              <option value="0">顶级分类（0）</option>
-              {parentOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name || c.code || c.id}
-                  {c.code ? ` · ${c.code}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-module">
-              适用模块
-            </label>
-            <select
-              id="cat-module"
-              className={INPUT_CLASS}
-              value={module}
-              onChange={(e) => setModule(e.target.value)}
-            >
-              {CATEGORY_MODULES.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}（{m.value}）
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-status">
-              状态
-            </label>
-            <select
-              id="cat-status"
-              className={INPUT_CLASS}
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {CATEGORY_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-sort">
-              排序
-            </label>
-            <input
-              id="cat-sort"
-              type="number"
-              className={INPUT_CLASS}
-              value={sortCode}
-              onChange={(e) => setSortCode(e.target.value)}
-              placeholder="数字越小越靠前"
-            />
-          </div>
+        <div>
+          <label className={LABEL_CLASS} htmlFor="cat-name">
+            分类名称 <span className="text-[#D70015]">*</span>
+          </label>
+          <input
+            id="cat-name"
+            className={INPUT_CLASS}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="如：设计方法论"
+            maxLength={100}
+          />
         </div>
 
         <div>
@@ -433,58 +341,137 @@ export function CategoryFormDialog({
           )}
         </div>
 
-        <div>
-          <label className={LABEL_CLASS} htmlFor="cat-icon">
-            分类图标
-          </label>
-          <input
-            id="cat-icon"
-            className={INPUT_CLASS}
-            value={icon}
-            onChange={(e) => setIcon(e.target.value)}
-            placeholder="图标名称或图标 URL，如 BookOpen"
-          />
-        </div>
+        {/* 更多选项：默认折叠，点击才展开 */}
+        <div className="pt-4 border-t border-[#F2F2F7]">
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] flex items-center justify-between gap-2 text-[12px] font-medium text-[#3A3A3C] hover:bg-[#EDEDF0] transition-colors"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Settings2 className="w-3.5 h-3.5 text-[#86868B]" strokeWidth={1.8} />
+              更多选项
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-normal text-[#86868B]">
+              父级 / 模块 / 状态等
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`}
+              />
+            </span>
+          </button>
 
-        <div>
-          <label className={LABEL_CLASS} htmlFor="cat-desc">
-            分类描述
-          </label>
-          <textarea
-            id="cat-desc"
-            className={`${INPUT_CLASS} h-auto min-h-[72px] py-2 leading-relaxed resize-y`}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="一句话说明该分类的用途"
-            maxLength={500}
-          />
-        </div>
+          {moreOpen && (
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="cat-parent">
+                    父级分类
+                  </label>
+                  <select
+                    id="cat-parent"
+                    className={INPUT_CLASS}
+                    value={parentId}
+                    onChange={(e) => setParentId(e.target.value)}
+                  >
+                    <option value="0">顶级分类</option>
+                    {parentOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name || c.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="cat-module">
+                    适用模块
+                  </label>
+                  <select
+                    id="cat-module"
+                    className={INPUT_CLASS}
+                    value={module}
+                    onChange={(e) => setModule(e.target.value)}
+                  >
+                    {CATEGORY_MODULES.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="cat-status">
+                    状态
+                  </label>
+                  <select
+                    id="cat-status"
+                    className={INPUT_CLASS}
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    {CATEGORY_STATUSES.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="cat-sort">
+                    排序
+                  </label>
+                  <input
+                    id="cat-sort"
+                    type="number"
+                    className={INPUT_CLASS}
+                    value={sortCode}
+                    onChange={(e) => setSortCode(e.target.value)}
+                    placeholder="数字越小越靠前"
+                  />
+                </div>
+              </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-remark">
-              备注
-            </label>
-            <textarea
-              id="cat-remark"
-              className={`${INPUT_CLASS} h-auto min-h-[64px] py-2 resize-y`}
-              value={remark}
-              onChange={(e) => setRemark(e.target.value)}
-              maxLength={500}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="cat-ext">
-              扩展信息（JSON）
-            </label>
-            <textarea
-              id="cat-ext"
-              className={`${INPUT_CLASS} h-auto min-h-[64px] py-2 resize-y font-mono text-[12px]`}
-              value={extJson}
-              onChange={(e) => setExtJson(e.target.value)}
-              placeholder='{"color":"#0071E3"}'
-            />
-          </div>
+              <div>
+                <label className={LABEL_CLASS} htmlFor="cat-icon">
+                  分类图标
+                </label>
+                <input
+                  id="cat-icon"
+                  className={INPUT_CLASS}
+                  value={icon}
+                  onChange={(e) => setIcon(e.target.value)}
+                  placeholder="图标名称或图标 URL，如 BookOpen"
+                />
+              </div>
+
+              <div>
+                <label className={LABEL_CLASS} htmlFor="cat-desc">
+                  分类描述
+                </label>
+                <textarea
+                  id="cat-desc"
+                  className={`${INPUT_CLASS} h-auto min-h-[72px] py-2 leading-relaxed resize-y`}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="一句话说明该分类的用途"
+                  maxLength={500}
+                />
+              </div>
+
+              <div>
+                <label className={LABEL_CLASS} htmlFor="cat-remark">
+                  备注
+                </label>
+                <textarea
+                  id="cat-remark"
+                  className={`${INPUT_CLASS} h-auto min-h-[64px] py-2 resize-y`}
+                  value={remark}
+                  onChange={(e) => setRemark(e.target.value)}
+                  maxLength={500}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </CategoryModal>
@@ -525,7 +512,6 @@ export function CategoryDetailDialog({
   const rows: Array<{ label: string; value: ReactNode }> = item
     ? [
         { label: '分类名称', value: item.name || '-' },
-        { label: '分类编码', value: <code>{item.code || '-'}</code> },
         { label: '父级分类', value: parentName },
         { label: '适用模块', value: `${categoryModuleLabel(item.module)}（${item.module || '-'}）` },
         { label: '状态', value: categoryStatusLabel(item.status) },
@@ -533,7 +519,6 @@ export function CategoryDetailDialog({
         { label: '分类图标', value: item.icon || '-' },
         { label: '分类描述', value: item.description || '-' },
         { label: '备注', value: item.remark || '-' },
-        { label: '扩展信息', value: item.extJson || '-' },
         { label: '创建时间', value: item.createTime ? formatDateShort(item.createTime) : '-' },
         { label: '更新时间', value: item.updateTime ? formatDateShort(item.updateTime) : '-' },
         { label: '创建人', value: item.createUser || '-' },
@@ -611,7 +596,7 @@ export function CategoryDeleteDialog({
   return (
     <CategoryModal
       title="确认删除分类？"
-      subtitle="删除后不可恢复，且已关联该分类编码的内容可能显示为未分类"
+      subtitle="删除后不可恢复，已使用该分类的内容可能显示为未分类"
       onClose={onClose}
       width="max-w-md"
       footer={
@@ -632,8 +617,7 @@ export function CategoryDeleteDialog({
       <ul className="mt-3 rounded-xl bg-[#F5F5F7] p-3 space-y-1.5 max-h-40 overflow-y-auto">
         {items.slice(0, 10).map((c) => (
           <li key={c.id} className="text-[12px] text-[#3A3A3C] truncate">
-            · {c.name || c.code || c.id}
-            {c.code ? `（${c.code}）` : ''}
+            · {c.name || c.id}
           </li>
         ))}
         {items.length > 10 && (

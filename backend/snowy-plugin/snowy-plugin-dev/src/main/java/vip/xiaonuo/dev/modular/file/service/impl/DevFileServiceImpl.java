@@ -52,6 +52,7 @@ import vip.xiaonuo.common.util.CommonDownloadUtil;
 import vip.xiaonuo.common.util.CommonResponseUtil;
 import vip.xiaonuo.dev.modular.file.entity.DevFile;
 import vip.xiaonuo.dev.modular.file.enums.DevFileBucketAuthEnum;
+import vip.xiaonuo.dev.modular.file.enums.DevFileCategoryEnum;
 import vip.xiaonuo.dev.modular.file.enums.DevFileEngineTypeEnum;
 import vip.xiaonuo.dev.modular.file.mapper.DevFileMapper;
 import vip.xiaonuo.dev.modular.file.param.DevFileDownloadParam;
@@ -130,6 +131,9 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         if(ObjectUtil.isNotEmpty(devFilePageParam.getEngine())) {
             queryWrapper.lambda().eq(DevFile::getEngine, devFilePageParam.getEngine());
         }
+        if(ObjectUtil.isNotEmpty(devFilePageParam.getCategory())) {
+            queryWrapper.lambda().eq(DevFile::getCategory, devFilePageParam.getCategory());
+        }
         if(ObjectUtil.isNotEmpty(devFilePageParam.getSearchKey())) {
             queryWrapper.lambda().like(DevFile::getName, devFilePageParam.getSearchKey());
         }
@@ -141,6 +145,9 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         QueryWrapper<DevFile> queryWrapper = new QueryWrapper<DevFile>().checkSqlInjection();
         if(ObjectUtil.isNotEmpty(devFileListParam.getEngine())) {
             queryWrapper.lambda().eq(DevFile::getEngine, devFileListParam.getEngine());
+        }
+        if(ObjectUtil.isNotEmpty(devFileListParam.getCategory())) {
+            queryWrapper.lambda().eq(DevFile::getCategory, devFileListParam.getCategory());
         }
         if(ObjectUtil.isNotEmpty(devFileListParam.getSearchKey())) {
             queryWrapper.lambda().like(DevFile::getName, devFileListParam.getSearchKey());
@@ -516,6 +523,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         String suffix = ObjectUtil.isNotEmpty(file.getOriginalFilename())?StrUtil.subAfter(file.getOriginalFilename(),
                 StrUtil.DOT, true):null;
         devFile.setSuffix(suffix);
+        devFile.setCategory(DevFileCategoryEnum.inferBySuffix(suffix));
         devFile.setSizeKb(Convert.toStr(NumberUtil.div(new BigDecimal(file.getSize()), BigDecimal.valueOf(1024))
                 .setScale(0,  RoundingMode.HALF_UP )));
         devFile.setSizeInfo(FileUtil.readableFileSize(file.getSize()));
@@ -912,6 +920,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         devFile.setName(fileName);
         String suffix = ObjectUtil.isNotEmpty(fileName) ? StrUtil.subAfter(fileName, StrUtil.DOT, true) : null;
         devFile.setSuffix(suffix);
+        devFile.setCategory(DevFileCategoryEnum.inferBySuffix(suffix));
         devFile.setSizeKb(Convert.toStr(NumberUtil.div(new BigDecimal(size), BigDecimal.valueOf(1024))
                 .setScale(0, RoundingMode.HALF_UP)));
         devFile.setSizeInfo(FileUtil.readableFileSize(size));

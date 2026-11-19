@@ -1,7 +1,10 @@
 -- ============================================================
--- domain-stream 业务模块建表语句
--- 模块：通用分类(BIZ_CATEGORY)、文章(BIZ_ARTICLE)、视频(BIZ_VIDEO)、图文(BIZ_GRAPHIC)、
---       访客访问事件明细(BIZ_VISITOR_EVENT)、留言(BIZ_MESSAGE)
+-- domain-stream 业务升级脚本（合并版）
+-- 内容：
+--   一、业务模块建表：通用分类(BIZ_CATEGORY)、文章(BIZ_ARTICLE)、视频(BIZ_VIDEO)、
+--       图文(BIZ_GRAPHIC)、访客访问事件明细(BIZ_VISITOR_EVENT)、留言(BIZ_MESSAGE)、
+--       留言回复(BIZ_MESSAGE_REPLY)
+--   二、素材库改造：DEV_FILE 增加素材分类字段并按后缀回填存量数据
 -- 规范：遵循小诺 Snowy 框架数据库约定
 --   - 分类关联：BIZ_ARTICLE/BIZ_VIDEO/BIZ_GRAPHIC 的 CATEGORY 字段存 BIZ_CATEGORY.CODE
 --   - 分类模块：BIZ_CATEGORY.MODULE 区分 ARTICLE/VIDEO/GRAPHIC/IMAGE/COMMON(通用)
@@ -11,10 +14,15 @@
 --   - 逻辑删除：正常 NOT_DELETE，删除 DELETED
 --   - 扩展字段 EXT_JSON，排序字段 SORT_CODE
 -- 数据库：MySQL 5.7 / 8.0，utf8mb4
+-- 注意：第一部分会 DROP 重建业务表（先备份业务数据）；第二部分如已加列请跳过
 -- ============================================================
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
+
+-- ============================================================
+-- 一、业务模块建表
+-- ============================================================
 
 -- ----------------------------
 -- Table structure for BIZ_CATEGORY  通用分类（文章/视频/图文共用）
@@ -223,6 +231,8 @@ CREATE TABLE `BIZ_MESSAGE`  (
 
 -- ----------------------------
 -- Table structure for BIZ_MESSAGE_REPLY  留言回复（访客互评，含回复自己的留言）
+-- 用途：让前台任何登录访客都能回复任意一条已通过的留言（包括自己发布的留言），
+--       回复默认即时展示；独立于 BIZ_MESSAGE.REPLY 的管理员回复。
 -- ----------------------------
 DROP TABLE IF EXISTS `BIZ_MESSAGE_REPLY`;
 CREATE TABLE `BIZ_MESSAGE_REPLY`  (
@@ -244,8 +254,28 @@ CREATE TABLE `BIZ_MESSAGE_REPLY`  (
   INDEX `IDX_REPLY_CREATE_TIME` (`CREATE_TIME`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '留言回复' ROW_FORMAT = Dynamic;
 
--- ----------------------------
--- Records of BIZ_MESSAGE
--- ----------------------------
+-- ============================================================
+-- 二、素材库改造：DEV_FILE 增加素材分类字段，并按后缀回填存量数据
+-- 执行前请备份 DEV_FILE 表；CATEGORY 列已存在时跳过本段
+-- ============================================================
+
+ALTER TABLE `DEV_FILE`
+  ADD COLUMN `CATEGORY` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '素材分类（IMAGE/VIDEO/AUDIO/DOC/OTHER）' AFTER `SUFFIX`;
+
+-- 存量数据按后缀回填分类
+UPDATE `DEV_FILE` SET `CATEGORY` = 'VIDEO' WHERE LOWER(`SUFFIX`) IN
+  ('mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'ogv', 'm4v', 'wmv', '3gp', 'mpg', 'mpeg', 'ts');
+
+UPDATE `DEV_FILE` SET `CATEGORY` = 'AUDIO' WHERE LOWER(`SUFFIX`) IN
+  ('mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'wma', 'amr', 'opus', 'mid', 'midi');
+
+UPDATE `DEV_FILE` SET `CATEGORY` = 'IMAGE' WHERE LOWER(`SUFFIX`) IN
+  ('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'ico', 'svg', 'psd', 'tif', 'tiff');
+
+UPDATE `DEV_FILE` SET `CATEGORY` = 'DOC' WHERE LOWER(`SUFFIX`) IN
+  ('pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv', 'json', 'xml',
+   'yml', 'yaml', 'html', 'htm', 'wps', 'ofd');
+
+UPDATE `DEV_FILE` SET `CATEGORY` = 'OTHER' WHERE `CATEGORY` IS NULL;
 
 SET FOREIGN_KEY_CHECKS = 1;

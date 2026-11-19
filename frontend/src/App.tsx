@@ -45,6 +45,7 @@ import { currentRoute, navigate, subscribeRoute, type RouteInfo } from './lib/ro
 import { LoginView } from './components/LoginView';
 import { RegisterView } from './components/RegisterView';
 import { CallbackView } from './components/CallbackView';
+import { MiniVideoPlayer } from './components/MiniVideoPlayer';
 
 type ContentSection = 'videos' | 'articles' | 'gallery' | 'messages';
 
@@ -110,6 +111,30 @@ export default function App() {
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
+
+  /* 悬浮迷你播放器：离开视频板块时继续播放 */
+  const [persistentVideo, setPersistentVideo] = useState<VideoItem | null>(null);
+  const [persistentMuted, setPersistentMuted] = useState(true);
+  const [persistentRate, setPersistentRate] = useState(1);
+  /* 按 videoId 记录播放进度，回到视频板块或迷你播放器续播 */
+  const [videoProgress, setVideoProgress] = usePersistentState<Record<string, number>>(
+    'lumina:video-progress',
+    {}
+  );
+
+  const saveVideoProgress = (id: string, time: number) => {
+    if (!id || !Number.isFinite(time) || time <= 0) return;
+    setVideoProgress((prev) => ({ ...prev, [id]: time }));
+  };
+
+  const handlePlayVideo = (
+    video: VideoItem,
+    opts?: { muted?: boolean; playbackRate?: number }
+  ) => {
+    setPersistentVideo(video);
+    if (typeof opts?.muted === 'boolean') setPersistentMuted(opts.muted);
+    if (typeof opts?.playbackRate === 'number') setPersistentRate(opts.playbackRate);
+  };
 
   const loadFromBackend = useCallback(async () => {
     setLoading(true);
@@ -416,6 +441,12 @@ export default function App() {
                       searchQuery={searchQuery}
                       onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
                       onToggleLike={(id) => toggleIdInList(setLikedIds, id)}
+                      onPlayVideo={handlePlayVideo}
+                      progressById={videoProgress}
+                      onSaveProgress={saveVideoProgress}
+                      resumeVideoId={persistentVideo?.id}
+                      resumeMuted={persistentMuted}
+                      resumePlaybackRate={persistentRate}
                     />
                   )}
                 </motion.div>
@@ -554,6 +585,22 @@ export default function App() {
           activeSection={activeSection}
           onSelectSection={handleSelectSection}
         />
+
+        {/* 悬浮迷你播放器：离开视频板块后继续播放 */}
+        <AnimatePresence>
+          {activeSection !== 'videos' && persistentVideo && (
+            <MiniVideoPlayer
+              video={persistentVideo}
+              muted={persistentMuted}
+              playbackRate={persistentRate}
+              savedTime={videoProgress[persistentVideo.id]}
+              onSaveProgress={(t) => saveVideoProgress(persistentVideo.id, t)}
+              onClose={() => setPersistentVideo(null)}
+              onToggleMute={() => setPersistentMuted((m) => !m)}
+              onOpenVideos={() => handleSelectSection('videos')}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </MotionConfig>
   );

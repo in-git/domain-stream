@@ -19,6 +19,8 @@ import {
   formatNumber,
 } from '../lib/format.ts';
 import type { ContentStatus, VideoItem } from '../types/cms.ts';
+import { publishCategoryName } from '../lib/category.ts';
+import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import { MediaImage } from './MediaImage.tsx';
 
 interface VideoManagerViewProps {
@@ -40,6 +42,8 @@ export function VideoManagerView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const { options: categoryOptions } = usePublishCategories('VIDEO');
+  const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -49,10 +53,11 @@ export function VideoManagerView({
       return (
         v.title.toLowerCase().includes(q) ||
         v.category.toLowerCase().includes(q) ||
+        categoryName(v.category).toLowerCase().includes(q) ||
         v.description.toLowerCase().includes(q)
       );
     });
-  }, [videos, search, statusFilter]);
+  }, [videos, search, statusFilter, categoryOptions]);
 
   async function handleToggleStatus(item: VideoItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -165,7 +170,7 @@ export function VideoManagerView({
             >
               <div
                 onClick={() => onOpen('view', item.id)}
-                className="relative aspect-video bg-[#F2F2F7] overflow-hidden cursor-pointer group"
+                className="relative aspect-[2/1] bg-[#F2F2F7] overflow-hidden cursor-pointer group"
               >
                 <MediaImage
                   src={item.coverUrl}
@@ -175,21 +180,21 @@ export function VideoManagerView({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent opacity-90" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-[#1D1D1F] shadow-md group-hover:scale-105 transition-transform">
-                    <Play className="w-5 h-5 ml-0.5 fill-current" />
+                  <div className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-[#1D1D1F] shadow-md group-hover:scale-105 transition-transform">
+                    <Play className="w-4 h-4 ml-0.5 fill-current" />
                   </div>
                 </div>
-                <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center justify-between text-[12px] text-white/95 font-mono tabular-nums">
+                <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[12px] text-white/95 font-mono tabular-nums">
                   <span>{item.resolution}</span>
                   <span>{formatDuration(item.durationSec)}</span>
                 </div>
               </div>
 
-              <div className="p-5 flex-1 flex flex-col justify-between">
+              <div className="p-4 flex-1 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73] mb-1.5">
+                  <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73] mb-1">
                     <div className="flex items-center gap-1.5 truncate">
-                      <span>{item.category}</span>
+                      <span>{categoryName(item.category)}</span>
                       <span aria-hidden="true">·</span>
                       <span className="tabular-nums">{formatDateShort(item.updatedAt)}</span>
                     </div>
@@ -208,12 +213,12 @@ export function VideoManagerView({
                   >
                     {item.title}
                   </h3>
-                  <p className="mt-1.5 text-[13px] text-[#6E6E73] line-clamp-2 leading-relaxed">
+                  <p className="mt-1 text-[13px] text-[#6E6E73] line-clamp-2 leading-relaxed">
                     {item.description || '暂无视频简介说明'}
                   </p>
                 </div>
 
-                <div className="mt-4 pt-3.5 border-t border-[#F2F2F7] flex items-center justify-between gap-2">
+                <div className="mt-3 pt-3 border-t border-[#F2F2F7] flex items-center justify-between gap-2">
                   <div className="text-[12px] text-[#86868B] tabular-nums">
                     {formatNumber(item.views)} 次播放 · {formatFileSize(item.fileSizeBytes)}
                   </div>
@@ -297,7 +302,9 @@ export function VideoManagerView({
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-[#6E6E73] whitespace-nowrap">{item.category}</td>
+                    <td className="py-3 px-4 text-[#6E6E73] whitespace-nowrap">
+                      {categoryName(item.category)}
+                    </td>
                     <td className="py-3 px-4 text-[#6E6E73] font-mono tabular-nums whitespace-nowrap">
                       {formatDuration(item.durationSec)} · {item.resolution}
                     </td>

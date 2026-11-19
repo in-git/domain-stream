@@ -12,6 +12,8 @@ import { api } from '../lib/api.ts';
 import { hasModulePerm } from '../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../lib/format.ts';
 import type { ContentStatus, ImageTextItem } from '../types/cms.ts';
+import { publishCategoryName } from '../lib/category.ts';
+import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import { MediaImage } from './MediaImage.tsx';
 
 interface ImageTextManagerViewProps {
@@ -32,6 +34,8 @@ export function ImageTextManagerView({
   const canDelete = hasModulePerm('imagetexts', 'Delete', permissions);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
+  const { options: categoryOptions } = usePublishCategories('GRAPHIC');
+  const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -42,10 +46,11 @@ export function ImageTextManagerView({
         it.title.toLowerCase().includes(q) ||
         it.body.toLowerCase().includes(q) ||
         it.category.toLowerCase().includes(q) ||
+        categoryName(it.category).toLowerCase().includes(q) ||
         it.location.toLowerCase().includes(q)
       );
     });
-  }, [items, search, statusFilter]);
+  }, [items, search, statusFilter, categoryOptions]);
 
   async function handleToggleStatus(item: ImageTextItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -157,7 +162,7 @@ export function ImageTextManagerView({
                 <div>
                   <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73] mb-1.5">
                     <div className="flex items-center gap-1.5 truncate">
-                      <span>{item.category}</span>
+                      <span>{categoryName(item.category)}</span>
                       <span aria-hidden="true">·</span>
                       <span className="tabular-nums">{formatDateShort(item.updatedAt)}</span>
                     </div>
