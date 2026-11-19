@@ -12,6 +12,7 @@ const MOBILE_TABS: { id: SectionId; label: string; Icon: typeof Film }[] = [
   { id: 'videos', label: '视频', Icon: Film },
   { id: 'articles', label: '文章', Icon: BookOpen },
   { id: 'gallery', label: '图文', Icon: ImageIcon },
+  { id: 'messages', label: '留言', Icon: MessageCircleHeart },
 ];
 
 export function MobileTabBar({ activeSection, onSelectSection }: MobileTabBarProps) {
@@ -24,11 +25,13 @@ export function MobileTabBar({ activeSection, onSelectSection }: MobileTabBarPro
         {MOBILE_TABS.map(({ id, label, Icon }) => {
           const isActive = activeSection === id;
           return (
-            <button
+            <motion.button
               key={id}
               type="button"
+              whileTap={{ scale: 0.94 }}
+              transition={SWIFTUI_SNAPPY}
               onClick={() => onSelectSection(id)}
-              className={`relative flex flex-col items-center justify-center min-h-[44px] min-w-[44px] rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+              className={`relative flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] rounded-xl select-none [-webkit-tap-highlight-color:transparent] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
                 isActive
                   ? 'text-[#0071E3] dark:text-[#0A84FF]'
                   : 'text-[#6E6E73] dark:text-[#98989D]'
@@ -39,20 +42,20 @@ export function MobileTabBar({ activeSection, onSelectSection }: MobileTabBarPro
                 <motion.span
                   layoutId="mobileTabHighlight"
                   transition={SWIFTUI_SNAPPY}
-                  className="absolute inset-x-2 inset-y-1 rounded-xl bg-[#0071E3]/[0.09] dark:bg-[#0A84FF]/[0.16]"
+                  className="absolute inset-x-2 inset-y-1.5 rounded-full bg-[#0071E3]/[0.09] dark:bg-[#0A84FF]/[0.16]"
                 />
               )}
               <motion.div
-                animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+                animate={{ scale: isActive ? 1.08 : 1 }}
                 transition={SWIFTUI_SNAPPY}
-                className="relative z-10"
+                className="relative z-10 shrink-0"
               >
                 <Icon className="w-5 h-5" strokeWidth={isActive ? 2.2 : 1.75} />
               </motion.div>
-              <span className="relative z-10 mt-0.5 text-[10px] font-medium tracking-tight whitespace-nowrap">
+              <span className="relative z-10 text-[11px] font-medium tracking-tight whitespace-nowrap">
                 {label}
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>

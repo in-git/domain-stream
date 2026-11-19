@@ -33,6 +33,7 @@ import { GalleryView } from './components/GalleryView';
 import MessagesView from './components/MessagesView';
 import { ProfileView, type UserBasicInfo } from './components/ProfileView';
 import { ProfilePage } from './components/ProfilePage';
+import type { FavoriteKind } from './components/FavoritesSection';
 import { PortalEmpty, PortalError, SectionSkeleton } from './components/PortalStates';
 import {
   authApi,
@@ -347,6 +348,14 @@ export default function App() {
     window.scrollTo({ top: 0 });
   }, []);
 
+  /** 从个人中心收藏列表跳转到对应板块：清空搜索词，避免目标内容被筛掉 */
+  const handleOpenFavorite = (kind: FavoriteKind) => {
+    setSearchQuery('');
+    setActiveSection(kind === 'video' ? 'videos' : kind === 'article' ? 'articles' : 'gallery');
+    navigate('/');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleAddMessage = async (message: MessageItem) => {
     const realId = await portalApi.addMessage({
       userId: message.userId,
@@ -408,6 +417,12 @@ export default function App() {
         onGoLogin={goLogin}
         onGoRegister={goRegister}
         onUpdateProfile={setProfile}
+        videos={videos}
+        articles={articles}
+        photos={photos}
+        savedIds={savedIds}
+        onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+        onOpenFavorite={handleOpenFavorite}
       />
     );
   }
@@ -621,6 +636,12 @@ export default function App() {
                     onUpdateProfile={setProfile}
                     isDark={isDark}
                     onToggleTheme={() => setIsDark((d) => !d)}
+                    videos={videos}
+                    articles={articles}
+                    photos={photos}
+                    savedIds={savedIds}
+                    onToggleSave={(id) => toggleIdInList(setSavedIds, id)}
+                    onOpenFavorite={handleOpenFavorite}
                   />
                 </motion.div>
               )}

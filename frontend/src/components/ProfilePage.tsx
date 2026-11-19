@@ -1,7 +1,8 @@
 import { motion } from 'motion/react';
 import { ArrowLeft, Moon, Sun } from 'lucide-react';
-import type { UserProfile } from '../data/content';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../data/content';
 import { navigate } from '../lib/router';
+import type { FavoriteKind } from './FavoritesSection';
 import { ProfileView, type UserBasicInfo } from './ProfileView';
 import { Tooltip } from './Tooltip';
 
@@ -16,6 +17,12 @@ interface ProfilePageProps {
   onGoLogin: () => void;
   onGoRegister: () => void;
   onUpdateProfile: (next: UserProfile) => void;
+  videos?: VideoItem[];
+  articles?: ArticleItem[];
+  photos?: PhotoItem[];
+  savedIds?: string[];
+  onToggleSave?: (id: string) => void;
+  onOpenFavorite?: (kind: FavoriteKind, id: string) => void;
 }
 
 /** 独立个人中心页面（/profile）：展示登录用户的基本信息 */
@@ -30,6 +37,12 @@ export function ProfilePage({
   onGoLogin,
   onGoRegister,
   onUpdateProfile,
+  videos,
+  articles,
+  photos,
+  savedIds,
+  onToggleSave,
+  onOpenFavorite,
 }: ProfilePageProps) {
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] dark:bg-[#000000] dark:text-[#F5F5F7]">
@@ -72,6 +85,12 @@ export function ProfilePage({
           onUpdateProfile={onUpdateProfile}
           isDark={isDark}
           onToggleTheme={onToggleTheme}
+          videos={videos}
+          articles={articles}
+          photos={photos}
+          savedIds={savedIds}
+          onToggleSave={onToggleSave}
+          onOpenFavorite={onOpenFavorite}
         />
       </main>
     </div>

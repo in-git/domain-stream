@@ -9,8 +9,9 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { UserProfile } from '../data/content';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../data/content';
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
+import { FavoritesSection, type FavoriteKind } from './FavoritesSection';
 import { ResilientImage } from './ResilientImage';
 
 export interface UserBasicInfo {
@@ -46,6 +47,12 @@ interface ProfileViewProps {
   onUpdateProfile: (next: UserProfile) => void;
   isDark: boolean;
   onToggleTheme: () => void;
+  videos?: VideoItem[];
+  articles?: ArticleItem[];
+  photos?: PhotoItem[];
+  savedIds?: string[];
+  onToggleSave?: (id: string) => void;
+  onOpenFavorite?: (kind: FavoriteKind, id: string) => void;
 }
 
 export function ProfileView({
@@ -59,6 +66,12 @@ export function ProfileView({
   onUpdateProfile,
   isDark,
   onToggleTheme,
+  videos = [],
+  articles = [],
+  photos = [],
+  savedIds = [],
+  onToggleSave,
+  onOpenFavorite,
 }: ProfileViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
@@ -249,6 +262,15 @@ export function ProfileView({
                 </span>
               </button>
             </div>
+
+            <FavoritesSection
+              videos={videos}
+              articles={articles}
+              photos={photos}
+              savedIds={savedIds}
+              onToggleSave={onToggleSave || (() => {})}
+              onOpenFavorite={onOpenFavorite || (() => {})}
+            />
 
             {/* Sign Out Button */}
             <motion.button

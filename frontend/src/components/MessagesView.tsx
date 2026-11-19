@@ -355,7 +355,9 @@ export default function MessagesView({
             </p>
           </div>
         ) : (
-          <div className="columns-2 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
+          /* 列宽上限约 236px（与卡片最大宽度一致），容器按卡片总宽收拢，
+             避免宽屏下网格被拉满、卡片容器明显宽于内容 */
+          <div className="grid w-full max-w-[480px] grid-cols-2 gap-2 sm:max-w-[484px] sm:gap-3 md:max-w-[732px] md:grid-cols-3 xl:max-w-[980px] xl:grid-cols-4 2xl:max-w-[1228px] 2xl:grid-cols-5">
             {visibleMessages.map((message, index) => {
               const isLiked = likedIds.has(message.id);
               const messageReplies = repliesByMessage.get(message.id) || [];
@@ -371,16 +373,18 @@ export default function MessagesView({
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-                  className="break-inside-avoid mb-3 sm:mb-4"
                 >
-                  <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  {/* 9:16 竖版卡片；参照小红书，高度不超过 420px、宽度不超过
+                      420 × 9/16 ≈ 236px，避免宽屏下列宽变大后卡片被拉宽，
+                      容器明显宽于中间的语录文字 */}
+                  <div className="group flex flex-col w-full max-w-[236px] aspect-[9/16] max-h-[420px] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
                   {/* 语录区 + 弹幕层 */}
-                  <div className="relative">
+                  <div className="relative flex-1 min-h-0">
                   {/* 语录区：引号装饰 + 居中大字，点击打开详情 */}
                   <button
                     type="button"
                     onClick={() => openMessage(message.id)}
-                    className="flex flex-col w-full px-4 pt-4 pb-4 min-h-[180px] sm:min-h-[210px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                    className="flex flex-col h-full w-full px-4 pt-4 pb-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
                     aria-label={`查看留言详情：${message.nickname}`}
                   >
                     <span
@@ -390,8 +394,8 @@ export default function MessagesView({
                       &ldquo;
                     </span>
 
-                    <div className="flex-1 flex items-center justify-center py-4">
-                      <p className="text-center font-editorial text-[19px] sm:text-[23px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words">
+                    <div className="flex-1 flex items-center justify-center py-4 min-h-0">
+                      <p className="text-center font-editorial text-[19px] sm:text-[23px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words line-clamp-5 sm:line-clamp-[8]">
                         {message.content}
                       </p>
                     </div>
@@ -623,6 +627,7 @@ export default function MessagesView({
               if (event.target === event.currentTarget) closeMessage();
             }}
           >
+            {/* 弹窗作为容器比 9:16 的语录内容更宽，内容在其中水平居中 */}
             <motion.div
               role="dialog"
               aria-modal="true"
@@ -631,7 +636,7 @@ export default function MessagesView({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.98 }}
               transition={SWIFTUI_SMOOTH}
-              className="relative w-full sm:max-w-lg max-h-[88vh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-xl"
+              className="relative w-full h-full sm:h-auto sm:max-w-[560px] max-h-none sm:max-h-[88vh] flex flex-col overflow-y-auto rounded-none sm:rounded-3xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-xl"
             >
               <button
                 type="button"
@@ -642,8 +647,10 @@ export default function MessagesView({
                 <X className="w-4 h-4" />
               </button>
 
-              {/* 语录展示区 */}
-              <div className="relative px-6 pt-7 pb-5 min-h-[240px] flex flex-col">
+              {/* 语录内容区：严格 9:16，高度取 64vh（上限 700px），
+                  模态框容器更宽，内容居中显示 */}
+              <div className="flex flex-1 items-center justify-center px-5 pt-6 pb-5">
+                <div className="relative h-[min(64vh,700px)] w-[calc(min(64vh,700px)*9/16)] max-w-full aspect-[9/16] shrink-0 rounded-2xl bg-[#F7F9FD] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.07] px-6 pt-7 pb-5 flex flex-col">
                 <span
                   aria-hidden="true"
                   className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
@@ -651,8 +658,8 @@ export default function MessagesView({
                   &ldquo;
                 </span>
 
-                <div className="flex-1 flex items-center justify-center py-4">
-                  <p className="text-center font-editorial text-[21px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words">
+                <div className="flex-1 min-h-0 flex overflow-y-auto py-4">
+                  <p className="m-auto text-center font-editorial text-[21px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words">
                     {activeMessage.content}
                   </p>
                 </div>
@@ -717,6 +724,7 @@ export default function MessagesView({
                     />
                     <span>{activeMessage.likes}</span>
                   </motion.button>
+                </div>
                 </div>
               </div>
 
