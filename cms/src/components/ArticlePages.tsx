@@ -3,6 +3,8 @@ import { ImagePlus } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
 import { formatDateShort, formatNumber } from '../lib/format.ts';
 import { plainText, renderRichContent } from '../lib/richtext.tsx';
+import { publishCategoryName, resolvePublishCategoryCode } from '../lib/category.ts';
+import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import type { ArticleItem, ContentStatus } from '../types/cms.ts';
 import { MediaImage } from './MediaImage.tsx';
 import { PageShell } from './PageShell.tsx';
@@ -15,8 +17,6 @@ import {
 const AiRichEditor = lazy(() =>
   import('./AiRichEditor.tsx').then((m) => ({ default: m.AiRichEditor }))
 );
-
-const ARTICLE_CATEGORIES = ['设计方法论', '产品思考', '数据洞察', '专题访谈', '行业观察'];
 
 interface ArticlePreviewProps {
   device: PreviewDevice;
@@ -96,7 +96,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [title, setTitle] = useState(item?.title ?? '');
   const [summary, setSummary] = useState(item?.summary ?? '');
   const [content, setContent] = useState(item?.content ?? '');
-  const [category, setCategory] = useState(item?.category ?? ARTICLE_CATEGORIES[0]);
+  const [category, setCategory] = useState(item?.category ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   const [coverUploading, setCoverUploading] = useState(false);
@@ -104,6 +104,21 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [formError, setFormError] = useState('');
 
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    options: categoryOptions,
+    loading: categoryLoading,
+    error: categoryError,
+  } = usePublishCategories('ARTICLE');
+
+  // 历史数据可能存的是分类名称，加载后端分类后统一换成编码
+  useEffect(() => {
+    if (categoryLoading || !category) return;
+    const resolved = resolvePublishCategoryCode(categoryOptions, category);
+    if (resolved !== category) setCategory(resolved);
+  }, [category, categoryLoading, categoryOptions]);
+
+  const categoryLabel = publishCategoryName(categoryOptions, category);
 
   // HTML 正文需按纯文本统计字数（避免把标签计入）
   const liveWordCount = useMemo(() => plainText(content).length, [content]);
@@ -137,6 +152,11 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
       setFormError('请输入文章正文内容');
       return;
     }
+    const finalCategory = resolvePublishCategoryCode(categoryOptions, category);
+    if (!finalCategory) {
+      setFormError(categoryError || '请选择文章分类');
+      return;
+    }
     setSaving(true);
     setFormError('');
     try {
@@ -144,7 +164,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
         title: title.trim(),
         summary: summary.trim() || plain.slice(0, 80),
         content: content.trim(),
-        category,
+        category: finalCategory,
         coverUrl: coverUrl || '/src/assets/images/article_cover_typography_1795026087411.jpg',
         status,
       };
@@ -233,18 +253,31 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
           </div>
 
           <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">文章栏目</label>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+              文章分类 <span className="text-[#D70015]">*</span>
+            </label>
             <select
               value={category}
+              disabled={categoryLoading || !!categoryError}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none"
+              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none disabled:opacity-60"
             >
-              {ARTICLE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value="">
+                {categoryLoading
+                  ? '正在加载分类...'
+                  : categoryError
+                    ? '分类加载失败'
+                    : '请选择分类'}
+              </option>
+              {categoryOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
                 </option>
               ))}
             </select>
+            {categoryError && (
+              <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
+            )}
           </div>
 
           <div>
@@ -313,7 +346,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
           title={title}
           summary={summary}
           content={content}
-          category={category}
+          category={categoryLabel}
           coverUrl={coverUrl}
           status={status}
           wordCount={liveWordCount}

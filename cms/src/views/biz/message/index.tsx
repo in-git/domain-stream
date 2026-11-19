@@ -135,7 +135,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
   const counts = useMemo(() => {
     const result: Record<string, number> = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
     items.forEach((item) => {
-      const key = item.status || 'PENDING';
+      const key = item.status || 'APPROVED';
       result[key] = (result[key] || 0) + 1;
     });
     return result;

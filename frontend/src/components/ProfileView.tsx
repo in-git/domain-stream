@@ -13,10 +13,33 @@ import type { UserProfile } from '../data/content';
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
 import { ResilientImage } from './ResilientImage';
 
+export interface UserBasicInfo {
+  email?: string;
+  phone?: string;
+  gender?: string;
+  birthday?: string;
+  latestLoginTime?: string;
+  latestLoginAddress?: string;
+}
+
+const GENDER_LABELS: Record<string, string> = {
+  '0': '未知',
+  '1': '男',
+  '2': '女',
+};
+
+function formatLoginTime(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('zh-CN', { hour12: false });
+}
+
 interface ProfileViewProps {
   isLoggedIn: boolean;
   accountEmail: string;
   profile: UserProfile;
+  userInfo?: UserBasicInfo;
   onGoLogin: () => void;
   onGoRegister: () => void;
   onLogout: () => void;
@@ -29,6 +52,7 @@ export function ProfileView({
   isLoggedIn,
   accountEmail,
   profile,
+  userInfo = {},
   onGoLogin,
   onGoRegister,
   onLogout,
@@ -165,6 +189,46 @@ export function ProfileView({
                   {accountEmail}
                 </span>
               </div>
+
+              {userInfo.email && userInfo.email !== accountEmail && (
+                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
+                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">邮箱</span>
+                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+                    {userInfo.email}
+                  </span>
+                </div>
+              )}
+
+              {userInfo.phone && (
+                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
+                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">手机号</span>
+                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
+                    {userInfo.phone}
+                  </span>
+                </div>
+              )}
+
+              {(userInfo.gender || userInfo.birthday) && (
+                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
+                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">性别 / 生日</span>
+                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+                    {[GENDER_LABELS[userInfo.gender || ''] || userInfo.gender, userInfo.birthday?.slice(0, 10)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </div>
+              )}
+
+              {userInfo.latestLoginTime && (
+                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
+                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">最近登录</span>
+                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate text-right">
+                    {[formatLoginTime(userInfo.latestLoginTime), userInfo.latestLoginAddress]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </div>
+              )}
 
               <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
                 <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">常驻地区</span>

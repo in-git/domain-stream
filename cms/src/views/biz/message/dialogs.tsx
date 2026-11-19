@@ -169,7 +169,7 @@ export function MessageFormDialog({
   const [email, setEmail] = useState(item?.email || '');
   const [phone, setPhone] = useState(item?.phone || '');
   const [content, setContent] = useState(item?.content || '');
-  const [status, setStatus] = useState<string>(item?.status || 'PENDING');
+  const [status, setStatus] = useState<string>(item?.status || 'APPROVED');
   const [sortCode, setSortCode] = useState(String(item?.sortCode ?? 0));
   const [remark, setRemark] = useState(item?.remark || '');
   const [extJson, setExtJson] = useState(item?.extJson || '');
@@ -220,7 +220,7 @@ export function MessageFormDialog({
   return (
     <MessageModal
       title={isEdit ? '编辑留言' : '新增留言'}
-      subtitle="后台代录留言，审核状态可在列表中通过「审核回复」调整"
+      subtitle="后台代录留言默认审核通过，可在列表中通过「审核回复」调整状态"
       onClose={onClose}
       footer={
         <>
@@ -476,7 +476,7 @@ export function MessageReplyDialog({
 }) {
   const [reply, setReply] = useState(item.reply || '');
   const [status, setStatus] = useState<MessageStatus>(
-    (item.status as MessageStatus) || 'PENDING'
+    (item.status as MessageStatus) || 'APPROVED'
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

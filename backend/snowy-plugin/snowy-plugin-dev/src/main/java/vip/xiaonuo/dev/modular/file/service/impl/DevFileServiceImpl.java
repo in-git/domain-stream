@@ -188,6 +188,166 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         }
     }
 
+    @Override
+    public void streamForPlay(String id, String sign, jakarta.servlet.http.HttpServletRequest request,
+                              HttpServletResponse response) throws IOException {
+        log.info(">>> 视频流式播放请求，id: {}，sign前缀: {}", id,
+                StrUtil.isBlank(sign) ? "" : sign.substring(0, Math.min(12, sign.length())));
+        try {
+            doStreamForPlay(id, sign, request, response);
+        } catch (Exception e) {
+            log.error(">>> 视频流式播放异常，id: {}", id, e);
+            if (!response.isCommitted()) {
+                CommonResponseUtil.renderError(response, "播放失败：" + e.getMessage());
+            }
+        }
+    }
+
+    private void doStreamForPlay(String id, String sign, jakarta.servlet.http.HttpServletRequest request,
+                                 HttpServletResponse response) throws IOException {
+        if (!verifyDownloadSign(id, sign)) {
+            CommonResponseUtil.renderError(response, "播放链接无效，请使用正确的地址");
+            return;
+        }
+        DevFile devFile;
+        try {
+            devFile = this.queryEntity(id);
+        } catch (Exception e) {
+            CommonResponseUtil.renderError(response, e.getMessage());
+            return;
+        }
+        if (BooleanUtil.isTrue(devFile.getIsDownloadAuth())) {
+            CommonResponseUtil.renderError(response, "该文件不允许公开播放");
+            return;
+        }
+
+        boolean isLocal = DevFileEngineTypeEnum.LOCAL.getValue().equals(devFile.getEngine());
+        File localFile = isLocal ? FileUtil.file(devFile.getStoragePath()) : null;
+        Long fileSize;
+        try {
+            fileSize = isLocal
+                    ? (FileUtil.isFile(localFile) ? localFile.length() : null)
+                    : this.getFileSize(devFile.getEngine(), devFile.getBucket(), devFile.getFileKey());
+        } catch (Exception e) {
+            CommonResponseUtil.renderError(response, e.getMessage());
+            return;
+        }
+        if (ObjectUtil.isNull(fileSize) || fileSize <= 0) {
+            CommonResponseUtil.renderError(response, "找不到存储的文件，id值为：" + id);
+            return;
+        }
+
+        String contentType = resolvePlayContentType(devFile.getSuffix());
+        response.setContentType(contentType);
+        response.setCharacterEncoding(CharsetUtil.UTF_8);
+        response.setHeader("Accept-Ranges", "bytes");
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Cache-Control", "public, max-age=3600");
+
+        long start = 0;
+        long end = fileSize - 1;
+        String range = request.getHeader("Range");
+        boolean partial = false;
+        if (StrUtil.isNotBlank(range) && range.startsWith("bytes=")) {
+            String rangeValue = StrUtil.removePrefix(range, "bytes=").split(",")[0].trim();
+            String[] parts = rangeValue.split("-", 2);
+            try {
+                if (StrUtil.isNotBlank(parts[0])) {
+                    start = Math.max(0, Long.parseLong(parts[0]));
+                }
+                if (parts.length > 1 && StrUtil.isNotBlank(parts[1])) {
+                    end = Math.min(fileSize - 1, Long.parseLong(parts[1]));
+                }
+                if (start <= end && start < fileSize) {
+                    partial = true;
+                } else {
+                    start = 0;
+                    end = fileSize - 1;
+                }
+            } catch (NumberFormatException ignored) {
+                start = 0;
+                end = fileSize - 1;
+            }
+        }
+
+        long contentLength = end - start + 1;
+        response.setContentLengthLong(contentLength);
+        if (partial) {
+            response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_PARTIAL_CONTENT);
+            response.setHeader("Content-Range", "bytes " + start + "-" + end + "/" + fileSize);
+        }
+
+        OutputStream outputStream = response.getOutputStream();
+        if (isLocal) {
+            try (InputStream inputStream = FileUtil.getInputStream(localFile)) {
+                if (start > 0) {
+                    long skipped = 0;
+                    while (skipped < start) {
+                        long current = inputStream.skip(start - skipped);
+                        if (current <= 0) {
+                            break;
+                        }
+                        skipped += current;
+                    }
+                }
+                writeRange(inputStream, outputStream, contentLength);
+            }
+        } else {
+            // 对象存储：走完整流，按 Range 截取输出（避免整文件载入内存）
+            writeObjectRange(devFile, outputStream, start, contentLength);
+        }
+    }
+
+    /**
+     * 按内容长度输出输入流
+     */
+    private void writeRange(InputStream inputStream, OutputStream outputStream, long length) throws IOException {
+        byte[] buffer = new byte[8192];
+        long remaining = length;
+        while (remaining > 0) {
+            int read = inputStream.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+            if (read < 0) {
+                break;
+            }
+            outputStream.write(buffer, 0, read);
+            remaining -= read;
+        }
+    }
+
+    /**
+     * 对象存储按 Range 输出
+     */
+    private void writeObjectRange(DevFile devFile, OutputStream outputStream, long start, long length) throws IOException {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        this.writeFileToStream(devFile.getEngine(), devFile.getBucket(), devFile.getFileKey(), buffer);
+        byte[] bytes = buffer.toByteArray();
+        int from = (int) Math.min(start, bytes.length);
+        int to = (int) Math.min(from + length, bytes.length);
+        if (from < to) {
+            outputStream.write(bytes, from, to - from);
+        }
+    }
+
+    /**
+     * 根据后缀推断播放 Content-Type
+     */
+    private String resolvePlayContentType(String suffix) {
+        if (StrUtil.isBlank(suffix)) {
+            return "video/mp4";
+        }
+        String ext = suffix.toLowerCase().replace(".", "");
+        return switch (ext) {
+            case "mp4" -> "video/mp4";
+            case "webm" -> "video/webm";
+            case "mov" -> "video/quicktime";
+            case "ogg", "ogv" -> "video/ogg";
+            case "m4v" -> "video/x-m4v";
+            case "mp3" -> "audio/mpeg";
+            case "wav" -> "audio/wav";
+            default -> "application/octet-stream";
+        };
+    }
+
     /**
      * 边读存储边输出文件并带上实际大小（前端据此显示进度），本地文件按存储路径读取，响应头与CommonDownloadUtil一致
      *

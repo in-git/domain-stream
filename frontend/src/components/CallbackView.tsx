@@ -16,7 +16,7 @@ const PLATFORM_NAMES: Record<string, string> = {
 };
 
 const fieldClass =
-  'w-full h-14 rounded-2xl bg-[#F5F5F7] dark:bg-[#242426] border border-transparent focus:bg-white dark:focus:bg-[#2C2C2E] focus:border-[#0071E3]/50 focus:outline-none focus:ring-4 focus:ring-[#0071E3]/10 text-[15px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] transition-all';
+  'w-full h-14 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.12] dark:border-white/[0.16] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-[#0071E3] dark:focus:border-[#0A84FF] focus:outline-none focus:ring-4 focus:ring-[#0071E3]/12 text-[15px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] transition-all';
 const labelClass = 'block text-[13px] font-medium text-[#6E6E73] dark:text-[#98989D] mb-2';
 
 /** 第三方授权回调落地页：换取 token；未绑定账号时展示绑定表单 */

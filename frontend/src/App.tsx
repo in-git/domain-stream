@@ -27,7 +27,8 @@ import { VideosView } from './components/VideosView';
 import { ArticlesView } from './components/ArticlesView';
 import { GalleryView } from './components/GalleryView';
 import MessagesView from './components/MessagesView';
-import { ProfileView } from './components/ProfileView';
+import { ProfileView, type UserBasicInfo } from './components/ProfileView';
+import { ProfilePage } from './components/ProfilePage';
 import { PortalEmpty, PortalError, SectionSkeleton } from './components/PortalStates';
 import {
   authApi,
@@ -78,7 +79,18 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSnowyToken());
   const [accountEmail, setAccountEmail] = useState(() => {
     const cached = getCachedClientUser();
-    return cached?.email || cached?.account || '';
+    return cached?.account || cached?.email || '';
+  });
+  const [userInfo, setUserInfo] = useState<UserBasicInfo>(() => {
+    const cached = getCachedClientUser();
+    return {
+      email: cached?.email || '',
+      phone: cached?.phone || '',
+      gender: cached?.gender || '',
+      birthday: cached?.birthday || '',
+      latestLoginTime: cached?.latestLoginTime || '',
+      latestLoginAddress: cached?.latestLoginAddress || '',
+    };
   });
   const [profile, setProfile] = usePersistentState<UserProfile>('lumina:profile', INITIAL_PROFILE);
 
@@ -192,7 +204,15 @@ export default function App() {
   };
 
   const applyUser = useCallback((user: SnowyClientUser) => {
-    setAccountEmail(user.email || user.account || '');
+    setAccountEmail(user.account || user.email || '');
+    setUserInfo({
+      email: user.email || '',
+      phone: user.phone || '',
+      gender: user.gender || '',
+      birthday: user.birthday || '',
+      latestLoginTime: user.latestLoginTime || '',
+      latestLoginAddress: user.latestLoginAddress || '',
+    });
     cacheClientUser(user);
     setProfile((prev) => ({
       ...prev,
@@ -204,18 +224,18 @@ export default function App() {
     setIsLoggedIn(true);
   }, []);
 
-  // 登录 / 三方回调成功后统一落地：保存 token → 拉用户信息 → 回首页
+  // 登录 / 三方回调成功后统一落地：保存 token → 拉用户信息 → 进入个人中心
   const handleAuthSuccess = useCallback(
     (token: string) => {
       setSnowyToken(token);
       setIsLoggedIn(true);
       authApi
-        .getLoginUser()
+        .getLoginUser(token)
         .then(applyUser)
         .catch(() => {
-          // token 已保存，用户信息暂不可用时仍允许进入站点
+          // token 已保存，用户信息暂不可用时仍允许进入个人中心
         })
-        .finally(() => navigate('/', true));
+        .finally(() => navigate('/profile', true));
     },
     [applyUser]
   );
@@ -245,6 +265,7 @@ export default function App() {
     void authApi.logout().finally(() => {
       setIsLoggedIn(false);
       setAccountEmail('');
+      setUserInfo({});
       setProfile(INITIAL_PROFILE);
       navigate('/', true);
     });
@@ -253,9 +274,8 @@ export default function App() {
   const goLogin = useCallback(() => navigate('/login'), []);
   const goRegister = useCallback(() => navigate('/register'), []);
   const goProfile = useCallback(() => {
-    setActiveSection('profile');
-    navigate('/');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate('/profile');
+    window.scrollTo({ top: 0 });
   }, []);
 
   const handleAddMessage = async (message: MessageItem) => {
@@ -265,7 +285,7 @@ export default function App() {
       content: message.content,
     });
     setMessages((prev) => [
-      { ...message, createdAt: new Date().toISOString(), status: 'PENDING' },
+      { ...message, createdAt: new Date().toISOString(), status: 'APPROVED' },
       ...prev,
     ]);
   };
@@ -282,6 +302,22 @@ export default function App() {
   }
   if (route.kind === 'callback') {
     return <CallbackView platform={route.platform || ''} onSuccess={handleAuthSuccess} />;
+  }
+  if (route.kind === 'profile') {
+    return (
+      <ProfilePage
+        isLoggedIn={isLoggedIn}
+        accountEmail={accountEmail}
+        profile={profile}
+        userInfo={userInfo}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark((d) => !d)}
+        onLogout={handleLogout}
+        onGoLogin={goLogin}
+        onGoRegister={goRegister}
+        onUpdateProfile={setProfile}
+      />
+    );
   }
 
   return (
@@ -463,6 +499,7 @@ export default function App() {
                     isLoggedIn={isLoggedIn}
                     accountEmail={accountEmail}
                     profile={profile}
+                    userInfo={userInfo}
                     onGoLogin={goLogin}
                     onGoRegister={goRegister}
                     onLogout={handleLogout}

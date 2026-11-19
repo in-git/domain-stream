@@ -152,7 +152,7 @@ public class BizPortalController {
     }
 
     /**
-     * 访客提交留言，状态强制为待审核，不接受回复等管理字段
+     * 访客提交留言，默认审核通过，不接受回复等管理字段
      *
      * @author wuwenlong
      * @date  2026/11/19
@@ -175,7 +175,7 @@ public class BizPortalController {
         bizMessage.setEmail(bizMessageAddParam.getEmail());
         bizMessage.setPhone(bizMessageAddParam.getPhone());
         bizMessage.setContent(bizMessageAddParam.getContent().trim());
-        bizMessage.setStatus("PENDING");
+        bizMessage.setStatus("APPROVED");
         bizMessage.setIp(getClientIp(request));
         bizMessage.setUserAgent(StrUtil.maxLength(request.getHeader("User-Agent"), 500));
         bizMessageMapper.insert(bizMessage);

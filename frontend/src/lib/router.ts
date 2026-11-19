@@ -2,7 +2,7 @@
  * 轻量前端路由：门户只有首页 / 登录 / 注册 / 三方回调四个页面，
  * 直接用 History API，避免为此引入额外路由依赖。
  */
-export type RouteKind = 'home' | 'login' | 'register' | 'callback';
+export type RouteKind = 'home' | 'login' | 'register' | 'callback' | 'profile';
 
 export interface RouteInfo {
   kind: RouteKind;
@@ -13,6 +13,7 @@ export function currentRoute(): RouteInfo {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/login') return { kind: 'login' };
   if (path === '/register') return { kind: 'register' };
+  if (path === '/profile') return { kind: 'profile' };
   const matched = path.match(/^\/callback\/([^/]+)$/);
   if (matched) return { kind: 'callback', platform: decodeURIComponent(matched[1]) };
   return { kind: 'home' };

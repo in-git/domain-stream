@@ -344,6 +344,20 @@ public class DevFileController {
      * @author xuyuxiang
      * @date 2022/6/21 15:44
      **/
+    /**
+     * 公开流式播放文件（支持HTTP Range），供前台 video 标签使用
+     *
+     * @author wuwenlong
+     * @date  2026/11/19
+     **/
+    @Operation(summary = "公开流式播放文件")
+    @GetMapping("/public/file/stream")
+    public void stream(@RequestParam String id, @RequestParam String sign,
+                       jakarta.servlet.http.HttpServletRequest request,
+                       HttpServletResponse response) throws IOException {
+        devFileService.streamForPlay(id, sign, request, response);
+    }
+
     @Operation(summary = "授权下载文件")
     @CommonLog("授权下载文件")
     @GetMapping(value = "/dev/file/authDownload", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)

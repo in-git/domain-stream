@@ -284,3 +284,123 @@ export async function listAllCategories(): Promise<BizCategory[]> {
   }
   return all;
 }
+
+/* ------------------------------------------------------------------ */
+/* 发布表单分类选项                                                     */
+/* ------------------------------------------------------------------ */
+
+/** 发布表单可用的分类模块；COMMON 作为各模块共享分类 */
+export type PublishCategoryModule = 'ARTICLE' | 'VIDEO' | 'GRAPHIC' | 'COMMON';
+
+export interface PublishCategoryOption {
+  /** 提交给业务接口的分类编码，对应 BIZ_CATEGORY.CODE */
+  code: string;
+  /** 纯分类名称，用于预览/列表展示 */
+  name: string;
+  /** 带层级缩进的展示文本，用于下拉框 */
+  label: string;
+  module?: string;
+  parentId: string;
+  sortCode: number;
+}
+
+/**
+ * 拉取发布表单可选分类。
+ *
+ * 优先使用门户只读接口 `/public/categories`（后端仅返回 ENABLE，免登录），
+ * 避免发布页依赖分类管理权限；接口不可用（如旧环境未部署）时回退到管理分页接口。
+ */
+export async function fetchPublishCategories(
+  module: PublishCategoryModule
+): Promise<PublishCategoryOption[]> {
+  let source: BizCategory[] = [];
+  try {
+    source = await snowyRequest<BizCategory[]>('/public/categories');
+  } catch {
+    source = await listAllCategories();
+  }
+
+  const usable = source
+    .map((item) => ({
+      ...item,
+      code: (item.code || '').trim(),
+      name: (item.name || '').trim(),
+    }))
+    .filter((item) => {
+      if (!item.code) return false;
+      if (item.status && item.status !== 'ENABLE') return false;
+      const itemModule = (item.module || '').toUpperCase();
+      return !itemModule || itemModule === module || itemModule === 'COMMON';
+    });
+
+  const byId = new Map(usable.map((item) => [item.id, item]));
+  const childrenOf = new Map<string, typeof usable>();
+  const roots: typeof usable = [];
+
+  for (const item of usable) {
+    const parentId = item.parentId && item.parentId !== '0' ? item.parentId : '';
+    // 父级不在可选集合中时按顶级处理，避免分类被隐藏
+    if (!parentId || !byId.has(parentId)) {
+      roots.push(item);
+    } else {
+      const siblings = childrenOf.get(parentId) || [];
+      siblings.push(item);
+      childrenOf.set(parentId, siblings);
+    }
+  }
+
+  const compare = (a: (typeof usable)[number], b: (typeof usable)[number]) =>
+    (a.sortCode ?? 0) - (b.sortCode ?? 0) ||
+    a.name.localeCompare(b.name, 'zh-CN');
+  roots.sort(compare);
+  childrenOf.forEach((list) => list.sort(compare));
+
+  const result: PublishCategoryOption[] = [];
+  const seen = new Set<string>();
+  const append = (item: (typeof usable)[number], depth: number) => {
+    if (seen.has(item.id)) return;
+    seen.add(item.id);
+    result.push({
+      code: item.code,
+      name: item.name || item.code,
+      label: depth > 0 ? `${'　'.repeat(depth - 1)}└ ${item.name || item.code}` : item.name || item.code,
+      module: item.module,
+      parentId: item.parentId || '0',
+      sortCode: item.sortCode ?? 0,
+    });
+  };
+  const walk = (items: typeof usable, depth: number) => {
+    items.forEach((item) => {
+      append(item, depth);
+      walk(childrenOf.get(item.id) || [], depth + 1);
+    });
+  };
+  walk(roots, 0);
+  // 防御环形父子关系：未遍历到的节点补到末尾
+  usable.forEach((item) => append(item, 0));
+
+  return result;
+}
+
+/** 兼容历史数据：优先按编码匹配，其次按分类名称匹配 */
+export function resolvePublishCategoryCode(
+  options: PublishCategoryOption[],
+  value?: string
+): string {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+  const exact = options.find((option) => option.code === raw);
+  if (exact) return exact.code;
+  const byName = options.find((option) => option.name === raw || option.label === raw);
+  return byName?.code || '';
+}
+
+/** 预览/列表展示用名称；找不到时保留原始值，避免历史数据展示为空 */
+export function publishCategoryName(
+  options: PublishCategoryOption[],
+  code?: string
+): string {
+  if (!code) return '未分类';
+  const resolved = resolvePublishCategoryCode(options, code);
+  return options.find((option) => option.code === resolved)?.name || code;
+}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { CheckCircle2, UploadCloud } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
+import { publishCategoryName, resolvePublishCategoryCode } from '../lib/category.ts';
+import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import {
   formatDateShort,
   formatDuration,
@@ -15,7 +17,8 @@ import {
   type PreviewDevice,
 } from './EditorWorkspace.tsx';
 
-const VIDEO_CATEGORIES = ['设计纪录', '建筑空间', '产品美学', '工作流指南', '幕后访谈'];
+/** 视频最大上传体积：1 GB */
+const MAX_VIDEO_SIZE = 1024 * 1024 * 1024;
 
 interface VideoPreviewProps {
   device: PreviewDevice;
@@ -99,7 +102,7 @@ interface VideoEditorPageProps {
 export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps) {
   const [title, setTitle] = useState(item?.title ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [category, setCategory] = useState(item?.category ?? VIDEO_CATEGORIES[0]);
+  const [category, setCategory] = useState(item?.category ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   const [videoUrl, setVideoUrl] = useState(item?.videoUrl ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
@@ -107,6 +110,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   const [resolution, setResolution] = useState(item?.resolution ?? '1920×1080');
   const [fileSizeBytes, setFileSizeBytes] = useState(item?.fileSizeBytes ?? 0);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -114,6 +118,21 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    options: categoryOptions,
+    loading: categoryLoading,
+    error: categoryError,
+  } = usePublishCategories('VIDEO');
+
+  // 历史数据可能存的是分类名称，加载后端分类后统一换成编码
+  useEffect(() => {
+    if (categoryLoading || !category) return;
+    const resolved = resolvePublishCategoryCode(categoryOptions, category);
+    if (resolved !== category) setCategory(resolved);
+  }, [category, categoryLoading, categoryOptions]);
+
+  const categoryLabel = publishCategoryName(categoryOptions, category);
 
   async function extractVideoMetadataAndFrame(file: File): Promise<{
     duration: number;
@@ -176,6 +195,10 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setFormError('请选择 MP4、MOV 或 WebM 格式的视频文件');
       return;
     }
+    if (file.size > MAX_VIDEO_SIZE) {
+      setFormError('视频文件不能超过 1 GB');
+      return;
+    }
     setFormError('');
     if (!title.trim()) {
       setTitle(file.name.replace(/\.[^/.]+$/, ''));
@@ -189,6 +212,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       });
       setVideoUrl(uploaded.url);
       setFileSizeBytes(uploaded.size);
+      // 视频上传成功后自动打开预览窗口
+      setPreviewOpen(true);
 
       const meta = await metaPromise;
       setDurationSec(meta.duration || 60);
@@ -236,16 +261,33 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setFormError('请填写视频标题');
       return;
     }
+    if (!description.trim()) {
+      setFormError('请填写视频简介');
+      return;
+    }
+    if (!videoUrl) {
+      setFormError('请上传视频文件');
+      return;
+    }
+    if (!coverUrl) {
+      setFormError('请上传或选择视频封面');
+      return;
+    }
+    const finalCategory = resolvePublishCategoryCode(categoryOptions, category);
+    if (!finalCategory) {
+      setFormError(categoryError || '请选择所属分类');
+      return;
+    }
     setSaving(true);
     setFormError('');
     try {
       const payload: Partial<VideoItem> = {
         title: title.trim(),
         description: description.trim(),
-        category,
+        category: finalCategory,
         status,
         videoUrl,
-        coverUrl: coverUrl || '/src/assets/images/video_cover_studio_1795026084973.jpg',
+        coverUrl,
         durationSec,
         resolution,
         fileSizeBytes,
@@ -269,6 +311,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       title={item ? '编辑视频信息' : '上传新视频'}
       subtitle="支持拖拽视频直传，系统自动读取时长、分辨率并截取视频封面"
       onBack={onBack}
+      previewOpen={previewOpen}
+      onPreviewOpenChange={setPreviewOpen}
       actions={
         <>
           <button
@@ -318,7 +362,9 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           <div className="text-[14px] font-medium text-[#1D1D1F]">
             {videoUrl ? '已选择视频文件，点击或拖拽可替换' : '点击选择或拖拽视频文件至此'}
           </div>
-          <div className="text-[12px] text-[#86868B] mt-1">支持 MP4、MOV、WebM · 最大 200 MB</div>
+          <div className="text-[12px] text-[#86868B] mt-1">
+            支持 MP4、MOV、WebM · 最大 1 GB <span className="text-[#D70015]">*</span>
+          </div>
 
           {uploadProgress !== null && (
             <div className="mt-4 max-w-[340px] mx-auto">
@@ -355,7 +401,9 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
             />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium text-[#1D1D1F]">视频封面图</div>
+            <div className="text-[13px] font-medium text-[#1D1D1F]">
+              视频封面图 <span className="text-[#D70015]">*</span>
+            </div>
             <p className="text-[12px] text-[#6E6E73] mt-0.5">
               上传视频后会自动截取精彩帧作为封面，也可手动上传高清海报图。
             </p>
@@ -381,7 +429,9 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         </div>
 
         <div>
-          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">视频标题</label>
+          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+            视频标题 <span className="text-[#D70015]">*</span>
+          </label>
           <input
             type="text"
             value={title}
@@ -393,18 +443,31 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">所属分类</label>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+              所属分类 <span className="text-[#D70015]">*</span>
+            </label>
             <select
               value={category}
+              disabled={categoryLoading || !!categoryError}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none"
+              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none disabled:opacity-60"
             >
-              {VIDEO_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value="">
+                {categoryLoading
+                  ? '正在加载分类...'
+                  : categoryError
+                    ? '分类加载失败'
+                    : '请选择分类'}
+              </option>
+              {categoryOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
                 </option>
               ))}
             </select>
+            {categoryError && (
+              <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
+            )}
           </div>
           <div>
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
@@ -432,7 +495,9 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         </div>
 
         <div>
-          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">内容简介</label>
+          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+            内容简介 <span className="text-[#D70015]">*</span>
+          </label>
           <textarea
             rows={4}
             value={description}
@@ -454,7 +519,7 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           device={device}
           title={title}
           description={description}
-          category={category}
+          category={categoryLabel}
           status={status}
           coverUrl={coverUrl}
           videoUrl={videoUrl}

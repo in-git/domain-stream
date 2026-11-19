@@ -144,7 +144,7 @@ function post<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-/** Snowy C 端登录用户（仅声明门户需要的字段） */
+/** Snowy C 端登录用户（与后端 SaBaseClientLoginUser 字段保持一致，仅声明门户需要的部分） */
 export interface SnowyClientUser {
   id: string;
   account: string;
@@ -154,8 +154,14 @@ export interface SnowyClientUser {
   email?: string | null;
   phone?: string | null;
   signature?: string | null;
-  orgName?: string | null;
-  positionName?: string | null;
+  gender?: string | null;
+  age?: string | null;
+  birthday?: string | null;
+  latestLoginTime?: string | null;
+  latestLoginAddress?: string | null;
+  latestLoginIp?: string | null;
+  userStatus?: string | null;
+  extJson?: string | null;
   [key: string]: unknown;
 }
 
@@ -194,9 +200,13 @@ export const authApi = {
     return get<CaptchaResult>('/auth/c/getPicCaptcha');
   },
 
-  /** 当前登录用户 */
-  getLoginUser(): Promise<SnowyClientUser> {
-    return get<SnowyClientUser>('/auth/c/getLoginUser');
+  /**
+   * 当前登录用户
+   * 与 snowy-admin-web 的 clientGetLoginUser 保持一致：显式携带 token 参数
+   */
+  getLoginUser(token?: string): Promise<SnowyClientUser> {
+    const target = token || getSnowyToken() || undefined;
+    return get<SnowyClientUser>('/auth/c/getLoginUser', target ? { token: target } : undefined);
   },
 
   /** 退出登录 */

@@ -13,8 +13,8 @@ const BASE = '/biz/message';
 
 /** 审核状态枚举：与 BIZ_MESSAGE.STATUS 字段注释一致 */
 export const MESSAGE_STATUSES = [
-  { value: 'PENDING', label: '待审核' },
   { value: 'APPROVED', label: '已通过' },
+  { value: 'PENDING', label: '待审核' },
   { value: 'REJECTED', label: '已拒绝' },
 ] as const;
 
@@ -129,7 +129,7 @@ export function toMessagePayload(item: BizMessage): MessagePayload {
     email: item.email || '',
     phone: item.phone || '',
     content: item.content || '',
-    status: item.status || 'PENDING',
+    status: item.status || 'APPROVED',
     reply: item.reply || '',
     replyTime: item.replyTime || '',
     replyUser: item.replyUser || '',

@@ -197,4 +197,13 @@ public interface DevFileService extends IService<DevFile> {
      * @date 2026/10/13 23:50
      */
     void writeFileToStream(String engine, String bucket, String fileKey, OutputStream outputStream);
+
+    /**
+     * 公开流式播放文件（支持 HTTP Range），供前台 video/audio 标签使用
+     *
+     * @author wuwenlong
+     * @date  2026/11/19
+     */
+    void streamForPlay(String id, String sign, jakarta.servlet.http.HttpServletRequest request,
+                       HttpServletResponse response) throws IOException;
 }

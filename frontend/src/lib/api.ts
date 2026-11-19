@@ -123,6 +123,25 @@ export interface PortalMessage {
   likeCount?: number;
 }
 
+/**
+ * 把 CMS 保存的文件地址转换为可播放的流式地址。
+ * CMS 存的是 /snowy/dev/file/download?id=...&sign=...（强制下载且不支持 Range），
+ * 这里改为前端代理下的 /api/public/file/stream?id=...&sign=...（支持 Range）。
+ */
+function toPlayableUrl(raw?: string): string {
+  if (!raw) return '';
+  try {
+    const u = new URL(raw, window.location.origin);
+    if (!u.pathname.includes('/dev/file/download')) return raw;
+    const id = u.searchParams.get('id');
+    const sign = u.searchParams.get('sign');
+    if (!id || !sign) return raw;
+    return `${API_BASE}/public/file/stream?id=${encodeURIComponent(id)}&sign=${encodeURIComponent(sign)}`;
+  } catch {
+    return raw;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* 映射工具                                                            */
 /* ------------------------------------------------------------------ */
@@ -291,7 +310,7 @@ export function videoFromPortal(
     director: str(ext.director, row.createUser || ''),
     date: formatYearMonth(row.publishTime || row.createTime),
     cover: row.cover || str(ext.cover),
-    src: row.videoUrl || str(ext.src),
+    src: toPlayableUrl(row.videoUrl) || toPlayableUrl(str(ext.src)),
     width: num(ext.width, 1280),
     height: num(ext.height, 720),
     accentTint: str(ext.accentTint, ACCENT_TINTS[index % ACCENT_TINTS.length]),
@@ -426,6 +445,6 @@ export const portalApi = {
   addMessage: (draft: MessageDraft) =>
     request<string>('/public/messages', {
       method: 'POST',
-      body: JSON.stringify({ ...draft, status: 'PENDING' }),
+      body: JSON.stringify({ ...draft, status: 'APPROVED' }),
     }),
 };

@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { api, convertToWebp, uploadFileWithProgress } from '../lib/api.ts';
 import { formatDateShort, formatNumber } from '../lib/format.ts';
+import { publishCategoryName, resolvePublishCategoryCode } from '../lib/category.ts';
+import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import type { ContentStatus, ImageTextItem } from '../types/cms.ts';
 import { MediaImage } from './MediaImage.tsx';
 import { PageShell } from './PageShell.tsx';
@@ -16,8 +18,6 @@ import {
   EditorWorkspace,
   type PreviewDevice,
 } from './EditorWorkspace.tsx';
-
-const IMAGETEXT_CATEGORIES = ['器物美学', '生活方式', '建筑摄影', '设计灵感', '城市记录'];
 
 interface ImageTextPreviewProps {
   device: PreviewDevice;
@@ -109,7 +109,7 @@ interface ImageTextEditorPageProps {
 export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPageProps) {
   const [title, setTitle] = useState(item?.title ?? '');
   const [body, setBody] = useState(item?.body ?? '');
-  const [category, setCategory] = useState(item?.category ?? IMAGETEXT_CATEGORIES[0]);
+  const [category, setCategory] = useState(item?.category ?? '');
   const [location, setLocation] = useState(item?.location ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   const [images, setImages] = useState<string[]>(item ? [...item.images] : []);
@@ -119,6 +119,21 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   const [formError, setFormError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    options: categoryOptions,
+    loading: categoryLoading,
+    error: categoryError,
+  } = usePublishCategories('GRAPHIC');
+
+  // 历史数据可能存的是分类名称，加载后端分类后统一换成编码
+  useEffect(() => {
+    if (categoryLoading || !category) return;
+    const resolved = resolvePublishCategoryCode(categoryOptions, category);
+    if (resolved !== category) setCategory(resolved);
+  }, [category, categoryLoading, categoryOptions]);
+
+  const categoryLabel = publishCategoryName(categoryOptions, category);
 
   async function handleImageFiles(fileList: FileList | File[]) {
     const validFiles = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
@@ -185,13 +200,18 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       setFormError('请至少上传 1 张图片');
       return;
     }
+    const finalCategory = resolvePublishCategoryCode(categoryOptions, category);
+    if (!finalCategory) {
+      setFormError(categoryError || '请选择图文分类');
+      return;
+    }
     setSaving(true);
     setFormError('');
     try {
       const payload: Partial<ImageTextItem> = {
         title: title.trim(),
         body: body.trim(),
-        category,
+        category: finalCategory,
         location: location.trim(),
         status,
         images,
@@ -355,18 +375,31 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">主题分类</label>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+              主题分类 <span className="text-[#D70015]">*</span>
+            </label>
             <select
               value={category}
+              disabled={categoryLoading || !!categoryError}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none"
+              className="w-full h-10 px-3 rounded-xl bg-[#F5F5F7] text-[14px] text-[#1D1D1F] focus:bg-white focus:outline-none disabled:opacity-60"
             >
-              {IMAGETEXT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value="">
+                {categoryLoading
+                  ? '正在加载分类...'
+                  : categoryError
+                    ? '分类加载失败'
+                    : '请选择分类'}
+              </option>
+              {categoryOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
                 </option>
               ))}
             </select>
+            {categoryError && (
+              <p className="mt-1 text-[11px] text-[#D70015]">{categoryError}，请稍后重试</p>
+            )}
           </div>
           <div>
             <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">拍摄地点</label>
@@ -427,7 +460,7 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           images={images}
           title={title}
           body={body}
-          category={category}
+          category={categoryLabel}
           location={location}
           status={status}
         />

@@ -104,20 +104,20 @@ function MessagesSkeleton() {
     <div className="space-y-6">
       <HeaderSkeleton />
       <div className="flex justify-end">
-        <Block className="h-11 w-32 rounded-[14px]" />
+        <Block className="h-10 w-24 rounded-xl" />
       </div>
       <div className="flex items-center justify-between">
-        <Block className="h-6 w-28" />
-        <Block className="h-9 w-32 rounded-full" />
+        <Block className="h-5 w-24" />
+        <Block className="h-9 w-28 rounded-xl" />
       </div>
-      <div className="columns-1 md:columns-2 xl:columns-3 gap-5">
+      <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 sm:gap-5">
         {[0, 1, 2, 3, 4, 5].map((index) => (
           <div
             key={index}
-            className="break-inside-avoid mb-5 rounded-[22px] border border-[#E8E8ED] dark:border-white/10 bg-white/70 dark:bg-[#1C1C1E]/70 p-5 space-y-4"
+            className="break-inside-avoid mb-4 sm:mb-5 rounded-2xl border border-black/[0.05] dark:border-white/[0.07] bg-white dark:bg-[#161618] p-4 sm:p-5 space-y-4"
           >
-            <div className="flex items-center gap-3">
-              <Block className="w-10 h-10 rounded-[14px]" />
+            <div className="flex items-center gap-2.5">
+              <Block className="w-9 h-9 rounded-full" />
               <div className="flex-1 space-y-2">
                 <Block className="h-3.5 w-24" />
                 <Block className="h-3 w-16" />

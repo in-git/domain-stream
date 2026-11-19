@@ -1,5 +1,14 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft, Eye, EyeOff, Monitor, Smartphone, Tablet } from 'lucide-react';
+import {
+  ArrowLeft,
+  BatteryFull,
+  Eye,
+  EyeOff,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Wifi,
+} from 'lucide-react';
 
 export type PreviewDevice = 'desktop' | 'tablet' | 'mobile';
 
@@ -7,12 +16,97 @@ const DEVICES: Array<{
   key: PreviewDevice;
   label: string;
   width: string;
+  hint: string;
   icon: typeof Monitor;
 }> = [
-  { key: 'desktop', label: '桌面', width: '100%', icon: Monitor },
-  { key: 'tablet', label: '平板', width: '768px', icon: Tablet },
-  { key: 'mobile', label: '手机', width: '390px', icon: Smartphone },
+  { key: 'desktop', label: '桌面', width: '100%', hint: '桌面浏览器 · 自适应宽度', icon: Monitor },
+  { key: 'tablet', label: '平板', width: '768px', hint: 'iPad · 768px', icon: Tablet },
+  { key: 'mobile', label: '手机', width: '390px', hint: 'iPhone · 390px', icon: Smartphone },
 ];
+
+/** 设备状态栏（手机/平板顶部）：时间 + 信号/WiFi/电池 */
+function DeviceStatusBar({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-between shrink-0 bg-white ${
+        compact ? 'h-11 px-6 pt-1.5' : 'h-9 px-7'
+      } text-[#1D1D1F]`}
+    >
+      <span className={`font-semibold tabular-nums ${compact ? 'text-[13px]' : 'text-[12px]'}`}>
+        9:41
+      </span>
+      <div className="flex items-center gap-1.5">
+        {/* 信号格 */}
+        <span className="flex items-end gap-[2px] h-3.5">
+          <i className="w-[3px] h-[5px] rounded-[1px] bg-current block" />
+          <i className="w-[3px] h-[7px] rounded-[1px] bg-current block" />
+          <i className="w-[3px] h-[10px] rounded-[1px] bg-current block" />
+          <i className="w-[3px] h-[13px] rounded-[1px] bg-current block" />
+        </span>
+        <Wifi className={compact ? 'w-4 h-4' : 'w-3.5 h-3.5'} strokeWidth={2.4} />
+        <BatteryFull className={compact ? 'w-[19px] h-[19px]' : 'w-[17px] h-[17px]'} strokeWidth={2.2} />
+      </div>
+    </div>
+  );
+}
+
+/** 真机外壳：桌面为浏览器窗口，平板/手机为带边框、刘海与 Home 条的设备 */
+function DeviceFrame({
+  device,
+  children,
+}: {
+  device: PreviewDevice;
+  children: ReactNode;
+}) {
+  if (device === 'desktop') {
+    return (
+      <div className="w-full h-full flex flex-col rounded-xl overflow-hidden border border-[#D2D2D7] bg-white shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
+        {/* 浏览器标签栏 */}
+        <div className="h-9 shrink-0 flex items-center gap-2 px-3 bg-[#F5F5F7] border-b border-[#E5E5EA]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+          </div>
+          <div className="flex-1 max-w-[320px] mx-auto h-6 rounded-md bg-white border border-[#E5E5EA] flex items-center justify-center gap-1 text-[10px] text-[#8E8E93]">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#34C759]" />
+            domain-stream.cn
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
+      </div>
+    );
+  }
+
+  if (device === 'tablet') {
+    return (
+      <div className="w-full h-full rounded-[30px] bg-[#2C2C2E] p-[10px] shadow-[0_14px_40px_rgba(0,0,0,0.22)]">
+        <div className="w-full h-full flex flex-col rounded-[22px] overflow-hidden bg-white relative">
+          {/* 前置摄像头 */}
+          <span className="absolute top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#3A3A3C] z-10" />
+          <DeviceStatusBar />
+          <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // 手机：灵动岛 + 状态栏 + 底部 Home 指示条
+  return (
+    <div className="w-full h-full rounded-[46px] bg-[#1D1D1F] p-[11px] shadow-[0_18px_48px_rgba(0,0,0,0.28)]">
+      <div className="w-full h-full flex flex-col rounded-[36px] overflow-hidden bg-white relative">
+        {/* 灵动岛 */}
+        <span className="absolute top-2 left-1/2 -translate-x-1/2 w-[92px] h-[26px] rounded-full bg-[#1D1D1F] z-10" />
+        <DeviceStatusBar compact />
+        <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
+        {/* Home 指示条 */}
+        <div className="h-6 shrink-0 flex items-start justify-center bg-white">
+          <span className="w-[110px] h-[5px] rounded-full bg-[#1D1D1F]/80" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface EditorWorkspaceProps {
   title: string;
@@ -23,6 +117,9 @@ interface EditorWorkspaceProps {
   preview: (device: PreviewDevice) => ReactNode;
   /** 可选信息栏：提供后由两栏变为「信息 / 正文 / 预览」三栏布局 */
   info?: ReactNode;
+  /** 预览开关（可选受控）：外部传入时由外部控制，如视频上传成功后自动打开 */
+  previewOpen?: boolean;
+  onPreviewOpenChange?: (open: boolean) => void;
 }
 
 /** 全宽编辑工作区：默认左侧编辑 + 右侧实时预览；提供 info 时为三栏 */
@@ -34,9 +131,17 @@ export function EditorWorkspace({
   editor,
   preview,
   info,
+  previewOpen,
+  onPreviewOpenChange,
 }: EditorWorkspaceProps) {
   const [device, setDevice] = useState<PreviewDevice>('desktop');
-  const [showPreview, setShowPreview] = useState(false);
+  const [internalShowPreview, setInternalShowPreview] = useState(false);
+  // 受控优先：外部传 previewOpen 时由外部决定，否则用内部 state
+  const showPreview = previewOpen ?? internalShowPreview;
+  const setPreviewOpen = (open: boolean) => {
+    if (previewOpen === undefined) setInternalShowPreview(open);
+    onPreviewOpenChange?.(open);
+  };
   const current = DEVICES.find((d) => d.key === device) || DEVICES[0];
   const hasInfo = info !== undefined && info !== null;
 
@@ -89,7 +194,7 @@ export function EditorWorkspace({
             <span className="text-[13px] font-semibold text-[#1D1D1F]">正文内容</span>
             <button
               type="button"
-              onClick={() => setShowPreview((v) => !v)}
+              onClick={() => setPreviewOpen(!showPreview)}
               title={showPreview ? '关闭预览窗口' : '打开预览窗口'}
               aria-pressed={showPreview}
               className={`h-7 px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors ${
@@ -134,17 +239,15 @@ export function EditorWorkspace({
             </div>
           </div>
 
-          <div className="p-4 bg-[#F5F5F7] flex-1 min-h-0 flex flex-col gap-2 overflow-x-auto">
+          <div className="p-4 bg-[#EFEFF2] flex-1 min-h-0 flex flex-col items-center gap-3 overflow-hidden">
             <div
-              className="mx-auto overflow-hidden rounded-xl border border-[#E5E5EA] bg-white shadow-sm transition-[width] duration-200 flex-1 min-h-0 flex flex-col"
-              style={{ width: current.width }}
+              className="transition-[width] duration-200 flex-1 min-h-0"
+              style={{ width: current.width, maxWidth: '100%' }}
             >
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                {preview(device)}
-              </div>
+              <DeviceFrame device={device}>{preview(device)}</DeviceFrame>
             </div>
             <div className="text-center text-[11px] text-[#86868B] tabular-nums shrink-0">
-              {current.label} · {current.width === '100%' ? '自适应宽度' : current.width}
+              {current.hint}
             </div>
           </div>
         </section>
