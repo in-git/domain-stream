@@ -26,6 +26,7 @@ import vip.xiaonuo.common.annotation.CommonLog;
 import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.dev.api.DevConfigApi;
 import vip.xiaonuo.dev.modular.file.entity.DevFile;
+import vip.xiaonuo.dev.modular.file.enums.DevFileBizTypeEnum;
 import vip.xiaonuo.dev.modular.file.enums.DevFileEngineTypeEnum;
 import vip.xiaonuo.dev.modular.file.param.DevFileDownloadParam;
 import vip.xiaonuo.dev.modular.file.param.DevFileIdParam;
@@ -169,6 +170,35 @@ public class DevFileController {
     @PostMapping("/dev/file/uploadLocalReturnUrl")
     public CommonResult<String> uploadLocalReturnUrl(@RequestPart("file") MultipartFile file) {
         return CommonResult.data(devFileService.uploadReturnUrl(DevFileEngineTypeEnum.LOCAL.getValue(), file));
+    }
+
+    /**
+     * 上传素材库文件，返回文件Url（与用户文件完全隔离）
+     *
+     * @author yubaoshan
+     * @date 2026/11/19 18:00
+     **/
+    @Operation(summary = "上传素材库文件返回url")
+    @CommonLog("上传素材库文件返回url")
+    @PostMapping("/dev/file/uploadMaterialReturnUrl")
+    public CommonResult<String> uploadMaterialReturnUrl(@RequestPart("file") MultipartFile file) {
+        return CommonResult.data(devFileService.uploadReturnUrl(DevFileEngineTypeEnum.LOCAL.getValue(), file,
+                DevFileBizTypeEnum.MATERIAL.getValue()));
+    }
+
+    /**
+     * 调整文件所属库类型（用户文件 / 素材库）
+     *
+     * @author yubaoshan
+     * @date 2026/11/19 18:00
+     **/
+    @Operation(summary = "调整文件所属库类型")
+    @CommonLog("调整文件所属库类型")
+    @PostMapping("/dev/file/updateBizType")
+    public CommonResult<String> updateBizType(@RequestBody @Valid @NotEmpty List<DevFileIdParam> devFileIdParamList,
+                                              @RequestParam("bizType") String bizType) {
+        devFileService.updateBizType(devFileIdParamList.stream().map(DevFileIdParam::getId).toList(), bizType);
+        return CommonResult.ok();
     }
 
     /**

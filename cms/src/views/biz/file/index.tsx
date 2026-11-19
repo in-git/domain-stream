@@ -5,20 +5,27 @@
  * 接口：vip.xiaonuo.dev.modular.file（DevFileController）
  *
  * 素材按后端 CATEGORY 分类（IMAGE/VIDEO/AUDIO/DOC/OTHER），分页查询走
- * /dev/file/page（支持 category/searchKey），支持视频/音频在线预览播放。
+ * /dev/file/page（支持 category/bizType/searchKey），支持视频/音频在线预览播放。
+ *
+ * BIZ_TYPE 把「素材库」（MATERIAL，可复用）与「用户文件」（USER，业务表单一次性使用）
+ * 完全隔离；用户文件可批量加入素材库。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
+  Download,
   Eye,
   FileText,
   Film,
   File as FileIcon,
+  FolderPlus,
   ImagePlus,
   Images,
   Loader2,
   Music,
+  Play,
   RefreshCw,
   Search,
   Trash2,
@@ -32,17 +39,24 @@ import {
   isImageFile,
   isVideoFile,
   toOpenUrl,
-  uploadMaterial,
+  uploadLibraryFile,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
-import { MediaImage } from '../../../components/MediaImage.tsx';
 import {
   FileDeleteDialog,
   FileDetailDialog,
   FilePreviewDialog,
 } from './dialogs.tsx';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 24;
+
+/** 两个完全隔离的文件库 */
+type LibraryType = 'MATERIAL' | 'USER';
+
+const LIBRARIES: Array<{ value: LibraryType; label: string }> = [
+  { value: 'MATERIAL', label: '素材库' },
+  { value: 'USER', label: '用户文件' },
+];
 
 type DialogState =
   | { kind: 'preview'; file: DevFile }
@@ -68,15 +82,181 @@ function coverIcon(file: DevFile) {
   return FileIcon;
 }
 
+/** 占位封面底色：按素材类型区分，接近「文件」App 的彩色图标 */
+function tileTone(file: DevFile): string {
+  if (isVideoFile(file)) return 'bg-gradient-to-br from-[#1C1C1E] via-[#2C2C2E] to-[#48484A] text-white';
+  if (isAudioFile(file)) return 'bg-gradient-to-br from-[#FF375F]/14 via-[#FF9F0A]/12 to-[#FFD60A]/14 text-[#FF375F]';
+  if (isImageFile(file)) return 'bg-gradient-to-br from-[#30D158]/14 via-[#0071E3]/10 to-[#5E5CE6]/14 text-[#0071E3]';
+  if ((file.category || '') === 'DOC') return 'bg-gradient-to-br from-[#5E5CE6]/14 to-[#0071E3]/10 text-[#5E5CE6]';
+  return 'bg-gradient-to-br from-[#F2F2F7] to-[#E5E5EA] text-[#8E8E93]';
+}
+
+interface FileCardProps {
+  file: DevFile;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  onOpen: (file: DevFile) => void;
+  onDetail: (file: DevFile) => void;
+  onDelete: (file: DevFile) => void;
+}
+
+/** 苹果文件 App 风格素材卡片：大封面 + 名称/大小，悬浮操作，双击打开 */
+function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }: FileCardProps) {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const Icon = coverIcon(file);
+  const isMedia = isVideoFile(file) || isAudioFile(file) || isImageFile(file);
+  const isVideo = isVideoFile(file);
+  const cover = file.thumbnail || (isImageFile(file) ? toOpenUrl(file) : '');
+  const showCover = !!cover && !thumbFailed;
+
+  return (
+    <div
+      title={isMedia ? '双击预览' : '双击查看详情'}
+      tabIndex={0}
+      onClick={() => onToggleSelect(file.id)}
+      onDoubleClick={() => onOpen(file)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(file);
+        }
+      }}
+      className={`group relative p-1.5 rounded-[14px] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 ${
+        selected ? 'bg-[#0071E3]/8' : 'hover:bg-[#F5F5F7]'
+      }`}
+    >
+      {/* 封面 */}
+      <div
+        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden ${
+          showCover ? 'bg-[#F2F2F7]' : tileTone(file)
+        } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
+      >
+        {showCover ? (
+          <img
+            src={cover}
+            alt={file.name || '素材'}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setThumbFailed(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
+            {isVideo ? (
+              <Film className="absolute w-20 h-20 opacity-[0.08]" strokeWidth={1} />
+            ) : (
+              <>
+                <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
+                <span className="text-[9px] font-medium uppercase tracking-wide opacity-70">
+                  {(file.suffix || '').replace('.', '') || categoryLabel(file.category)}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {isVideo && (
+          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="w-10 h-10 rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm text-white flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.28)] transition-transform group-hover:scale-105">
+              <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
+            </span>
+          </span>
+        )}
+
+        {/* 选择圈 */}
+        <button
+          type="button"
+          aria-label={`${selected ? '取消选择' : '选择'} ${file.name || file.id}`}
+          aria-pressed={selected}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(file.id);
+          }}
+          className={`absolute top-1.5 left-1.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-all ${
+            selected
+              ? 'bg-[#0071E3] border-[#0071E3] text-white'
+              : 'bg-white/85 border-black/10 text-transparent opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <Check className="w-2.5 h-2.5" strokeWidth={3} />
+        </button>
+
+        {/* 悬浮操作条 */}
+        <div
+          className="absolute bottom-1.5 right-1.5 flex items-center gap-0.5 p-0.5 rounded-lg bg-white/90 backdrop-blur-md shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          {isMedia && (
+            <button
+              type="button"
+              onClick={() => onOpen(file)}
+              aria-label={`预览 ${file.name}`}
+              title={isVideo || isAudioFile(file) ? '播放' : '预览'}
+              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+            >
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onDetail(file)}
+            aria-label={`详情 ${file.name}`}
+            title="详情"
+            className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+          </button>
+          {file.downloadPath && (
+            <a
+              href={toOpenUrl(file)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`下载 ${file.name}`}
+              title="下载"
+              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => onDelete(file)}
+            aria-label={`删除 ${file.name}`}
+            title="删除"
+            className="p-1 rounded-md text-[#3A3A3C] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 名称与元信息 */}
+      <div className="mt-1.5 px-0.5 min-w-0">
+        <div className="text-[12px] font-medium text-[#1D1D1F] truncate" title={file.name}>
+          {file.name || '未命名素材'}
+        </div>
+        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#86868B]">
+          <span className="truncate">{file.sizeInfo || '-'}</span>
+          <span className="w-0.5 h-0.5 rounded-full bg-[#C7C7CC] shrink-0" />
+          <span className="shrink-0">{(file.suffix || '').toUpperCase() || categoryLabel(file.category)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FileCenterView() {
   const [records, setRecords] = useState<DevFile[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [library, setLibrary] = useState<LibraryType>('MATERIAL');
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectingAll, setSelectingAll] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   // 分类统计（全部/视频/音频/图片），各取 size=1 的分页 total
@@ -106,6 +286,7 @@ export default function FileCenterView() {
         current: page,
         size: PAGE_SIZE,
         category: category || undefined,
+        bizType: library,
         searchKey: search.trim() || undefined,
       });
       setRecords(data.records || []);
@@ -115,7 +296,7 @@ export default function FileCenterView() {
     } finally {
       setLoading(false);
     }
-  }, [page, category, search]);
+  }, [page, category, search, library]);
 
   /** 拉取分类统计，load 完成后或上传/删除后刷新 */
   const loadStats = useCallback(async () => {
@@ -124,7 +305,7 @@ export default function FileCenterView() {
       const results = await Promise.all(
         targets.map((cat) =>
           fileCenterApi
-            .page({ current: 1, size: 1, category: cat || undefined })
+            .page({ current: 1, size: 1, category: cat || undefined, bizType: library })
             .then((d) => [cat, Number(d.total || 0)] as const)
         )
       );
@@ -132,7 +313,7 @@ export default function FileCenterView() {
     } catch {
       // 统计失败不阻塞列表
     }
-  }, []);
+  }, [library]);
 
   useEffect(() => {
     void load();
@@ -153,6 +334,11 @@ export default function FileCenterView() {
     };
   }, [search]);
 
+  // 切换库或筛选条件时清空选择，避免跨库误删
+  useEffect(() => {
+    setSelected(new Set());
+  }, [library, category, search]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
 
@@ -166,6 +352,7 @@ export default function FileCenterView() {
   }
 
   const allPageSelected = records.length > 0 && records.every((r) => selected.has(r.id));
+  const somePageSelected = records.some((r) => selected.has(r.id));
 
   function toggleSelectPage() {
     setSelected((prev) => {
@@ -174,6 +361,69 @@ export default function FileCenterView() {
       else records.forEach((r) => next.add(r.id));
       return next;
     });
+  }
+
+  /** 批量删除前收集跨分页已选文件 */
+  async function openBatchDelete() {
+    const onPage = records.filter((r) => selected.has(r.id));
+    if (onPage.length === selected.size) {
+      setDialog({ kind: 'delete', files: onPage });
+      return;
+    }
+    try {
+      const data = await fileCenterApi.page({
+        current: 1,
+        size: Math.max(total, 1),
+        category: category || undefined,
+        bizType: library,
+        searchKey: search.trim() || undefined,
+      });
+      const targets = (data.records || []).filter((r) => selected.has(r.id));
+      if (!targets.length) {
+        notify('error', '已选文件已不存在，请刷新后重试');
+        return;
+      }
+      setDialog({ kind: 'delete', files: targets });
+    } catch (err) {
+      notify('error', `读取已选文件失败：${errorMessage(err)}`);
+    }
+  }
+
+  /** 把已选的用户文件加入素材库，之后即可在素材库复用 */
+  async function moveSelectedToMaterial() {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    try {
+      await fileCenterApi.updateBizType(ids, 'MATERIAL');
+      setSelected(new Set());
+      notify('success', `已加入素材库：${ids.length} 个文件`);
+      await Promise.all([load(), loadStats()]);
+    } catch (err) {
+      notify('error', `加入素材库失败：${errorMessage(err)}`);
+    }
+  }
+
+  /** 全选/取消全选当前筛选条件下的所有文件（跨分页） */
+  async function toggleSelectAllResults() {
+    if (selected.size >= total) {
+      setSelected(new Set());
+      return;
+    }
+    setSelectingAll(true);
+    try {
+      const data = await fileCenterApi.page({
+        current: 1,
+        size: Math.max(total, 1),
+        category: category || undefined,
+        bizType: library,
+        searchKey: search.trim() || undefined,
+      });
+      setSelected(new Set((data.records || []).map((r) => r.id)));
+    } catch (err) {
+      notify('error', `全选失败：${errorMessage(err)}`);
+    } finally {
+      setSelectingAll(false);
+    }
   }
 
   /** 顺序上传多个文件，逐个上报进度，结束后刷新列表与统计 */
@@ -187,7 +437,7 @@ export default function FileCenterView() {
       for (let i = 0; i < files.length; i++) {
         setUploadName(files[i].name);
         try {
-          await uploadMaterial(files[i], (percent) => {
+          await uploadLibraryFile(files[i], library, (percent) => {
             setUploadPercent(Math.round(((i + percent / 100) / files.length) * 100));
           });
           success += 1;
@@ -227,7 +477,7 @@ export default function FileCenterView() {
   }
 
   const statCards = [
-    { label: '全部素材', value: stats[''] ?? 0, icon: Images },
+    { label: library === 'MATERIAL' ? '全部素材' : '全部文件', value: stats[''] ?? 0, icon: Images },
     { label: '视频', value: stats['VIDEO'] ?? 0, icon: Film },
     { label: '音频', value: stats['AUDIO'] ?? 0, icon: Music },
     { label: '图片', value: stats['IMAGE'] ?? 0, icon: ImagePlus },
@@ -258,6 +508,69 @@ export default function FileCenterView() {
       {/* 工具栏 */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
+          {/* 库切换：素材库与用户文件完全隔离 */}
+          <div className="flex items-center rounded-xl bg-[#F5F5F7] p-0.5">
+            {LIBRARIES.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setLibrary(item.value);
+                  setCategory('');
+                  setPage(1);
+                }}
+                className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
+                  library === item.value
+                    ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {/* 全选 */}
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={allPageSelected ? true : somePageSelected ? 'mixed' : false}
+            aria-label="全选本页文件"
+            disabled={!records.length}
+            onClick={toggleSelectPage}
+            title="全选 / 取消全选本页"
+            className="h-8 pl-1.5 pr-2.5 rounded-[10px] inline-flex items-center gap-1.5 text-[12px] font-medium text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+          >
+            <span
+              className={`w-4 h-4 rounded-[5px] border flex items-center justify-center transition-colors ${
+                allPageSelected
+                  ? 'bg-[#0071E3] border-[#0071E3] text-white'
+                  : somePageSelected
+                    ? 'bg-[#0071E3]/12 border-[#0071E3]'
+                    : 'bg-white border-[#C7C7CC]'
+              }`}
+            >
+              {allPageSelected ? (
+                <Check className="w-2.5 h-2.5" strokeWidth={3} />
+              ) : somePageSelected ? (
+                <span className="w-2 h-0.5 rounded-full bg-[#0071E3]" />
+              ) : null}
+            </span>
+            全选本页
+          </button>
+          {total > records.length && (
+            <button
+              type="button"
+              disabled={selectingAll}
+              onClick={() => void toggleSelectAllResults()}
+              className="h-8 px-2 rounded-[10px] text-[11px] font-medium text-[#0071E3] hover:bg-[#0071E3]/8 disabled:opacity-50 transition-colors"
+            >
+              {selectingAll
+                ? '选择中...'
+                : selected.size >= total
+                  ? '取消全选'
+                  : `选择全部 ${total} 个`}
+            </button>
+          )}
           {/* 分类 Tab */}
           <div className="flex items-center rounded-xl bg-[#F5F5F7] p-0.5">
             {[{ value: '', label: '全部' }, ...FILE_CATEGORIES].map((cat) => (
@@ -300,15 +613,20 @@ export default function FileCenterView() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
+          {library === 'USER' && selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => void moveSelectedToMaterial()}
+              className="h-9 px-3 rounded-xl bg-[#0071E3]/8 text-[#0071E3] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#0071E3]/12 transition-colors"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              加入素材库 ({selected.size})
+            </button>
+          )}
           {selected.size > 0 && (
             <button
               type="button"
-              onClick={() =>
-                setDialog({
-                  kind: 'delete',
-                  files: records.filter((r) => selected.has(r.id)),
-                })
-              }
+              onClick={() => void openBatchDelete()}
               className="h-9 px-3 rounded-xl bg-white border border-[#FF3B30]/30 text-[#D70015] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#FF3B30]/8 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -339,7 +657,7 @@ export default function FileCenterView() {
             ) : (
               <>
                 <ImagePlus className="w-4 h-4" />
-                上传素材
+                {library === 'MATERIAL' ? '上传素材' : '上传文件'}
               </>
             )}
           </button>
@@ -376,143 +694,39 @@ export default function FileCenterView() {
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-20 px-6 text-center">
           <Images className="w-10 h-10 text-[#C7C7CC] mx-auto mb-3" strokeWidth={1.5} />
           <h3 className="text-[16px] font-semibold text-[#1D1D1F]">
-            {search.trim() || category ? '没有匹配的素材' : '素材库还是空的'}
+            {search.trim() || category
+              ? '没有匹配的文件'
+              : library === 'MATERIAL'
+                ? '素材库还是空的'
+                : '还没有用户文件'}
           </h3>
           <p className="text-[13px] text-[#6E6E73] mt-1">
             {search.trim() || category
               ? '试试调整搜索词或切换分类'
-              : '上传视频、音频、图片等素材后，即可在此统一管理与选用'}
+              : library === 'MATERIAL'
+                ? '上传视频、音频、图片等素材后，即可在此统一管理与复用'
+                : '业务表单上传的视频、图片、封面等会出现在这里'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-          {records.map((file) => {
-            const Icon = coverIcon(file);
-            const isImage = isImageFile(file) && !!file.thumbnail;
-            return (
-              <div
-                key={file.id}
-                className={`group bg-white rounded-2xl border overflow-hidden cursor-pointer transition-all hover:shadow-[0_6px_20px_rgba(0,0,0,0.06)] ${
-                  selected.has(file.id)
-                    ? 'border-[#0071E3] ring-1 ring-[#0071E3]'
-                    : 'border-[#E5E5EA]'
-                }`}
-                onClick={() => toggleSelect(file.id)}
-              >
-                {/* 封面区 */}
-                <div className="relative h-[140px] bg-[#FAFAFC] flex items-center justify-center overflow-hidden">
-                  {isImage ? (
-                    <MediaImage
-                      src={file.thumbnail}
-                      alt={file.name || '素材'}
-                      fallbackLabel={categoryLabel(file.category)}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-1.5 text-[#AEAEB2] select-none">
-                      <Icon className="w-9 h-9" strokeWidth={1.5} />
-                      <span className="text-[11px] font-medium">{categoryLabel(file.category)}</span>
-                    </div>
-                  )}
-                  <input
-                    type="checkbox"
-                    aria-label={`选择 ${file.name || file.id}`}
-                    checked={selected.has(file.id)}
-                    onChange={() => toggleSelect(file.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute top-2 left-2 w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
-                  />
-                  {/* 悬浮预览按钮 */}
-                  {(isVideoFile(file) || isAudioFile(file) || isImageFile(file)) && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDialog({ kind: 'preview', file });
-                      }}
-                      title="预览"
-                      className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <span className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-[#1D1D1F]">
-                        <Eye className="w-4.5 h-4.5" strokeWidth={1.8} />
-                      </span>
-                    </button>
-                  )}
-                </div>
-                {/* 信息区 */}
-                <div className="px-3 pt-2.5 pb-3">
-                  <div className="text-[13px] font-medium text-[#1D1D1F] truncate" title={file.name}>
-                    {file.name || '未命名素材'}
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#86868B]">
-                    <span>{file.sizeInfo || '-'}</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-[#F2F2F7] text-[#3A3A3C] font-medium">
-                      {(file.suffix || '').toUpperCase() || '-'}
-                    </span>
-                  </div>
-                  {/* 操作行 */}
-                  <div
-                    className="mt-2.5 pt-2.5 border-t border-[#F2F2F7] flex items-center justify-end gap-0.5"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {(isVideoFile(file) || isAudioFile(file) || isImageFile(file)) && (
-                      <button
-                        type="button"
-                        onClick={() => setDialog({ kind: 'preview', file })}
-                        aria-label={`预览 ${file.name}`}
-                        title="预览"
-                        className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setDialog({ kind: 'detail', file })}
-                      aria-label={`详情 ${file.name}`}
-                      title="详情"
-                      className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-                    >
-                      <FileText className="w-4 h-4" />
-                    </button>
-                    {file.downloadPath && (
-                      <a
-                        href={toOpenUrl(file)}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`下载 ${file.name}`}
-                        title="下载"
-                        className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setDialog({ kind: 'delete', files: [file] })}
-                      aria-label={`删除 ${file.name}`}
-                      title="删除"
-                      className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-1.5 gap-y-3">
+          {records.map((file) => (
+            <FileCard
+              key={file.id}
+              file={file}
+              selected={selected.has(file.id)}
+              onToggleSelect={toggleSelect}
+              onOpen={(target) => {
+                if (isVideoFile(target) || isAudioFile(target) || isImageFile(target)) {
+                  setDialog({ kind: 'preview', file: target });
+                } else {
+                  setDialog({ kind: 'detail', file: target });
+                }
+              }}
+              onDetail={(target) => setDialog({ kind: 'detail', file: target })}
+              onDelete={(target) => setDialog({ kind: 'delete', files: [target] })}
+            />
+          ))}
         </div>
       )}
 

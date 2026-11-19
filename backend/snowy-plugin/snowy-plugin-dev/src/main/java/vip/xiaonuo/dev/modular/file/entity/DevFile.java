@@ -57,6 +57,10 @@ public class DevFile extends CommonEntity {
     @Schema(description = "素材分类")
     private String category;
 
+    /** 库类型（USER 用户文件 / MATERIAL 素材库） */
+    @Schema(description = "库类型")
+    private String bizType;
+
     /** 文件大小kb */
     @Schema(description = "文件大小kb")
     private String sizeKb;

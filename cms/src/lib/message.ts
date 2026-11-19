@@ -45,9 +45,6 @@ export interface BizMessage {
   status?: string;
   ip?: string;
   userAgent?: string;
-  sortCode?: number;
-  remark?: string;
-  extJson?: string;
   deleteFlag?: string;
   createTime?: string;
   createUser?: string;
@@ -63,9 +60,6 @@ export interface MessagePayload {
   status?: string;
   ip?: string;
   userAgent?: string;
-  sortCode?: number;
-  remark?: string;
-  extJson?: string;
 }
 
 /** MyBatis-Plus 分页对象 */
@@ -123,9 +117,6 @@ export function toMessagePayload(item: BizMessage): MessagePayload {
     status: item.status || 'APPROVED',
     ip: item.ip || '',
     userAgent: item.userAgent || '',
-    sortCode: item.sortCode ?? 0,
-    remark: item.remark || '',
-    extJson: item.extJson || '',
   };
 }
 

@@ -164,33 +164,18 @@ export function MessageFormDialog({
   const [userId, setUserId] = useState(item?.userId || '');
   const [content, setContent] = useState(item?.content || '');
   const [status, setStatus] = useState<string>(item?.status || 'APPROVED');
-  const [sortCode, setSortCode] = useState(String(item?.sortCode ?? 0));
-  const [remark, setRemark] = useState(item?.remark || '');
-  const [extJson, setExtJson] = useState(item?.extJson || '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit() {
     const trimmedContent = content.trim();
     if (!trimmedContent) return setError('请填写留言内容');
-    const parsedSort = Number(sortCode);
-    if (!Number.isFinite(parsedSort)) return setError('排序需为数字');
-    if (extJson.trim()) {
-      try {
-        JSON.parse(extJson.trim());
-      } catch {
-        return setError('扩展信息需为合法 JSON 字符串');
-      }
-    }
 
     const payload: MessagePayload = {
       ...(item ? { id: item.id } : {}),
       userId: userId.trim(),
       content: trimmedContent,
       status,
-      sortCode: Math.trunc(parsedSort),
-      remark: remark.trim(),
-      extJson: extJson.trim(),
     };
     setBusy(true);
     setError(null);
@@ -206,7 +191,7 @@ export function MessageFormDialog({
   return (
     <MessageModal
       title={isEdit ? '编辑留言' : '新增留言'}
-      subtitle="后台代录留言默认审核通过，可在列表中通过「审核回复」调整状态"
+      subtitle="后台代录留言默认审核通过，专注填写留言内容即可"
       onClose={onClose}
       footer={
         <>
@@ -225,14 +210,14 @@ export function MessageFormDialog({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={LABEL_CLASS} htmlFor="msg-user-id">
-              用户 ID
+              用户名字
             </label>
             <input
               id="msg-user-id"
               className={INPUT_CLASS}
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder="选填"
+              placeholder="选填，填写用户 ID 以显示对应名字"
               maxLength={20}
             />
           </div>
@@ -263,46 +248,6 @@ export function MessageFormDialog({
           <div className="mt-1 text-right text-[11px] text-[#AEAEB2]">{content.length} / 2000</div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL_CLASS} htmlFor="msg-sort">
-              排序
-            </label>
-            <input
-              id="msg-sort"
-              type="number"
-              className={INPUT_CLASS}
-              value={sortCode}
-              onChange={(e) => setSortCode(e.target.value)}
-              placeholder="数字越小越靠前"
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS} htmlFor="msg-remark">
-              备注
-            </label>
-            <input
-              id="msg-remark"
-              className={INPUT_CLASS}
-              value={remark}
-              onChange={(e) => setRemark(e.target.value)}
-              maxLength={500}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className={LABEL_CLASS} htmlFor="msg-ext">
-            扩展信息（JSON）
-          </label>
-          <textarea
-            id="msg-ext"
-            className={`${INPUT_CLASS} h-auto min-h-[60px] py-2 resize-y font-mono text-[12px]`}
-            value={extJson}
-            onChange={(e) => setExtJson(e.target.value)}
-            placeholder='{"source":"contact"}'
-          />
-        </div>
       </div>
     </MessageModal>
   );
@@ -335,8 +280,7 @@ export function MessageDetailDialog({
 
   const rows: Array<{ label: string; value: ReactNode }> = item
     ? [
-        { label: '用户 ID', value: item.userId || '-' },
-        { label: '用户昵称', value: item.nickname || '-' },
+        { label: '用户名字', value: item.nickname || item.userId || '-' },
         {
           label: '留言层级',
           value: item.parentId
@@ -347,9 +291,6 @@ export function MessageDetailDialog({
         { label: '留言内容', value: item.content || '-' },
         { label: 'IP', value: item.ip || '-' },
         { label: '浏览器 UA', value: item.userAgent || '-' },
-        { label: '排序', value: item.sortCode ?? '-' },
-        { label: '备注', value: item.remark || '-' },
-        { label: '扩展信息', value: item.extJson || '-' },
         {
           label: '提交时间',
           value: item.createTime ? formatDateTime(item.createTime) : '-',

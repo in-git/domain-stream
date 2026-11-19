@@ -181,9 +181,6 @@ export default function MessageView({ permissions }: { permissions?: string[] })
           .some((v) => (v || '').toLowerCase().includes(q));
       })
       .sort((a, b) => {
-        const sa = a.sortCode ?? 9999;
-        const sb = b.sortCode ?? 9999;
-        if (sa !== sb) return sa - sb;
         return (b.createTime || '').localeCompare(a.createTime || '');
       });
   }, [items, search, statusFilter]);
@@ -328,7 +325,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索昵称、用户 ID、内容..."
+              placeholder="搜索用户名字、内容..."
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
           </div>
@@ -446,7 +443,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
               />
               <span>留言内容</span>
               <span>审核状态</span>
-              <span>用户 ID</span>
+              <span>用户名字</span>
               <span>提交时间</span>
               <span className="text-right">操作</span>
             </div>
@@ -554,8 +551,8 @@ export default function MessageView({ permissions }: { permissions?: string[] })
                       {messageStatusLabel(item.status)}
                     </span>
 
-                    <span className="text-[12px] text-[#6E6E73] truncate" title={item.userId || ''}>
-                      {item.userId || '-'}
+                    <span className="text-[12px] text-[#6E6E73] truncate" title={item.nickname || item.userId || ''}>
+                      {item.nickname || item.userId || '-'}
                     </span>
                     <span className="text-[12px] text-[#86868B] tabular-nums">
                       {item.createTime ? formatDateTime(item.createTime) : '-'}

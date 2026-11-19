@@ -36,7 +36,8 @@ export function FilePreviewDialog({ file, onClose }: { file: DevFile; onClose: (
   const directUrl = isImage ? toOpenUrl(file) : toStreamUrl(file);
 
   useEffect(() => {
-    if (directUrl || (!isVideo && !isAudio)) return;
+    // 无公开地址时，视频/音频/图片都走 authDownload 拉 blob 本地播放或预览
+    if (directUrl || (!isVideo && !isAudio && !isImage)) return;
     let revoked = '';
     let alive = true;
     setLoading(true);
@@ -57,7 +58,7 @@ export function FilePreviewDialog({ file, onClose }: { file: DevFile; onClose: (
       alive = false;
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [file, directUrl, isVideo, isAudio]);
+  }, [file, directUrl, isVideo, isAudio, isImage]);
 
   return (
     <CategoryModal
@@ -74,7 +75,17 @@ export function FilePreviewDialog({ file, onClose }: { file: DevFile; onClose: (
       ) : error ? (
         <div className="py-12 text-center text-[13px] text-[#D70015]">{error}</div>
       ) : isVideo && (directUrl || objectUrl) ? (
-        <video src={directUrl || objectUrl} controls autoPlay className="w-full max-h-[65vh] bg-black rounded-xl" />
+        <div className="rounded-xl overflow-hidden bg-black">
+          <video
+            src={directUrl || objectUrl}
+            poster={file.thumbnail}
+            controls
+            autoPlay
+            playsInline
+            preload="metadata"
+            className="w-full max-h-[65vh] bg-black"
+          />
+        </div>
       ) : isAudio && (directUrl || objectUrl) ? (
         <div className="py-10 flex flex-col items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-[#0071E3]/8 flex items-center justify-center text-[#0071E3] text-2xl">
@@ -82,13 +93,13 @@ export function FilePreviewDialog({ file, onClose }: { file: DevFile; onClose: (
           </div>
           <audio src={directUrl || objectUrl} controls autoPlay className="w-full max-w-md" />
         </div>
-      ) : isImage && directUrl ? (
-        <div className="flex justify-center">
+      ) : isImage && (directUrl || objectUrl) ? (
+        <div className="flex justify-center rounded-xl bg-[#F5F5F7] p-3">
           <img
-            src={directUrl}
+            src={directUrl || objectUrl}
             alt={file.name || '图片'}
             referrerPolicy="no-referrer"
-            className="max-w-full max-h-[65vh] rounded-xl"
+            className="max-w-full max-h-[65vh] object-contain rounded-lg"
           />
         </div>
       ) : (

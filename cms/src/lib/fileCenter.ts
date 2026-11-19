@@ -58,6 +58,8 @@ export interface DevFile {
   name?: string;
   suffix?: string;
   category?: string;
+  /** 库类型：USER 用户文件 / MATERIAL 素材库 */
+  bizType?: string;
   sizeKb?: string;
   sizeInfo?: string;
   objName?: string;
@@ -136,20 +138,30 @@ export async function fetchFileBlob(file: DevFile): Promise<Blob> {
   return res.blob();
 }
 
-/** 上传素材（本地引擎，返回下载 URL）；上传完成后由调用方刷新列表 */
+/** 上传文件到指定库（本地引擎，返回下载 URL）；上传完成后由调用方刷新列表 */
+export function uploadLibraryFile(
+  file: File,
+  bizType: 'USER' | 'MATERIAL',
+  onProgress?: (percent: number) => void
+): Promise<{ url: string }> {
+  return snowyUpload(file, onProgress, false, bizType);
+}
+
+/** 上传素材到素材库 */
 export function uploadMaterial(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<{ url: string }> {
-  return snowyUpload(file, onProgress);
+  return uploadLibraryFile(file, 'MATERIAL', onProgress);
 }
 
 export const fileCenterApi = {
-  /** 分页（后端支持 category / searchKey 过滤） */
+  /** 分页（后端支持 category / bizType / searchKey 过滤） */
   page(params: {
     current?: number;
     size?: number;
     category?: string;
+    bizType?: 'USER' | 'MATERIAL';
     searchKey?: string;
   } = {}): Promise<DevFilePage> {
     return snowyRequest<DevFilePage>(`${BASE}/page${qs(params)}`);
@@ -163,6 +175,14 @@ export const fileCenterApi = {
   /** 删除：后端要求 [{"id":"..."}] 数组，支持批量（仅删记录，不动存储对象） */
   remove(ids: string[]): Promise<void> {
     return snowyRequest<void>(`${BASE}/delete`, {
+      method: 'POST',
+      body: JSON.stringify(ids.map((id) => ({ id }))),
+    });
+  },
+
+  /** 调整文件所属库（用户文件 / 素材库） */
+  updateBizType(ids: string[], bizType: 'USER' | 'MATERIAL'): Promise<void> {
+    return snowyRequest<void>(`${BASE}/updateBizType?bizType=${bizType}`, {
       method: 'POST',
       body: JSON.stringify(ids.map((id) => ({ id }))),
     });

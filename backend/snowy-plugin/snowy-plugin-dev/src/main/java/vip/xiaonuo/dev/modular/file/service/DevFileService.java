@@ -45,6 +45,14 @@ public interface DevFileService extends IService<DevFile> {
     String uploadReturnId(String engine, MultipartFile file);
 
     /**
+     * MultipartFile文件上传，返回文件id，并指定库类型
+     *
+     * @author yubaoshan
+     * @date 2026/11/19 18:00
+     **/
+    String uploadReturnId(String engine, MultipartFile file, String bizType);
+
+    /**
      * MultipartFile文件上传，返回文件id（带后缀校验）
      *
      * @author xuyuxiang
@@ -59,6 +67,14 @@ public interface DevFileService extends IService<DevFile> {
      * @date 2022/4/22 15:53
      **/
     String uploadReturnUrl(String engine, MultipartFile file);
+
+    /**
+     * MultipartFile文件上传，返回文件Url，并指定库类型
+     *
+     * @author yubaoshan
+     * @date 2026/11/19 18:00
+     **/
+    String uploadReturnUrl(String engine, MultipartFile file, String bizType);
 
     /**
      * MultipartFile文件上传，返回文件Url（带后缀校验）
@@ -117,6 +133,14 @@ public interface DevFileService extends IService<DevFile> {
      * @date 2022/8/4 10:36
      **/
     void deleteAbsolute(DevFileIdParam devFileIdParam);
+
+    /**
+     * 调整文件所属库类型（用户文件 / 素材库）
+     *
+     * @author yubaoshan
+     * @date 2026/11/19 18:00
+     **/
+    void updateBizType(List<String> ids, String bizType);
 
     /**
      * 获取文件详情

@@ -51,6 +51,7 @@ import vip.xiaonuo.common.prop.CommonProperties;
 import vip.xiaonuo.common.util.CommonDownloadUtil;
 import vip.xiaonuo.common.util.CommonResponseUtil;
 import vip.xiaonuo.dev.modular.file.entity.DevFile;
+import vip.xiaonuo.dev.modular.file.enums.DevFileBizTypeEnum;
 import vip.xiaonuo.dev.modular.file.enums.DevFileBucketAuthEnum;
 import vip.xiaonuo.dev.modular.file.enums.DevFileCategoryEnum;
 import vip.xiaonuo.dev.modular.file.enums.DevFileEngineTypeEnum;
@@ -105,24 +106,34 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
 
     @Override
     public String uploadReturnId(String engine, MultipartFile file) {
-        return this.storageFile(engine, file, true,  true);
+        return this.uploadReturnId(engine, file, DevFileBizTypeEnum.USER.getValue());
+    }
+
+    @Override
+    public String uploadReturnId(String engine, MultipartFile file, String bizType) {
+        return this.storageFile(engine, file, true, true, bizType);
     }
 
     @Override
     public String uploadReturnIdWithValidation(String engine, MultipartFile file, List<String> allowedExtensions) {
         validateFileExtension(file, allowedExtensions);
-        return this.storageFile(engine, file, true, true);
+        return this.storageFile(engine, file, true, true, DevFileBizTypeEnum.USER.getValue());
     }
 
     @Override
     public String uploadReturnUrl(String engine, MultipartFile file) {
-        return this.storageFile(engine, file, false, false);
+        return this.uploadReturnUrl(engine, file, DevFileBizTypeEnum.USER.getValue());
+    }
+
+    @Override
+    public String uploadReturnUrl(String engine, MultipartFile file, String bizType) {
+        return this.storageFile(engine, file, false, false, bizType);
     }
 
     @Override
     public String uploadReturnUrlWithValidation(String engine, MultipartFile file, List<String> allowedExtensions) {
         validateFileExtension(file, allowedExtensions);
-        return this.storageFile(engine, file, false, false);
+        return this.storageFile(engine, file, false, false, DevFileBizTypeEnum.USER.getValue());
     }
 
     @Override
@@ -133,6 +144,9 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         }
         if(ObjectUtil.isNotEmpty(devFilePageParam.getCategory())) {
             queryWrapper.lambda().eq(DevFile::getCategory, devFilePageParam.getCategory());
+        }
+        if(ObjectUtil.isNotEmpty(devFilePageParam.getBizType())) {
+            queryWrapper.lambda().eq(DevFile::getBizType, devFilePageParam.getBizType());
         }
         if(ObjectUtil.isNotEmpty(devFilePageParam.getSearchKey())) {
             queryWrapper.lambda().like(DevFile::getName, devFilePageParam.getSearchKey());
@@ -148,6 +162,9 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         }
         if(ObjectUtil.isNotEmpty(devFileListParam.getCategory())) {
             queryWrapper.lambda().eq(DevFile::getCategory, devFileListParam.getCategory());
+        }
+        if(ObjectUtil.isNotEmpty(devFileListParam.getBizType())) {
+            queryWrapper.lambda().eq(DevFile::getBizType, devFileListParam.getBizType());
         }
         if(ObjectUtil.isNotEmpty(devFileListParam.getSearchKey())) {
             queryWrapper.lambda().like(DevFile::getName, devFileListParam.getSearchKey());
@@ -412,6 +429,22 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         this.removeByIds(CollStreamUtil.toList(devFileIdParamList, DevFileIdParam::getId));
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void updateBizType(List<String> ids, String bizType) {
+        if (CollUtil.isEmpty(ids)) {
+            throw new CommonException("请选择文件");
+        }
+        if (!DevFileBizTypeEnum.MATERIAL.getValue().equalsIgnoreCase(bizType)
+                && !DevFileBizTypeEnum.USER.getValue().equalsIgnoreCase(bizType)) {
+            throw new CommonException("不支持的库类型：{}", bizType);
+        }
+        LambdaUpdateWrapper<DevFile> updateWrapper = Wrappers.lambdaUpdate();
+        updateWrapper.in(DevFile::getId, ids)
+                .set(DevFile::getBizType, bizType.toUpperCase());
+        this.update(updateWrapper);
+    }
+
     @Override
     public void deleteAbsolute(DevFileIdParam devFileIdParam) {
         DevFile devFile = this.queryEntity(devFileIdParam.getId());
@@ -456,7 +489,8 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
      * @author xuyuxiang
      * @date 2022/6/16 16:24
      **/
-    private String storageFile(String engine, MultipartFile file, boolean returnFileId, Boolean isDownloadAuth) {
+    private String storageFile(String engine, MultipartFile file, boolean returnFileId, Boolean isDownloadAuth,
+                               String bizType) {
 
         // 如果引擎为空，默认使用本地
         if(ObjectUtil.isEmpty(engine)) {
@@ -524,6 +558,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
                 StrUtil.DOT, true):null;
         devFile.setSuffix(suffix);
         devFile.setCategory(DevFileCategoryEnum.inferBySuffix(suffix));
+        devFile.setBizType(DevFileBizTypeEnum.normalize(bizType));
         devFile.setSizeKb(Convert.toStr(NumberUtil.div(new BigDecimal(file.getSize()), BigDecimal.valueOf(1024))
                 .setScale(0,  RoundingMode.HALF_UP )));
         devFile.setSizeInfo(FileUtil.readableFileSize(file.getSize()));
@@ -921,6 +956,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         String suffix = ObjectUtil.isNotEmpty(fileName) ? StrUtil.subAfter(fileName, StrUtil.DOT, true) : null;
         devFile.setSuffix(suffix);
         devFile.setCategory(DevFileCategoryEnum.inferBySuffix(suffix));
+        devFile.setBizType(DevFileBizTypeEnum.USER.getValue());
         devFile.setSizeKb(Convert.toStr(NumberUtil.div(new BigDecimal(size), BigDecimal.valueOf(1024))
                 .setScale(0, RoundingMode.HALF_UP)));
         devFile.setSizeInfo(FileUtil.readableFileSize(size));

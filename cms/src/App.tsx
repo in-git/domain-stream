@@ -50,6 +50,7 @@ import {
 import CategoryView from './views/biz/category/index.tsx';
 import MessageView from './views/biz/message/index.tsx';
 import FileCenterView from './views/biz/file/index.tsx';
+import MaterialCenterView from './views/biz/material/index.tsx';
 
 const MODULE_TITLES: Record<ModuleKey, string> = {
   dashboard: '首页看板',
@@ -59,6 +60,7 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   category: '通用分类',
   messages: '留言管理',
   files: '文件中心',
+  materials: '素材中心',
   profile: '个人中心',
 };
 
@@ -561,6 +563,8 @@ export default function App() {
             <MessageView permissions={permissions} />
           ) : route.module === 'files' ? (
             <FileCenterView />
+          ) : route.module === 'materials' ? (
+            <MaterialCenterView permissions={permissions} />
           ) : (
             <PersonalCenterView
               user={user}

@@ -108,6 +108,171 @@ function QuickCreateSection({
   );
 }
 
+/** 流程图中的单个可点击节点 */
+function FlowNode({
+  x,
+  y,
+  width,
+  height,
+  label,
+  color,
+  primary,
+  onClick,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  color: string;
+  primary?: boolean;
+  onClick: () => void;
+}) {
+  const midY = y + height / 2;
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={`进入${label}模块`}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="cursor-pointer transition-opacity hover:opacity-85 focus:opacity-85 outline-none"
+    >
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={16}
+        fill={primary ? color : '#FFFFFF'}
+        stroke={primary ? color : '#E5E5EA'}
+        strokeWidth={primary ? 0 : 1.5}
+      />
+      <circle cx={x + 30} cy={midY} r={14} fill={primary ? 'rgba(255,255,255,0.22)' : `${color}1A`} />
+      <text
+        x={x + 30}
+        y={midY + 5}
+        textAnchor="middle"
+        fontSize="13"
+        fontWeight="700"
+        fill={primary ? '#FFFFFF' : color}
+      >
+        {label.slice(0, 1)}
+      </text>
+      <text x={x + 54} y={midY - 2} fontSize="15" fontWeight="600" fill={primary ? '#FFFFFF' : '#1D1D1F'}>
+        {label}
+      </text>
+      <text x={x + 54} y={midY + 17} fontSize="11" fill={primary ? 'rgba(255,255,255,0.82)' : '#86868B'}>
+        点击进入 →
+      </text>
+    </g>
+  );
+}
+
+/** 模块关系导览：以「通用分类」为中心，箭头指向各内容模块，节点点击可跳转 */
+function ModuleFlowSection({
+  onNavigate,
+  permissions,
+}: {
+  onNavigate: (module: ModuleKey) => void;
+  permissions: string[];
+}) {
+  const targets = [
+    { module: 'videos' as const, label: '视频', color: '#0071E3', cy: 80 },
+    { module: 'imagetexts' as const, label: '图文', color: '#1D9E5F', cy: 160 },
+    { module: 'articles' as const, label: '文章', color: '#5E5CE6', cy: 240 },
+  ].filter((n) => hasModulePerm(n.module, 'Detail', permissions));
+  const showCategory = hasModulePerm('category', 'Detail', permissions);
+
+  if (!showCategory || targets.length === 0) return null;
+
+  const W = 920;
+  const H = 320;
+  const nodeW = 176;
+  const nodeH = 64;
+  const rootX = 40;
+  const rootY = 128;
+  const rootRight = rootX + nodeW;
+  const rootMidY = rootY + nodeH / 2;
+  const targetX = W - nodeW - 40;
+
+  return (
+    <section aria-label="模块关系导览">
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">模块关系导览</h2>
+          <p className="mt-0.5 text-[13px] text-[#6E6E73]">分类统一管理内容，点击节点进入对应模块</p>
+        </div>
+        <span className="hidden sm:inline text-[12px] text-[#86868B]">点击节点跳转</span>
+      </div>
+
+      <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 sm:p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[680px] block" role="img" aria-label="分类到内容模块的流程图">
+          <defs>
+            <marker
+              id="module-flow-arrow"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#C7C7CC" />
+            </marker>
+          </defs>
+
+          {/* 分类 -> 内容模块 连线 */}
+          {targets.map((n) => {
+            const ty = n.cy;
+            return (
+              <path
+                key={n.module}
+                d={`M ${rootRight} ${rootMidY} C ${rootRight + 110} ${rootMidY}, ${targetX - 110} ${ty}, ${targetX} ${ty}`}
+                fill="none"
+                stroke="#D2D2D7"
+                strokeWidth="1.8"
+                markerEnd="url(#module-flow-arrow)"
+              />
+            );
+          })}
+
+          {/* 分类中心节点 */}
+          <FlowNode
+            x={rootX}
+            y={rootY}
+            width={nodeW}
+            height={nodeH}
+            label="分类"
+            color="#0071E3"
+            primary
+            onClick={() => onNavigate('category')}
+          />
+
+          {/* 内容节点 */}
+          {targets.map((n) => (
+            <FlowNode
+              key={n.module}
+              x={targetX}
+              y={n.cy - nodeH / 2}
+              width={nodeW}
+              height={nodeH}
+              label={n.label}
+              color={n.color}
+              onClick={() => onNavigate(n.module)}
+            />
+          ))}
+        </svg>
+      </div>
+    </section>
+  );
+}
+
 type RangeKey = 'realtime' | 'week' | 'month';
 type MetricMode = 'both' | 'uv' | 'pv';
 
@@ -352,6 +517,8 @@ export function DashboardView({
   return (
     <div className="space-y-6">
       <QuickCreateSection onSelect={onQuickCreate} permissions={permissions} />
+
+      <ModuleFlowSection onNavigate={onNavigate} permissions={permissions} />
 
       {/* KPI Strip: Real-time Visitor & Engagement Metrics */}
       <section aria-label="实时访客概览" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

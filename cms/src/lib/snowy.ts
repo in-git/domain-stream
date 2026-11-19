@@ -215,17 +215,22 @@ function normalizeFileUrl(raw: string): string {
  * @param file 文件
  * @param onProgress 上传进度回调（0-100）
  * @param imageOnly 是否走"仅图片"校验接口
+ * @param bizType 库类型：USER 用户文件（默认）/ MATERIAL 素材库
  */
 export function snowyUpload(
   file: File,
   onProgress?: (percent: number) => void,
-  imageOnly = false
+  imageOnly = false,
+  bizType: 'USER' | 'MATERIAL' = 'USER'
 ): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const endpoint = imageOnly
-      ? '/snowy/dev/file/uploadLocalReturnUrl' // 本地引擎统一接口（图片类型由前端校验）
-      : '/snowy/dev/file/uploadLocalReturnUrl';
+    const endpoint =
+      bizType === 'MATERIAL'
+        ? '/snowy/dev/file/uploadMaterialReturnUrl'
+        : imageOnly
+          ? '/snowy/dev/file/uploadLocalReturnUrl' // 本地引擎统一接口（图片类型由前端校验）
+          : '/snowy/dev/file/uploadLocalReturnUrl';
     xhr.open('POST', endpoint);
     const token = getSnowyToken();
     if (token) xhr.setRequestHeader('token', token);
