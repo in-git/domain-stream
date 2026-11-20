@@ -4,13 +4,13 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-// 小诺 Snowy 后端代理：/snowy/* -> http://<SNOWY_HOST>:<SNOWY_PORT>/api/*
-// 兼容原 Node 服务通过环境变量配置后端地址的方式；dev 与 preview 共用。
+// 小诺 Snowy 后端代理：/snowy/* -> http://<SNOWY_HOST>:<SNOWY_PORT>/*
+// 后端服务挂在根路径（无 /api 前缀），这里仅剥掉 /snowy 前缀。
 const snowyProxy = {
   '/snowy': {
-    target: `http://${process.env.SNOWY_HOST || 'localhost'}:${Number(process.env.SNOWY_PORT) || 91}`,
+    target: `http://${process.env.SNOWY_HOST || 'localhost'}:${Number(process.env.SNOWY_PORT) || 82}`,
     changeOrigin: true,
-    rewrite: (p: string) => p.replace(/^\/snowy/, '/api'),
+    rewrite: (p: string) => p.replace(/^\/snowy/, ''),
   },
 };
 

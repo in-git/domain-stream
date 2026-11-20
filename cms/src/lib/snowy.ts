@@ -189,6 +189,8 @@ export async function snowyLogin(account: string, password: string): Promise<str
     password: sm2Encrypt(password),
     validCode: '',
     validCodeReqNo: '',
+    // 指定独立设备类型，避免与 PC 端后台（snowy-admin-web）互踢顶号
+    device: 'APP',
   });
   return data;
 }
