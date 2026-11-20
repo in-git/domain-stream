@@ -699,14 +699,10 @@ interface ImageViewPageProps {
 }
 
 /** 图文相册独立页面（原灯箱弹窗） */
-export function ImageViewPage({ item, slide = 0, onRefresh, onBack }: ImageViewPageProps) {
+export function ImageViewPage({ item, slide = 0, onBack }: ImageViewPageProps) {
   const [activeSlide, setActiveSlide] = useState(
     Math.min(Math.max(slide, 0), Math.max(item.images.length - 1, 0))
   );
-
-  useEffect(() => {
-    void api.trackView('imagetext', item.id).then(() => onRefresh());
-  }, [item.id, onRefresh]);
 
   const total = item.images.length;
   const goPrev = () => setActiveSlide((i) => (i === 0 ? total - 1 : i - 1));

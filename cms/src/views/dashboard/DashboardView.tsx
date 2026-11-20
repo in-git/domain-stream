@@ -235,9 +235,6 @@ export function DashboardView({
   }, []);
 
   useEffect(() => {
-    // 进入仪表盘时上报一次心跳，将当前会话计入在线访客
-    void api.heartbeat().catch(() => {});
-
     if (!liveRefreshEnabled) {
       setSseConnected(false);
       return;

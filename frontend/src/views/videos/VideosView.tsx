@@ -21,10 +21,10 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import type { VideoItem } from '../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
-import { Tooltip } from './Tooltip';
-import { ResilientImage } from './ResilientImage';
+import type { VideoItem } from '../../data/content';
+import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
+import { Tooltip } from '../../components/Tooltip';
+import { ResilientImage } from '../../components/ResilientImage';
 
 interface VideosViewProps {
   videos: VideoItem[];

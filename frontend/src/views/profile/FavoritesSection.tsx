@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { BookmarkX, FileText, Film, Image as ImageIcon } from 'lucide-react';
-import type { ArticleItem, PhotoItem, VideoItem } from '../data/content';
-import { SWIFTUI_SMOOTH } from '../lib/motion';
-import { FavoriteDetailModal, type FavoriteTarget } from './FavoriteDetailModal';
-import { ResilientImage } from './ResilientImage';
+import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
+import { SWIFTUI_SMOOTH } from '../../lib/motion';
+import { FavoriteDetailModal, type FavoriteTarget } from '../shared/FavoriteDetailModal';
+import { ResilientImage } from '../../components/ResilientImage';
 
 export type FavoriteKind = 'video' | 'article' | 'graphic';
 

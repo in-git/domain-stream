@@ -424,56 +424,6 @@ export function buildUserProfile(account: string): UserProfile {
 /* 首页访客数据（小诺 biz/visitor 接口，已在后端放行无需登录）           */
 /* ------------------------------------------------------------------ */
 
-/** 前端本地维护的访客身份（用于 UV 去重 / 在线会话） */
-export interface VisitorIdentity {
-  visitorId: string;
-  sessionId: string;
-}
-
-function randomId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** 获取（或首次生成）当前浏览器访客身份，visitorId 持久化、sessionId 每次会话生成 */
-export function getVisitorIdentity(): VisitorIdentity {
-  let visitorId = '';
-  let sessionId = '';
-  try {
-    visitorId = localStorage.getItem('VISITOR_ID') || '';
-    if (!visitorId) {
-      visitorId = randomId('v');
-      localStorage.setItem('VISITOR_ID', visitorId);
-    }
-    sessionId = sessionStorage.getItem('SESSION_ID') || '';
-    if (!sessionId) {
-      sessionId = randomId('s');
-      sessionStorage.setItem('SESSION_ID', sessionId);
-    }
-  } catch {
-    visitorId = visitorId || randomId('v');
-    sessionId = sessionId || randomId('s');
-  }
-  return { visitorId, sessionId };
-}
-
-function detectDevice(): string {
-  const ua = navigator.userAgent || '';
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ? 'MOBILE' : 'DESKTOP';
-}
-
-/** 推断访问来源：有 referrer 且非本站视为外部来源 */
-function detectSource(): string {
-  try {
-    const ref = document.referrer;
-    if (!ref) return 'DIRECT';
-    if (/baidu|google|bing|sogou|so\.com|360/i.test(ref)) return 'SEARCH';
-    if (/weibo|weixin|qq\.com|twitter|facebook|douyin|xiaohongshu/i.test(ref)) return 'SOCIAL';
-    return 'DIRECT';
-  } catch {
-    return 'DIRECT';
-  }
-}
-
 /** 拉取首页访客聚合数据（对齐 DashboardPayload） */
 export function snowyVisitorDashboard(): Promise<DashboardPayload> {
   return get<DashboardPayload>('/biz/visitor/dashboard');
@@ -489,40 +439,6 @@ export function snowyVisitorLive(): Promise<{
   updatedAt: string;
 }> {
   return get('/biz/visitor/live');
-}
-
-type VisitorEventType = 'PV' | 'CONTENT_VIEW' | 'HEARTBEAT';
-type VisitorPageType = 'HOME' | 'VIDEO' | 'ARTICLE' | 'GRAPHIC';
-
-/** 上报一次访客事件 */
-export function snowyVisitorTrack(opts: {
-  eventType?: VisitorEventType;
-  pageType?: VisitorPageType;
-  contentId?: string;
-  contentTitle?: string;
-  durationSec?: number;
-}): Promise<void> {
-  const identity = getVisitorIdentity();
-  return post<void>('/biz/visitor/track', {
-    ...identity,
-    eventType: opts.eventType || 'PV',
-    pageType: opts.pageType || 'HOME',
-    contentId: opts.contentId,
-    contentTitle: opts.contentTitle,
-    source: detectSource(),
-    device: detectDevice(),
-    durationSec: opts.durationSec || 0,
-  });
-}
-
-/** 上报心跳（维持在线会话） */
-export function snowyVisitorHeartbeat(): Promise<void> {
-  const identity = getVisitorIdentity();
-  return post<void>('/biz/visitor/heartbeat', {
-    ...identity,
-    source: detectSource(),
-    device: detectDevice(),
-  });
 }
 
 /* ------------------------------------------------------------------ */

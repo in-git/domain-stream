@@ -5,8 +5,8 @@ import {
   Image as ImageIcon,
   MessageCircleHeart,
 } from 'lucide-react';
-import type { SectionId } from '../data/content';
-import { SWIFTUI_SNAPPY } from '../lib/motion';
+import type { SectionId } from '../../data/content';
+import { SWIFTUI_SNAPPY } from '../../lib/motion';
 
 interface LeftSidebarProps {
   activeSection: SectionId;

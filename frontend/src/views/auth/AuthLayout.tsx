@@ -1,8 +1,8 @@
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
-import heroImage from '../assets/images/video_hero_coast_1795019172940.jpg';
-import { navigate } from '../lib/router';
+import heroImage from '../../assets/images/video_hero_coast_1795019172940.jpg';
+import { navigate } from '../../lib/router';
 
 interface AuthLayoutProps {
   title: string;

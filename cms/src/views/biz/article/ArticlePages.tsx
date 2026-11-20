@@ -425,11 +425,7 @@ interface ArticleReaderPageProps {
 }
 
 /** 文章阅读独立页面（原阅读弹窗） */
-export function ArticleReaderPage({ item, onRefresh, onBack }: ArticleReaderPageProps) {
-  useEffect(() => {
-    void api.trackView('article', item.id).then(() => onRefresh());
-  }, [item.id, onRefresh]);
-
+export function ArticleReaderPage({ item, onBack }: ArticleReaderPageProps) {
   return (
     <PageShell
       title={item.title}

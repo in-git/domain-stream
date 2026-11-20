@@ -10,10 +10,10 @@ import {
   SearchX,
   X,
 } from 'lucide-react';
-import type { ArticleItem, MessageItem, PhotoItem, SectionId, VideoItem } from '../data/content';
-import { SWIFTUI_SMOOTH } from '../lib/motion';
-import { FavoriteDetailModal, type FavoriteTarget } from './FavoriteDetailModal';
-import { ResilientImage } from './ResilientImage';
+import type { ArticleItem, MessageItem, PhotoItem, SectionId, VideoItem } from '../../data/content';
+import { SWIFTUI_SMOOTH } from '../../lib/motion';
+import { FavoriteDetailModal, type FavoriteTarget } from '../shared/FavoriteDetailModal';
+import { ResilientImage } from '../../components/ResilientImage';
 
 interface SearchOverlayProps {
   /** 底部导航当前所处的模块，决定搜索范围 */

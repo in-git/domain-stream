@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bookmark, Heart, Type, X } from 'lucide-react';
-import type { ArticleItem } from '../data/content';
-import { sanitizeRichHtml } from '../lib/richtext';
-import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
-import { ResilientImage } from './ResilientImage';
-import { Tooltip } from './Tooltip';
+import type { ArticleItem } from '../../data/content';
+import { sanitizeRichHtml } from '../../lib/richtext';
+import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
+import { ResilientImage } from '../../components/ResilientImage';
+import { Tooltip } from '../../components/Tooltip';
 
 interface ArticlesViewProps {
   articles: ArticleItem[];

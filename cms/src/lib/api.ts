@@ -22,9 +22,7 @@ import {
   snowyLogout,
   snowyUpload,
   snowyVisitorDashboard,
-  snowyVisitorHeartbeat,
   snowyVisitorLive,
-  snowyVisitorTrack,
   userProfileFromSnowy,
   type SnowyLoginUser,
   type SnowyMenu,
@@ -158,22 +156,6 @@ export const api = {
 
   /** 实时访客快照（供仪表盘轮询刷新 KPI） */
   getLiveSnapshot: () => snowyVisitorLive(),
-
-  /** 心跳上报（维持当前会话在线状态） */
-  heartbeat: () => snowyVisitorHeartbeat(),
-
-  /**
-   * 上报一次内容浏览：从列表视图打开详情/预览时调用
-   * @param type video / imagetext / article
-   * @param id 内容ID
-   */
-  trackView: async (type?: string, id?: string): Promise<{ todayPV: number }> => {
-    const pageType =
-      type === 'video' ? 'VIDEO' : type === 'article' ? 'ARTICLE' : type === 'imagetext' ? 'GRAPHIC' : 'HOME';
-    await snowyVisitorTrack({ eventType: 'CONTENT_VIEW', pageType, contentId: id });
-    const live = await snowyVisitorLive();
-    return { todayPV: live.todayPV };
-  },
 
   // ---- 视频 ----
   getVideos: async () => ({ items: await snowyBiz.listVideos() }),

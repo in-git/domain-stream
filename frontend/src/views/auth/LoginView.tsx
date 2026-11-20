@@ -2,10 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, ScanLine, UserRound } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
-import { authApi, type CaptchaResult } from '../lib/snowyAuth';
-import { navigate } from '../lib/router';
-import qqIcon from '../assets/images/authSource/qq.png';
-import wechatIcon from '../assets/images/authSource/wechat.png';
+import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
+import { navigate } from '../../lib/router';
+import qqIcon from '../../assets/images/authSource/qq.png';
+import wechatIcon from '../../assets/images/authSource/wechat.png';
 
 interface LoginViewProps {
   onSuccess: (token: string) => void;

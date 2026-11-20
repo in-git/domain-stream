@@ -10,9 +10,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import type { PhotoItem } from '../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion';
-import { ResilientImage } from './ResilientImage';
+import type { PhotoItem } from '../../data/content';
+import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
+import { ResilientImage } from '../../components/ResilientImage';
 
 interface GalleryViewProps {
   photos: PhotoItem[];

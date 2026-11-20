@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { Moon, Search, Sun, X } from 'lucide-react';
-import { AccountMenu, type AccountMenuProps } from './AccountMenu';
-import { Tooltip } from './Tooltip';
+import { AccountMenu, type AccountMenuProps } from '../../components/AccountMenu';
+import { Tooltip } from '../../components/Tooltip';
 
 interface MainHeaderProps {
   searchQuery: string;

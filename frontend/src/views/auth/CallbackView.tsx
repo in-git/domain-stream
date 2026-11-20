@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, Loader2, Lock, ShieldCheck, UserRound } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AuthLayout } from './AuthLayout';
-import { authApi } from '../lib/snowyAuth';
-import { navigate } from '../lib/router';
+import { authApi } from '../../lib/snowyAuth';
+import { navigate } from '../../lib/router';
 
 interface CallbackViewProps {
   platform: string;

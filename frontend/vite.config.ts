@@ -50,6 +50,13 @@ export default defineConfig(() => {
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/api/, ''),
         },
+        // 访客 WebSocket：/ws/* -> ws://localhost:82/*
+        '/ws': {
+          target: 'ws://localhost:82',
+          ws: true,
+          changeOrigin: true,
+          rewrite: (p: string) => p.replace(/^\/ws/, ''),
+        },
         ...snowyProxy,
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
@@ -64,6 +71,12 @@ export default defineConfig(() => {
           target: 'http://localhost:82',
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/api/, ''),
+        },
+        '/ws': {
+          target: 'ws://localhost:82',
+          ws: true,
+          changeOrigin: true,
+          rewrite: (p: string) => p.replace(/^\/ws/, ''),
         },
         ...snowyProxy,
       },

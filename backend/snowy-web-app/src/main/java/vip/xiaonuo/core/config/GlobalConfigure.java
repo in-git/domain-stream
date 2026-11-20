@@ -198,11 +198,12 @@ public class GlobalConfigure implements WebMvcConfigurer {
             /* 仪表盘放行 */
             "/dashboard/dashboardList/shareDetail",
 
-            /* 首页访客统计放行（前台上报 + CMS 仪表盘拉取，无需B端登录） */
+            /* 首页访客统计放行（前台 WS 上报 + CMS 仪表盘拉取，无需B端登录） */
             "/biz/visitor/dashboard",
             "/biz/visitor/live",
             "/biz/visitor/track",
             "/biz/visitor/heartbeat",
+            "/biz/visitor/ws",
 
             /* 公共接口放行：public/** 下全部无需登录即可访问（前台内容只读 + 访客留言） */
             "/public/**",

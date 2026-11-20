@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { BookmarkX, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import type { ArticleItem, PhotoItem, VideoItem } from '../data/content';
-import { sanitizeRichHtml } from '../lib/richtext';
-import { SWIFTUI_SMOOTH } from '../lib/motion';
-import { ResilientImage } from './ResilientImage';
+import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
+import { sanitizeRichHtml } from '../../lib/richtext';
+import { SWIFTUI_SMOOTH } from '../../lib/motion';
+import { ResilientImage } from '../../components/ResilientImage';
 
 /** 收藏详情弹窗要展示的内容：三类内容各自携带自己的视图模型 */
 export type FavoriteTarget =

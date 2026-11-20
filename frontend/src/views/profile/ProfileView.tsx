@@ -9,10 +9,10 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../data/content';
-import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../lib/motion';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
+import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoritesSection } from './FavoritesSection';
-import { ResilientImage } from './ResilientImage';
+import { ResilientImage } from '../../components/ResilientImage';
 
 export interface UserBasicInfo {
   email?: string;

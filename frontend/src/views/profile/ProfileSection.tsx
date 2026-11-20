@@ -1,0 +1,58 @@
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
+import { ProfileView, type UserBasicInfo } from './ProfileView';
+
+interface ProfileSectionProps {
+  isLoggedIn: boolean;
+  accountEmail: string;
+  profile: UserProfile;
+  userInfo: UserBasicInfo;
+  isDark: boolean;
+  onToggleTheme: () => void;
+  onLogout: () => void;
+  onGoLogin: () => void;
+  onGoRegister: () => void;
+  onUpdateProfile: (profile: UserProfile) => void;
+  videos: VideoItem[];
+  articles: ArticleItem[];
+  photos: PhotoItem[];
+  savedIds: string[];
+  onToggleSave: (id: string) => void;
+}
+
+export function ProfileSection({
+  isLoggedIn,
+  accountEmail,
+  profile,
+  userInfo,
+  isDark,
+  onToggleTheme,
+  onLogout,
+  onGoLogin,
+  onGoRegister,
+  onUpdateProfile,
+  videos,
+  articles,
+  photos,
+  savedIds,
+  onToggleSave,
+}: ProfileSectionProps) {
+  return (
+    <ProfileView
+      isLoggedIn={isLoggedIn}
+      accountEmail={accountEmail}
+      profile={profile}
+      userInfo={userInfo}
+      onGoLogin={onGoLogin}
+      onGoRegister={onGoRegister}
+      onLogout={onLogout}
+      onUpdateProfile={onUpdateProfile}
+      isDark={isDark}
+      onToggleTheme={onToggleTheme}
+      videos={videos}
+      articles={articles}
+      photos={photos}
+      savedIds={savedIds}
+      onToggleSave={onToggleSave}
+    />
+  );
+}

@@ -607,11 +607,7 @@ interface VideoViewPageProps {
 }
 
 /** 视频播放独立页面（原播放弹窗） */
-export function VideoViewPage({ item, onRefresh, onBack }: VideoViewPageProps) {
-  useEffect(() => {
-    void api.trackView('video', item.id).then(() => onRefresh());
-  }, [item.id, onRefresh]);
-
+export function VideoViewPage({ item, onBack }: VideoViewPageProps) {
   return (
     <PageShell
       title={item.title}

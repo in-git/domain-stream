@@ -1,9 +1,9 @@
 import { motion } from 'motion/react';
 import { ArrowLeft, Moon, Sun } from 'lucide-react';
-import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../data/content';
-import { navigate } from '../lib/router';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
+import { navigate } from '../../lib/router';
 import { ProfileView, type UserBasicInfo } from './ProfileView';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '../../components/Tooltip';
 
 interface ProfilePageProps {
   isLoggedIn: boolean;

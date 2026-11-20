@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, Heart, MessageCircle, Send, X } from 'lucide-react';
-import type { MessageItem, MessageReply } from '../data/content.ts';
-import type { ReplyDraft } from '../lib/api.ts';
+import type { MessageItem, MessageReply } from '../../data/content.ts';
+import type { ReplyDraft } from '../../lib/api.ts';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { APPLE_EASE, SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../lib/motion.ts';
+import { APPLE_EASE, SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion.ts';
 
 type SortMode = 'latest' | 'hot';
 

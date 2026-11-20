@@ -30,6 +30,7 @@ import vip.xiaonuo.biz.modular.visitor.mapper.BizVisitorEventMapper;
 import vip.xiaonuo.biz.modular.visitor.param.BizVisitorTrackParam;
 import vip.xiaonuo.biz.modular.visitor.result.BizVisitorDashboardResult;
 import vip.xiaonuo.biz.modular.visitor.service.BizVisitorService;
+import vip.xiaonuo.biz.modular.visitor.websocket.BizVisitorWebSocket;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -45,7 +46,6 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
 
     private static final String EVENT_PV = "PV";
     private static final String EVENT_CONTENT = "CONTENT_VIEW";
-    private static final String EVENT_HEARTBEAT = "HEARTBEAT";
 
     @Resource
     private BizArticleMapper bizArticleMapper;
@@ -56,24 +56,19 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
 
     @Override
     public void track(BizVisitorTrackParam param, String ip, String userAgent) {
-        BizVisitorEvent event = buildEvent(param, ip, userAgent);
         String type = param.getEventType();
-        if (EVENT_HEARTBEAT.equals(type)) {
-            event.setEventType(EVENT_HEARTBEAT);
-        } else if (EVENT_CONTENT.equals(type)) {
-            event.setEventType(EVENT_CONTENT);
-        } else {
-            event.setEventType(EVENT_PV);
+        // 只写入关键事件（PV / 内容浏览），心跳不落库
+        if (!EVENT_CONTENT.equals(type) && !EVENT_PV.equals(type)) {
+            return;
         }
+        BizVisitorEvent event = buildEvent(param, ip, userAgent);
+        event.setEventType(type);
         this.save(event);
     }
 
     @Override
     public void heartbeat(BizVisitorTrackParam param, String ip, String userAgent) {
-        BizVisitorEvent event = buildEvent(param, ip, userAgent);
-        event.setEventType(EVENT_HEARTBEAT);
-        event.setPageType(StrUtil.blankToDefault(param.getPageType(), "HOME"));
-        this.save(event);
+        // 保留旧 HTTP 心跳接口兼容，但不再写库；在线会话由 WebSocket 维护
     }
 
     private BizVisitorEvent buildEvent(BizVisitorTrackParam param, String ip, String userAgent) {
@@ -136,10 +131,8 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
         Date todayStart = DateUtil.beginOfDay(now);
         Date tomorrowStart = DateUtil.offsetDay(todayStart, 1);
         Date yesterdayStart = DateUtil.offsetDay(todayStart, -1);
-        Date onlineFrom = DateUtil.offsetMinute(now, -5);
         long elapsedToday = now.getTime() - todayStart.getTime();
 
-        Set<String> onlineSessions = new HashSet<>();
         Set<String> todayVisitors = new HashSet<>();
         Set<String> yesterdayVisitors = new HashSet<>();
         int todayPV = 0;
@@ -155,11 +148,6 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
             if (t == null) continue;
             String et = e.getEventType();
             boolean isView = EVENT_PV.equals(et) || EVENT_CONTENT.equals(et);
-
-            // 在线会话：最近5分钟
-            if (EVENT_HEARTBEAT.equals(et) && !t.before(onlineFrom)) {
-                if (StrUtil.isNotBlank(e.getSessionId())) onlineSessions.add(e.getSessionId());
-            }
 
             // 今日
             if (!t.before(todayStart) && t.before(tomorrowStart)) {
@@ -196,7 +184,7 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
         int mobileShare = (mobile + desktop) == 0 ? 60 : (int) Math.round(mobile * 100.0 / (mobile + desktop));
 
         BizVisitorDashboardResult.Snapshot s = new BizVisitorDashboardResult.Snapshot();
-        s.setOnlineNow(onlineSessions.size());
+        s.setOnlineNow(BizVisitorWebSocket.onlineCount());
         s.setTodayPV(todayPV);
         s.setTodayUV(todayVisitors.size());
         s.setPvGrowthPercent(pvGrowth);
