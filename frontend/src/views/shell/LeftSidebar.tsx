@@ -4,9 +4,12 @@ import {
   Film,
   Image as ImageIcon,
   MessageCircleHeart,
+  ShieldCheck,
+  Landmark,
 } from 'lucide-react';
 import type { SectionId } from '../../data/content';
 import { SWIFTUI_SNAPPY } from '../../lib/motion';
+import { useSystemInfo } from '../../lib/systemInfo';
 
 interface LeftSidebarProps {
   activeSection: SectionId;
@@ -21,6 +24,9 @@ const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
 ];
 
 export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
+  const { title, config } = useSystemInfo();
+  const icpNo = (config.icpNo || '').trim();
+  const policeNo = (config.policeNo || '').trim();
   return (
     <aside
       aria-label="左侧主导航"
@@ -42,7 +48,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
             </svg>
           </span>
           <span className="hidden lg:inline text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] whitespace-nowrap">
-            吴文龙的私域
+            {title}
           </span>
         </button>
 
@@ -85,6 +91,36 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
           })}
         </nav>
       </div>
+
+      {/* 备案信息：黑底卡片，带图标且可跳转至官方查询站，留空则整块隐藏 */}
+      {(icpNo || policeNo) && (
+        <div className="hidden lg:block px-2 pb-1 space-y-1.5">
+          {icpNo && (
+            <a
+              href="https://beian.miit.gov.cn"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${icpNo}（点击前往工信部备案查询）`}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-black text-white hover:bg-[#1D1D1F] transition-colors"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-[10px] leading-tight truncate">{icpNo}</span>
+            </a>
+          )}
+          {policeNo && (
+            <a
+              href="https://beian.gov.cn"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${policeNo}（点击前往公安备案查询）`}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-black text-white hover:bg-[#1D1D1F] transition-colors"
+            >
+              <Landmark className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-[10px] leading-tight truncate">{policeNo}</span>
+            </a>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

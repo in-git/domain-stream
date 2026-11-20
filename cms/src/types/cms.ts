@@ -7,6 +7,7 @@ export type ModuleKey =
   | 'messages'
   | 'files'
   | 'materials'
+  | 'config'
   | 'profile';
 
 export type ContentStatus = 'published' | 'draft';

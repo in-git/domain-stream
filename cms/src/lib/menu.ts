@@ -35,6 +35,7 @@ const DEFAULT_PATHS: Record<ModuleKey, string> = {
   messages: '/biz/message',
   files: '/biz/file',
   materials: '/biz/material',
+  config: '/biz/config',
   profile: '/profile',
 };
 
@@ -64,6 +65,8 @@ const MATCHERS: ModuleMatcher[] = [
   { key: 'files', label: '文件中心', keywords: ['biz/file', 'bizfile'] },
   // 素材中心：菜单 component = biz/material/index，path = /biz/material
   { key: 'materials', label: '素材中心', keywords: ['biz/material', 'bizmaterial'] },
+  // 页面配置：菜单 component = biz/config/index，path = /biz/config
+  { key: 'config', label: '页面配置', keywords: ['biz/config', 'bizconfig'] },
 ];
 
 function matchModule(node: SnowyMenu): ModuleMatcher | undefined {
@@ -188,6 +191,7 @@ const MODULE_PERM_PREFIX: Record<Exclude<ModuleKey, 'dashboard' | 'profile'>, st
   messages: 'bizMessage',
   files: 'bizFile',
   materials: 'bizMaterial',
+  config: 'bizConfig',
 };
 
 /** 判断当前用户对某模块是否有某动作（add/edit/delete/detail）权限 */

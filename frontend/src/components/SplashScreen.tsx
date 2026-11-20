@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { APPLE_EASE, SWIFTUI_SMOOTH } from '../lib/motion';
+import { useSystemInfo } from '../lib/systemInfo';
 
 interface SplashScreenProps {
   onComplete: () => void;
 }
 
 export function SplashScreen({ onComplete }: SplashScreenProps) {
+  const { title } = useSystemInfo();
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -98,7 +100,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           transition={{ ...SWIFTUI_SMOOTH, delay: 0.18 }}
           className="text-3xl font-semibold tracking-tight text-white"
         >
-          吴文龙的私域
+          {title}
         </motion.h1>
 
         <motion.p

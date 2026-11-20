@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import heroImage from '../../assets/images/video_hero_coast_1795019172940.jpg';
 import { navigate } from '../../lib/router';
+import { useSystemInfo } from '../../lib/systemInfo';
 
 interface AuthLayoutProps {
   title: string;
@@ -13,6 +14,7 @@ interface AuthLayoutProps {
 
 /** 登录 / 注册 / 回调页共用的全屏沉浸式认证布局 */
 export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
+  const { title: siteTitle } = useSystemInfo();
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#0B1220]">
       {/* 背景图层：固定铺满，两张渐变保证任意图片上文字都清晰 */}
@@ -38,7 +40,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
               W
             </div>
             <div className="hidden sm:block">
-              <p className="text-[14px] font-semibold tracking-wide">吴文龙的私域</p>
+              <p className="text-[14px] font-semibold tracking-wide">{siteTitle}</p>
               <p className="text-[10px] tracking-[0.18em] text-white/50">CONTENT · VISION · DESIGN</p>
             </div>
           </div>
@@ -99,7 +101,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             <ShieldCheck className="h-4 w-4" />
             账号数据已加密保护
           </span>
-          <span>© {new Date().getFullYear()} 吴文龙的私域</span>
+          <span>© {new Date().getFullYear()} {siteTitle}</span>
         </footer>
       </div>
     </div>

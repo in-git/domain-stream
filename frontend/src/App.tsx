@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SectionId } from './data/content';
 import { startVisitorTracking, trackPageView } from './lib/visitor';
+import { loadSystemInfo } from './lib/systemInfo';
 import { LoginView } from './views/auth/LoginView';
 import { RegisterView } from './views/auth/RegisterView';
 import { CallbackView } from './views/auth/CallbackView';
@@ -33,6 +34,11 @@ export default function App() {
     if (activeSection === 'profile' || data.loadedSections[activeSection]) return;
     void data.loadSection(activeSection);
   }, [activeSection, data.loadedSections, data.loadSection]);
+
+  // 应用启动时拉取系统基础信息（网页标题 / 开屏文本）
+  useEffect(() => {
+    void loadSystemInfo();
+  }, []);
 
   // 启动访客在线追踪（WebSocket 心跳 + 关键事件上报）
   useEffect(() => startVisitorTracking(), []);

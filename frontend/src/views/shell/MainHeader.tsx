@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { Moon, Search, Sun, X } from 'lucide-react';
 import { AccountMenu, type AccountMenuProps } from '../../components/AccountMenu';
 import { Tooltip } from '../../components/Tooltip';
+import { useSystemInfo } from '../../lib/systemInfo';
 
 interface MainHeaderProps {
   searchQuery: string;
@@ -24,6 +25,7 @@ export function MainHeader({
   account,
   overlay = false,
 }: MainHeaderProps) {
+  const { title } = useSystemInfo();
   const shellClass = overlay
     ? 'fixed inset-x-0 top-0 z-30 md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
     : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
@@ -43,7 +45,7 @@ export function MainHeader({
             overlay ? 'text-white drop-shadow' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
           }`}
         >
-          吴文龙的私域
+          {title}
         </span>
       </div>
 

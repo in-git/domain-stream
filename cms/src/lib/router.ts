@@ -27,6 +27,7 @@ const MODULES: ModuleKey[] = [
   'messages',
   'files',
   'materials',
+  'config',
   'profile',
 ];
 const CONTENT_MODULES: ContentModule[] = ['videos', 'imagetexts', 'articles'];

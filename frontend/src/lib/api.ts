@@ -468,7 +468,15 @@ export interface ReplyDraft {
   replyToNickname?: string;
 }
 
+/** 公共系统基础信息（无需登录） */
+export interface PublicSystemInfo {
+  siteName: string;
+  title: string;
+  config: Record<string, string>;
+}
+
 export const portalApi = {
+  systemInfo: () => request<PublicSystemInfo>('/public/system/info'),
   categories: () => request<PortalCategory[]>('/public/categories'),
   videos: () => request<PortalVideo[]>('/public/videos'),
   articles: () => request<PortalArticle[]>('/public/articles'),
