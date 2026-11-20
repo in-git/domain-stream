@@ -21,7 +21,8 @@ function previewUrl(raw: string): string {
 }
 
 export function PreviewPanel({ values }: PreviewPanelProps) {
-  const [showJson, setShowJson] = useState(false);
+  // 默认展开存储 JSON，便于核对配置内容
+  const [showJson, setShowJson] = useState(true);
   const title = values.title || '（未设置标题）';
   const logoUrl = previewUrl((values.logoUrl || '').trim());
   const icpNo = (values.icpNo || '').trim();

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   File as FileIcon,
   Film,
+  FolderPlus,
   Image as ImageIcon,
   ImagePlus,
   Loader2,
@@ -19,6 +20,7 @@ import {
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
 import { isAudioFile, isImageFile, isVideoFile } from '../../../lib/fileCenter.ts';
 import { SelectField } from '../../../components/SelectField.tsx';
+import { QuickCreateCategory } from '../../../components/QuickCreateCategory.tsx';
 
 export interface UploadSubmitPayload {
   files: File[];
@@ -28,7 +30,11 @@ export interface UploadSubmitPayload {
 interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (payload: UploadSubmitPayload, onProgress: (percent: number) => void) => Promise<void>;
+  /** 返回上传失败的文件（用于保留重试），全部成功可返回空数组 */
+  onSubmit: (
+    payload: UploadSubmitPayload,
+    onProgress: (percent: number) => void
+  ) => Promise<File[] | void>;
   /** 打开时预填的文件（如页面拖拽进来的文件） */
   initialFiles?: File[];
 }
@@ -51,6 +57,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
   const [categoryCode, setCategoryCode] = useState('');
   const [categories, setCategories] = useState<BizCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [percent, setPercent] = useState(0);
@@ -140,8 +147,14 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
     setPercent(0);
     setError('');
     try {
-      await onSubmit({ files, categoryCode }, (value) => setPercent(value));
-      onClose();
+      // 多个文件共用同一个分类一次提交，成功后关闭；失败时保留未成功的文件便于重试
+      const failedFiles = await onSubmit({ files, categoryCode }, (value) => setPercent(value));
+      if (failedFiles?.length) {
+        setFiles(failedFiles);
+        setError(`${failedFiles.length} 个文件上传失败，可点击「保存并上传」重试`);
+      } else {
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     } finally {
@@ -220,6 +233,11 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[12px] font-medium text-[#1D1D1F]">
                   已选 {files.length} 个文件
+                  {files.length > 1 && (
+                    <span className="ml-1 text-[11px] font-normal text-[#86868B]">
+                      （共用同一分类）
+                    </span>
+                  )}
                 </span>
                 <span className="text-[11px] text-[#86868B]">共 {readableSize(totalSize)}</span>
               </div>
@@ -271,25 +289,46 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
                 <span className="block text-[12px] font-medium text-[#1D1D1F] mb-1.5">
                   分类 <span className="text-[#CF1322]">*</span>
                 </span>
-                <div className="px-3 py-2.5 rounded-xl bg-[#FFF7E6] border border-[#FFE0A3] text-[12px] text-[#AD6800]">
-                  暂无可用分类，请先在「通用分类」中创建 <b>素材</b> 模块的分类
+                <div className="px-3 py-2.5 rounded-xl bg-[#FFF7E6] border border-[#FFE0A3] text-[12px] text-[#AD6800] flex items-center justify-between gap-2">
+                  <span>暂无可用分类，先创建一个吧</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuickCreateOpen(true)}
+                    className="shrink-0 h-7 px-2.5 rounded-lg bg-[#AD6800] text-white text-[12px] hover:bg-[#955800] inline-flex items-center gap-1"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    新建分类
+                  </button>
                 </div>
               </>
             ) : (
-              <SelectField
-                label={
-                  <>
-                    分类 <span className="text-[#CF1322]">*</span>
-                  </>
-                }
-                value={categoryCode}
-                onChange={setCategoryCode}
-                isDisabled={submitting}
-                options={[
-                  { value: '', label: '请选择分类' },
-                  ...categories.map((item) => ({ value: item.code || '', label: item.name || '未命名分类' })),
-                ]}
-              />
+              <div>
+                <SelectField
+                  label={
+                    <>
+                      分类 <span className="text-[#CF1322]">*</span>
+                    </>
+                  }
+                  value={categoryCode}
+                  onChange={setCategoryCode}
+                  isDisabled={submitting}
+                  options={[
+                    { value: '', label: '请选择分类' },
+                    ...categories.map((item) => ({
+                      value: item.code || '',
+                      label: item.name || '未命名分类',
+                    })),
+                  ]}
+                />
+                <button
+                  type="button"
+                  onClick={() => setQuickCreateOpen(true)}
+                  className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-[#0071E3] hover:underline"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  新建分类
+                </button>
+              </div>
             )}
           </div>
 
@@ -302,7 +341,9 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
           {submitting && (
             <div>
               <div className="flex items-center justify-between mb-1 text-[11px] text-[#0071E3]">
-                <span>正在上传...</span>
+                <span>
+                  正在上传 {files.length > 1 ? `（共 ${files.length} 个文件）` : '...'}
+                </span>
                 <span>{percent}%</span>
               </div>
               <div className="h-1.5 rounded-full bg-[#E5E5EA] overflow-hidden">
@@ -336,6 +377,19 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
           </button>
         </div>
       </div>
+
+      {/* 快捷创建素材分类：创建成功后自动选中 */}
+      <QuickCreateCategory
+        open={quickCreateOpen}
+        module="MATERIAL"
+        title="新建素材分类"
+        hint="创建后将自动选中该分类，可直接用于本次上传"
+        onClose={() => setQuickCreateOpen(false)}
+        onCreated={(category) => {
+          void loadCategories();
+          if (category.code) setCategoryCode(category.code);
+        }}
+      />
     </div>
   );
 }

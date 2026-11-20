@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   fetchPublishCategories,
   type PublishCategoryModule,
@@ -34,6 +34,8 @@ export function usePublishCategories(module: PublishCategoryModule) {
   const [options, setOptions] = useState<PublishCategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  /** 每次手动刷新递增，触发重新拉取（用于新建分类后立即更新下拉） */
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +58,14 @@ export function usePublishCategories(module: PublishCategoryModule) {
     return () => {
       cancelled = true;
     };
+  }, [module, reloadToken]);
+
+  /** 重新拉取分类列表（新建分类后调用） */
+  const reload = useCallback(() => {
+    // 清掉并发缓存，确保拿到最新数据
+    inflight.delete(module);
+    setReloadToken((value) => value + 1);
   }, [module]);
 
-  return { options, loading, error };
+  return { options, loading, error, reload };
 }

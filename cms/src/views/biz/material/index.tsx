@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 素材中心
  * ------------------------------------------------------------------
  * 对后端菜单：path = /biz/material，component = biz/material/index
@@ -503,35 +503,37 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
     setUploadOpen(true);
   }
 
-  /** 模态框保存：顺序上传并逐个上报整体进度 */
+  /**
+   * 模态框保存：多个文件共用同一分类，顺序上传并汇总整体进度。
+   * 返回上传失败的文件，便于模态框保留它们重试。
+   */
   async function handleUploadSubmit(
     { files, categoryCode }: UploadSubmitPayload,
     onProgress: (percent: number) => void
-  ) {
-    let success = 0;
-    let failed = 0;
+  ): Promise<File[]> {
+    const failedFiles: File[] = [];
     for (let i = 0; i < files.length; i++) {
       setUploadName(files[i].name);
       try {
         await uploadMaterial(
           files[i],
+          // 整体进度 = 已完成文件数 + 当前文件进度
           (percent) => onProgress(Math.round(((i + percent / 100) / files.length) * 100)),
           categoryCode
         );
-        success += 1;
       } catch (err) {
-        failed += 1;
+        failedFiles.push(files[i]);
         notify('error', `「${files[i].name}」上传失败：${errorMessage(err)}`);
       }
     }
     setUploadName('');
-    if (success) notify('success', `已上传 ${success} 个素材`);
-    if (!success && failed) {
-      // 全部失败时向上抛错，让模态框保留并提示
-      throw new Error(`全部 ${failed} 个文件上传失败`);
+    const success = files.length - failedFiles.length;
+    if (success > 0) {
+      notify('success', `已上传 ${success} 个素材`);
+      setPage(1);
+      await Promise.all([load(), loadStats()]);
     }
-    setPage(1);
-    await Promise.all([load(), loadStats()]);
+    return failedFiles;
   }
 
   async function handleDelete(targets: DevFile[]) {
@@ -1091,7 +1093,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-6 right-6 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
             toast.kind === 'success' ? 'bg-[#1D1D1F] text-white' : 'bg-[#D70015] text-white'
           }`}
         >

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 客户端配置管理页
  * ------------------------------------------------------------------
  * 对应后端菜单：path = /biz/config，component = biz/config/index
@@ -321,7 +321,7 @@ export default function ConfigView() {
 
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-[60] flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-[13px] text-white ${
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-[13px] text-white ${
             toast.kind === 'success' ? 'bg-[#1D1D1F]' : 'bg-[#CF1322]'
           }`}
         >

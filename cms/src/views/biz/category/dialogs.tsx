@@ -17,16 +17,17 @@ import {
 import { uploadFileWithProgress } from '../../../lib/api.ts';
 import {
   CATEGORY_MODULES,
-  CATEGORY_STATUSES,
   categoryApi,
   categoryModuleLabel,
   categoryStatusLabel,
+  generateCategoryCode,
   type BizCategory,
   type CategoryImportResult,
   type CategoryPayload,
 } from '../../../lib/category.ts';
 import { formatDateShort } from '../../../lib/format.ts';
 import { SelectField } from '../../../components/SelectField.tsx';
+import { SwitchField } from '../../../components/SwitchField.tsx';
 
 const INPUT_CLASS =
   'w-full h-9 px-3 rounded-xl bg-[#F5F5F7] border border-transparent text-[13px] text-[#1D1D1F] placeholder:text-[#AEAEB2] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 focus:border-[#0071E3]/30 transition-all';
@@ -34,14 +35,6 @@ const LABEL_CLASS = 'block text-[12px] font-medium text-[#3A3A3C] mb-1.5';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败，请稍后重试';
-}
-
-/**
- * 分类编码不再由用户填写：新增时系统自动生成，编辑时保留原值。
- * 业务表 CATEGORY 仍以该编码关联分类，故不能留空。
- */
-function generateCategoryCode(): string {
-  return `cat_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /** 通用弹窗外框 */
@@ -331,14 +324,31 @@ export function CategoryFormDialog({
           <label className={LABEL_CLASS}>
             适用模块 <span className="text-[#D70015]">*</span>
           </label>
-          <SelectField
-            value={module}
-            onChange={setModule}
-            ariaLabel="适用模块"
-            className="w-full"
-            placeholder="请选择适用模块"
-            options={CATEGORY_MODULES.map((m) => ({ value: m.value, label: m.label }))}
-          />
+          <div
+            role="radiogroup"
+            aria-label="适用模块"
+            className="flex flex-wrap gap-1.5"
+          >
+            {CATEGORY_MODULES.map((m) => {
+              const active = module === m.value;
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setModule(m.value)}
+                  className={`h-8 px-3 rounded-lg text-[12px] font-medium transition-colors ${
+                    active
+                      ? 'bg-[#0071E3] text-white'
+                      : 'bg-[#F5F5F7] text-[#3A3A3C] hover:bg-[#EBEBF0]'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
           <p className="mt-1 text-[11px] text-[#86868B]">
             决定该分类会出现在哪个发布模块的分类下拉中
           </p>
@@ -445,13 +455,15 @@ export function CategoryFormDialog({
                 </div>
                 <div>
                   <label className={LABEL_CLASS}>状态</label>
-                  <SelectField
-                    value={status}
-                    onChange={setStatus}
-                    ariaLabel="状态"
-                    className="w-full"
-                    options={CATEGORY_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
-                  />
+                  <div className="h-9 flex items-center">
+                    <SwitchField
+                      checked={status === 'ENABLE'}
+                      onChange={(next) => setStatus(next ? 'ENABLE' : 'DISABLE')}
+                      ariaLabel="分类状态"
+                      onLabel="启用"
+                      offLabel="停用"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className={LABEL_CLASS} htmlFor="cat-sort">

@@ -119,7 +119,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   const [fileSizeBytes, setFileSizeBytes] = useState(item?.fileSizeBytes ?? 0);
   // 只有保存阶段才会真正上传，这里显示上传进度
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  // 默认打开预览窗口，与编辑工作区保持一致
+  const [previewOpen, setPreviewOpen] = useState(true);
   const [coverProcessing, setCoverProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);

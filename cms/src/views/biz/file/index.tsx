@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 文件中心（素材库）管理页
  * ------------------------------------------------------------------
  * 对应后端菜单：path = /biz/file，component = biz/file/index
@@ -729,7 +729,7 @@ export default function FileCenterView() {
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-6 right-6 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
             toast.kind === 'success' ? 'bg-[#1D1D1F] text-white' : 'bg-[#D70015] text-white'
           }`}
         >

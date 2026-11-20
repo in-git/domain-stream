@@ -93,6 +93,14 @@ export interface CategoryImportResult {
   errorDetail?: Array<{ index?: number; success?: boolean; msg?: string }>;
 }
 
+/**
+ * 分类编码不由用户填写：新增时自动生成。
+ * 业务表以该编码关联分类，因此不能留空。
+ */
+export function generateCategoryCode(): string {
+  return `cat_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function qs(params: Record<string, unknown> = {}): string {
   const entries = Object.entries(params).filter(
     ([, v]) => v !== undefined && v !== null && v !== ''

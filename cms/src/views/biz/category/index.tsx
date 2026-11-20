@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 通用分类管理页
  * ------------------------------------------------------------------
  * 对应后端菜单：path = /biz/category，component = biz/category/index
@@ -45,7 +45,6 @@ import {
   CategoryFormDialog,
   CategoryImportDialog,
 } from './dialogs.tsx';
-import { SelectField } from '../../../components/SelectField.tsx';
 
 const PAGE_SIZE = 10;
 const GRID_CLASS =
@@ -339,53 +338,102 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
 
       {/* 工具栏 */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
-          <div className="relative flex-1 max-w-[300px] min-w-[180px]">
-            <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索名称、描述、备注..."
-              className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
-            />
+        <div className="flex flex-col gap-2.5 flex-1 min-w-[260px]">
+          {/* 第一行：搜索 */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-[300px] min-w-[180px]">
+              <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="搜索名称、描述、备注..."
+                className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
+              />
+            </div>
+            {hasFilter && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setModuleFilter('all');
+                  setStatusFilter('all');
+                }}
+                className="h-9 px-2.5 rounded-xl text-[12px] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F2F2F7] inline-flex items-center gap-1 transition-colors shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+                清除筛选
+              </button>
+            )}
           </div>
-          <SelectField
-            value={moduleFilter}
-            onChange={setModuleFilter}
-            ariaLabel="按适用模块筛选"
-            className="w-[140px]"
-            options={[
-              { value: 'all', label: '全部模块' },
-              ...CATEGORY_MODULES.map((m) => ({ value: m.value, label: m.label })),
-              { value: '', label: '未设置模块' },
-            ]}
-          />
-          <SelectField
-            value={statusFilter}
-            onChange={setStatusFilter}
-            ariaLabel="按状态筛选"
-            className="w-[124px]"
-            options={[
-              { value: 'all', label: '全部状态' },
-              { value: 'ENABLE', label: '已启用' },
-              { value: 'DISABLE', label: '已禁用' },
-            ]}
-          />
-          {hasFilter && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('');
-                setModuleFilter('all');
-                setStatusFilter('all');
-              }}
-              className="h-9 px-2.5 rounded-xl text-[12px] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F2F2F7] inline-flex items-center gap-1 transition-colors"
+
+          {/* 第二行：模块（独占一行） */}
+          <div className="flex items-start gap-2">
+            <span className="h-8 leading-8 text-[12px] text-[#86868B] shrink-0">模块</span>
+            <div
+              role="radiogroup"
+              aria-label="按适用模块筛选"
+              className="flex flex-wrap items-center gap-1"
             >
-              <X className="w-3.5 h-3.5" />
-              清除筛选
-            </button>
-          )}
+              {[
+                { value: 'all', label: '全部模块' },
+                ...CATEGORY_MODULES.map((m) => ({ value: m.value as string, label: m.label })),
+                { value: '', label: '未设置' },
+              ].map((m) => {
+                const active = moduleFilter === m.value;
+                return (
+                  <button
+                    key={m.value || 'none'}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setModuleFilter(m.value)}
+                    className={`h-8 px-2.5 rounded-lg text-[12px] font-medium transition-colors ${
+                      active
+                        ? 'bg-[#0071E3] text-white'
+                        : 'bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#EBEBF0] hover:text-[#1D1D1F]'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 第三行：状态（独占一行） */}
+          <div className="flex items-start gap-2">
+            <span className="h-8 leading-8 text-[12px] text-[#86868B] shrink-0">状态</span>
+            <div
+              role="radiogroup"
+              aria-label="按状态筛选"
+              className="flex flex-wrap items-center gap-1"
+            >
+              {[
+                { value: 'all', label: '全部状态' },
+                { value: 'ENABLE', label: '已启用' },
+                { value: 'DISABLE', label: '已禁用' },
+              ].map((s) => {
+                const active = statusFilter === s.value;
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setStatusFilter(s.value)}
+                    className={`h-8 px-2.5 rounded-lg text-[12px] font-medium transition-colors ${
+                      active
+                        ? 'bg-[#0071E3] text-white'
+                        : 'bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#EBEBF0] hover:text-[#1D1D1F]'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -737,7 +785,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-6 right-6 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
             toast.kind === 'success'
               ? 'bg-[#1D1D1F] text-white'
               : 'bg-[#D70015] text-white'

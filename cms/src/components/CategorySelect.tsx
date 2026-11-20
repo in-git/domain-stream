@@ -1,10 +1,12 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { FolderPlus } from 'lucide-react';
 import {
   filterPublishCategories,
   type PublishCategoryModule,
 } from '../lib/category.ts';
 import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import { SelectField } from './SelectField.tsx';
+import { QuickCreateCategory } from './QuickCreateCategory.tsx';
 
 export interface CategorySelectProps {
   /** 目标模块：只展示该模块与「通用」分类 */
@@ -21,6 +23,8 @@ export interface CategorySelectProps {
   className?: string;
   /** 是否包含「通用」（COMMON）分类，默认包含 */
   includeCommon?: boolean;
+  /** 是否显示「新建分类」快捷入口，默认显示 */
+  allowQuickCreate?: boolean;
 }
 
 /**
@@ -37,8 +41,10 @@ export function CategorySelect({
   placeholder = '请选择分类',
   className = 'w-full',
   includeCommon = true,
+  allowQuickCreate = true,
 }: CategorySelectProps) {
-  const { options, loading, error } = usePublishCategories(module);
+  const { options, loading, error, reload } = usePublishCategories(module);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   const filtered = useMemo(
     () => filterPublishCategories(options, module, includeCommon),
@@ -69,6 +75,31 @@ export function CategorySelect({
         options={selectable.map((option) => ({ value: option.code, label: option.label }))}
       />
       {error && <p className="mt-1 text-[11px] text-[#D70015]">{error}，请稍后重试</p>}
+
+      {allowQuickCreate && (
+        <>
+          <button
+            type="button"
+            onClick={() => setQuickCreateOpen(true)}
+            className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-[#0071E3] hover:underline"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            新建分类
+          </button>
+          <QuickCreateCategory
+            open={quickCreateOpen}
+            module={module}
+            title="新建分类"
+            hint="创建后将自动选中该分类"
+            onClose={() => setQuickCreateOpen(false)}
+            onCreated={(category) => {
+              // 刷新下拉选项并选中新建的分类
+              reload();
+              if (category.code) onChange(category.code);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

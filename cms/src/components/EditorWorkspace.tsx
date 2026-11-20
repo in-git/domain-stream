@@ -135,7 +135,8 @@ export function EditorWorkspace({
   onPreviewOpenChange,
 }: EditorWorkspaceProps) {
   const [device, setDevice] = useState<PreviewDevice>('desktop');
-  const [internalShowPreview, setInternalShowPreview] = useState(false);
+  // 默认打开预览窗口，编辑时即时看到效果
+  const [internalShowPreview, setInternalShowPreview] = useState(true);
   // 受控优先：外部传 previewOpen 时由外部决定，否则用内部 state
   const showPreview = previewOpen ?? internalShowPreview;
   const setPreviewOpen = (open: boolean) => {
