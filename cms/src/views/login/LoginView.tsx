@@ -7,11 +7,6 @@ interface LoginViewProps {
   onLoginSuccess: (user: UserProfile) => void;
 }
 
-const PRESET_ACCOUNTS = [
-  { label: '超级管理员', account: 'superAdmin', pass: 'Snowy@2026!' },
-  { label: '业务管理员', account: 'bizAdmin', pass: 'Snowy@2026!' },
-];
-
 const ACCOUNT_KEY = 'SNOWY_ACCOUNT';
 
 function readRememberedAccount(): string {
@@ -61,23 +56,6 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
       onLoginSuccess(res.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败，请重试');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function quickLogin(presetAccount: string, presetPass: string) {
-    setEmail(presetAccount);
-    setPassword(presetPass);
-    setError('');
-    setForceLogoutReason('');
-    setSubmitting(true);
-    try {
-      const res = await api.login(presetAccount, presetPass);
-      persistAccount(presetAccount);
-      onLoginSuccess(res.user);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败');
     } finally {
       setSubmitting(false);
     }
@@ -188,27 +166,6 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
           </button>
         </form>
-
-        <div className="mt-7 pt-6 border-t border-[#E5E5EA]">
-          <p className="text-[12px] text-[#86868B] mb-2.5 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#0071E3]" />
-            使用小诺 Snowy 统一认证账号，点击下方预设可快速登录：
-          </p>
-          <div className="grid grid-cols-1 gap-2">
-            {PRESET_ACCOUNTS.map((acc) => (
-              <button
-                key={acc.account}
-                type="button"
-                disabled={submitting}
-                onClick={() => quickLogin(acc.account, acc.pass)}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] hover:bg-[#ECECF0] text-left transition-colors"
-              >
-                <span className="text-[13px] font-medium text-[#1D1D1F]">{acc.label}</span>
-                <span className="text-[12px] font-mono text-[#6E6E73]">{acc.account}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       <p className="mt-6 text-[12px] text-[#86868B]">
