@@ -127,7 +127,12 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
 
     @Override
     public String uploadReturnUrl(String engine, MultipartFile file, String bizType) {
-        return this.storageFile(engine, file, false, false, bizType);
+        return this.uploadReturnUrl(engine, file, bizType, null);
+    }
+
+    @Override
+    public String uploadReturnUrl(String engine, MultipartFile file, String bizType, String categoryCode) {
+        return this.storageFile(engine, file, false, false, bizType, categoryCode);
     }
 
     @Override
@@ -144,6 +149,9 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         }
         if(ObjectUtil.isNotEmpty(devFilePageParam.getCategory())) {
             queryWrapper.lambda().eq(DevFile::getCategory, devFilePageParam.getCategory());
+        }
+        if(ObjectUtil.isNotEmpty(devFilePageParam.getCategoryCode())) {
+            queryWrapper.lambda().eq(DevFile::getCategoryCode, devFilePageParam.getCategoryCode());
         }
         if(ObjectUtil.isNotEmpty(devFilePageParam.getBizType())) {
             queryWrapper.lambda().eq(DevFile::getBizType, devFilePageParam.getBizType());
@@ -162,6 +170,9 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         }
         if(ObjectUtil.isNotEmpty(devFileListParam.getCategory())) {
             queryWrapper.lambda().eq(DevFile::getCategory, devFileListParam.getCategory());
+        }
+        if(ObjectUtil.isNotEmpty(devFileListParam.getCategoryCode())) {
+            queryWrapper.lambda().eq(DevFile::getCategoryCode, devFileListParam.getCategoryCode());
         }
         if(ObjectUtil.isNotEmpty(devFileListParam.getBizType())) {
             queryWrapper.lambda().eq(DevFile::getBizType, devFileListParam.getBizType());
@@ -491,6 +502,11 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
      **/
     private String storageFile(String engine, MultipartFile file, boolean returnFileId, Boolean isDownloadAuth,
                                String bizType) {
+        return this.storageFile(engine, file, returnFileId, isDownloadAuth, bizType, null);
+    }
+
+    private String storageFile(String engine, MultipartFile file, boolean returnFileId, Boolean isDownloadAuth,
+                               String bizType, String categoryCode) {
 
         // 如果引擎为空，默认使用本地
         if(ObjectUtil.isEmpty(engine)) {
@@ -558,6 +574,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
                 StrUtil.DOT, true):null;
         devFile.setSuffix(suffix);
         devFile.setCategory(DevFileCategoryEnum.inferBySuffix(suffix));
+        devFile.setCategoryCode(ObjectUtil.isNotEmpty(categoryCode) ? categoryCode : null);
         devFile.setBizType(DevFileBizTypeEnum.normalize(bizType));
         devFile.setSizeKb(Convert.toStr(NumberUtil.div(new BigDecimal(file.getSize()), BigDecimal.valueOf(1024))
                 .setScale(0,  RoundingMode.HALF_UP )));

@@ -11,6 +11,9 @@
  */
 import type { PageConfigItem } from '../../../lib/pageConfig.ts';
 
+/** 编辑控件类型：文本框 / 图片上传（前端转 WebP 后走文件中心上传） */
+export type ConfigControl = 'text' | 'upload';
+
 export interface ConfigFieldDef {
   /** JSON 中的属性名（回写数据库时使用） */
   key: string;
@@ -18,6 +21,8 @@ export interface ConfigFieldDef {
   label: string;
   /** 属性说明 */
   description?: string;
+  /** 编辑控件类型，默认 text */
+  control?: ConfigControl;
   /** 数据库中还没有该属性时的初始值 */
   defaultValue: string;
   placeholder?: string;
@@ -33,6 +38,20 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     description: '浏览器标签页与站点顶部显示的名称',
     defaultValue: '吴文龙的私域',
     placeholder: '请输入网页标题',
+  },
+  {
+    key: 'faviconUrl',
+    label: '网页图标（favicon）',
+    description: '浏览器标签页图标，上传后自动转 WebP 存入文件中心；留空用默认',
+    control: 'upload',
+    defaultValue: '',
+  },
+  {
+    key: 'logoUrl',
+    label: '网页 Logo',
+    description: '侧边栏与登录页品牌图标，上传后自动转 WebP；留空用默认',
+    control: 'upload',
+    defaultValue: '',
   },
   {
     key: 'icpNo',

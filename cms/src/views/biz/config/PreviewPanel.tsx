@@ -5,16 +5,25 @@
  * 新增属性时在这里加对应的预览区块即可。
  */
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Eye, FileJson, Globe2, ShieldCheck, Landmark } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, FileJson, Globe2 } from 'lucide-react';
+import icpIcon from '../../../assets/icp-icon.svg';
+import policeIcon from '../../../assets/police-icon.svg';
 import { draftToJson } from './schema';
 
 interface PreviewPanelProps {
   values: Record<string, string>;
 }
 
+/** 配置里存的是纯后端路径，CMS 预览时补回 /snowy 代理前缀 */
+function previewUrl(raw: string): string {
+  if (!raw || raw.startsWith('/snowy') || raw.startsWith('http')) return raw;
+  return `/snowy${raw}`;
+}
+
 export function PreviewPanel({ values }: PreviewPanelProps) {
   const [showJson, setShowJson] = useState(false);
   const title = values.title || '（未设置标题）';
+  const logoUrl = previewUrl((values.logoUrl || '').trim());
   const icpNo = (values.icpNo || '').trim();
   const policeNo = (values.policeNo || '').trim();
   const json = useMemo(() => draftToJson(values), [values]);
@@ -46,10 +55,19 @@ export function PreviewPanel({ values }: PreviewPanelProps) {
           {/* 站点预览区 */}
           <div className="p-5" style={{ borderTop: '3px solid #0071E3' }}>
             <div className="flex items-center justify-between gap-2 mb-6">
-              <span className="text-[13px] font-semibold text-[#1D1D1F] truncate">{title}</span>
-              <span className="text-[10px] text-[#86868B] flex items-center gap-1 shrink-0">
-                <Globe2 className="w-3 h-3" />
-                首页
+              <span className="flex items-center gap-2 text-[13px] font-semibold text-[#1D1D1F] truncate">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="w-5 h-5 object-contain shrink-0" />
+                ) : (
+                  <span className="w-5 h-5 rounded-md bg-[#1D1D1F] shrink-0" />
+                )}
+                {title}
+              </span>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] text-[#86868B] flex items-center gap-1">
+                  <Globe2 className="w-3 h-3" />
+                  首页
+                </span>
               </span>
             </div>
 
@@ -66,25 +84,21 @@ export function PreviewPanel({ values }: PreviewPanelProps) {
             </button>
 
             {(icpNo || policeNo) && (
-              <div className="mt-5 pt-3 border-t border-[#E5E5EA] space-y-1.5">
-                {icpNo && (
-                  <div
-                    title={icpNo}
-                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-black text-white"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                    <span className="text-[10px] leading-tight truncate">{icpNo}</span>
-                  </div>
-                )}
-                {policeNo && (
-                  <div
-                    title={policeNo}
-                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-black text-white"
-                  >
-                    <Landmark className="w-3.5 h-3.5 shrink-0" />
-                    <span className="text-[10px] leading-tight truncate">{policeNo}</span>
-                  </div>
-                )}
+              <div className="mt-5 pt-3 border-t border-[#E5E5EA]">
+                <div className="bg-black rounded-xl px-2.5 py-2 space-y-1.5">
+                  {icpNo && (
+                    <div className="flex items-center gap-1.5" title={icpNo}>
+                      <img src={icpIcon} alt="ICP备案" className="w-4 h-4 shrink-0" />
+                      <span className="text-[10px] leading-tight text-white truncate">{icpNo}</span>
+                    </div>
+                  )}
+                  {policeNo && (
+                    <div className="flex items-center gap-1.5" title={policeNo}>
+                      <img src={policeIcon} alt="公安备案" className="w-4 h-4 shrink-0" />
+                      <span className="text-[10px] leading-tight text-white truncate">{policeNo}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

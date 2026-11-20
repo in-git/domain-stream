@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vip.xiaonuo.biz.modular.config.param.BizConfigAddParam;
 import vip.xiaonuo.biz.modular.config.param.BizConfigEditParam;
 import vip.xiaonuo.biz.modular.config.param.BizConfigKeyParam;
+import vip.xiaonuo.biz.modular.config.param.BizConfigSaveParam;
 import vip.xiaonuo.biz.modular.config.result.BizConfigItemResult;
 import vip.xiaonuo.biz.modular.config.result.PublicSystemInfoResult;
 import vip.xiaonuo.biz.modular.config.service.BizConfigService;
@@ -59,6 +60,14 @@ public class BizConfigController {
     @GetMapping("/biz/config/json")
     public CommonResult<String> rawJson() {
         return CommonResult.data(bizConfigService.rawJson());
+    }
+
+    @Operation(summary = "整体保存页面配置（覆盖写入）")
+    @CommonLog("保存页面配置")
+    @PostMapping("/biz/config/save")
+    public CommonResult<String> save(@RequestBody BizConfigSaveParam saveParam) {
+        bizConfigService.save(saveParam);
+        return CommonResult.ok();
     }
 
     @Operation(summary = "新增页面配置属性")

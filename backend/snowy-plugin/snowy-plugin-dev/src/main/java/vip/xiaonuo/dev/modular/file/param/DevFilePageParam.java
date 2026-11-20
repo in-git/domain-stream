@@ -34,6 +34,10 @@ public class DevFilePageParam {
     @Schema(description = "素材分类")
     private String category;
 
+    /** 通用分类编码，关联 BIZ_CATEGORY.CODE */
+    @Schema(description = "通用分类编码")
+    private String categoryCode;
+
     /** 库类型（USER 用户文件 / MATERIAL 素材库） */
     @Schema(description = "库类型")
     private String bizType;

@@ -26,6 +26,10 @@ export const pageConfigApi = {
   /** 原始 JSON 字符串 */
   rawJson: () => snowyRequest<string>('/biz/config/json'),
 
+  /** 整体保存全部属性（覆盖写入，允许空值，不存在则新增、存在则更新） */
+  save: (items: PageConfigItem[]) =>
+    snowyRequest<void>('/biz/config/save', jsonBody({ items })),
+
   /** 新增属性，属性名重复时后端报错 */
   add: (key: string, value: string) =>
     snowyRequest<void>('/biz/config/add', jsonBody({ key, value })),

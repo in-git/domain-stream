@@ -51,8 +51,8 @@ public class BizCategoryAddParam {
     @Schema(description = "分类图标")
     private String icon;
 
-    /** 适用模块：ARTICLE文章/VIDEO视频/GRAPHIC图文/IMAGE图片/COMMON通用 */
-    @Schema(description = "适用模块：ARTICLE文章/VIDEO视频/GRAPHIC图文/IMAGE图片/COMMON通用")
+    /** 适用模块：ARTICLE文章/VIDEO视频/GRAPHIC图文/IMAGE图片/MATERIAL素材/COMMON通用 */
+    @Schema(description = "适用模块：ARTICLE文章/VIDEO视频/GRAPHIC图文/IMAGE图片/MATERIAL素材/COMMON通用")
     private String module;
 
     /** 分类描述 */

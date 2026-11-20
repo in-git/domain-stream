@@ -58,6 +58,8 @@ export interface DevFile {
   name?: string;
   suffix?: string;
   category?: string;
+  /** 通用分类编码，关联 BIZ_CATEGORY.CODE */
+  categoryCode?: string;
   /** 库类型：USER 用户文件 / MATERIAL 素材库 */
   bizType?: string;
   sizeKb?: string;
@@ -147,20 +149,22 @@ export function uploadLibraryFile(
   return snowyUpload(file, onProgress, false, bizType);
 }
 
-/** 上传素材到素材库 */
+/** 上传素材到素材库（可指定通用分类编码） */
 export function uploadMaterial(
   file: File,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  categoryCode?: string
 ): Promise<{ url: string }> {
-  return uploadLibraryFile(file, 'MATERIAL', onProgress);
+  return snowyUpload(file, onProgress, false, 'MATERIAL', categoryCode);
 }
 
 export const fileCenterApi = {
-  /** 分页（后端支持 category / bizType / searchKey 过滤） */
+  /** 分页（后端支持 category / categoryCode / bizType / searchKey 过滤） */
   page(params: {
     current?: number;
     size?: number;
     category?: string;
+    categoryCode?: string;
     bizType?: 'USER' | 'MATERIAL';
     searchKey?: string;
   } = {}): Promise<DevFilePage> {

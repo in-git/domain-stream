@@ -4,12 +4,12 @@ import {
   Film,
   Image as ImageIcon,
   MessageCircleHeart,
-  ShieldCheck,
-  Landmark,
 } from 'lucide-react';
+import icpIcon from '../../assets/icp-icon.svg';
+import policeIcon from '../../assets/police-icon.svg';
 import type { SectionId } from '../../data/content';
 import { SWIFTUI_SNAPPY } from '../../lib/motion';
-import { useSystemInfo } from '../../lib/systemInfo';
+import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 
 interface LeftSidebarProps {
   activeSection: SectionId;
@@ -25,6 +25,7 @@ const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
 
 export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
   const { title, config } = useSystemInfo();
+  const logoUrl = publicFileUrl(config.logoUrl);
   const icpNo = (config.icpNo || '').trim();
   const policeNo = (config.policeNo || '').trim();
   return (
@@ -40,12 +41,18 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
           onClick={() => onSelectSection('videos')}
           className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
         >
-          <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#1D1D1F] dark:bg-white text-white dark:text-[#1D1D1F] shrink-0 shadow-xs">
-            <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none" aria-hidden="true">
-              <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="2" />
-              <path d="M16 9L22.5 20.5H9.5L16 9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-              <circle cx="16" cy="16" r="2.2" fill="#0A84FF" />
-            </svg>
+          <span className="flex items-center justify-center w-9 h-9 shrink-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center rounded-xl bg-[#1D1D1F] dark:bg-white text-white dark:text-[#1D1D1F] shadow-xs">
+                <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none" aria-hidden="true">
+                  <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="2" />
+                  <path d="M16 9L22.5 20.5H9.5L16 9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <circle cx="16" cy="16" r="2.2" fill="#0A84FF" />
+                </svg>
+              </span>
+            )}
           </span>
           <span className="hidden lg:inline text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] whitespace-nowrap">
             {title}
@@ -92,33 +99,35 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         </nav>
       </div>
 
-      {/* 备案信息：黑底卡片，带图标且可跳转至官方查询站，留空则整块隐藏 */}
+      {/* 备案模块：铺满侧栏底部整宽、紧贴底边，真实图标 + 白字，点击跳转官方查询站 */}
       {(icpNo || policeNo) && (
-        <div className="hidden lg:block px-2 pb-1 space-y-1.5">
-          {icpNo && (
-            <a
-              href="https://beian.miit.gov.cn"
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`${icpNo}（点击前往工信部备案查询）`}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-black text-white hover:bg-[#1D1D1F] transition-colors"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-[10px] leading-tight truncate">{icpNo}</span>
-            </a>
-          )}
-          {policeNo && (
-            <a
-              href="https://beian.gov.cn"
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`${policeNo}（点击前往公安备案查询）`}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-black text-white hover:bg-[#1D1D1F] transition-colors"
-            >
-              <Landmark className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-[10px] leading-tight truncate">{policeNo}</span>
-            </a>
-          )}
+        <div className="hidden lg:block -mx-3 lg:-mx-4 -mb-5">
+          <div className="bg-black px-3 py-3 space-y-2">
+            {icpNo && (
+              <a
+                href="https://beian.miit.gov.cn"
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`${icpNo}（点击前往工信部备案查询）`}
+                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+              >
+                <img src={icpIcon} alt="ICP备案" className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] leading-tight text-white truncate">{icpNo}</span>
+              </a>
+            )}
+            {policeNo && (
+              <a
+                href="https://beian.gov.cn"
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`${policeNo}（点击前往公安备案查询）`}
+                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+              >
+                <img src={policeIcon} alt="公安备案" className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] leading-tight text-white truncate">{policeNo}</span>
+              </a>
+            )}
+          </div>
         </div>
       )}
     </aside>

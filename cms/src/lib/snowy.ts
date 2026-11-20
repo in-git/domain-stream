@@ -218,21 +218,27 @@ function normalizeFileUrl(raw: string): string {
  * @param onProgress 上传进度回调（0-100）
  * @param imageOnly 是否走"仅图片"校验接口
  * @param bizType 库类型：USER 用户文件（默认）/ MATERIAL 素材库
+ * @param categoryCode 通用分类编码（BIZ_CATEGORY.CODE），仅素材库有效
  */
 export function snowyUpload(
   file: File,
   onProgress?: (percent: number) => void,
   imageOnly = false,
-  bizType: 'USER' | 'MATERIAL' = 'USER'
+  bizType: 'USER' | 'MATERIAL' = 'USER',
+  categoryCode?: string
 ): Promise<{ url: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const endpoint =
+    const base =
       bizType === 'MATERIAL'
         ? '/snowy/dev/file/uploadMaterialReturnUrl'
         : imageOnly
           ? '/snowy/dev/file/uploadLocalReturnUrl' // 本地引擎统一接口（图片类型由前端校验）
           : '/snowy/dev/file/uploadLocalReturnUrl';
+    const endpoint =
+      bizType === 'MATERIAL' && categoryCode
+        ? `${base}?categoryCode=${encodeURIComponent(categoryCode)}`
+        : base;
     xhr.open('POST', endpoint);
     const token = getSnowyToken();
     if (token) xhr.setRequestHeader('token', token);
@@ -638,14 +644,24 @@ function graphicFromSnowy(g: SnowyGraphic): ImageTextItem {
 /* 业务模块 CRUD（page / add / edit / delete / detail）                 */
 /* ------------------------------------------------------------------ */
 
-const PAGE_SIZE = 200;
+/** 单页请求条数：统一使用常规分页大小，不再一次性拉大页 */
+const PAGE_SIZE = 20;
 
+/** 逐页拉取模块全部数据，避免一次性请求过大分页 */
 async function fetchAll<T>(module: string): Promise<T[]> {
-  const page = await get<SnowyPage<T>>(`/biz/${module}/page`, {
-    current: 1,
-    size: PAGE_SIZE,
-  });
-  return page?.records || [];
+  const all: T[] = [];
+  for (let current = 1; ; current++) {
+    const page = await get<SnowyPage<T>>(`/biz/${module}/page`, {
+      current,
+      size: PAGE_SIZE,
+    });
+    const records = page?.records || [];
+    all.push(...records);
+    if (records.length < PAGE_SIZE || all.length >= (page?.total ?? all.length)) {
+      break;
+    }
+  }
+  return all;
 }
 
 export interface SnowyBizApi {

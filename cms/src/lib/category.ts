@@ -19,6 +19,7 @@ export const CATEGORY_MODULES = [
   { value: 'VIDEO', label: '视频' },
   { value: 'GRAPHIC', label: '图文' },
   { value: 'IMAGE', label: '图片' },
+  { value: 'MATERIAL', label: '素材' },
   { value: 'COMMON', label: '通用' },
 ] as const;
 
@@ -269,8 +270,8 @@ export const categoryApi = {
 /** 循环分页拉取全部分类（后端 page 不支持条件查询，列表页在前端过滤） */
 export async function listAllCategories(): Promise<BizCategory[]> {
   const all: BizCategory[] = [];
-  const size = 200;
-  for (let current = 1; current <= 50; current++) {
+  const size = 20;
+  for (let current = 1; current <= 500; current++) {
     const page = await categoryApi.page({ current, size });
     const records = page?.records || [];
     if (!records.length) break;

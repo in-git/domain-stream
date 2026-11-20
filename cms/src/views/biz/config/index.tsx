@@ -11,17 +11,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Check,
+  Image as ImageIcon,
   Loader2,
+  FolderOpen,
   RefreshCw,
   RotateCcw,
   Save,
   SlidersHorizontal,
+  X,
 } from 'lucide-react';
+import { convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
+import { FilePicker } from '../../../components/FilePicker.tsx';
 import { pageConfigApi } from '../../../lib/pageConfig.ts';
 import {
   CONFIG_FIELDS,
   draftFromItems,
   type ConfigDraft,
+  type ConfigFieldDef,
 } from './schema';
 import { PreviewPanel } from './PreviewPanel';
 
@@ -34,6 +41,119 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
+/** 配置里存的是纯后端路径，CMS 预览时补回 /snowy 代理前缀 */
+function previewUrl(raw: string): string {
+  if (!raw) return '';
+  if (raw.startsWith('/snowy') || raw.startsWith('http')) return raw;
+  return `/snowy${raw}`;
+}
+
+/** 文本框 / 图片上传（选中图片 → 前端转 WebP → 文件中心上传 → 存返回 URL） */
+function FieldControl({
+  field,
+  value,
+  onChange,
+  onError,
+  onPick,
+}: {
+  field: ConfigFieldDef;
+  value: string;
+  onChange: (value: string) => void;
+  onError: (message: string) => void;
+  onPick: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+
+  async function handleUpload(selected: File | undefined) {
+    if (!selected) return;
+    if (!selected.type.startsWith('image/')) {
+      onError('请选择图片文件');
+      return;
+    }
+    setUploading(true);
+    setPreviewFailed(false);
+    try {
+      const webp = await convertToWebp(selected);
+      const { url } = await uploadFileWithProgress(webp);
+      // 存纯后端路径（去掉 CMS 的 /snowy 代理前缀），frontend 用自己的 /api 代理访问
+      onChange(url.replace(/^\/snowy/, ''));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : '图片上传失败');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (field.control === 'upload') {
+    return (
+      <div className="flex items-center gap-3">
+        <label className="relative w-14 h-14 rounded-xl border border-dashed border-[#C7C7CC] bg-[#FAFAFC] flex items-center justify-center shrink-0 overflow-hidden cursor-pointer hover:border-[#0071E3] transition-colors">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploading}
+            onChange={(event) => {
+              void handleUpload(event.target.files?.[0]);
+              event.target.value = '';
+            }}
+          />
+          {uploading ? (
+            <Loader2 className="w-5 h-5 text-[#0071E3] animate-spin" />
+          ) : value && !previewFailed ? (
+            <img
+              src={previewUrl(value)}
+              alt="预览"
+              className="w-full h-full object-contain"
+              onError={() => setPreviewFailed(true)}
+            />
+          ) : (
+            <ImageIcon className="w-5 h-5 text-[#C7C7CC]" />
+          )}
+        </label>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] text-[#1D1D1F] truncate" title={value || undefined}>
+            {uploading ? '正在转换并上传...' : value ? '已上传（点击左侧图标可更换）' : '未设置'}
+          </p>
+          <p className="mt-0.5 text-[11px] text-[#86868B]">
+            上传自动转 WebP，或
+            <button
+              type="button"
+              onClick={onPick}
+              className="ml-0.5 text-[#0071E3] hover:underline"
+            >
+              从文件库选择
+            </button>
+          </p>
+        </div>
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange('');
+              setPreviewFailed(false);
+            }}
+            className="p-1.5 rounded-lg text-[#86868B] hover:bg-[#FFF1F0] hover:text-[#CF1322]"
+            title="清除"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={field.placeholder}
+      className="w-full h-10 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[13px] text-[#1D1D1F] outline-none focus:border-[#0071E3]"
+    />
+  );
+}
+
 export default function ConfigView() {
   const [draft, setDraft] = useState<ConfigDraft | null>(null);
   const [original, setOriginal] = useState<ConfigDraft | null>(null);
@@ -41,6 +161,8 @@ export default function ConfigView() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<Toast | null>(null);
+  /** 正在通过文件选择器设置的字段（null 表示未打开） */
+  const [pickerField, setPickerField] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,18 +209,12 @@ export default function ConfigView() {
     if (!draft || pendingKeys.length === 0) return;
     setSaving(true);
     try {
-      /* 后端每次写都是读改写整个 JSON，这里顺序执行避免互相覆盖 */
-      for (const key of pendingKeys) {
-        const field = CONFIG_FIELDS.find((item) => item.key === key);
-        if (!field) continue;
-        const storedKey = draft.storedKeys[key];
-        const value = draft.values[key];
-        if (storedKey) {
-          await pageConfigApi.edit(storedKey, value);
-        } else {
-          await pageConfigApi.add(field.key, value);
-        }
-      }
+      // 一次提交全部属性：后端整体覆盖写入（存在则更新、不存在则新增，允许空值）
+      const items = CONFIG_FIELDS.map((field) => ({
+        key: field.key,
+        value: draft.values[field.key] ?? '',
+      }));
+      await pageConfigApi.save(items);
       setToast({ kind: 'success', text: '配置已保存，客户端立即生效' });
       await load();
     } catch (err) {
@@ -185,12 +301,12 @@ export default function ConfigView() {
                       <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
                     )}
                   </div>
-                  <input
-                    type="text"
+                  <FieldControl
+                    field={field}
                     value={draft.values[field.key] ?? ''}
-                    onChange={(event) => setFieldValue(field.key, event.target.value)}
-                    placeholder={field.placeholder}
-                    className="w-full h-10 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[13px] text-[#1D1D1F] outline-none focus:border-[#0071E3]"
+                    onChange={(value) => setFieldValue(field.key, value)}
+                    onError={(message) => setToast({ kind: 'error', text: message })}
+                    onPick={() => setPickerField(field.key)}
                   />
                 </div>
               ))}
@@ -213,6 +329,19 @@ export default function ConfigView() {
           {toast.text}
         </div>
       )}
+
+      <FilePicker
+        open={pickerField !== null}
+        onClose={() => setPickerField(null)}
+        accept="image"
+        title="选择图片"
+        beforeUpload={convertToWebp}
+        onSelect={(files: DevFile[]) => {
+          if (!pickerField || !files[0]) return;
+          // 文件选择器返回带 /snowy 的地址，存纯后端路径供 frontend 使用
+          setFieldValue(pickerField, toOpenUrl(files[0]).replace(/^\/snowy/, ''));
+        }}
+      />
     </div>
   );
 }

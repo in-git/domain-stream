@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import heroImage from '../../assets/images/video_hero_coast_1795019172940.jpg';
 import { navigate } from '../../lib/router';
-import { useSystemInfo } from '../../lib/systemInfo';
+import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 
 interface AuthLayoutProps {
   title: string;
@@ -14,7 +14,8 @@ interface AuthLayoutProps {
 
 /** 登录 / 注册 / 回调页共用的全屏沉浸式认证布局 */
 export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
-  const { title: siteTitle } = useSystemInfo();
+  const { title: siteTitle, config } = useSystemInfo();
+  const logoUrl = publicFileUrl(config.logoUrl);
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#0B1220]">
       {/* 背景图层：固定铺满，两张渐变保证任意图片上文字都清晰 */}
@@ -36,8 +37,12 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             返回首页
           </button>
           <div className="flex items-center gap-3 text-white">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/25 bg-white/10 text-[17px] font-semibold backdrop-blur-md">
-              W
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/25 bg-white/10 text-[17px] font-semibold backdrop-blur-md">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
+              ) : (
+                'W'
+              )}
             </div>
             <div className="hidden sm:block">
               <p className="text-[14px] font-semibold tracking-wide">{siteTitle}</p>

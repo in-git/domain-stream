@@ -8,7 +8,7 @@
  * /dev/file/page（支持 category/bizType/searchKey），支持视频/音频在线预览播放。
  *
  * BIZ_TYPE 把「素材库」（MATERIAL，可复用）与「用户文件」（USER，业务表单一次性使用）
- * 完全隔离；用户文件可批量加入素材库。
+ * 完全隔离；素材库已独立为素材中心页面，本页只管理用户文件。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -20,7 +20,6 @@ import {
   FileText,
   Film,
   File as FileIcon,
-  FolderPlus,
   ImagePlus,
   Images,
   Loader2,
@@ -50,13 +49,8 @@ import {
 
 const PAGE_SIZE = 24;
 
-/** 两个完全隔离的文件库 */
+/** 文件库类型：素材库已独立为单独页面，此处固定为用户文件 */
 type LibraryType = 'MATERIAL' | 'USER';
-
-const LIBRARIES: Array<{ value: LibraryType; label: string }> = [
-  { value: 'MATERIAL', label: '素材库' },
-  { value: 'USER', label: '用户文件' },
-];
 
 type DialogState =
   | { kind: 'preview'; file: DevFile }
@@ -252,7 +246,7 @@ export default function FileCenterView() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [library, setLibrary] = useState<LibraryType>('MATERIAL');
+  const [library, setLibrary] = useState<LibraryType>('USER');
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -389,20 +383,6 @@ export default function FileCenterView() {
     }
   }
 
-  /** 把已选的用户文件加入素材库，之后即可在素材库复用 */
-  async function moveSelectedToMaterial() {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    try {
-      await fileCenterApi.updateBizType(ids, 'MATERIAL');
-      setSelected(new Set());
-      notify('success', `已加入素材库：${ids.length} 个文件`);
-      await Promise.all([load(), loadStats()]);
-    } catch (err) {
-      notify('error', `加入素材库失败：${errorMessage(err)}`);
-    }
-  }
-
   /** 全选/取消全选当前筛选条件下的所有文件（跨分页） */
   async function toggleSelectAllResults() {
     if (selected.size >= total) {
@@ -477,7 +457,7 @@ export default function FileCenterView() {
   }
 
   const statCards = [
-    { label: library === 'MATERIAL' ? '全部素材' : '全部文件', value: stats[''] ?? 0, icon: Images },
+    { label: '全部文件', value: stats[''] ?? 0, icon: Images },
     { label: '视频', value: stats['VIDEO'] ?? 0, icon: Film },
     { label: '音频', value: stats['AUDIO'] ?? 0, icon: Music },
     { label: '图片', value: stats['IMAGE'] ?? 0, icon: ImagePlus },
@@ -508,27 +488,6 @@ export default function FileCenterView() {
       {/* 工具栏 */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
-          {/* 库切换：素材库与用户文件完全隔离 */}
-          <div className="flex items-center rounded-xl bg-[#F5F5F7] p-0.5">
-            {LIBRARIES.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => {
-                  setLibrary(item.value);
-                  setCategory('');
-                  setPage(1);
-                }}
-                className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
-                  library === item.value
-                    ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
-                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
           {/* 全选 */}
           <button
             type="button"
@@ -613,16 +572,6 @@ export default function FileCenterView() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {library === 'USER' && selected.size > 0 && (
-            <button
-              type="button"
-              onClick={() => void moveSelectedToMaterial()}
-              className="h-9 px-3 rounded-xl bg-[#0071E3]/8 text-[#0071E3] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#0071E3]/12 transition-colors"
-            >
-              <FolderPlus className="w-3.5 h-3.5" />
-              加入素材库 ({selected.size})
-            </button>
-          )}
           {selected.size > 0 && (
             <button
               type="button"

@@ -10,7 +10,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUpDown,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -47,6 +46,9 @@ import {
 import { formatDateTime } from '../../../lib/format.ts';
 import { FileDeleteDialog, FilePreviewDialog } from '../file/dialogs.tsx';
 import { absoluteFileUrl, copyText, MaterialDetailDialog } from './dialogs.tsx';
+import { UploadDialog, type UploadSubmitPayload } from './UploadDialog.tsx';
+import { SelectField } from '../../../components/SelectField.tsx';
+import { categoryApi, type BizCategory } from '../../../lib/category.ts';
 
 const PAGE_SIZE = 24;
 
@@ -268,6 +270,9 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [category, setCategory] = useState('');
+  /** 素材分类（通用分类 MATERIAL 模块的编码），空表示不限 */
+  const [categoryCode, setCategoryCode] = useState('');
+  const [materialCategories, setMaterialCategories] = useState<BizCategory[]>([]);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('newest');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -275,12 +280,11 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   const [dialog, setDialog] = useState<DialogState>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [stats, setStats] = useState<Record<string, number>>({});
-  const [uploading, setUploading] = useState(false);
-  const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [pendingDropFiles, setPendingDropFiles] = useState<File[] | undefined>(undefined);
   const [uploadName, setUploadName] = useState('');
   const [dragging, setDragging] = useState(false);
 
-  const uploadInputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<number | null>(null);
   const dragDepthRef = useRef(0);
 
@@ -311,6 +315,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
         current: page,
         size: PAGE_SIZE,
         category: category || undefined,
+        categoryCode: categoryCode || undefined,
         bizType: 'MATERIAL',
         searchKey: search.trim() || undefined,
       });
@@ -321,7 +326,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
     } finally {
       setLoading(false);
     }
-  }, [page, category, search]);
+  }, [page, category, categoryCode, search]);
 
   /** 分类统计：素材库固定 bizType=MATERIAL，各分类取 size=1 的 total */
   const loadStats = useCallback(async () => {
@@ -339,6 +344,31 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
       // 统计失败不阻塞列表
     }
   }, []);
+
+  /** 加载素材模块的通用分类（逐页拉全量） */
+  const loadMaterialCategories = useCallback(async () => {
+    try {
+      const all: BizCategory[] = [];
+      for (let current = 1; ; current++) {
+        const result = await categoryApi.page({ current, size: 20 });
+        const records = result?.records || [];
+        all.push(...records);
+        if (records.length < 20 || all.length >= (result?.total ?? all.length)) break;
+        if (current >= 500) break;
+      }
+      setMaterialCategories(
+        all
+          .filter((item) => item.module === 'MATERIAL' && (item.status || 'ENABLE') === 'ENABLE')
+          .sort((a, b) => (a.sortCode ?? 0) - (b.sortCode ?? 0))
+      );
+    } catch {
+      setMaterialCategories([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMaterialCategories();
+  }, [loadMaterialCategories]);
 
   useEffect(() => {
     void load();
@@ -360,7 +390,14 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   // 切换筛选时清空选择
   useEffect(() => {
     setSelected(new Set());
-  }, [category, search]);
+  }, [category, categoryCode, search]);
+
+  /** 切换文件类型时重置素材分类，避免两个维度的筛选互相干扰 */
+  const handleTypeChange = useCallback((next: string) => {
+    setCategory(next);
+    setCategoryCode('');
+    setPage(1);
+  }, []);
 
   /** 当前页展示顺序：最新上传沿用后端顺序，其余本地排序 */
   const visibleRecords = useMemo(() => {
@@ -456,40 +493,45 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
     }
   }
 
-  /** 顺序上传，逐个上报整体进度 */
-  async function handleUpload(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
-    if (!files.length) return;
+  /** 打开上传模态框（选择文件与分类后才会真正上传） */
+  function openUploadDialog(fileList?: FileList | File[]) {
     if (!canUpload) {
       notify('error', '当前账号没有上传素材权限');
       return;
     }
-    setUploading(true);
+    if (fileList?.length) setPendingDropFiles(Array.from(fileList));
+    setUploadOpen(true);
+  }
+
+  /** 模态框保存：顺序上传并逐个上报整体进度 */
+  async function handleUploadSubmit(
+    { files, categoryCode }: UploadSubmitPayload,
+    onProgress: (percent: number) => void
+  ) {
     let success = 0;
     let failed = 0;
-    try {
-      for (let i = 0; i < files.length; i++) {
-        setUploadName(files[i].name);
-        try {
-          await uploadMaterial(files[i], (percent) => {
-            setUploadPercent(Math.round(((i + percent / 100) / files.length) * 100));
-          });
-          success += 1;
-        } catch (err) {
-          failed += 1;
-          notify('error', `「${files[i].name}」上传失败：${errorMessage(err)}`);
-        }
+    for (let i = 0; i < files.length; i++) {
+      setUploadName(files[i].name);
+      try {
+        await uploadMaterial(
+          files[i],
+          (percent) => onProgress(Math.round(((i + percent / 100) / files.length) * 100)),
+          categoryCode
+        );
+        success += 1;
+      } catch (err) {
+        failed += 1;
+        notify('error', `「${files[i].name}」上传失败：${errorMessage(err)}`);
       }
-      if (success) notify('success', `已上传 ${success} 个素材`);
-      if (failed && !success) setUploadPercent(0);
-      setPage(1);
-      await Promise.all([load(), loadStats()]);
-    } finally {
-      setUploading(false);
-      setUploadPercent(0);
-      setUploadName('');
-      if (uploadInputRef.current) uploadInputRef.current.value = '';
     }
+    setUploadName('');
+    if (success) notify('success', `已上传 ${success} 个素材`);
+    if (!success && failed) {
+      // 全部失败时向上抛错，让模态框保留并提示
+      throw new Error(`全部 ${failed} 个文件上传失败`);
+    }
+    setPage(1);
+    await Promise.all([load(), loadStats()]);
   }
 
   async function handleDelete(targets: DevFile[]) {
@@ -559,7 +601,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
         e.preventDefault();
         dragDepthRef.current = 0;
         setDragging(false);
-        if (e.dataTransfer.files?.length) void handleUpload(e.dataTransfer.files);
+        if (e.dataTransfer.files?.length) openUploadDialog(e.dataTransfer.files);
       }}
     >
       {dragging && (
@@ -578,10 +620,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
           <button
             key={stat.key}
             type="button"
-            onClick={() => {
-              setCategory(stat.key === 'ALL' ? '' : stat.key);
-              setPage(1);
-            }}
+            onClick={() => handleTypeChange(stat.key === 'ALL' ? '' : stat.key)}
             className={`text-left bg-white rounded-2xl border px-4 py-3.5 flex items-center gap-3 transition-colors ${
               (stat.key === 'ALL' ? '' : stat.key) === category
                 ? 'border-[#0071E3]/40 ring-1 ring-[#0071E3]/20'
@@ -616,21 +655,13 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
               />
             </div>
 
-            <label className="relative inline-flex items-center h-9 pl-8 pr-1 rounded-xl bg-[#F5F5F7] text-[12px] text-[#3A3A3C]">
-              <ArrowUpDown className="w-3.5 h-3.5 text-[#86868B] absolute left-2.5 pointer-events-none" />
-              <span className="sr-only">排序方式</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                className="h-9 bg-transparent pr-2 focus:outline-none cursor-pointer"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SelectField
+              ariaLabel="排序方式"
+              value={sort}
+              onChange={(value) => setSort(value as SortKey)}
+              options={SORT_OPTIONS}
+              className="w-36"
+            />
 
             <div className="flex items-center rounded-xl bg-[#F5F5F7] p-0.5">
               <button
@@ -666,39 +697,20 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
             <button
               type="button"
               onClick={() => void Promise.all([load(), loadStats()])}
-              disabled={loading || uploading}
+              disabled={loading}
               title="刷新素材"
               className="h-9 w-9 rounded-xl bg-white border border-[#E5E5EA] flex items-center justify-center text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <input
-              ref={uploadInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) void handleUpload(e.target.files);
-              }}
-            />
             {canUpload && (
               <button
                 type="button"
-                onClick={() => uploadInputRef.current?.click()}
-                disabled={uploading}
-                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                onClick={() => openUploadDialog()}
+                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors"
               >
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    上传中 {uploadPercent}%
-                  </>
-                ) : (
-                  <>
-                    <ImagePlus className="w-4 h-4" />
-                    上传素材
-                  </>
-                )}
+                <ImagePlus className="w-4 h-4" />
+                上传素材
               </button>
             )}
           </div>
@@ -711,10 +723,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
               <button
                 key={cat.value || 'all'}
                 type="button"
-                onClick={() => {
-                  setCategory(cat.value);
-                  setPage(1);
-                }}
+                onClick={() => handleTypeChange(cat.value)}
                 className={`h-8 px-3 rounded-[10px] text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
                   category === cat.value
                     ? 'bg-[#0071E3]/10 text-[#0071E3]'
@@ -733,6 +742,49 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
                 )}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* 素材分类筛选：通用分类中 MODULE=MATERIAL 的分类 */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#F2F2F7]">
+          <span className="text-[12px] text-[#86868B]">素材分类</span>
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryCode('');
+                setPage(1);
+              }}
+              className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
+                categoryCode === ''
+                  ? 'bg-[#0071E3]/10 text-[#0071E3]'
+                  : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
+              }`}
+            >
+              全部
+            </button>
+            {materialCategories.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setCategoryCode(item.code || '');
+                  setPage(1);
+                }}
+                className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
+                  categoryCode === (item.code || '')
+                    ? 'bg-[#0071E3]/10 text-[#0071E3]'
+                    : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
+                }`}
+              >
+                {item.name || '未命名分类'}
+              </button>
+            ))}
+            {materialCategories.length === 0 && (
+              <span className="text-[11px] text-[#AEAEB2]">
+                暂无素材分类，可在「通用分类」中创建素材模块的分类
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-1 pt-2 ml-auto">
@@ -795,10 +847,10 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
         </div>
       </div>
 
-      {uploading && uploadName && (
+      {uploadOpen && uploadName && (
         <div className="rounded-xl bg-[#0071E3]/8 border border-[#0071E3]/20 px-4 py-2.5 text-[12px] text-[#0071E3] flex items-center gap-2">
           <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-          正在上传：{uploadName}（{uploadPercent}%）
+          正在上传：{uploadName}
         </div>
       )}
 
@@ -837,7 +889,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
           {canUpload && !(search.trim() || category) && (
             <button
               type="button"
-              onClick={() => uploadInputRef.current?.click()}
+              onClick={() => openUploadDialog()}
               className="mt-5 h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5"
             >
               <UploadCloud className="w-4 h-4" />
@@ -1025,6 +1077,15 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
           onConfirm={() => void handleDelete(dialog.files)}
         />
       )}
+      <UploadDialog
+        open={uploadOpen}
+        onClose={() => {
+          setUploadOpen(false);
+          setPendingDropFiles(undefined);
+        }}
+        onSubmit={handleUploadSubmit}
+        initialFiles={pendingDropFiles}
+      />
 
       {/* 轻提示 */}
       {toast && (

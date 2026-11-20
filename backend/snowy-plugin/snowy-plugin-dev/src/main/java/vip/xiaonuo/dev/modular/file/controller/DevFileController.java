@@ -181,9 +181,10 @@ public class DevFileController {
     @Operation(summary = "上传素材库文件返回url")
     @CommonLog("上传素材库文件返回url")
     @PostMapping("/dev/file/uploadMaterialReturnUrl")
-    public CommonResult<String> uploadMaterialReturnUrl(@RequestPart("file") MultipartFile file) {
+    public CommonResult<String> uploadMaterialReturnUrl(@RequestPart("file") MultipartFile file,
+                                                        @RequestParam(value = "categoryCode", required = false) String categoryCode) {
         return CommonResult.data(devFileService.uploadReturnUrl(DevFileEngineTypeEnum.LOCAL.getValue(), file,
-                DevFileBizTypeEnum.MATERIAL.getValue()));
+                DevFileBizTypeEnum.MATERIAL.getValue(), categoryCode));
     }
 
     /**

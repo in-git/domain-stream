@@ -77,6 +77,15 @@ public interface DevFileService extends IService<DevFile> {
     String uploadReturnUrl(String engine, MultipartFile file, String bizType);
 
     /**
+     * MultipartFile文件上传，返回文件Url，并指定库类型与通用分类编码
+     *
+     * @param categoryCode 通用分类编码（BIZ_CATEGORY.CODE），可为空
+     * @author domain-stream
+     * @date 2026/11/20
+     **/
+    String uploadReturnUrl(String engine, MultipartFile file, String bizType, String categoryCode);
+
+    /**
      * MultipartFile文件上传，返回文件Url（带后缀校验）
      *
      * @author xuyuxiang

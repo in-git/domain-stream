@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import vip.xiaonuo.biz.modular.config.param.BizConfigAddParam;
 import vip.xiaonuo.biz.modular.config.param.BizConfigEditParam;
 import vip.xiaonuo.biz.modular.config.param.BizConfigKeyParam;
+import vip.xiaonuo.biz.modular.config.param.BizConfigSaveParam;
 import vip.xiaonuo.biz.modular.config.result.BizConfigItemResult;
 import vip.xiaonuo.biz.modular.config.result.PublicSystemInfoResult;
 import vip.xiaonuo.biz.modular.config.service.BizConfigService;
@@ -107,6 +108,21 @@ public class BizConfigServiceImpl implements BizConfigService {
             throw new CommonException("页面配置属性不存在，属性名为：{}", editParam.getKey());
         }
         json.set(editParam.getKey(), editParam.getValue());
+        writeJson(json);
+    }
+
+    @Override
+    public synchronized void save(BizConfigSaveParam saveParam) {
+        // 整体覆盖写入：属性不存在则新增、存在则更新，值允许为空
+        JSONObject json = new JSONObject();
+        if (saveParam.getItems() != null) {
+            for (BizConfigSaveParam.BizConfigSaveItem item : saveParam.getItems()) {
+                if (StrUtil.isBlank(item.getKey())) {
+                    continue;
+                }
+                json.set(item.getKey(), StrUtil.blankToDefault(item.getValue(), ""));
+            }
+        }
         writeJson(json);
     }
 

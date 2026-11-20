@@ -53,9 +53,13 @@ public class DevFile extends CommonEntity {
     @Schema(description = "文件后缀")
     private String suffix;
 
-    /** 素材分类（IMAGE/VIDEO/AUDIO/DOC/OTHER） */
+    /** 素材分类（IMAGE/VIDEO/AUDIO/DOC/OTHER），由后端按后缀推断 */
     @Schema(description = "素材分类")
     private String category;
+
+    /** 通用分类编码，关联 BIZ_CATEGORY.CODE（素材中心分类） */
+    @Schema(description = "通用分类编码")
+    private String categoryCode;
 
     /** 库类型（USER 用户文件 / MATERIAL 素材库） */
     @Schema(description = "库类型")

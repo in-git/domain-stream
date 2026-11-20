@@ -3,6 +3,7 @@ package vip.xiaonuo.biz.modular.config.service;
 import vip.xiaonuo.biz.modular.config.param.BizConfigAddParam;
 import vip.xiaonuo.biz.modular.config.param.BizConfigEditParam;
 import vip.xiaonuo.biz.modular.config.param.BizConfigKeyParam;
+import vip.xiaonuo.biz.modular.config.param.BizConfigSaveParam;
 import vip.xiaonuo.biz.modular.config.result.BizConfigItemResult;
 import vip.xiaonuo.biz.modular.config.result.PublicSystemInfoResult;
 
@@ -33,6 +34,9 @@ public interface BizConfigService {
 
     /** 编辑属性值，属性不存在时抛异常 */
     void edit(BizConfigEditParam editParam);
+
+    /** 整体保存全部属性（覆盖写入，允许空值，不存在则新增、存在则更新） */
+    void save(BizConfigSaveParam saveParam);
 
     /** 删除属性，属性不存在时抛异常 */
     void delete(BizConfigKeyParam keyParam);

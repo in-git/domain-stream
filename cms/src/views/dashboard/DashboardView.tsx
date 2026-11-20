@@ -26,7 +26,7 @@ function ModuleFlowPanel({
 }) {
   const can = (module: ModuleKey) => hasModulePerm(module, 'Detail', permissions);
   // 文件中心 / 素材中心为后加模块：若后端未配置对应按钮码，按“菜单可见即允许”处理
-  const canLoose = (module: 'files' | 'materials', prefix: string) =>
+  const canLoose = (module: 'files' | 'materials' | 'config', prefix: string) =>
     !permissions.some((code) => code.startsWith(prefix)) || can(module);
 
   const contents = [
@@ -37,6 +37,7 @@ function ModuleFlowPanel({
   const showCategory = can('category');
   const showFiles = canLoose('files', 'bizFile');
   const showMaterials = canLoose('materials', 'bizMaterial');
+  const showConfig = canLoose('config', 'bizConfig');
   const showMessages = can('messages');
 
   const groups: FlowChartGroup[] = [];
@@ -50,35 +51,54 @@ function ModuleFlowPanel({
   const COL_H = 248;
   const colX = (index: number) => 8 + index * (COL_W + COL_GAP);
 
-  // 左列：通用分类（视频/图文/文章共用）与素材中心（用户主动上传、供内容备用）
-  const inputNodes: FlowChartNode[] = [];
+  // 左列：基础数据 —— 通用分类、素材中心、客户端配置，纵向均分排列
+  const inputDefs: Array<{
+    id: FlowChartNode['id'];
+    label: string;
+    color: string;
+    icon: string;
+    primary?: boolean;
+    onClick: () => void;
+  }> = [];
   if (showCategory) {
-    inputNodes.push({
+    inputDefs.push({
       id: 'category',
       label: '通用分类',
-      x: colX(0) + 10,
-      y: 46,
-      width: COL_W - 20,
-      height: 56,
       color: '#0071E3',
-      primary: true,
       icon: '分',
+      primary: true,
       onClick: () => onNavigate('category'),
     });
   }
   if (showMaterials) {
-    inputNodes.push({
+    inputDefs.push({
       id: 'materials',
       label: '素材中心',
-      x: colX(0) + 10,
-      y: 150,
-      width: COL_W - 20,
-      height: 56,
       color: '#1D9E5F',
       icon: '素',
       onClick: () => onNavigate('materials'),
     });
   }
+  // 节点在列内纵向均分，节点增多时自动压缩间距
+  const NODE_H = 56;
+  const listStart = COL_Y + 22;
+  const listEnd = COL_Y + COL_H - 22;
+  const step =
+    inputDefs.length > 0
+      ? Math.min(78, (listEnd - listStart - NODE_H) / Math.max(1, inputDefs.length - 1))
+      : 0;
+  const inputNodes: FlowChartNode[] = inputDefs.map((def, index) => ({
+    id: def.id,
+    label: def.label,
+    x: colX(0) + 10,
+    y: Math.round(listStart + step * index),
+    width: COL_W - 20,
+    height: NODE_H,
+    color: def.color,
+    icon: def.icon,
+    primary: def.primary,
+    onClick: def.onClick,
+  }));
 
   // 中列：视频 / 图文 / 文章纵向排列，彼此之间不画连线
   const contentNodes: FlowChartNode[] = contents.map((item, index) => ({
@@ -127,7 +147,7 @@ function ModuleFlowPanel({
       stroke: '#EDEDF1',
     });
   }
-  if (outputNode || showMessages) {
+  if (outputNode || showMessages || showConfig) {
     groups.push({
       x: colX(2),
       y: COL_Y,
@@ -141,7 +161,7 @@ function ModuleFlowPanel({
   nodes.push(...inputNodes, ...contentNodes);
   if (outputNode) nodes.push(outputNode);
 
-  // 分类与素材为内容提供公共分类与备用素材；上传内容后沉淀为文件
+  // 分类与素材为内容提供公共分类与备用素材
   inputNodes.forEach((src) => {
     contentNodes.forEach((dst) => edges.push({ from: src.id, to: dst.id }));
   });
@@ -149,7 +169,7 @@ function ModuleFlowPanel({
     contentNodes.forEach((src) => edges.push({ from: src.id, to: outputNode!.id }));
   }
 
-  // 留言为独立的留言板功能，与内容之间没有连线
+  // 留言为独立的留言板功能，与内容之间没有连线；客户端配置紧随其下
   if (showMessages) {
     nodes.push({
       id: 'messages',
@@ -164,6 +184,20 @@ function ModuleFlowPanel({
       onClick: () => onNavigate('messages'),
     });
   }
+  if (showConfig) {
+    nodes.push({
+      id: 'config',
+      label: '客户端配置',
+      x: colX(2) + 10,
+      y: showMessages ? 228 : 150,
+      width: COL_W - 20,
+      height: 56,
+      color: '#AF52DE',
+      dashed: true,
+      icon: '配',
+      onClick: () => onNavigate('config'),
+    });
+  }
 
   if (nodes.length === 0) return null;
 
@@ -176,7 +210,10 @@ function ModuleFlowPanel({
     ) + 20;
 
   return (
-    <section aria-label="导航" className="h-full lg:col-span-1 xl:col-span-2">
+    <section
+      aria-label="导航"
+      className="h-full lg:col-span-1 xl:col-span-2 bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
+    >
       <h2 className="mb-3 text-[17px] font-semibold tracking-tight text-[#1D1D1F]">导航</h2>
       <ModuleFlowChart
         nodes={nodes}
