@@ -53,9 +53,21 @@ export function CategorySelect({
 }: CategorySelectProps) {
   const { options, loading, error, reload } = usePublishCategories(module);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  /**
+   * 新建分类后的本地补充项。
+   * 后端分类列表需要重新请求才能包含新分类，而重新请求存在时序问题
+   * （并发缓存、父组件自己的 hook 实例刷新前仍拿到旧列表），
+   * 这里直接把新建结果并入选项，保证「新建即可选、可保存」。
+   */
+  const [createdOptions, setCreatedOptions] = useState<PublishCategoryOption[]>([]);
 
   // 外部传入时以外部数据为准，并视为已加载完成
-  const source = externalOptions ?? options;
+  const baseOptions = externalOptions ?? options;
+  const source = useMemo(() => {
+    if (!createdOptions.length) return baseOptions;
+    const known = new Set(baseOptions.map((option) => option.id));
+    return [...baseOptions, ...createdOptions.filter((option) => !known.has(option.id))];
+  }, [baseOptions, createdOptions]);
   const isLoading = externalOptions ? false : loading;
 
   const filtered = useMemo(
@@ -109,9 +121,24 @@ export function CategorySelect({
           hint="创建后将自动选中该分类"
           onClose={() => setQuickCreateOpen(false)}
           onCreated={(category) => {
-            // 刷新下拉选项并选中新建的分类
+            // 先把新建分类补进本地选项，再触发一次后台刷新（拉取完整层级）
+            if (category.code) {
+              setCreatedOptions((prev) => [
+                ...prev,
+                {
+                  id: category.id,
+                  code: category.code as string,
+                  name: (category.name || category.code || '').trim(),
+                  label: (category.name || category.code || '').trim(),
+                  module: category.module,
+                  parentId: category.parentId || '0',
+                  sortCode: category.sortCode ?? 0,
+                },
+              ]);
+              // 立即选中：不依赖刷新时序，新建后马上可用
+              onChange(category.code);
+            }
             reload();
-            if (category.code) onChange(category.code);
           }}
         />
       )}

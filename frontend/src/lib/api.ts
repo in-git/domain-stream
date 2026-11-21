@@ -230,19 +230,12 @@ export function categoryNameMap(categories: PortalCategory[]): Map<string, strin
   return map;
 }
 
-const VIDEO_CATEGORIES: string[] = ['设计纪实', '城市影像', '自然声景'];
-const VIDEO_CATEGORY_MAP: Record<string, VideoItem['category']> = {
-  design: '设计纪实',
-  Design: '设计纪实',
-  设计: '设计纪实',
-  设计纪实: '设计纪实',
-  city: '城市影像',
-  urban: '城市影像',
-  城市影像: '城市影像',
-  nature: '自然声景',
-  自然声景: '自然声景',
-};
-
+/**
+ * 分类一律以「分类表」为准（categoryNameMap），这里不再维护静态映射：
+ * 曾经写死的 VIDEO_CATEGORY_MAP 会把接口新增的分类强行改成旧的三个名字，
+ * 导致客户端分类标签与实际配置不一致。
+ */
+const VIDEO_CATEGORIES: string[] = [];
 const ARTICLE_CATEGORIES: string[] = ['设计', '影像', '技术', '随笔'];
 const ARTICLE_CATEGORY_MAP: Record<string, ArticleItem['category']> = {
   design: '设计',
@@ -297,13 +290,15 @@ export function videoFromPortal(
         { time: Math.max(1, Math.floor(durationSeconds / 2)), label: '中段' },
         { time: Math.max(2, durationSeconds - 1), label: '结尾' },
       ];
-  const rawCategory = row.category || '';
-  // 优先使用后端分类名称；未收录的新分类保持原值，避免被静态默认值覆盖
+  const rawCategory = (row.category || '').trim();
+  /**
+   * 分类展示名：
+   * 1. 后端分类表里能查到编码（或名称）→ 直接用其名称，这是唯一可信来源；
+   * 2. 查不到（分类被删除 / 接口失败）→ 保留原始值，不再套用写死的默认分类，
+   *    否则会把「设计纪实 / 城市影像 / 自然声景」这类旧名字张冠李戴到新分类上。
+   */
   const category =
-    categoryNames?.get(rawCategory) ||
-    VIDEO_CATEGORY_MAP[rawCategory] ||
-    rawCategory ||
-    VIDEO_CATEGORIES[index % VIDEO_CATEGORIES.length];
+    (rawCategory ? categoryNames?.get(rawCategory) : '') || rawCategory || '未分类';
 
   return {
     id: String(row.id),
@@ -471,27 +466,6 @@ export interface ReplyDraft {
   replyToNickname?: string;
 }
 
-/** 文本转图文的提交参数 */
-export interface GraphicPosterDraft {
-  /** 正文，最多 1000 字 */
-  content: string;
-  /** 标题，留空时后端取正文首行 */
-  title?: string;
-  /** 昵称，留空时后端取登录用户昵称 */
-  nickname?: string;
-  /** 卡片主题 */
-  theme?: string;
-}
-
-/**
- * 应用生成结果：只保留用户选中的图片。
- * 与重新生成相比省去二次排版，仅按给定顺序重排图片列表入库。
- */
-export interface GraphicPosterApplyDraft extends GraphicPosterDraft {
-  /** 已应用的图片地址（顺序即展示顺序） */
-  images: string[];
-}
-
 /** 公共系统基础信息（无需登录） */
 export interface PublicSystemInfo {
   siteName: string;
@@ -505,21 +479,6 @@ export const portalApi = {
   videos: () => request<PortalVideo[]>('/public/videos'),
   articles: () => request<PortalArticle[]>('/public/articles'),
   graphics: () => request<PortalGraphic[]>('/public/graphics'),
-  /**
-   * 文本转图文：把纯文本交给后端渲染成卡片图片并入库。
-   * 图片由服务端绘制，前端只提交文本与主题。
-   */
-  createGraphicPoster: (draft: GraphicPosterDraft) =>
-    request<PortalGraphic>('/public/graphics/poster', {
-      method: 'POST',
-      body: JSON.stringify(draft),
-    }),
-  /** 确认应用预览结果：只保留选中的图片，直接入库 */
-  createGraphicPosterImages: (draft: GraphicPosterApplyDraft) =>
-    request<PortalGraphic>('/public/graphics/poster/apply', {
-      method: 'POST',
-      body: JSON.stringify(draft),
-    }),
   /** 顶级留言与回复同在一张表，一次拉取后由调用方按 parentId 组装 */
   messages: () => request<PortalMessage[]>('/public/messages'),
   addMessage: (draft: MessageDraft) =>

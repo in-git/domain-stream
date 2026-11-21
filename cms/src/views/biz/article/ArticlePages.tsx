@@ -133,11 +133,12 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
     error: categoryError,
   } = usePublishCategories('ARTICLE');
 
-  // 历史数据可能存的是分类名称，加载后端分类后统一换成编码
+  // 历史数据可能存的是分类名称，加载后端分类后统一换成编码；
+  // 匹配不到时保留原值（可能是刚新建、列表尚未刷新到的分类），避免被清空
   useEffect(() => {
     if (categoryLoading || !category) return;
     const resolved = resolvePublishCategoryCode(categoryOptions, category);
-    if (resolved !== category) setCategory(resolved);
+    if (resolved && resolved !== category) setCategory(resolved);
   }, [category, categoryLoading, categoryOptions]);
 
   const categoryLabel = publishCategoryName(categoryOptions, category);

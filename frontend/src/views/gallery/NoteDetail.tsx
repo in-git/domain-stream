@@ -38,6 +38,33 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
     return () => window.removeEventListener('keydown', onKey);
   }, [note, onClose]);
 
+  /** 作者 + 关闭栏：移动端置顶显示，桌面端仍在正文区顶部 */
+  const renderHeader = (mobile: boolean) => (
+    <div
+      className={`${mobile ? 'flex md:hidden' : 'hidden md:flex'} shrink-0 items-center justify-between px-5 h-14 border-b border-black/[0.06] dark:border-white/[0.08]`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-[#FF2E4D] to-[#FF8A5B] flex items-center justify-center text-[11px] font-semibold text-white shrink-0">
+          {(note?.author || '匿').slice(0, 1)}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+            {note?.author || '匿名用户'}
+          </p>
+          <p className="text-[10px] text-[#86868B] truncate">{note?.album}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="关闭"
+        className="p-2 rounded-full text-[#86868B] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] shrink-0"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
   return (
     <AnimatePresence>
       {note && (
@@ -60,6 +87,8 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
             onClick={(event) => event.stopPropagation()}
             className="w-full sm:max-w-4xl h-full sm:h-[min(88vh,760px)] bg-white dark:bg-[#161618] sm:rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl"
           >
+            {renderHeader(true)}
+
             {/* 左：图片轮播
                 容器按竖图比例留位，图片 contain 完整显示，不裁切也不被压小 */}
             <div className="relative md:w-[54%] shrink-0 bg-black dark:bg-black flex items-center justify-center overflow-hidden">
@@ -113,27 +142,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
 
             {/* 右：正文与互动 */}
             <div className="flex-1 min-w-0 flex flex-col">
-              <div className="shrink-0 flex items-center justify-between px-5 h-14 border-b border-black/[0.06] dark:border-white/[0.08]">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-7 h-7 rounded-full bg-gradient-to-br from-[#FF2E4D] to-[#FF8A5B] flex items-center justify-center text-[11px] font-semibold text-white shrink-0">
-                    {(note.author || '匿').slice(0, 1)}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
-                      {note.author || '匿名用户'}
-                    </p>
-                    <p className="text-[10px] text-[#86868B] truncate">{note.album}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="关闭"
-                  className="p-2 rounded-full text-[#86868B] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {renderHeader(false)}
 
               <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
                 <h2 className="text-[16px] font-semibold leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">

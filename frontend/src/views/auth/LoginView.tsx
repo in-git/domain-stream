@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, ScanLine, UserRound } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
 import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
@@ -19,7 +19,7 @@ const labelClass = 'block text-[13px] font-medium text-[#6E6E73] dark:text-[#989
 const primaryButtonClass =
   'w-full h-14 rounded-2xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 transition-all';
 const secondaryButtonClass =
-  'w-full h-12 rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white dark:bg-[#242426] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F5F5F7] dark:hover:bg-[#2C2C2E] disabled:opacity-50 transition-colors';
+  'w-full h-14 rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white dark:bg-[#242426] flex items-center justify-center gap-2.5 text-[15px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F5F5F7] dark:hover:bg-[#2C2C2E] disabled:opacity-50 transition-colors';
 
 export function LoginView({ onSuccess }: LoginViewProps) {
   const [mode, setMode] = useState<LoginMode>('wechat');
@@ -119,9 +119,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
       title={mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
       subtitle={mode === 'wechat' ? '微信扫一扫，登录或注册一步完成' : '使用账号密码登录你的账号'}
       footer={
-        mode === 'wechat' ? (
-          <span>首次微信扫码将自动创建账号，无需额外注册</span>
-        ) : (
+        mode === 'wechat' ? undefined : (
           <span>
             还没有账号？{' '}
             <button
@@ -176,12 +174,6 @@ export function LoginView({ onSuccess }: LoginViewProps) {
             <div className="rounded-2xl bg-[#F5F5F7] dark:bg-[#242426] px-4 py-3.5 text-center text-[13px] text-[#6E6E73] dark:text-[#98989D]">
               微信登录暂未开通，请使用账号密码登录
             </div>
-          )}
-
-          {error && (
-            <p role="alert" className="rounded-2xl bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 text-[13px] text-[#D70015] dark:text-[#FF453A]">
-              {error}
-            </p>
           )}
 
           <div className="space-y-3 pt-1">
@@ -278,12 +270,6 @@ export function LoginView({ onSuccess }: LoginViewProps) {
               </div>
             )}
 
-            {error && (
-              <p role="alert" className="rounded-2xl bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 text-[13px] text-[#D70015] dark:text-[#FF453A]">
-                {error}
-              </p>
-            )}
-
             <motion.button
               type="submit"
               whileTap={{ scale: 0.99 }}
@@ -302,6 +288,23 @@ export function LoginView({ onSuccess }: LoginViewProps) {
           </button>
         </div>
       )}
+
+      {/* 错误信息统一放底部提示，不占用表单布局 */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            key={error}
+            role="alert"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed bottom-6 left-0 right-0 z-50 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-2xl bg-[#FF3B30] px-5 py-3 text-center text-[13px] font-medium text-white shadow-lg"
+          >
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AuthLayout>
   );
 }

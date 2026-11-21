@@ -852,51 +852,51 @@ export function VideosView({
           })}
         </div>
 
-        {/* Feed vs Grid Switcher */}
+        {/* Feed vs Grid Switcher（不加 tooltip，避免悬浮提示遮挡内容） */}
         <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
-          <Tooltip label="沉浸刷看" side="bottom">
-            <button
-              type="button"
-              onClick={() => setViewMode('feed')}
-              aria-label="沉浸刷看"
-              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-                viewMode === 'feed'
-                  ? 'text-[#1D1D1F] dark:text-white'
-                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-              }`}
-            >
-              {viewMode === 'feed' && (
-                <motion.span
-                  layoutId="videoModeSwitch"
-                  transition={SWIFTUI_SNAPPY}
-                  className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-                />
-              )}
-              <Rows3 className="relative z-10 w-4 h-4" />
-            </button>
-          </Tooltip>
+          <button
+            type="button"
+            onClick={() => setViewMode('feed')}
+            aria-label="沉浸刷看"
+            aria-pressed={viewMode === 'feed'}
+            title="沉浸刷看"
+            className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+              viewMode === 'feed'
+                ? 'text-[#1D1D1F] dark:text-white'
+                : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+            }`}
+          >
+            {viewMode === 'feed' && (
+              <motion.span
+                layoutId="videoModeSwitch"
+                transition={SWIFTUI_SNAPPY}
+                className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
+              />
+            )}
+            <Rows3 className="relative z-10 w-4 h-4" />
+          </button>
 
-          <Tooltip label="发现网格" side="bottom">
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              aria-label="发现网格"
-              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-                viewMode === 'grid'
-                  ? 'text-[#1D1D1F] dark:text-white'
-                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-              }`}
-            >
-              {viewMode === 'grid' && (
-                <motion.span
-                  layoutId="videoModeSwitch"
-                  transition={SWIFTUI_SNAPPY}
-                  className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-                />
-              )}
-              <LayoutGrid className="relative z-10 w-4 h-4" />
-            </button>
-          </Tooltip>
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            aria-label="发现网格"
+            aria-pressed={viewMode === 'grid'}
+            title="发现网格"
+            className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+              viewMode === 'grid'
+                ? 'text-[#1D1D1F] dark:text-white'
+                : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+            }`}
+          >
+            {viewMode === 'grid' && (
+              <motion.span
+                layoutId="videoModeSwitch"
+                transition={SWIFTUI_SNAPPY}
+                className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
+              />
+            )}
+            <LayoutGrid className="relative z-10 w-4 h-4" />
+          </button>
         </div>
       </div>
       )}
@@ -932,7 +932,9 @@ export function VideosView({
             className={
               isMini
                 ? 'relative w-full h-full overflow-hidden'
-                : 'relative flex-1 min-w-0 h-[100dvh] md:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                : // 移动端底栏透明悬浮、不占布局空间，视频区铺满整个视口；
+                  // 桌面端顶栏占位，高度扣掉 Header 与上下留白
+                  'relative flex-1 min-w-0 h-[100dvh] md:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
             <Swiper

@@ -41,14 +41,22 @@ export function VideoManagerView({
   const canDelete = hasModulePerm('videos', 'Delete', permissions);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { options: categoryOptions } = usePublishCategories('VIDEO');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
+
+  /** 分类 chip：只列出实际有视频的分类，避免空分类占位 */
+  const categoryChips = useMemo(() => {
+    const codes = Array.from(new Set(videos.map((v) => v.category).filter(Boolean)));
+    return codes.map((code) => ({ code, label: categoryName(code) || code }));
+  }, [videos, categoryOptions]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return videos.filter((v) => {
       if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+      if (categoryFilter !== 'all' && v.category !== categoryFilter) return false;
       if (!q) return true;
       return (
         v.title.toLowerCase().includes(q) ||
@@ -57,7 +65,7 @@ export function VideoManagerView({
         v.description.toLowerCase().includes(q)
       );
     });
-  }, [videos, search, statusFilter, categoryOptions]);
+  }, [videos, search, statusFilter, categoryFilter, categoryOptions]);
 
   async function handleToggleStatus(item: VideoItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -141,6 +149,30 @@ export function VideoManagerView({
           )}
         </div>
       </div>
+
+      {/* 分类筛选：与图文/文章管理页一致的 chip 条 */}
+      {categoryChips.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[{ code: 'all', label: '全部' }, ...categoryChips].map((chip) => {
+            const active = categoryFilter === chip.code;
+            return (
+              <button
+                key={chip.code}
+                type="button"
+                onClick={() => setCategoryFilter(chip.code)}
+                aria-pressed={active}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                  active
+                    ? 'bg-[#1D1D1F] font-medium text-white'
+                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07]'
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Empty State */}
       {filtered.length === 0 ? (

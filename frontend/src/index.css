@@ -86,22 +86,32 @@
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
-/* Subtle Apple-style scrollbars */
-::-webkit-scrollbar {
+/* Body 不显示滚动条：移动端全屏滚动时避免出现灰色条 */
+body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 旧版 Edge / IE */
+}
+
+body::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
+/* 容器内部滚动仍保留 Apple 风格的细滚动条 */
+*::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background: rgba(120, 120, 128, 0.28);
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background: rgba(120, 120, 128, 0.45);
 }
 

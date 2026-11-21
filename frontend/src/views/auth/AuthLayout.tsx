@@ -1,6 +1,6 @@
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import heroImage from '../../assets/images/video_hero_coast_1795019172940.jpg';
 import { navigate } from '../../lib/router';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
@@ -25,19 +25,19 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
         <div className="absolute inset-0 bg-gradient-to-t from-[#050A12]/80 via-transparent to-[#050A12]/30" />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1500px] flex-col px-5 py-6 sm:px-8 lg:px-16 lg:py-10">
-        {/* 顶部：返回入口 + 品牌标识 */}
-        <header className="flex items-center justify-between gap-4">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1500px] flex-col sm:px-8 sm:py-6 lg:px-16 lg:py-10">
+        {/* 顶部：返回入口 + 品牌标识（绝对定位浮在内容之上，不占布局空间） */}
+        <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-5 pt-5 sm:px-8 md:static md:inset-auto md:px-0 md:pt-0">
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-[13px] font-medium text-white/85 backdrop-blur-md transition-colors hover:bg-white/20"
+            className="inline-flex items-center gap-2 rounded-full bg-black/25 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-black/40"
           >
             <ArrowLeft className="h-4 w-4" />
             返回首页
           </button>
           <div className="flex items-center gap-3 text-white">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/25 bg-white/10 text-[17px] font-semibold backdrop-blur-md">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/25 bg-black/25 text-[17px] font-semibold">
               {logoUrl ? (
                 <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
               ) : (
@@ -52,7 +52,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
         </header>
 
         {/* 主体：左侧主视觉 + 右侧表单 */}
-        <main className="flex flex-1 items-center py-12 lg:py-8">
+        <main className="flex flex-1 items-center py-0 sm:py-12 lg:py-8">
           <div className="grid w-full items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(460px,540px)] lg:gap-16 xl:gap-24">
             <motion.section
               initial={{ opacity: 0, x: -24 }}
@@ -87,7 +87,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
               transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
               className="w-full"
             >
-              <div className="rounded-[32px] border border-white/70 bg-white/95 p-8 shadow-[0_32px_100px_rgba(2,8,20,0.35)] backdrop-blur-2xl sm:p-10 lg:p-11 dark:border-white/10 dark:bg-[#111318]/95">
+              <div className="min-h-dvh rounded-none border-0 bg-white/95 px-6 pb-6 pt-24 shadow-none sm:min-h-0 sm:rounded-[32px] sm:border sm:border-white/70 sm:px-10 sm:pb-10 sm:pt-24 sm:shadow-[0_32px_100px_rgba(2,8,20,0.35)] sm:backdrop-blur-2xl lg:px-11 lg:pb-11 lg:pt-10 dark:bg-[#111318]/95 sm:dark:border-white/10">
                 <div className="mb-8">
                   <h1 className="text-[30px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {title}
@@ -96,18 +96,24 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
                 </div>
                 {children}
               </div>
-              {footer && <div className="mt-7 text-center text-[14px] text-white/80">{footer}</div>}
             </motion.section>
           </div>
         </main>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 text-[12px] text-white/45">
-          <span className="inline-flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            账号数据已加密保护
-          </span>
-          <span>© {new Date().getFullYear()} {siteTitle}</span>
-        </footer>
+        {/* 注册/返回等引导提示改为底部 toast，不占卡片布局 */}
+        <AnimatePresence>
+          {footer && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="fixed bottom-6 left-0 right-0 z-40 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-full bg-black/60 px-6 py-3 text-center text-[14px] text-white shadow-lg backdrop-blur-md"
+            >
+              {footer}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

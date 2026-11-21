@@ -33,13 +33,21 @@ export function ArticleManagerView({
   const canDelete = hasModulePerm('articles', 'Delete', permissions);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const { options: categoryOptions } = usePublishCategories('ARTICLE');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
+
+  /** 分类 chip：只列出实际有文章的分类，避免空分类占位 */
+  const categoryChips = useMemo(() => {
+    const codes = Array.from(new Set(articles.map((a) => a.category).filter(Boolean)));
+    return codes.map((code) => ({ code, label: categoryName(code) || code }));
+  }, [articles, categoryOptions]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return articles.filter((a) => {
       if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+      if (categoryFilter !== 'all' && a.category !== categoryFilter) return false;
       if (!q) return true;
       return (
         a.title.toLowerCase().includes(q) ||
@@ -48,7 +56,7 @@ export function ArticleManagerView({
         categoryName(a.category).toLowerCase().includes(q)
       );
     });
-  }, [articles, search, statusFilter, categoryOptions]);
+  }, [articles, search, statusFilter, categoryFilter, categoryOptions]);
 
   async function handleToggleStatus(item: ArticleItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -107,6 +115,30 @@ export function ArticleManagerView({
           </button>
         )}
       </div>
+
+      {/* 分类筛选：与图文管理页一致的 chip 条 */}
+      {categoryChips.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[{ code: 'all', label: '全部' }, ...categoryChips].map((chip) => {
+            const active = categoryFilter === chip.code;
+            return (
+              <button
+                key={chip.code}
+                type="button"
+                onClick={() => setCategoryFilter(chip.code)}
+                aria-pressed={active}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                  active
+                    ? 'bg-[#1D1D1F] font-medium text-white'
+                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07]'
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Article List */}
       {filtered.length === 0 ? (

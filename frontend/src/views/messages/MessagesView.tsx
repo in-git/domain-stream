@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Heart, MessageCircle, Send, X } from 'lucide-react';
+import { Check, Heart, LogIn, MessageCircle, Send, X } from 'lucide-react';
 import type { MessageItem, MessageReply } from '../../data/content.ts';
 import type { ReplyDraft } from '../../lib/api.ts';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -234,10 +234,6 @@ export default function MessagesView({
       setReplyError('请填写回复内容');
       return;
     }
-    if (!isLoggedIn) {
-      onRequireLogin();
-      return;
-    }
 
     setReplySubmitting(true);
     setReplyError(null);
@@ -279,13 +275,24 @@ export default function MessagesView({
             </h1>
           </div>
 
-          <button
-            type="button"
-            onClick={openComposer}
-            className="h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
-          >
-            写留言
-          </button>
+          {isLoggedIn ? (
+            <button
+              type="button"
+              onClick={openComposer}
+              className="h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
+            >
+              写留言
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onRequireLogin}
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
+            >
+              <LogIn className="w-4 h-4" />
+              登录后留言
+            </button>
+          )}
         </motion.div>
 
         <AnimatePresence>
@@ -366,9 +373,8 @@ export default function MessagesView({
             </p>
           </div>
         ) : (
-          /* 列宽上限约 236px（与卡片最大宽度一致），容器按卡片总宽收拢，
-             避免宽屏下网格被拉满、卡片容器明显宽于内容 */
-          <div className="grid w-full max-w-[480px] grid-cols-2 gap-2 sm:max-w-[484px] sm:gap-3 md:max-w-[732px] md:grid-cols-3 xl:max-w-[980px] xl:grid-cols-4 2xl:max-w-[1228px] 2xl:grid-cols-5">
+          /* 与图文笔记一致：CSS columns 瀑布流，列数/间距相同，卡片宽度由列宽决定 */
+          <div className="columns-2 gap-2.5 sm:columns-3 md:columns-4 lg:columns-5 2xl:columns-6">
             {visibleMessages.map((message, index) => {
               const messageReplies = repliesByMessage.get(message.id) || [];
               // 弹幕轨道：回复数超过轨道数时循环滚动
@@ -383,11 +389,10 @@ export default function MessagesView({
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
+                  className="break-inside-avoid pb-4"
                 >
-                  {/* 9:16 竖版卡片；参照小红书，高度不超过 420px、宽度不超过
-                      420 × 9/16 ≈ 236px，避免宽屏下列宽变大后卡片被拉宽，
-                      容器明显宽于中间的语录文字 */}
-                  <div className="group relative flex flex-col w-full max-w-[236px] aspect-[9/16] max-h-[420px] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  {/* 3:4 竖版卡片，与图文笔记卡片同尺寸；宽度由列宽决定 */}
+                  <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
                   {/* 时间固定在卡片右上角 */}
                   <span className="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] text-[10px] leading-tight text-[#AEAEB2] dark:text-[#86868B] tabular-nums">
                     {formatShortDate(message.createdAt)}
@@ -729,18 +734,14 @@ export default function MessagesView({
                       onChange={(e) => setReplyText(e.target.value)}
                       maxLength={500}
                       rows={2}
-                      placeholder={isLoggedIn ? '写下你的留言...' : '登录后可留言'}
-                      disabled={!isLoggedIn}
-                      onFocus={() => {
-                        if (!isLoggedIn) onRequireLogin();
-                      }}
-                      className="w-full px-3 py-2 bg-transparent rounded-xl text-[13px] leading-5 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:outline-none resize-none disabled:opacity-60"
+                      placeholder="写下你的留言..."
+                      className="w-full px-3 py-2 bg-transparent rounded-xl text-[13px] leading-5 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:outline-none resize-none"
                     />
                   </div>
 
                   <motion.button
                     type="submit"
-                    disabled={replySubmitting || !replyText.trim() || !isLoggedIn}
+                    disabled={replySubmitting || !replyText.trim()}
                     whileTap={{ scale: 0.96 }}
                     transition={SWIFTUI_SNAPPY}
                     className="h-10 px-4 shrink-0 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 disabled:opacity-50"

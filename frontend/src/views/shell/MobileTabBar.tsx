@@ -1,39 +1,37 @@
 import { motion } from 'motion/react';
-import { BookOpen, Film, Image as ImageIcon, MessageCircleHeart } from 'lucide-react';
-import type { SectionId } from '../../data/content';
 import { SWIFTUI_SNAPPY } from '../../lib/motion';
+import { useSystemInfo } from '../../lib/systemInfo';
+import { navIconComponent, navIconUrl, parseNav } from './navConfig';
 
 interface MobileTabBarProps {
-  activeSection: SectionId;
-  onSelectSection: (section: SectionId) => void;
+  activeSection: string;
+  onSelectSection: (section: string) => void;
   /** 首页（视频板块）使用透明紧凑样式，让视频铺满全屏 */
   transparent?: boolean;
 }
-
-const MOBILE_TABS: { id: SectionId; label: string; Icon: typeof Film }[] = [
-  { id: 'videos', label: '视频', Icon: Film },
-  { id: 'articles', label: '文章', Icon: BookOpen },
-  { id: 'gallery', label: '图文', Icon: ImageIcon },
-  { id: 'messages', label: '留言', Icon: MessageCircleHeart },
-];
 
 export function MobileTabBar({
   activeSection,
   onSelectSection,
   transparent = false,
 }: MobileTabBarProps) {
+  const { config } = useSystemInfo();
+  // 与 PC 左侧栏共用后台导航配置：数量、顺序、名称、图标均由接口决定
+  const navItems = parseNav(config.navItems);
+
   return (
     <nav
       aria-label="底部导航"
-      className={`md:hidden fixed bottom-0 left-0 right-0 z-30 ${
-        transparent
-          ? 'bg-transparent'
-          : 'bg-[#FBFBFD]/95 dark:bg-black/85 backdrop-blur-xl'
-      }`}
+      className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-transparent"
     >
-      <div className="grid grid-cols-4 h-12 items-center px-1">
-        {MOBILE_TABS.map(({ id, label, Icon }) => {
+      <div
+        className="h-12 items-center px-1"
+        style={{ display: 'grid', gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+      >
+        {navItems.map(({ id, label, iconUrl }) => {
           const isActive = activeSection === id;
+          const Icon = navIconComponent(id);
+          const customIcon = navIconUrl({ id, label, iconUrl });
           return (
             <motion.button
               key={id}
@@ -57,12 +55,22 @@ export function MobileTabBar({
                 transition={SWIFTUI_SNAPPY}
                 className="shrink-0"
               >
-                <Icon
-                  className="w-[22px] h-[22px]"
-                  strokeWidth={isActive ? 2.4 : 1.8}
-                  fill={isActive ? 'currentColor' : 'none'}
-                  fillOpacity={isActive ? 0.12 : 0}
-                />
+                {customIcon ? (
+                  <img
+                    src={customIcon}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    className="w-[22px] h-[22px] object-contain"
+                  />
+                ) : (
+                  <Icon
+                    className="w-[22px] h-[22px]"
+                    strokeWidth={isActive ? 2.4 : 1.8}
+                    fill={isActive ? 'currentColor' : 'none'}
+                    fillOpacity={isActive ? 0.12 : 0}
+                  />
+                )}
               </motion.div>
               <span className="text-[10px] font-medium tracking-tight whitespace-nowrap">
                 {label}

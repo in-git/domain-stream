@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Heart, Plus } from 'lucide-react';
+import { Check, Heart, Star } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
+import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
-import { NoteComposer } from './NoteComposer';
 import { NoteDetail } from './NoteDetail';
 
 interface GalleryViewProps {
@@ -15,10 +14,6 @@ interface GalleryViewProps {
   searchQuery?: string;
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
-  /** 发布成功后的刷新回调 */
-  onPublished?: () => void;
-  /** 当前用户昵称，用于新笔记署名 */
-  currentUserName?: string;
   externalSelectedId?: string | null;
   onClearExternalSelection?: () => void;
 }
@@ -36,8 +31,11 @@ interface NoteCardProps {
   note: PhotoItem;
   index: number;
   liked: boolean;
+  /** 是否已收藏，决定收藏图标的状态 */
+  saved: boolean;
   onOpen: () => void;
   onToggleLike: () => void;
+  onToggleSave: () => void;
 }
 
 /**
@@ -46,7 +44,7 @@ interface NoteCardProps {
  * - 多图可左右拖动 / 点击箭头切换
  * - 底部标题 + 作者 + 点赞，整体紧凑
  */
-function NoteCard({ note, index, liked, onOpen, onToggleLike }: NoteCardProps) {
+function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSave }: NoteCardProps) {
   const [active, setActive] = useState(0);
   const total = note.images.length;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -103,16 +101,16 @@ function NoteCard({ note, index, liked, onOpen, onToggleLike }: NoteCardProps) {
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 14 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 10) * 0.025 }}
-      className="mb-2 break-inside-avoid"
+      transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 10) * 0.02 }}
+      className="break-inside-avoid pb-4"
     >
-      {/* 图片区：无圆角包裹、无边框，就是一张图（小红书原样） */}
+      {/* 图片：竖版 3:4，小红书图文的标准比例；卡片大小由列宽控制 */}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-lg bg-[#F5F5F7] dark:bg-[#1C1C1E]"
+        className="relative w-full overflow-hidden rounded-lg bg-[#F2F2F7] dark:bg-[#1C1C1E]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -152,45 +150,68 @@ function NoteCard({ note, index, liked, onOpen, onToggleLike }: NoteCardProps) {
           ))}
         </div>
 
-        {/* 多图角标：右上角「1/3」 */}
+        {/* 多图角标 */}
         {total > 1 && (
-          <span className="absolute right-2 top-2 rounded-full bg-black/40 px-1.5 py-[1px] text-[10px] font-medium text-white backdrop-blur-sm tabular-nums">
+          <span className="absolute right-2 top-2 rounded-full bg-black/40 px-2 py-0.5 text-[12px] font-medium text-white backdrop-blur-sm tabular-nums">
             {active + 1}/{total}
           </span>
         )}
 
-        {/* 图片底部压暗：让覆盖在图片上的标题与点赞始终清晰 */}
+        {/* 图片底部压暗：保证叠加的文字清晰 */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
 
-        {/* 标题 + 描述：左下角，标题更大，描述紧贴其下 */}
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 pr-9">
-          <p className="line-clamp-2 text-[15px] font-semibold leading-[1.35] text-white drop-shadow-sm">
+        {/* 标题 + 描述：左下角（右侧让出 48px 图标列 + 间距） */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-6 right-16">
+          <p className="line-clamp-2 text-[17px] font-semibold leading-[1.35] text-white drop-shadow-sm">
             {note.title}
           </p>
           {note.content && (
-            <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.5] text-white/80 drop-shadow-sm">
+            <p className="mt-1 line-clamp-2 text-[13px] leading-[1.5] text-white/85 drop-shadow-sm">
               {note.content}
             </p>
           )}
         </div>
 
-        {/* 点赞：右下角（不参与拖拽/打开详情） */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.85 }}
-          transition={SWIFTUI_BOUNCY}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleLike();
-          }}
-          aria-pressed={liked}
-          aria-label={liked ? '取消点赞' : '点赞'}
-          className="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-full px-1 text-[11px] font-medium text-white tabular-nums drop-shadow-sm"
-        >
-          <Heart className={`h-3.5 w-3.5 ${liked ? 'fill-[#FF2442] text-[#FF2442]' : ''}`} />
-          {(note.likeCount || 0) + (liked ? 1 : 0) || ''}
-        </motion.button>
+        {/* 点赞 / 收藏：右下角竖向排列，图标 48px，距底留出安全距离 */}
+        <div className="absolute bottom-6 right-2 flex flex-col items-center gap-3 text-white">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.85 }}
+            transition={SWIFTUI_BOUNCY}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleLike();
+            }}
+            aria-pressed={liked}
+            aria-label={liked ? '取消点赞' : '点赞'}
+            className="flex h-12 w-12 flex-col items-center justify-center drop-shadow-sm"
+          >
+            <Heart
+              className={`h-7 w-7 ${liked ? 'fill-[#FF2442] text-[#FF2442]' : ''}`}
+              strokeWidth={1.8}
+            />
+            <span className="mt-0.5 text-[11px] font-medium leading-none tabular-nums">
+              {(note.likeCount || 0) + (liked ? 1 : 0) || ''}
+            </span>
+          </motion.button>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSave();
+            }}
+            aria-pressed={saved}
+            aria-label={saved ? '取消收藏' : '收藏'}
+            className="flex h-12 w-12 items-center justify-center drop-shadow-sm"
+          >
+            <Star
+              className={`h-7 w-7 ${saved ? 'fill-[#FFB300] text-[#FFB300]' : ''}`}
+              strokeWidth={1.8}
+            />
+          </button>
+        </div>
       </div>
     </motion.article>
   );
@@ -208,14 +229,25 @@ export function GalleryView({
   searchQuery = '',
   onToggleSave,
   onToggleLike,
-  onPublished,
-  currentUserName,
   externalSelectedId,
   onClearExternalSelection,
 }: GalleryViewProps) {
   const [album, setAlbum] = useState<string>(ALL);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saveToast) return;
+    const timer = window.setTimeout(() => setSaveToast(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [saveToast]);
+
+  /** 收藏 / 取消收藏：切换状态并给出轻提示（卡片与详情共用） */
+  function handleToggleSave(noteId: string) {
+    const wasSaved = savedIds.includes(noteId);
+    onToggleSave(noteId);
+    setSaveToast(wasSaved ? '已取消收藏' : '已收藏');
+  }
 
   // 分类标签：全部 + 数据里出现的分类
   const chips = useMemo(() => {
@@ -245,8 +277,10 @@ export function GalleryView({
 
   return (
     <section aria-label="图文笔记" className="space-y-3">
-      {/* 顶部分类：小红书式的横向 chip 条，吸顶滚动 */}
-      <div className="sticky top-14 z-20 -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-4 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
+      {/* 顶部分类：小红书式的横向 chip 条，吸顶滚动。
+          层级压到 z-10，必须低于 Header(z-20) 与账号下拉弹层(z-100)，
+          否则会盖住右上角的个人信息菜单 */}
+      <div className="sticky top-14 z-10 -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-4 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
         <div className="flex items-center gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {chips.map((item) => {
             const active = album === item;
@@ -266,24 +300,17 @@ export function GalleryView({
               </button>
             );
           })}
-          <button
-            type="button"
-            onClick={() => setComposerOpen(true)}
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-[#FF2442] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[#e81f3b]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            发布
-          </button>
         </div>
       </div>
 
       {/* 瀑布流：CSS columns，小红书同款自然错落 */}
       {list.length === 0 ? (
         <div className="py-20 text-center">
-          <p className="text-[13px] text-[#86868B]">还没有笔记，发布第一篇试试。</p>
+          <p className="text-[13px] text-[#86868B]">还没有笔记。</p>
         </div>
       ) : (
-        <div className="columns-2 gap-2 md:columns-3 lg:columns-4 xl:columns-5">
+        /* 小红书桌面端约 5 列，卡片宽 ≈ 350px；列数更多卡片自然更小 */
+        <div className="columns-2 gap-2.5 sm:columns-3 md:columns-4 lg:columns-5 2xl:columns-6">
           <AnimatePresence mode="popLayout">
             {list.map((note, idx) => (
               <NoteCard
@@ -291,6 +318,8 @@ export function GalleryView({
                 note={note}
                 index={idx}
                 liked={likedIds.includes(note.id)}
+                saved={savedIds.includes(note.id)}
+                onToggleSave={() => handleToggleSave(note.id)}
                 onOpen={() => {
                   setActiveId(note.id);
                   onClearExternalSelection?.();
@@ -307,19 +336,33 @@ export function GalleryView({
         liked={activeNote ? likedIds.includes(activeNote.id) : false}
         saved={activeNote ? savedIds.includes(activeNote.id) : false}
         onToggleLike={() => activeNote && onToggleLike(activeNote.id)}
-        onToggleSave={() => activeNote && onToggleSave(activeNote.id)}
+        onToggleSave={() => activeNote && handleToggleSave(activeNote.id)}
         onClose={() => {
           setActiveId(null);
           onClearExternalSelection?.();
         }}
       />
 
-      <NoteComposer
-        open={composerOpen}
-        authorName={currentUserName}
-        onClose={() => setComposerOpen(false)}
-        onPublished={() => onPublished?.()}
-      />
+      {/* 收藏反馈 toast：外层负责定位，内层做动画，避免 transform 冲突 */}
+      <div className="pointer-events-none fixed bottom-24 left-1/2 z-[60] -translate-x-1/2">
+        <AnimatePresence>
+          {saveToast && (
+            <motion.div
+              key={saveToast}
+              role="status"
+              aria-live="polite"
+              initial={{ opacity: 0, y: 12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={SWIFTUI_SNAPPY}
+              className="flex items-center gap-2 whitespace-nowrap rounded-full bg-[#1D1D1F]/90 px-4 py-2 text-[13px] font-medium text-white shadow-lg backdrop-blur-md dark:bg-white/90 dark:text-[#1D1D1F]"
+            >
+              <Check className="h-4 w-4" />
+              {saveToast}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </section>
   );
 }

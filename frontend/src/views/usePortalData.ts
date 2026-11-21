@@ -194,30 +194,6 @@ export function usePortalData(currentUserName: string, initialSection: string) {
     [currentUserName]
   );
 
-  /** 发布图文后重新拉取图文列表（不进入 loading 态，避免整页闪骨架屏） */
-  const reloadGraphics = useCallback(async () => {
-    try {
-      const [rows, categories] = await Promise.all([
-        portalApi.graphics(),
-        portalApi
-          .categories()
-          .catch((): PortalCategory[] => []),
-      ]);
-      const names = categoryNameMap(categories);
-      const items = graphicsToPhotos(rows, names);
-      setPhotos(items);
-      setGraphicCategories(
-        pickCategories(categoriesForModule(categories, 'GRAPHIC'), items.map((item) => item.album))
-      );
-      setLoadedSections((prev) => ({ ...prev, gallery: true }));
-    } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        gallery: error instanceof Error ? error.message : '图文加载失败',
-      }));
-    }
-  }, [pickCategories]);
-
   return {
     videos,
     articles,
@@ -233,6 +209,5 @@ export function usePortalData(currentUserName: string, initialSection: string) {
     loadSection,
     addMessage,
     addReply,
-    reloadGraphics,
   };
 }

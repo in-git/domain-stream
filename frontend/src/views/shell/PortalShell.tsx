@@ -4,6 +4,7 @@ import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
 import { BUILTIN_SECTIONS, LeftSidebar } from './LeftSidebar';
+import { isSectionId } from '../constants';
 import { SectionPlaceholder } from './SectionPlaceholder';
 import { MainHeader } from './MainHeader';
 import { MobileTabBar } from './MobileTabBar';
@@ -51,6 +52,8 @@ export function PortalShell({
   data,
   player,
 }: PortalShellProps) {
+  // 搜索范围只接受内置板块；自定义模块没有专属数据，退化为搜索全部内容
+  const searchSection = isSectionId(activeSection) ? activeSection : 'profile';
   const {
     isDark,
     toggleTheme,
@@ -126,7 +129,7 @@ export function PortalShell({
 
         <LeftSidebar activeSection={activeSection} onSelectSection={onSelectSection} />
 
-        <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh]">
+        <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh] overflow-hidden">
           <MainHeader
             searchQuery={searchQuery}
             onChangeSearch={onChangeSearch}
@@ -149,7 +152,7 @@ export function PortalShell({
             className={`flex-1 w-full ${
               activeSection === 'videos'
                 ? 'px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8'
-                : 'px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-20 md:pb-8'
+                : 'px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-0 md:pb-8'
             }`}
           >
             <VideosSection
@@ -218,8 +221,6 @@ export function PortalShell({
                     onRetry={() => void loadSection('gallery')}
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
-                    onPublished={() => void reloadGraphics()}
-                    currentUserName={session.profile.name}
                   />
                 </motion.div>
               )}
@@ -306,7 +307,7 @@ export function PortalShell({
         <AnimatePresence>
           {isSearchOpen && (
             <SearchOverlay
-              section={activeSection}
+              section={searchSection}
               videos={videos}
               articles={articles}
               photos={photos}
