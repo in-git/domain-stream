@@ -200,7 +200,7 @@ export async function snowyLogin(account: string, password: string): Promise<str
 /* ------------------------------------------------------------------ */
 
 /** 把小诺返回的下载 URL 规范化为走 cms 代理的相对地址 */
-function normalizeFileUrl(raw: string): string {
+export function normalizeFileUrl(raw: string): string {
   if (!raw) return raw;
   try {
     // 形如 http://localhost:91/api/dev/file/download?id=...&sign=...

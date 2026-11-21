@@ -29,15 +29,15 @@ export default function App() {
   const data = usePortalData(session.profile.name, activeSection);
   const player = usePersistentPlayer();
 
-  /* 进入某板块时才拉取该板块数据，已加载板块不再重复请求；
+  /* 每次切换到板块时都重新拉取该板块数据，保证内容是最新的；
      自定义模块没有数据源，直接跳过，避免无意义请求 */
   useEffect(() => {
     if (activeSection === 'profile') return;
     if (!isSectionId(activeSection)) return;
-    const section = activeSection;
-    if (data.loadedSections[section]) return;
-    void data.loadSection(section);
-  }, [activeSection, data.loadedSections, data.loadSection]);
+    void data.loadSection(activeSection);
+    // loadSection 内部有 loading 防重入，依赖只随 activeSection 变化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
 
   // 应用启动时拉取系统基础信息（网页标题 / 开屏文本）
   useEffect(() => {

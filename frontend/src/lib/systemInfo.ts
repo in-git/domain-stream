@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import { portalApi, type PublicSystemInfo } from './api';
 
-const FALLBACK_TITLE = '吴文龙的私域';
+const FALLBACK_TITLE = '私域';
 
 let info: PublicSystemInfo = { siteName: FALLBACK_TITLE, title: FALLBACK_TITLE, config: {} };
 let loaded = false;

@@ -449,7 +449,11 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       setFormError('请至少选择 1 张图片');
       return;
     }
-    const finalCategory = resolvePublishCategoryCode(categoryOptions, category);
+    // 新建分类后本页的 categoryOptions（独立的 hook 实例）可能尚未刷新，
+    // resolvePublishCategoryCode 查不到会返回空；此时 category state 已是新分类 code，
+    // 直接沿用，避免误判为「未选择分类」。
+    const resolved = resolvePublishCategoryCode(categoryOptions, category);
+    const finalCategory = resolved || category.trim();
     if (!finalCategory) {
       setFormError(categoryError || '请选择图文分类');
       return;

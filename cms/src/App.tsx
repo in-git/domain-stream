@@ -31,6 +31,7 @@ import type {
 import { Sidebar } from './components/Sidebar.tsx';
 import { DeleteConfirmPage } from './components/DeleteConfirmPage.tsx';
 import { QuickCreatePage } from './components/QuickCreatePage.tsx';
+import { UploadQueuePanel } from './components/UploadQueuePanel.tsx';
 import { NoAccessPage, PageNotFound } from './components/PageShell.tsx';
 import { LoginView } from './views/login/LoginView.tsx';
 import { DashboardView } from './views/dashboard/DashboardView.tsx';
@@ -590,6 +591,9 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* 全局后台上传任务面板：上传期间用户可继续操作其它内容 */}
+      <UploadQueuePanel />
     </div>
   );
 }

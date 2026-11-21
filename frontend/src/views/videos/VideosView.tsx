@@ -221,6 +221,11 @@ function FeedSlide({
   const playerRef = useRef<MediaPlayerInstance | null>(null);
   const restoredRef = useRef<boolean>(false);
   const lastSaveRef = useRef<number>(0);
+  // 父组件传入的 onToggleMute 是内联函数，用 ref 固定引用，避免进入自动播放 effect 依赖导致重复播放
+  const onToggleMuteRef = useRef(onToggleMute);
+  useEffect(() => {
+    onToggleMuteRef.current = onToggleMute;
+  }, [onToggleMute]);
   // 每个 Slide 自己持有播放状态，由真实 onPlay/onPause 事件驱动
   const [playing, setPlaying] = useState(false);
 
@@ -277,10 +282,15 @@ function FeedSlide({
     }
     player.playbackRate = playbackRate;
     player.muted = isMuted;
-    // 未静音时浏览器会拒绝自动播放（控制台报 play request failed），交给用户点击触发
-    if (isMuted) {
+    // 划到当前视频即尝试自动播放。若浏览器拦截有声自动播放，
+    // 则切为静音后重试，保证滑动切换后一定会播放。
+    void player.play().catch(() => {
+      if (!isMuted) {
+        player.muted = true;
+        onToggleMuteRef.current();
+      }
       void player.play().catch(() => {});
-    }
+    });
   }, [active, isMuted, playbackRate]);
 
   // 进入迷你窗口时继续播放：静音状态下浏览器允许自动播放
@@ -667,12 +677,15 @@ export function VideosView({
   const togglePlayback = () => {
     const player = getActivePlayer();
     if (!player) return;
+    // 静音（自动播放）状态下点击：解除静音并保持播放，而不是暂停
+    if (isMuted) {
+      setIsMuted(false);
+      player.muted = false;
+      setHasPlayed(true);
+      if (player.paused) void player.play().catch(() => {});
+      return;
+    }
     if (player.paused) {
-      // 用户主动播放时，解除静音（如果之前是自动播放被静音）
-      if (isMuted) {
-        setIsMuted(false);
-        player.muted = false;
-      }
       setHasPlayed(true);
       void player.play().catch(() => {});
     } else {

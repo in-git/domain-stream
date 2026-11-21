@@ -42,6 +42,8 @@ export function usePortalData(currentUserName: string, initialSection: string) {
   }));
   const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
+  /** 与 loadingMap 同步的 ref，供 loadSection 内同步判断防重入 */
+  const loadingMapRef = useRef<Partial<Record<SectionId, boolean>>>({});
 
   /** 分类接口全站只请求一次，失败时允许下次重试 */
   const getCategories = useCallback(() => {
@@ -86,13 +88,16 @@ export function usePortalData(currentUserName: string, initialSection: string) {
     []
   );
 
-  /** 进入某板块时才加载该板块数据；重复进入已加载板块不会再次请求 */
+  /** 切换进入某板块时加载该板块数据；正在加载中的板块不会重复请求 */
   const loadSection = useCallback(
     async (rawSection: string) => {
       // 自定义模块没有数据源，直接忽略
       if (!isSectionId(rawSection)) return;
       const section = rawSection;
       if (section === 'profile') return;
+      // 防重入：同一板块正在请求时直接返回，避免并发重复拉取
+      if (loadingMapRef.current[section]) return;
+      loadingMapRef.current[section] = true;
       setLoadingMap((prev) => ({ ...prev, [section]: true }));
       setErrors((prev) => ({ ...prev, [section]: undefined }));
 
@@ -149,6 +154,7 @@ export function usePortalData(currentUserName: string, initialSection: string) {
           [section]: error instanceof Error ? error.message : '数据加载失败',
         }));
       } finally {
+        loadingMapRef.current[section] = false;
         setLoadingMap((prev) => ({ ...prev, [section]: false }));
         setLoadedSections((prev) => ({ ...prev, [section]: true }));
       }

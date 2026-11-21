@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { CheckCircle2, UploadCloud } from 'lucide-react';
-import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import { CheckCircle2, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
+import { api, convertToWebp } from '../../../lib/api.ts';
 import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
+import { uploadTaskQueue } from '../../../lib/uploadTaskQueue.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import {
@@ -50,24 +52,39 @@ function VideoPreview({
   return (
     <div className="bg-white">
       <div className="relative aspect-video bg-black overflow-hidden">
-        <MediaImage
-          src={coverUrl}
-          alt="视频封面预览"
-          fallbackLabel="视频封面预览"
-          className="w-full h-full object-cover opacity-90"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/20" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center text-[#1D1D1F] shadow-md">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 ml-0.5 fill-current" aria-hidden="true">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-        </div>
-        <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] text-white/95 font-mono tabular-nums">
-          <span>{resolution || '1920×1080'}</span>
-          <span>{formatDuration(durationSec)}</span>
-        </div>
+        {videoUrl ? (
+          // 有视频源时渲染真实播放器，可直接在预览区播放
+          <MediaPlayer
+            src={videoUrl}
+            poster={coverUrl || undefined}
+            title={title || '视频预览'}
+            playsInline
+            className="absolute inset-0 w-full h-full"
+          >
+            <MediaProvider className="w-full h-full" />
+          </MediaPlayer>
+        ) : (
+          <>
+            <MediaImage
+              src={coverUrl}
+              alt="视频封面预览"
+              fallbackLabel="视频封面预览"
+              className="w-full h-full object-cover opacity-90"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/20" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center text-[#1D1D1F] shadow-md">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 ml-0.5 fill-current" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            </div>
+            <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] text-white/95 font-mono tabular-nums">
+              <span>{resolution || '1920×1080'}</span>
+              <span>{formatDuration(durationSec)}</span>
+            </div>
+          </>
+        )}
       </div>
       <div className={compact ? 'p-4' : 'p-5'}>
         <div className="flex items-center justify-between gap-2 text-[11px] text-[#6E6E73]">
@@ -117,8 +134,6 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   const [durationSec, setDurationSec] = useState(item?.durationSec ?? 120);
   const [resolution, setResolution] = useState(item?.resolution ?? '1920×1080');
   const [fileSizeBytes, setFileSizeBytes] = useState(item?.fileSizeBytes ?? 0);
-  // 只有保存阶段才会真正上传，这里显示上传进度
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   // 默认打开预览窗口，与编辑工作区保持一致
   const [previewOpen, setPreviewOpen] = useState(true);
   const [coverProcessing, setCoverProcessing] = useState(false);
@@ -294,7 +309,71 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     if (file) void handleVideoFile(file);
   }
 
-  async function handleSave() {
+  /** 是否存在需要上传的本地文件（决定按钮文案） */
+  function uploadsPending() {
+    return !!videoFile || !!coverFile;
+  }
+
+  /** 是否已有上传到服务器的文件（videoUrl 为远端地址，本地待上传的 videoFile 不算） */
+  function hasUploadedFiles() {
+    return !!videoUrl || !!coverUrl;
+  }
+
+  /** 清空表单：释放本地预览、重置所有字段与文件输入，不删除服务器文件 */
+  function handleClearForm() {
+    releaseLocalPreview(videoPreviewUrl);
+    releaseLocalPreview(coverPreviewUrl);
+    setTitle('');
+    setDescription('');
+    setCategory('');
+    setStatus('published');
+    setVideoFile(null);
+    setVideoUrl('');
+    setVideoPreviewUrl('');
+    setCoverFile(null);
+    setCoverUrl('');
+    setCoverPreviewUrl('');
+    setVideoFileName('');
+    setDurationSec(120);
+    setResolution('1920×1080');
+    setFileSizeBytes(0);
+    setFormError('');
+    setPreviewOpen(true);
+    if (videoInputRef.current) videoInputRef.current.value = '';
+    if (coverInputRef.current) coverInputRef.current.value = '';
+  }
+
+  /**
+   * 删除已上传的视频与封面：先从文件服务彻底删除远端文件，再清空对应状态。
+   * 本地尚未上传的文件只释放预览、不调用删除。
+   */
+  async function handleDeleteUploaded() {
+    if (!hasUploadedFiles() && !videoFile && !coverFile) {
+      setFormError('当前没有可删除的视频或封面');
+      return;
+    }
+    try {
+      // 仅删除服务器上的远端文件；本地待上传文件无需调用删除接口
+      await deleteFilesByUrls([videoUrl, coverUrl]);
+      releaseLocalPreview(videoPreviewUrl);
+      releaseLocalPreview(coverPreviewUrl);
+      setVideoFile(null);
+      setVideoUrl('');
+      setVideoPreviewUrl('');
+      setCoverFile(null);
+      setCoverUrl('');
+      setCoverPreviewUrl('');
+      setVideoFileName('');
+      setFileSizeBytes(0);
+      setFormError('');
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      if (coverInputRef.current) coverInputRef.current.value = '';
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : '删除已上传文件失败');
+    }
+  }
+
+  function handleSave() {
     if (!title.trim()) {
       setFormError('请填写视频标题');
       return;
@@ -311,44 +390,33 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       setFormError('请上传或选择视频封面');
       return;
     }
-    const finalCategory = resolvePublishCategoryCode(categoryOptions, category);
+    // 新建分类后本页的 categoryOptions（独立的 hook 实例）可能尚未刷新，
+    // resolvePublishCategoryCode 查不到会返回空；此时 category state 已是新分类 code，
+    // 直接沿用，避免误判为「未选择分类」。
+    const resolved = resolvePublishCategoryCode(categoryOptions, category);
+    const finalCategory = resolved || category.trim();
     if (!finalCategory) {
       setFormError(categoryError || '请选择所属分类');
       return;
     }
-    setSaving(true);
     setFormError('');
-    setUploadProgress(videoFile ? 0 : null);
-    const hasVideoUpload = !!videoFile;
-    let finalVideoUrl = videoUrl;
-    let finalCoverUrl = coverUrl;
-    let finalSize = fileSizeBytes;
-    try {
-      // 点击保存时才真正上传：视频占前 90%，封面占后 10%（只有封面时占满）
-      if (videoFile) {
-        const uploaded = await uploadFileWithProgress(videoFile, (pct) =>
-          setUploadProgress(Math.round(pct * 0.9))
-        );
-        finalVideoUrl = uploaded.url;
-        finalSize = uploaded.size;
-        setVideoUrl(uploaded.url);
-        setFileSizeBytes(uploaded.size);
-        // 已上传成功则不再保留本地文件，保存失败重试时不会重复上传
-        setVideoFile(null);
-        releaseLocalPreview(videoPreviewUrl);
-        setVideoPreviewUrl(uploaded.url);
-      }
-      if (coverFile) {
-        const uploadedCover = await uploadFileWithProgress(coverFile, (pct) =>
-          setUploadProgress(hasVideoUpload ? 90 + Math.round(pct * 0.1) : pct)
-        );
-        finalCoverUrl = uploadedCover.url;
-        setCoverUrl(uploadedCover.url);
-        setCoverFile(null);
-        releaseLocalPreview(coverPreviewUrl);
-        setCoverPreviewUrl(uploadedCover.url);
-      }
-      setUploadProgress(100);
+
+    // 需要上传的文件（未选择新文件则沿用原地址）
+    const uploads: Array<{
+      file: File;
+      name?: string;
+      kind?: string;
+      bizType?: 'USER' | 'MATERIAL';
+    }> = [];
+    if (videoFile) uploads.push({ file: videoFile, kind: '视频文件' });
+    if (coverFile) uploads.push({ file: coverFile, kind: '封面图片' });
+
+    // 所有文件上传完成后的保存逻辑（构造 payload、写库、刷新）
+    const finish = async (uploadedUrls: string[]) => {
+      let cursor = 0;
+      const finalVideoUrl = videoFile ? uploadedUrls[cursor++] : videoUrl;
+      const finalCoverUrl = coverFile ? uploadedUrls[cursor++] : coverUrl;
+      const finalSize = videoFile ? uploads[0].file.size : fileSizeBytes;
 
       const payload: Partial<VideoItem> = {
         title: title.trim(),
@@ -363,7 +431,6 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
       };
       if (item) {
         await api.updateVideo(item.id, payload);
-        // 保存成功后彻底删除被替换掉的历史视频/封面，避免留下孤儿文件
         void deleteFilesByUrls(
           removedUrls([item.videoUrl, item.coverUrl], [finalVideoUrl, finalCoverUrl])
         );
@@ -371,13 +438,23 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         await api.createVideo(payload);
       }
       await onSaved();
-      onBack();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : '保存失败');
-    } finally {
-      setSaving(false);
-      setUploadProgress(null);
+    };
+
+    if (uploads.length === 0) {
+      // 未选择新文件，仅元数据变更：直接保存后返回
+      setSaving(true);
+      void finish([])
+        .then(() => onBack())
+        .catch((err) => {
+          setFormError(err instanceof Error ? err.message : '保存失败');
+          setSaving(false);
+        });
+      return;
     }
+
+    // 入队后台上传：全部成功后保存记录；用户可立即返回列表继续新增其它视频
+    uploadTaskQueue.enqueueBatch(uploads, finish);
+    onBack();
   }
 
   return (
@@ -391,6 +468,14 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
         <>
           <button
             type="button"
+            onClick={handleClearForm}
+            className="h-10 px-4 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[13px] font-medium text-[#1D1D1F] inline-flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-4 h-4" />
+            清空表单
+          </button>
+          <button
+            type="button"
             onClick={onBack}
             className="h-10 px-4 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[13px] font-medium text-[#1D1D1F]"
           >
@@ -398,17 +483,10 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           </button>
           <button
             type="button"
-            disabled={saving}
-            onClick={() => void handleSave()}
-            className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white text-[13px] font-medium"
+            onClick={handleSave}
+            className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium"
           >
-            {saving
-              ? uploadProgress !== null
-                ? `正在上传 ${uploadProgress}%`
-                : '正在保存...'
-              : item
-                ? '保存更改'
-                : '确认发布'}
+            {uploadsPending() ? '加入上传队列' : item ? '保存更改' : '确认发布'}
           </button>
         </>
       }
@@ -441,33 +519,16 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           <UploadCloud className="w-8 h-8 text-[#0071E3] mx-auto mb-2" strokeWidth={1.6} />
           <div className="text-[14px] font-medium text-[#1D1D1F]">
             {videoFile
-              ? '已选择本地视频，点击保存后才会上传'
+              ? '已选择本地视频，点击「加入上传队列」后在后台上传'
               : videoUrl
                 ? '已选择视频文件，点击或拖拽可替换'
                 : '点击选择或拖拽视频文件至此'}
           </div>
           <div className="text-[12px] text-[#86868B] mt-1">
-            支持 MP4、MOV、WebM · 最大 1 GB <span className="text-[#D70015]">*</span>
+            支持 MP4、MOV、WebM · 大文件自动分片上传，期间可继续新增其它视频 <span className="text-[#D70015]">*</span>
           </div>
 
-          {uploadProgress !== null && (
-            <div className="mt-4 max-w-[340px] mx-auto">
-              <div className="flex items-center justify-between text-[12px] mb-1">
-                <span className="text-[#1D1D1F] font-medium">
-                  {uploadProgress === 100 ? '上传完成' : '正在上传文件...'}
-                </span>
-                <span className="font-mono tabular-nums text-[#0071E3]">{uploadProgress}%</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-[#E5E5EA] overflow-hidden">
-                <div
-                  className="h-full bg-[#0071E3] transition-all duration-150"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {uploadProgress === null && (videoFile || videoUrl) && (
+          {(videoFile || videoUrl) && (
             <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#16A34A]">
               <CheckCircle2 className="w-4 h-4" />
               <span>
@@ -476,6 +537,19 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
                 {videoFile ? ` · ${formatFileSize(fileSizeBytes)}` : ''} ·{' '}
                 {formatDuration(durationSec)} · {resolution}
               </span>
+            </div>
+          )}
+
+          {(hasUploadedFiles() || videoFile || coverFile) && (
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={() => void handleDeleteUploaded()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#FF3B30]/25 bg-[#FF3B30]/5 text-[12px] font-medium text-[#D70015] hover:bg-[#FF3B30]/10"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                删除已上传视频与封面
+              </button>
             </div>
           )}
         </div>
@@ -619,14 +693,18 @@ export function VideoViewPage({ item, onBack }: VideoViewPageProps) {
     >
       <div className="relative rounded-2xl overflow-hidden bg-black flex items-center justify-center">
         {item.videoUrl ? (
-          // 视频横向铺满容器宽度，高度按自身宽高比自适应；容器贴合视频尺寸，不产生黑边
-          <video
-            src={item.videoUrl}
-            poster={item.coverUrl}
-            controls
-            autoPlay
-            className="block w-full h-auto"
-          />
+          // 使用统一播放器，控件一致；16:9 容器避免不同分辨率导致布局跳动
+          <div className="relative w-full aspect-video">
+            <MediaPlayer
+              src={item.videoUrl}
+              poster={item.coverUrl || undefined}
+              title={item.title}
+              playsInline
+              className="absolute inset-0 w-full h-full"
+            >
+              <MediaProvider className="w-full h-full" />
+            </MediaPlayer>
+          </div>
         ) : (
           // 无视频源时用封面占位，保持 16:9 容器以承载提示层
           <div className="relative w-full aspect-video">
