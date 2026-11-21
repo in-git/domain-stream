@@ -53,6 +53,34 @@
   }
 }
 
+/* Vidstack 默认布局中心播放按钮（默认布局没有自动渲染大按钮） */
+.cms-big-play-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+}
+.cms-big-play-button:hover {
+  background: rgba(0, 0, 0, 0.75);
+  transform: scale(1.06);
+}
+.cms-big-play-icon {
+  width: 28px;
+  height: 28px;
+  margin-left: 3px;
+}
+[data-media-player][data-started]:not([data-paused]) .cms-big-play-button {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ===== 富文本正文排版（AiEditor 输出 / 旧 Markdown 转换后的 HTML） ===== */
 .rich-content {
   color: #1d1d1f;

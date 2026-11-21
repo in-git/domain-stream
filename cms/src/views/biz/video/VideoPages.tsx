@@ -1,10 +1,5 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { MediaPlayer, MediaProvider } from '@vidstack/react';
-import {
-  DefaultVideoLayout,
-  defaultLayoutIcons,
-} from '@vidstack/react/player/layouts/default';
-import { CheckCircle2, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
+import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react';
+import { Camera, CheckCircle2, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
 import { api, convertToWebp } from '../../../lib/api.ts';
 import {
   deleteFilesByUrls,
@@ -42,6 +37,9 @@ interface VideoPreviewProps {
   videoUrl: string;
   durationSec: number;
   resolution: string;
+  videoRef?: RefObject<HTMLVideoElement | null>;
+  onCaptureCover?: () => void;
+  capturingCover?: boolean;
 }
 
 /** 右侧实时预览：按设备宽度自适应排版 */
@@ -55,6 +53,9 @@ function VideoPreview({
   videoUrl,
   durationSec,
   resolution,
+  videoRef,
+  onCaptureCover,
+  capturingCover,
 }: VideoPreviewProps) {
   const compact = device === 'mobile';
   const playableVideoUrl = toPlayableVideoUrl(videoUrl);
@@ -63,16 +64,27 @@ function VideoPreview({
       <div className="relative aspect-video bg-black overflow-hidden">
         {playableVideoUrl ? (
           // 有视频源时渲染真实播放器，可直接在预览区播放
-          <MediaPlayer
-            src={playableVideoUrl}
-            poster={coverUrl || undefined}
-            title={title || '视频预览'}
-            playsInline
-            className="absolute inset-0 w-full h-full"
-          >
-            <MediaProvider className="w-full h-full" />
-            <DefaultVideoLayout icons={defaultLayoutIcons} />
-          </MediaPlayer>
+          <>
+            <video
+              ref={videoRef}
+              src={playableVideoUrl}
+              poster={coverUrl || undefined}
+              controls
+              playsInline
+              className="absolute inset-0 w-full h-full bg-black object-contain"
+            />
+            {onCaptureCover && (
+              <button
+                type="button"
+                onClick={onCaptureCover}
+                disabled={capturingCover}
+                className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg bg-black/65 px-3 py-2 text-[12px] font-medium text-white backdrop-blur-md transition-colors hover:bg-black/80 disabled:opacity-60"
+              >
+                <Camera className="h-4 w-4" />
+                {capturingCover ? '截取中…' : '截取封面'}
+              </button>
+            )}
+          </>
         ) : (
           <>
             <MediaImage
@@ -153,6 +165,8 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [capturingCover, setCapturingCover] = useState(false);
   // 记录尚未上传的本地预览地址，离开页面时统一释放
   const localPreviewUrlsRef = useRef<Set<string>>(new Set());
 
@@ -254,6 +268,41 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     releaseLocalPreview(coverPreviewUrl);
     setCoverFile(file);
     setCoverPreviewUrl(trackLocalPreview(file));
+  }
+
+  /** 从预览视频当前帧生成封面，统一转 WebP 后作为待上传封面 */
+  async function captureCoverFromPreview() {
+    const video = previewVideoRef.current;
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      setFormError('请先播放视频，再点击截取封面');
+      return;
+    }
+    setCapturingCover(true);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('当前浏览器不支持画面截取');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.92)
+      );
+      if (!blob) throw new Error('截取失败，请换一帧重试');
+      const frame = new File([blob], `video-frame-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      applyCoverFile(await convertToWebp(frame, 0.9));
+      setFormError('');
+    } catch (error) {
+      const message =
+        error instanceof Error && error.name === 'SecurityError'
+          ? '视频源不允许截取画面，请改用本地上传的视频'
+          : error instanceof Error
+            ? error.message
+            : '截取封面失败';
+      setFormError(message);
+    } finally {
+      setCapturingCover(false);
+    }
   }
 
   async function handleVideoFile(file: File) {
@@ -679,6 +728,9 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
           videoUrl={videoPreviewUrl}
           durationSec={durationSec}
           resolution={resolution}
+          videoRef={previewVideoRef}
+          onCaptureCover={captureCoverFromPreview}
+          capturingCover={capturingCover}
         />
       )}
     />
@@ -705,16 +757,13 @@ export function VideoViewPage({ item, onBack }: VideoViewPageProps) {
         {playableVideoUrl ? (
           // 使用统一播放器，控件一致；16:9 容器避免不同分辨率导致布局跳动
           <div className="relative w-full aspect-video">
-            <MediaPlayer
+            <video
               src={playableVideoUrl}
               poster={item.coverUrl || undefined}
-              title={item.title}
+              controls
               playsInline
-              className="absolute inset-0 w-full h-full"
-            >
-              <MediaProvider className="w-full h-full" />
-              <DefaultVideoLayout icons={defaultLayoutIcons} />
-            </MediaPlayer>
+              className="absolute inset-0 w-full h-full bg-black object-contain"
+            />
           </div>
         ) : (
           // 无视频源时用封面占位，保持 16:9 容器以承载提示层

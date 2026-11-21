@@ -129,6 +129,8 @@ export function toStreamUrl(file: DevFile): string {
  */
 export function toPlayableVideoUrl(raw?: string): string {
   if (!raw) return '';
+  // 本地 blob 预览地址原样返回；播放器需要配合 MIME type 才能识别媒体
+  if (raw.startsWith('blob:')) return raw;
   try {
     const u = new URL(raw, window.location.origin);
     if (!u.pathname.includes('/dev/file/download')) return raw;
