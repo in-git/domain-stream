@@ -18,7 +18,6 @@ import {
   X,
 } from 'lucide-react';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
-import { isAudioFile, isImageFile, isVideoFile } from '../../../lib/fileCenter.ts';
 import { SelectField } from '../../../components/SelectField.tsx';
 import { QuickCreateCategory } from '../../../components/QuickCreateCategory.tsx';
 
@@ -148,8 +147,10 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
     setError('');
     try {
       // 多个文件共用同一个分类一次提交，成功后关闭；失败时保留未成功的文件便于重试
-      const failedFiles = await onSubmit({ files, categoryCode }, (value) => setPercent(value));
-      if (failedFiles?.length) {
+      // 明确收窄返回类型：void 视为「全部成功」，避免 void | File[] 上的属性访问报错
+      const result = await onSubmit({ files, categoryCode }, (value) => setPercent(value));
+      const failedFiles = Array.isArray(result) ? result : [];
+      if (failedFiles.length) {
         setFiles(failedFiles);
         setError(`${failedFiles.length} 个文件上传失败，可点击「保存并上传」重试`);
       } else {

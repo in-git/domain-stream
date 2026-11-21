@@ -18,7 +18,7 @@ function externalHref(path: string): string {
  * 外部菜单占位页
  * ------------------------------------------------------------------
  * /sys/userCenter/loginMenu 返回的菜单完整覆盖小诺后台全部功能，而
- * CueStudio 工作台只内置了首页看板 / 视频 / 图文 / 文章 / 通用分类 / 个人中心。
+ * 私域工作台只内置了首页看板 / 视频 / 图文 / 文章 / 通用分类 / 个人中心。
  * 点击其余菜单时渲染本页，展示菜单元数据并提供跳转后台的入口，
  * 避免「点了没反应」或白屏。
  */
@@ -62,7 +62,7 @@ export function ExternalMenuView({ node, onBack }: ExternalMenuViewProps) {
           <div className="rounded-xl bg-[#F5F5F7] p-4 flex gap-3">
             <Info className="w-4 h-4 text-[#0071E3] shrink-0 mt-0.5" />
             <p className="text-[13px] leading-6 text-[#3A3A3C]">
-              该菜单由后端动态下发，CueStudio 工作台尚未内置对应页面。侧边栏会完整呈现你有权访问的全部菜单；
+              该菜单由后端动态下发，私域工作台尚未内置对应页面。侧边栏会完整呈现你有权访问的全部菜单；
               如需使用此功能，可在小诺后台管理系统中打开。
             </p>
           </div>

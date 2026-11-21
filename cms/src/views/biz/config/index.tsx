@@ -12,8 +12,8 @@ import {
   AlertCircle,
   Check,
   Image as ImageIcon,
+  ListOrdered,
   Loader2,
-  FolderOpen,
   RefreshCw,
   RotateCcw,
   Save,
@@ -31,6 +31,7 @@ import {
   type ConfigFieldDef,
 } from './schema';
 import { PreviewPanel } from './PreviewPanel';
+import { NavItemsEditor } from './NavItemsEditor';
 
 interface Toast {
   kind: 'success' | 'error';
@@ -163,6 +164,16 @@ export default function ConfigView() {
   const [toast, setToast] = useState<Toast | null>(null);
   /** 正在通过文件选择器设置的字段（null 表示未打开） */
   const [pickerField, setPickerField] = useState<string | null>(null);
+  /** 当前编辑分组：页面配置 / 侧边栏导航 */
+  const [tab, setTab] = useState<'basic' | 'nav'>('basic');
+
+  /** 基础属性字段：排除导航列表，导航用独立 Tab 与拖拽编辑器 */
+  const basicFields = useMemo(
+    () => CONFIG_FIELDS.filter((field) => field.control !== 'navList'),
+    []
+  );
+  /** 参与当前 Tab 的字段，用于判断是否有未保存改动 */
+  const tabFields = tab === 'nav' ? CONFIG_FIELDS.filter((f) => f.control === 'navList') : basicFields;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,14 +200,26 @@ export default function ConfigView() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  /** 只保存发生变化或数据库中尚不存在的属性 */
+  /** 当前 Tab 下发生变化或数据库中尚不存在的属性 */
   const pendingKeys = useMemo(() => {
     if (!draft || !original) return [];
-    return CONFIG_FIELDS.filter(
+    return tabFields
+      .filter(
+        (field) =>
+          draft.storedKeys[field.key] === null ||
+          draft.values[field.key] !== original.values[field.key]
+      )
+      .map((field) => field.key);
+  }, [draft, original, tabFields]);
+
+  /** 全部配置是否有改动（保存时整体覆盖，需按全量判断） */
+  const hasAnyChange = useMemo(() => {
+    if (!draft || !original) return false;
+    return CONFIG_FIELDS.some(
       (field) =>
         draft.storedKeys[field.key] === null ||
         draft.values[field.key] !== original.values[field.key]
-    ).map((field) => field.key);
+    );
   }, [draft, original]);
 
   const setFieldValue = useCallback((key: string, value: string) => {
@@ -229,7 +252,7 @@ export default function ConfigView() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="w-full flex-1 min-h-0 flex flex-col gap-5 h-full">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#1D1D1F]">客户端配置</h2>
@@ -248,7 +271,7 @@ export default function ConfigView() {
           <button
             type="button"
             onClick={handleReset}
-            disabled={saving || pendingKeys.length === 0}
+            disabled={saving || !hasAnyChange}
             className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:opacity-40 flex items-center gap-1.5"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -257,7 +280,7 @@ export default function ConfigView() {
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={saving || pendingKeys.length === 0}
+            disabled={saving || !hasAnyChange}
             className="h-9 px-4 rounded-xl bg-[#0071E3] text-white text-[13px] font-medium hover:bg-[#0077ED] disabled:opacity-40 flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -273,26 +296,67 @@ export default function ConfigView() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-5 items-start">
-        <div className="bg-white rounded-2xl border border-[#E5E5EA] overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-[#E5E5EA] bg-[#FAFAFC]">
-            <SlidersHorizontal className="w-4 h-4 text-[#0071E3]" />
-            <span className="text-[14px] font-medium text-[#1D1D1F]">属性设置</span>
-            <span className="ml-auto text-[11px] text-[#86868B]">
+      {/* 左侧表单可纵向滚动，右侧预览占满剩余高度，整体铺满容器；
+          lg 以上预览固定占 2/3，表单占 1/3，窄屏仍上下堆叠。
+          auto-rows-fr：栅格行均分容器高度，避免卡片被内容高度「撑不满」而底部露背景 */}
+      <div className="flex-1 h-full lg:min-h-0 grid grid-cols-1 auto-rows-fr lg:auto-rows-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-5 items-stretch">
+        <div className="bg-white rounded-2xl border border-[#E5E5EA] overflow-hidden flex flex-col min-h-0">
+          {/* Tab 切换：页面配置 / 侧边栏导航 */}
+          <div className="shrink-0 flex items-center gap-1 px-4 pt-3 border-b border-[#E5E5EA] bg-[#FAFAFC]">
+            {[
+              { key: 'basic' as const, label: '页面配置', icon: SlidersHorizontal },
+              { key: 'nav' as const, label: '侧边栏导航', icon: ListOrdered },
+            ].map((item) => {
+              const active = tab === item.key;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setTab(item.key)}
+                  className={`h-9 px-3.5 rounded-t-xl text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+                    active
+                      ? 'bg-white text-[#1D1D1F] border border-[#E5E5EA] border-b-white -mb-px'
+                      : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${active ? 'text-[#0071E3]' : ''}`} />
+                  {item.label}
+                </button>
+              );
+            })}
+            <span className="ml-auto pb-2 text-[11px] text-[#86868B]">
               {pendingKeys.length > 0 ? `${pendingKeys.length} 项未保存` : '已保存'}
             </span>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-[#86868B]">
+            <div className="flex-1 flex items-center justify-center gap-2 py-16 text-[13px] text-[#86868B]">
               <Loader2 className="w-4 h-4 animate-spin" />
               正在加载配置...
             </div>
           ) : !draft ? (
-            <div className="py-16 text-center text-[13px] text-[#86868B]">配置加载失败</div>
+            <div className="flex-1 py-16 text-center text-[13px] text-[#86868B]">配置加载失败</div>
+          ) : tab === 'nav' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+              {CONFIG_FIELDS.filter((field) => field.control === 'navList').map((field) => (
+                <div key={field.key}>
+                  <div className="mb-3">
+                    <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
+                    {field.description && (
+                      <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
+                    )}
+                  </div>
+                  <NavItemsEditor
+                    value={draft.values[field.key] ?? ''}
+                    onChange={(value) => setFieldValue(field.key, value)}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="divide-y divide-[#F0F0F2]">
-              {CONFIG_FIELDS.map((field) => (
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#F0F0F2]">
+              {basicFields.map((field) => (
                 <div key={field.key} className="px-5 py-4">
                   <div className="mb-2">
                     <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
@@ -314,9 +378,8 @@ export default function ConfigView() {
           )}
         </div>
 
-        <div className="lg:sticky lg:top-20">
-          <PreviewPanel values={draft?.values ?? {}} />
-        </div>
+        {/* 属性修改预览：栅格项在 items-stretch 下自动等高，flex-1 撑满内部剩余高度 */}
+        <PreviewPanel values={draft?.values ?? {}} className="min-h-0" />
       </div>
 
       {toast && (

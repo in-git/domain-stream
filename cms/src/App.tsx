@@ -90,7 +90,7 @@ export default function App() {
   const [permissions, setPermissions] = useState<string[]>([]);
   // 后端 /sys/userCenter/loginMenu 返回的原始菜单树，侧边栏据此动态渲染
   const [menuTree, setMenuTree] = useState<SnowyMenu[]>(() => getCachedMenu() || []);
-  // 当前选中的外部菜单（CueStudio 未内置对应页面的后台菜单）
+  // 当前选中的外部菜单（私域工作台未内置对应页面的后台菜单）
   const [externalMenu, setExternalMenu] = useState<SnowyMenu | null>(null);
   const [route, setRoute] = useState<AppRoute>({ kind: 'module', module: 'dashboard' });
   const [lastModule, setLastModule] = useState<ModuleKey>(
@@ -493,7 +493,7 @@ export default function App() {
         onCloseMobile={() => setMobileNavOpen(false)}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col h-screen min-h-0">
         {/* Top Bar Contract: Breadcrumb on Left — Clean Quick Nav — 1 Primary Action on Right */}
         <header className="sticky top-0 z-30 h-16 bg-[#F5F5F7]/85 backdrop-blur-xl border-b border-[#E5E5EA] px-4 sm:px-8 flex items-center justify-between gap-8">
           <div className="flex items-center gap-3 min-w-0">
@@ -519,9 +519,9 @@ export default function App() {
         </header>
 
         <main
-          className={`flex-1 w-full px-4 sm:px-8 py-6 ${
+          className={`flex-1 min-h-0 w-full px-4 sm:px-8 py-6 ${
             route.kind === 'content'
-              ? 'lg:h-[calc(100vh-64px)] lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col'
+              ? 'lg:overflow-hidden lg:flex lg:flex-col'
               : ''
           }`}
         >

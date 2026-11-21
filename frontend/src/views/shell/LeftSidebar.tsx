@@ -3,7 +3,11 @@ import {
   BookOpen,
   Film,
   Image as ImageIcon,
+  ImagePlus,
   MessageCircleHeart,
+  Music,
+  Star,
+  UserRound,
 } from 'lucide-react';
 import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
@@ -16,22 +20,76 @@ interface LeftSidebarProps {
   onSelectSection: (section: SectionId) => void;
 }
 
-const NAV_ITEMS: { id: SectionId; label: string; Icon: typeof Film }[] = [
-  { id: 'videos', label: '视频', Icon: Film },
-  { id: 'articles', label: '文章', Icon: BookOpen },
-  { id: 'gallery', label: '图文', Icon: ImageIcon },
-  { id: 'messages', label: '留言', Icon: MessageCircleHeart },
+/** 板块 id → 默认图标组件；CMS 未上传自定义图标时作为兜底 */
+const ICON_MAP: Record<SectionId, typeof Film> = {
+  videos: Film,
+  articles: BookOpen,
+  gallery: ImageIcon,
+  messages: MessageCircleHeart,
+  profile: UserRound,
+};
+
+/** 默认导航项：配置缺失或解析失败时使用，与后台默认一致 */
+const DEFAULT_NAV: SidebarNavItem[] = [
+  { id: 'videos', label: '视频' },
+  { id: 'articles', label: '文章' },
+  { id: 'gallery', label: '图文' },
+  { id: 'messages', label: '留言' },
 ];
+
+/** 可导航的板块白名单，避免配置里出现未知 id 导致点击无效 */
+const VALID_SECTIONS: SectionId[] = ['videos', 'articles', 'gallery', 'messages', 'profile'];
+
+/** 导航项名称最大长度，与 CMS 保持一致（超长会挤爆侧栏） */
+const LABEL_MAX_LENGTH = 4;
+
+interface SidebarNavItem {
+  id: SectionId;
+  label: string;
+  /** CMS 上传的自定义图标地址；留空时按 id 回退默认图标 */
+  iconUrl?: string;
+}
+
+/** 解析后台配置的导航 JSON，失败或为空时回退默认 */
+function parseNav(raw: string | undefined): SidebarNavItem[] {
+  if (!raw || !raw.trim()) return DEFAULT_NAV;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return DEFAULT_NAV;
+    const items: SidebarNavItem[] = [];
+    const seen = new Set<string>();
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue;
+      const row = entry as Record<string, unknown>;
+      if (row.enabled === false) continue;
+      const id = String(row.id ?? '') as SectionId;
+      // 白名单校验 + 去重，避免重复 key 与点了没反应的条目
+      if (!VALID_SECTIONS.includes(id) || seen.has(id)) continue;
+      seen.add(id);
+      const label = String(row.label ?? id).trim() || id;
+      const iconUrl = String(row.iconUrl ?? '').trim();
+      items.push({
+        id,
+        label: label.slice(0, LABEL_MAX_LENGTH),
+        ...(iconUrl ? { iconUrl } : {}),
+      });
+    }
+    return items.length ? items : DEFAULT_NAV;
+  } catch {
+    return DEFAULT_NAV;
+  }
+}
 
 export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
   const { title, config } = useSystemInfo();
   const logoUrl = publicFileUrl(config.logoUrl);
   const icpNo = (config.icpNo || '').trim();
   const policeNo = (config.policeNo || '').trim();
+  const navItems = parseNav(config.navItems);
   return (
     <aside
       aria-label="左侧主导航"
-      className="hidden md:flex flex-col justify-between sticky top-0 h-screen w-20 lg:w-60 shrink-0 border-r border-black/[0.06] dark:border-white/[0.08] bg-[#F5F5F7]/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 py-5 select-none z-30"
+      className="hidden md:flex flex-col justify-between sticky top-0 h-screen w-20 lg:w-60 shrink-0 border-r border-black/[0.06] dark:border-white/[0.08] bg-[#F5F5F7]/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
     >
       {/* Top Brand + Primary Vertical Navigation */}
       <div className="space-y-6">
@@ -61,8 +119,11 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
 
         {/* Douyin-style Left Vertical Nav Links */}
         <nav aria-label="板块导航" className="space-y-1.5">
-          {NAV_ITEMS.map(({ id, label, Icon }) => {
+          {navItems.map(({ id, label, iconUrl }) => {
             const isActive = activeSection === id;
+            // 图标完全由 CMS 提供；未上传时按板块 id 回退默认图标
+            const Icon = ICON_MAP[id] ?? Film;
+            const customIcon = publicFileUrl(iconUrl);
             return (
               <motion.button
                 key={id}
@@ -84,12 +145,22 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
                     className="absolute inset-0 rounded-2xl bg-white dark:bg-[#1E1E22] shadow-xs border border-black/[0.05] dark:border-white/[0.08]"
                   />
                 )}
-                <Icon
-                  className={`relative z-10 w-5 h-5 shrink-0 ${
-                    isActive ? 'text-[#0071E3] dark:text-[#0A84FF]' : ''
-                  }`}
-                  strokeWidth={isActive ? 2.2 : 1.8}
-                />
+                {customIcon ? (
+                  <img
+                    src={customIcon}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    className="relative z-10 w-5 h-5 shrink-0 object-contain"
+                  />
+                ) : (
+                  <Icon
+                    className={`relative z-10 w-5 h-5 shrink-0 ${
+                      isActive ? 'text-[#0071E3] dark:text-[#0A84FF]' : ''
+                    }`}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                  />
+                )}
                 <span className="relative z-10 hidden lg:inline whitespace-nowrap truncate">
                   {label}
                 </span>
@@ -99,35 +170,43 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         </nav>
       </div>
 
-      {/* 备案模块：铺满侧栏底部整宽、紧贴底边，真实图标 + 白字，点击跳转官方查询站 */}
+      {/* 备案模块：固定在侧栏底部，右对齐（公安备案在最下方），点击跳转官方查询站 */}
       {(icpNo || policeNo) && (
-        <div className="hidden lg:block -mx-3 lg:-mx-4 -mb-5">
-          <div className="bg-black px-3 py-3 space-y-2">
-            {icpNo && (
-              <a
-                href="https://beian.miit.gov.cn"
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`${icpNo}（点击前往工信部备案查询）`}
-                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
-              >
-                <img src={icpIcon} alt="ICP备案" className="w-4 h-4 shrink-0" />
-                <span className="text-[10px] leading-tight text-white truncate">{icpNo}</span>
-              </a>
-            )}
-            {policeNo && (
-              <a
-                href="https://beian.gov.cn"
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`${policeNo}（点击前往公安备案查询）`}
-                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
-              >
-                <img src={policeIcon} alt="公安备案" className="w-4 h-4 shrink-0" />
-                <span className="text-[10px] leading-tight text-white truncate">{policeNo}</span>
-              </a>
-            )}
-          </div>
+        <div className="hidden lg:flex shrink-0 flex-col items-end gap-1 pt-3 border-t border-black/[0.05] dark:border-white/[0.06]">
+          {icpNo && (
+            <a
+              href="https://beian.miit.gov.cn"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${icpNo}（点击前往工信部备案查询）`}
+              className="group flex items-center gap-1.5 max-w-full pl-1.5 pr-2 py-1 -mr-1.5 rounded-lg text-[#8E8E93] dark:text-[#8E8E93] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition-colors"
+            >
+              <img
+                src={icpIcon}
+                alt=""
+                aria-hidden="true"
+                className="w-3 h-3 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+              />
+              <span className="text-[10px] leading-none truncate">{icpNo}</span>
+            </a>
+          )}
+          {policeNo && (
+            <a
+              href="https://beian.gov.cn"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${policeNo}（点击前往公安备案查询）`}
+              className="group flex items-center gap-1.5 max-w-full pl-1.5 pr-2 py-1 -mr-1.5 rounded-lg text-[#8E8E93] dark:text-[#8E8E93] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition-colors"
+            >
+              <img
+                src={policeIcon}
+                alt=""
+                aria-hidden="true"
+                className="w-3 h-3 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+              />
+              <span className="text-[10px] leading-none truncate">{policeNo}</span>
+            </a>
+          )}
         </div>
       )}
     </aside>

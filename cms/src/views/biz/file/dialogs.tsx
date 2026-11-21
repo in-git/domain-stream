@@ -1,6 +1,6 @@
 /**
  * 文件中心弹窗集合：预览播放、详情、删除确认
- * 供 biz/file/index 使用，UI 风格与 CueStudio 工作台保持一致。
+ * 供 biz/file/index 使用，UI 风格与私域工作台保持一致。
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';

@@ -8,10 +8,12 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Eye, FileJson, Globe2 } from 'lucide-react';
 import icpIcon from '../../../assets/icp-icon.svg';
 import policeIcon from '../../../assets/police-icon.svg';
-import { draftToJson } from './schema';
+import { draftToJson, parseNavItems } from './schema';
 
 interface PreviewPanelProps {
   values: Record<string, string>;
+  /** 外部布局类，用于铺满容器高度 */
+  className?: string;
 }
 
 /** 配置里存的是纯后端路径，CMS 预览时补回 /snowy 代理前缀 */
@@ -20,7 +22,7 @@ function previewUrl(raw: string): string {
   return `/snowy${raw}`;
 }
 
-export function PreviewPanel({ values }: PreviewPanelProps) {
+export function PreviewPanel({ values, className }: PreviewPanelProps) {
   // 默认展开存储 JSON，便于核对配置内容
   const [showJson, setShowJson] = useState(true);
   const title = values.title || '（未设置标题）';
@@ -28,19 +30,26 @@ export function PreviewPanel({ values }: PreviewPanelProps) {
   const icpNo = (values.icpNo || '').trim();
   const policeNo = (values.policeNo || '').trim();
   const json = useMemo(() => draftToJson(values), [values]);
+  // 仅展示已启用的导航项，与客户端侧边栏一致
+  const navItems = useMemo(
+    () => parseNavItems(values.navItems).filter((item) => item.enabled),
+    [values.navItems]
+  );
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E5E5EA] overflow-hidden shadow-sm">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#E5E5EA] bg-[#FAFAFC]">
+    <div
+      className={`h-full bg-white rounded-2xl border border-[#E5E5EA] overflow-hidden shadow-sm flex flex-col ${className ?? ''}`}
+    >
+      <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-[#E5E5EA] bg-[#FAFAFC]">
         <Eye className="w-4 h-4 text-[#0071E3]" />
         <span className="text-[13px] font-medium text-[#1D1D1F]">属性修改预览</span>
         <span className="ml-auto text-[11px] text-[#86868B]">实时更新</span>
       </div>
 
-      <div className="p-4">
-        {/* 模拟浏览器窗口 */}
-        <div className="rounded-xl border border-[#D2D2D7] overflow-hidden bg-white">
-          <div className="flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] border-b border-[#E5E5EA]">
+      <div className="flex-1 min-h-0 p-4 flex flex-col">
+        {/* 模拟浏览器窗口：占满预览区全部剩余高度 */}
+        <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-[#D2D2D7] overflow-hidden bg-white">
+          <div className="shrink-0 flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] border-b border-[#E5E5EA]">
             <span className="flex gap-1.5">
               <i className="w-2 h-2 rounded-full bg-[#FF5F57]" />
               <i className="w-2 h-2 rounded-full bg-[#FEBC2E]" />
@@ -53,15 +62,92 @@ export function PreviewPanel({ values }: PreviewPanelProps) {
             </div>
           </div>
 
-          {/* 站点预览区 */}
-          <div className="p-5" style={{ borderTop: '3px solid #0071E3' }}>
-            <div className="flex items-center justify-between gap-2 mb-6">
-              <span className="flex items-center gap-2 text-[13px] font-semibold text-[#1D1D1F] truncate">
+          {/* 站点预览区：左侧为侧边栏导航示意，右侧为主内容 */}
+          <div className="flex-1 min-h-0 flex" style={{ borderTop: '3px solid #0071E3' }}>
+            <div className="w-[128px] shrink-0 border-r border-[#E5E5EA] bg-[#FAFAFC] px-2 pt-3 pb-2 flex flex-col">
+              <div className="flex items-center justify-start gap-2 mb-2 px-1">
                 {logoUrl ? (
                   <img src={logoUrl} alt="Logo" className="w-5 h-5 object-contain shrink-0" />
                 ) : (
                   <span className="w-5 h-5 rounded-md bg-[#1D1D1F] shrink-0" />
                 )}
+                <span className="text-[9px] font-semibold text-[#1D1D1F] truncate">{title}</span>
+              </div>
+              <div className="space-y-1">
+                {navItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md ${
+                      index === 0 ? 'bg-white shadow-xs border border-black/5' : ''
+                    }`}
+                  >
+                    {item.iconUrl ? (
+                      <img
+                        src={previewUrl(item.iconUrl)}
+                        alt=""
+                        aria-hidden="true"
+                        className="w-3 h-3 rounded-sm object-contain shrink-0"
+                      />
+                    ) : (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          index === 0 ? 'bg-[#0071E3]' : 'bg-[#C7C7CC]'
+                        }`}
+                      />
+                    )}
+                    <span
+                      className={`flex-1 min-w-0 text-[10px] truncate ${
+                        index === 0 ? 'text-[#1D1D1F] font-medium' : 'text-[#86868B]'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+                {navItems.length === 0 && (
+                  <p className="text-[9px] text-[#C7C7CC] text-center leading-tight">
+                    无启用导航
+                  </p>
+                )}
+              </div>
+              {/* 备案信息与客户端一致：固定在侧边栏底部、右对齐，公安备案在最下方 */}
+              {(icpNo || policeNo) && (
+                <div className="mt-auto pt-2 flex flex-col items-end gap-1 border-t border-black/5">
+                  {icpNo && (
+                    <div
+                      className="flex items-center gap-1 max-w-full pl-1 pr-1.5 py-0.5 rounded text-[#8E8E93]"
+                      title={icpNo}
+                    >
+                      <img
+                        src={icpIcon}
+                        alt=""
+                        aria-hidden="true"
+                        className="w-3 h-3 shrink-0 opacity-70"
+                      />
+                      <span className="text-[9px] leading-none truncate">{icpNo}</span>
+                    </div>
+                  )}
+                  {policeNo && (
+                    <div
+                      className="flex items-center gap-1 max-w-full pl-1 pr-1.5 py-0.5 rounded text-[#8E8E93]"
+                      title={policeNo}
+                    >
+                      <img
+                        src={policeIcon}
+                        alt=""
+                        aria-hidden="true"
+                        className="w-3 h-3 shrink-0 opacity-70"
+                      />
+                      <span className="text-[9px] leading-none truncate">{policeNo}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0 p-4">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <span className="flex items-center gap-2 text-[12px] font-semibold text-[#1D1D1F] truncate">
                 {title}
               </span>
               <span className="flex items-center gap-2 shrink-0">
@@ -83,30 +169,13 @@ export function PreviewPanel({ values }: PreviewPanelProps) {
             >
               立即体验
             </button>
-
-            {(icpNo || policeNo) && (
-              <div className="mt-5 pt-3 border-t border-[#E5E5EA]">
-                <div className="bg-black rounded-xl px-2.5 py-2 space-y-1.5">
-                  {icpNo && (
-                    <div className="flex items-center gap-1.5" title={icpNo}>
-                      <img src={icpIcon} alt="ICP备案" className="w-4 h-4 shrink-0" />
-                      <span className="text-[10px] leading-tight text-white truncate">{icpNo}</span>
-                    </div>
-                  )}
-                  {policeNo && (
-                    <div className="flex items-center gap-1.5" title={policeNo}>
-                      <img src={policeIcon} alt="公安备案" className="w-4 h-4 shrink-0" />
-                      <span className="text-[10px] leading-tight text-white truncate">{policeNo}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
         {/* 存储结构（只读） */}
-        <div className="mt-4 rounded-xl border border-[#E5E5EA] overflow-hidden">
+        {/* 存储结构：仅展开时占用空间，避免挤压上方预览 */}
+        <div className="shrink-0 mt-3 rounded-xl border border-[#E5E5EA] overflow-hidden flex flex-col">
           <button
             type="button"
             onClick={() => setShowJson((open) => !open)}
@@ -117,7 +186,7 @@ export function PreviewPanel({ values }: PreviewPanelProps) {
             查看存储 JSON
           </button>
           {showJson && (
-            <pre className="px-3 py-3 text-[11px] leading-relaxed font-mono text-[#1D1D1F] bg-white overflow-x-auto whitespace-pre-wrap break-all">
+            <pre className="max-h-[160px] overflow-auto px-3 py-3 text-[11px] leading-relaxed font-mono text-[#1D1D1F] bg-white whitespace-pre-wrap break-all">
               {json}
             </pre>
           )}

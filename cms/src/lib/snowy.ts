@@ -312,7 +312,7 @@ export interface SnowyMenu {
   };
 }
 
-/** 小诺登录用户信息（只声明 CueStudio 用到的字段） */
+/** 小诺登录用户信息（只声明私域工作台用到的字段） */
 export interface SnowyLoginUser {
   id: string;
   account: string;
@@ -382,7 +382,7 @@ export function clearSnowyLoginCache(): void {
   }
 }
 
-/** 把小诺真实用户信息映射为 CueStudio 的 UserProfile */
+/** 把小诺真实用户信息映射为私域工作台的 UserProfile */
 export function userProfileFromSnowy(raw: SnowyLoginUser, defaultModule: string = 'dashboard'): UserProfile {
   const roleTitle = raw.positionName || (raw.roleCodeList || []).join('、') || '系统用户';
   return {

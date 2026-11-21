@@ -10,8 +10,8 @@ import {
  * 动态路由 / 菜单映射层
  * ------------------------------------------------------------------
  * 参照 snowy-admin-web：后端 loginMenu 返回模块树，前端按 component/path
- * 把菜单映射为 CueStudio 的 ModuleKey，据此动态生成侧边栏与可访问路由。
- * CueStudio 的页面组件是固定的几个（React 静态导入），因此这里不是像 Vue
+ * 把菜单映射为私域工作台的 ModuleKey，据此动态生成侧边栏与可访问路由。
+ * 私域工作台的页面组件是固定的几个（React 静态导入），因此这里不是像 Vue
  * 那样按 component 动态 import 组件，而是做「权限/可见性」的动态映射。
  */
 
@@ -39,7 +39,7 @@ const DEFAULT_PATHS: Record<ModuleKey, string> = {
   profile: '/profile',
 };
 
-/** dashboard / profile 为 CueStudio 内置页，不依赖后端菜单 */
+/** dashboard / profile 为私域工作台内置页，不依赖后端菜单 */
 const BUILTIN_MODULES: DynamicModule[] = [
   { key: 'dashboard', label: '业务首页', path: DEFAULT_PATHS.dashboard, sortCode: 0 },
   { key: 'profile', label: '个人中心', path: DEFAULT_PATHS.profile, sortCode: 9999 },
@@ -75,15 +75,15 @@ function matchModule(node: SnowyMenu): ModuleMatcher | undefined {
 }
 
 /**
- * 把单个菜单节点映射到 CueStudio 已内置页面的 ModuleKey。
- * 返回 null 表示该菜单来自小诺后台、CueStudio 尚无对应页面（外部菜单）。
+ * 把单个菜单节点映射到私域工作台已内置页面的 ModuleKey。
+ * 返回 null 表示该菜单来自小诺后台、私域工作台尚无对应页面（外部菜单）。
  * 供侧边栏树形渲染时判断高亮、徽标与点击分流使用。
  */
 export function menuNodeToModule(node: SnowyMenu): ModuleKey | null {
   return matchModule(node)?.key ?? null;
 }
 
-/** 递归展平菜单树，取出能映射到 CueStudio 模块的可访问菜单项 */
+/** 递归展平菜单树，取出能映射到私域工作台模块的可访问菜单项 */
 function flattenMenu(menus: SnowyMenu[]): DynamicModule[] {
   const found: DynamicModule[] = [];
   const seen = new Set<ModuleKey>();

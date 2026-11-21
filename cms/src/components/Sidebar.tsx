@@ -39,7 +39,7 @@ interface SidebarProps {
   /** /sys/userCenter/loginMenu 返回的原始菜单树（模块 -> 目录 -> 菜单，可任意层级） */
   menuTree: SnowyMenu[];
   activeModule: ModuleKey;
-  /** 当前选中的外部菜单节点 id（CueStudio 未内置页面的菜单） */
+  /** 当前选中的外部菜单节点 id（私域工作台未内置页面的菜单） */
   activeMenuId: string | null;
   onSelectModule: (mod: ModuleKey) => void;
   /** 点击任意菜单叶子节点；由 App 层分流到内置模块或外部菜单占位页 */
@@ -330,7 +330,7 @@ export function Sidebar({
           }}
           className="text-[18px] font-semibold tracking-tight text-[#1D1D1F] whitespace-nowrap shrink-0"
         >
-          CueStudio
+          私域工作台
         </button>
         <button
           type="button"

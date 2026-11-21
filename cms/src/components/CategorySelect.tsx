@@ -65,40 +65,43 @@ export function CategorySelect({
           {label} {required && <span className="text-[#D70015]">*</span>}
         </label>
       )}
-      <SelectField
-        value={value}
-        onChange={onChange}
-        isDisabled={loading || !!error}
-        placeholder={loading ? '正在加载分类...' : error ? '分类加载失败' : placeholder}
-        ariaLabel={ariaLabel || (typeof label === 'string' ? label : '分类')}
-        className={className}
-        options={selectable.map((option) => ({ value: option.code, label: option.label }))}
-      />
-      {error && <p className="mt-1 text-[11px] text-[#D70015]">{error}，请稍后重试</p>}
-
-      {allowQuickCreate && (
-        <>
+      <div className={`flex items-center gap-2 ${className}`}>
+        <SelectField
+          value={value}
+          onChange={onChange}
+          isDisabled={loading || !!error}
+          placeholder={loading ? '正在加载分类...' : error ? '分类加载失败' : placeholder}
+          ariaLabel={ariaLabel || (typeof label === 'string' ? label : '分类')}
+          className="flex-1 min-w-0"
+          options={selectable.map((option) => ({ value: option.code, label: option.label }))}
+        />
+        {allowQuickCreate && (
           <button
             type="button"
             onClick={() => setQuickCreateOpen(true)}
-            className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-[#0071E3] hover:underline"
-          >
-            <FolderPlus className="w-3.5 h-3.5" />
-            新建分类
-          </button>
-          <QuickCreateCategory
-            open={quickCreateOpen}
-            module={module}
             title="新建分类"
-            hint="创建后将自动选中该分类"
-            onClose={() => setQuickCreateOpen(false)}
-            onCreated={(category) => {
-              // 刷新下拉选项并选中新建的分类
-              reload();
-              if (category.code) onChange(category.code);
-            }}
-          />
-        </>
+            aria-label="新建分类"
+            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl border border-[#D2D2D7] bg-white text-[#0071E3] hover:bg-[#F5F5F7] hover:border-[#0071E3]/40 transition-colors"
+          >
+            <FolderPlus className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+      {error && <p className="mt-1 text-[11px] text-[#D70015]">{error}，请稍后重试</p>}
+
+      {allowQuickCreate && (
+        <QuickCreateCategory
+          open={quickCreateOpen}
+          module={module}
+          title="新建分类"
+          hint="创建后将自动选中该分类"
+          onClose={() => setQuickCreateOpen(false)}
+          onCreated={(category) => {
+            // 刷新下拉选项并选中新建的分类
+            reload();
+            if (category.code) onChange(category.code);
+          }}
+        />
       )}
     </div>
   );

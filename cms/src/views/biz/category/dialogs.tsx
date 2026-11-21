@@ -1,6 +1,6 @@
 /**
  * 通用分类弹窗集合：新增/编辑表单、详情、删除确认、Excel 导入
- * 供 biz/category/index 使用，UI 风格与 CueStudio 工作台保持一致。
+ * 供 biz/category/index 使用，UI 风格与私域工作台保持一致。
  */
 import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import {

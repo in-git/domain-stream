@@ -69,7 +69,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
             C
           </div>
           <h1 className="text-[24px] font-semibold tracking-tight text-[#1D1D1F] text-balance">
-            登录 CueStudio 工作台
+            登录私域工作台
           </h1>
           <p className="mt-2 text-[14px] text-[#6E6E73] leading-relaxed">
             使用团队内部授权账号进入内容管理与实时数据看板
@@ -169,7 +169,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
       </div>
 
       <p className="mt-6 text-[12px] text-[#86868B]">
-        CueStudio 内容与数据中心 · 仅限内部团队使用
+        私域工作台 · 内容与数据中心 · 仅限内部团队使用
       </p>
     </div>
   );
