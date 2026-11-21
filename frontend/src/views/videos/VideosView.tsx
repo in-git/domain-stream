@@ -22,9 +22,20 @@ import {
   X,
 } from 'lucide-react';
 import type { VideoItem } from '../../data/content';
+import { portalApi } from '../../lib/api';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { Tooltip } from '../../components/Tooltip';
 import { ResilientImage } from '../../components/ResilientImage';
+
+/** 同一个浏览器标签页内，每个视频只上报一次播放量，避免重复滑动/暂停重播刷量 */
+const countedVideoViews = new Set<string>();
+function countVideoViewOnce(id: string) {
+  if (!id || countedVideoViews.has(id)) return;
+  countedVideoViews.add(id);
+  void portalApi.recordVideoView(id).catch(() => {
+    countedVideoViews.delete(id);
+  });
+}
 
 interface VideosViewProps {
   videos: VideoItem[];
@@ -336,6 +347,7 @@ function FeedSlide({
         onPlay={() => {
           setPlaying(true);
           setLoading(false);
+          countVideoViewOnce(video.id);
         }}
         onPause={() => {
           setPlaying(false);
@@ -532,6 +544,12 @@ function FeedSlide({
                   <span>{video.category}</span>
                   <span aria-hidden="true">·</span>
                   <span>{video.date}</span>
+                  {!!video.viewCount && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{video.viewCount} 次播放</span>
+                    </>
+                  )}
                 </div>
                 <h2 className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug">
                   {video.title}

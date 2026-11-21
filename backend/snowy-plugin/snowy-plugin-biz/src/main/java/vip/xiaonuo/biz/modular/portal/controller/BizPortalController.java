@@ -22,6 +22,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +40,7 @@ import vip.xiaonuo.biz.modular.message.mapper.BizMessageMapper;
 import vip.xiaonuo.biz.modular.message.param.BizMessageAddParam;
 import vip.xiaonuo.biz.modular.video.entity.BizVideo;
 import vip.xiaonuo.biz.modular.video.mapper.BizVideoMapper;
+import vip.xiaonuo.biz.modular.video.service.BizVideoService;
 import vip.xiaonuo.auth.api.SaBaseLoginUserApi;
 import vip.xiaonuo.auth.core.pojo.SaBaseClientLoginUser;
 import vip.xiaonuo.auth.core.util.StpClientUtil;
@@ -68,6 +70,9 @@ public class BizPortalController {
 
     @Resource
     private BizVideoMapper bizVideoMapper;
+
+    @Resource
+    private BizVideoService bizVideoService;
 
     @Resource
     private BizArticleMapper bizArticleMapper;
@@ -109,15 +114,26 @@ public class BizPortalController {
      * @author wuwenlong
      * @date  2026/11/19
      */
-    @Operation(summary = "获取已发布视频列表")
+    @Operation(summary = "获取已发布视频列表（随机推荐）")
     @GetMapping("/public/videos")
     public CommonResult<List<BizVideo>> videos() {
         LambdaQueryWrapper<BizVideo> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(BizVideo::getStatus, "PUBLISHED")
-                .orderByDesc(BizVideo::getIsTop)
-                .orderByAsc(BizVideo::getSortCode)
-                .orderByDesc(BizVideo::getPublishTime);
+                .last("ORDER BY RAND()");
         return CommonResult.data(bizVideoMapper.selectList(queryWrapper));
+    }
+
+    /**
+     * 上报视频播放量：仅在视频真正开始播放时由前台调用
+     *
+     * @author domain-stream
+     * @date  2026/11/21
+     */
+    @Operation(summary = "上报视频播放量")
+    @PostMapping("/public/videos/{id}/view")
+    public CommonResult<Boolean> recordVideoView(@PathVariable("id") String id) {
+        bizVideoService.recordView(id);
+        return CommonResult.data(true);
     }
 
     /**

@@ -83,6 +83,13 @@ public interface BizVideoService extends IService<BizVideo> {
     BizVideo queryEntity(Serializable id);
 
     /**
+     * 前台：播放量 +1（仅统计已发布视频）
+     *
+     * @param id 视频ID
+     */
+    void recordView(String id);
+
+    /**
      * 下载视频导入模板
      *
      * @author wuwenlong

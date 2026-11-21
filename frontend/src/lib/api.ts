@@ -313,6 +313,7 @@ export function videoFromPortal(
     cover: row.cover || str(ext.cover),
     src: toPlayableUrl(row.videoUrl) || toPlayableUrl(str(ext.src)),
     likeCount: row.likeCount || 0,
+    viewCount: num(row.viewCount, 0),
     width: num(ext.width, 1280),
     height: num(ext.height, 720),
     accentTint: str(ext.accentTint, ACCENT_TINTS[index % ACCENT_TINTS.length]),
@@ -493,6 +494,8 @@ export const portalApi = {
   systemInfo: () => request<PublicSystemInfo>('/public/system/info'),
   categories: () => request<PortalCategory[]>('/public/categories'),
   videos: () => request<PortalVideo[]>('/public/videos'),
+  recordVideoView: (id: string) =>
+    request<boolean>(`/public/videos/${encodeURIComponent(id)}/view`, { method: 'POST' }),
   articles: () => request<PortalArticle[]>('/public/articles'),
   graphics: () => request<PortalGraphic[]>('/public/graphics'),
   /** 顶级留言与回复同在一张表，一次拉取后由调用方按 parentId 组装 */

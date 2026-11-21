@@ -27,6 +27,7 @@ import cn.hutool.json.JSONUtil;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.servlet.http.HttpServletResponse;
@@ -160,6 +161,18 @@ public class BizVideoServiceImpl extends ServiceImpl<BizVideoMapper, BizVideo> i
             throw new CommonException("视频不存在，id值为：{}", id);
         }
         return bizVideo;
+    }
+
+    @Override
+    public void recordView(String id) {
+        if (StrUtil.isBlank(id)) {
+            return;
+        }
+        LambdaUpdateWrapper<BizVideo> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(BizVideo::getId, id)
+                .eq(BizVideo::getStatus, "PUBLISHED")
+                .setSql("VIEW_COUNT = IFNULL(VIEW_COUNT, 0) + 1");
+        this.update(wrapper);
     }
 
     @Override
