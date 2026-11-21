@@ -105,7 +105,7 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
       {/* 图片：竖版 3:4，小红书图文的标准比例；卡片大小由列宽控制 */}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-md bg-[#1C1C1E]"
+        className="relative w-full overflow-hidden rounded-md bg-[#F2F2F7] dark:bg-[#1C1C1E]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}

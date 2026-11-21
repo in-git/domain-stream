@@ -230,7 +230,7 @@ export function ArticlesView({
               transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(idx, 8) * 0.03 }}
               className="break-inside-avoid pb-2.5"
             >
-              <div className="group overflow-hidden rounded-md bg-[#161618] border border-white/[0.07] transition-shadow hover:shadow-md">
+              <div className="group overflow-hidden rounded-md bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
                 <div className="relative overflow-hidden">
                   <button
                     type="button"

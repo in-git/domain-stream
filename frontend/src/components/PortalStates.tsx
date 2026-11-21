@@ -3,7 +3,6 @@ import {
   AlertCircle,
   Film,
   Images,
-  LoaderCircle,
   MessageCircleHeart,
   Newspaper,
   RefreshCw,
@@ -13,23 +12,9 @@ import { APPLE_EASE } from '../lib/motion';
 
 type ContentSection = Exclude<SectionId, 'profile'>;
 
-/** 统一的加载态：旋转图标 + 「加载中…」，替代原来的骨架屏 */
-export function SectionSkeleton({ section }: { section: ContentSection }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex min-h-[50dvh] w-full flex-col items-center justify-center gap-3"
-    >
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, ease: 'linear', duration: 1 }}
-      >
-        <LoaderCircle className="h-8 w-8 text-[#8E8E93] dark:text-[#98989D]" strokeWidth={1.8} />
-      </motion.div>
-      <span className="text-[13px] text-[#6E6E73] dark:text-[#98989D]">加载中…</span>
-    </div>
-  );
+/** 加载态：不显示任何内容，数据到位后直接渲染 */
+export function SectionSkeleton(_props: { section: ContentSection }) {
+  return null;
 }
 
 const SECTION_META: Record<ContentSection, { label: string; Icon: typeof Film }> = {

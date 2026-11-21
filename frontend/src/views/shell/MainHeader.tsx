@@ -48,7 +48,7 @@ export function MainHeader({
 
   return (
     <header
-      className={`h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 ${shellClass}`}
+      className={`h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 transition-colors duration-300 ease-out ${shellClass}`}
     >
       {/* Left: Mobile Brand */}
       <div className="flex items-center gap-2.5 shrink-0">

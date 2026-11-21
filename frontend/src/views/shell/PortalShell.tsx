@@ -124,7 +124,13 @@ export function PortalShell({
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen flex bg-[#FBFBFD] text-[#1D1D1F] dark:bg-[#000000] dark:text-[#F5F5F7] transition-colors duration-300">
+      <div
+        className={`min-h-screen flex text-[#1D1D1F] dark:text-[#F5F5F7] transition-colors duration-300 ease-out ${
+          activeSection === 'videos' && isMobileViewport
+            ? 'bg-black'
+            : 'bg-[#FBFBFD] dark:bg-[#000000]'
+        }`}
+      >
         <AnimatePresence>
           {showSplash && <SplashScreen onComplete={onSplashComplete} />}
         </AnimatePresence>
@@ -159,9 +165,7 @@ export function PortalShell({
           <main
             className={`flex-1 w-full ${
               activeSection === 'videos'
-                ? `px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8${
-                    isMobileViewport && videoViewMode === 'grid' ? ' bg-black' : ''
-                  }`
+                ? 'px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8'
                 : activeSection === 'gallery'
                   ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
                   : activeSection === 'articles'
