@@ -63,52 +63,6 @@ function formatTime(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-interface VideoMeta {
-  width: number;
-  height: number;
-}
-
-/** Read the video's own resolution so grid cards follow its native ratio. */
-function useVideoMeta(src: string | undefined): VideoMeta | null {
-  const [meta, setMeta] = useState<VideoMeta | null>(null);
-
-  useEffect(() => {
-    if (!src) {
-      setMeta(null);
-      return;
-    }
-
-    let active = true;
-    setMeta(null);
-
-    const probe = document.createElement('video');
-    probe.preload = 'metadata';
-    probe.muted = true;
-
-    const handleLoadedMetadata = () => {
-      if (active && probe.videoWidth > 0 && probe.videoHeight > 0) {
-        setMeta({ width: probe.videoWidth, height: probe.videoHeight });
-      }
-    };
-
-    probe.addEventListener('loadedmetadata', handleLoadedMetadata);
-    probe.src = src;
-
-    return () => {
-      active = false;
-      probe.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      probe.removeAttribute('src');
-      probe.load();
-    };
-  }, [src]);
-
-  return meta;
-}
-
-function getFallbackMeta(video: VideoItem | null): VideoMeta {
-  return video ? { width: video.width, height: video.height } : { width: 16, height: 9 };
-}
-
 interface VideoGridCardProps {
   video: VideoItem;
   index: number;
@@ -128,45 +82,46 @@ function VideoGridCard({
   onToggleLike,
   onToggleSave,
 }: VideoGridCardProps) {
-  const meta = useVideoMeta(video.src);
-  const fallback = getFallbackMeta(video);
-  const ratio = meta ? meta.width / meta.height : fallback.width / fallback.height;
-
   return (
     <motion.article
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
-      whileHover={{ y: -2 }}
-      className="group break-inside-avoid mb-5 rounded-2xl overflow-hidden bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08]"
+      className="min-w-0"
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`播放 ${video.title}`}
-        className="relative block w-full max-h-[360px] overflow-hidden text-left bg-black"
-        style={{ aspectRatio: ratio }}
-      >
-        <ResilientImage
-          src={video.cover}
-          alt={video.title}
-          fallbackTitle={video.title}
-          className="w-full h-full transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-        <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-black/60 text-white text-[11px] font-mono-tabular">
-          {video.durationLabel}
-        </span>
-      </button>
-      <div className="px-3 pt-2.5 pb-3 space-y-1">
-        <div className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
-          {video.category} · {video.director}
-        </div>
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="flex-1 text-[13px] sm:text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
-            {video.title}
-          </h3>
-          <div className="flex items-center gap-0.5 shrink-0">
+      <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+        <div className="relative overflow-hidden">
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={`播放 ${video.title}`}
+            className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+          >
+            <ResilientImage
+              src={video.cover}
+              alt={video.title}
+              fallbackTitle={video.title}
+              className={`w-full aspect-[16/9] transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
+            />
+          </button>
+          <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
+            {video.category}
+          </span>
+          <span className="absolute right-2 top-2 px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-mono-tabular">
+            {video.durationLabel}
+          </span>
+
+          {/* 底部渐变：标题与简介在左下，点赞/收藏在右下 */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+          <div className="pointer-events-none absolute bottom-2 left-2.5 right-[4.75rem] z-10">
+            <h3 className="text-[16px] sm:text-[18px] font-semibold leading-snug text-white line-clamp-2">
+              {video.title}
+            </h3>
+            <p className="mt-0.5 text-[11px] sm:text-[12px] leading-relaxed text-white/75 line-clamp-1">
+              {video.description || video.subtitle}
+            </p>
+          </div>
+          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
             <motion.button
               type="button"
               whileTap={{ scale: 0.85 }}
@@ -174,13 +129,13 @@ function VideoGridCard({
               onClick={onToggleLike}
               aria-label={liked ? '取消点赞视频' : '点赞视频'}
               aria-pressed={liked}
-              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+              className={`flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
                 liked
-                  ? 'text-[#FF2E4D]'
-                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
+                  ? 'bg-[#FF2E4D] text-white'
+                  : 'bg-black/45 text-white hover:bg-black/60'
               }`}
             >
-              <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-current' : ''}`} />
+              <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
             </motion.button>
             <motion.button
               type="button"
@@ -189,13 +144,13 @@ function VideoGridCard({
               onClick={onToggleSave}
               aria-label={saved ? '取消收藏视频' : '收藏视频'}
               aria-pressed={saved}
-              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+              className={`flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
                 saved
-                  ? 'text-[#0071E3] dark:text-[#0A84FF]'
-                  : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+                  ? 'bg-[#0071E3] text-white'
+                  : 'bg-black/45 text-white hover:bg-black/60'
               }`}
             >
-              <Bookmark className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
+              <Bookmark className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
             </motion.button>
           </div>
         </div>
@@ -1019,7 +974,7 @@ export function VideosView({
 
       {/* Mode 2: Discovery Masonry */}
       {!isMini && viewMode === 'grid' && filteredVideos.length > 0 && (
-        <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 sm:gap-4 xl:gap-5">
           {filteredVideos.map((video, idx) => (
             <VideoGridCard
               key={video.id}

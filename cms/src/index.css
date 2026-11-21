@@ -139,10 +139,12 @@
 }
 .rich-content th { background: #f5f5f7; font-weight: 600; }
 
-/* AiEditor 铺满外层容器，并收紧正文区过于宽松的内边距 */
+/* AiEditor 铺满外层容器：mount → wrapper → 根元素 → 内容区 → 正文区，
+   逐层传递高度，并覆盖默认的 520px / calc(100vh - 220px) 最小高度 */
 .article-ai-editor .aieditor-container,
 .article-ai-editor > div {
   width: 100%;
+  height: 100%;
 }
 
 /* 编辑器根元素撑满 mount 容器（mount 为 absolute inset-0，高度由父级决定） */
@@ -153,9 +155,15 @@
   border-radius: 0;
 }
 
-/* 内容区自身滚动，去掉 prose 的 520px 最小高度，避免撑破 flex 容器 */
-.article-ai-editor .aieditor__prose {
+/* header/footer 之间的主体网格占满剩余高度，并自身滚动 */
+.article-ai-editor .aieditor__content {
   min-height: 0;
+  height: 100%;
+}
+
+/* 正文输入框铺满整个内容区，不再由文字多少决定高度 */
+.article-ai-editor .aieditor__prose {
+  min-height: 100%;
   padding: 24px 28px 48px;
   font-size: 16px;
   line-height: 1.75;

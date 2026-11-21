@@ -153,11 +153,18 @@ export function ArticlesView({
                     {article.category}
                   </span>
 
-                  {/* 底部渐变：标题在左下、收藏在右下 */}
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                  <h3 className="pointer-events-none absolute bottom-2 left-2.5 right-10 text-[12px] sm:text-[13px] font-medium leading-snug text-white line-clamp-2">
-                    {article.title}
-                  </h3>
+                  {/* 底部渐变：标题与简介在左下、收藏在右下 */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+                  <div className="pointer-events-none absolute bottom-2 left-2.5 right-10 z-10">
+                    <h3 className="text-[16px] sm:text-[18px] font-semibold leading-snug text-white line-clamp-2">
+                      {article.title}
+                    </h3>
+                    {article.excerpt && (
+                      <p className="mt-0.5 text-[11px] sm:text-[12px] leading-relaxed text-white/75 line-clamp-1">
+                        {article.excerpt}
+                      </p>
+                    )}
+                  </div>
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.85 }}
@@ -312,60 +319,60 @@ export function ArticlesView({
                       ))}
                     </div>
                   )}
-
-                  {/* Reader Footer Actions */}
-                  <div className="pt-8 mt-8 border-t border-black/[0.08] dark:border-white/[0.08] flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <Tooltip label={likedIds.includes(activeArticle.id) ? '取消点赞' : '点赞'}>
-                        <motion.button
-                          type="button"
-                          whileTap={{ scale: 0.92 }}
-                          onClick={() => onToggleLike(activeArticle.id)}
-                          aria-label={likedIds.includes(activeArticle.id) ? '取消点赞' : '点赞'}
-                          className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
-                            likedIds.includes(activeArticle.id)
-                              ? 'bg-[#FF375F]/12 border-[#FF375F]/35 text-[#FF375F]'
-                              : 'border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-                          }`}
-                        >
-                          <Heart
-                            className={`w-4 h-4 ${
-                              likedIds.includes(activeArticle.id) ? 'fill-current' : ''
-                            }`}
-                          />
-                        </motion.button>
-                      </Tooltip>
-
-                      <Tooltip label={savedIds.includes(activeArticle.id) ? '取消收藏' : '收藏'}>
-                        <motion.button
-                          type="button"
-                          whileTap={{ scale: 0.92 }}
-                          onClick={() => onToggleSave(activeArticle.id)}
-                          aria-label={savedIds.includes(activeArticle.id) ? '取消收藏' : '收藏'}
-                          className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
-                            savedIds.includes(activeArticle.id)
-                              ? 'bg-[#0071E3]/12 border-[#0071E3]/35 text-[#0071E3] dark:text-[#0A84FF]'
-                              : 'border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-                          }`}
-                        >
-                          <Bookmark
-                            className={`w-4 h-4 ${
-                              savedIds.includes(activeArticle.id) ? 'fill-current' : ''
-                            }`}
-                          />
-                        </motion.button>
-                      </Tooltip>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveArticle(null)}
-                      className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-medium bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]"
-                    >
-                      完成阅读
-                    </button>
-                  </div>
                 </div>
+              </div>
+
+              {/* Fixed Modal Footer：点赞/收藏 + 关闭，固定在最底部 */}
+              <div className="shrink-0 border-t border-black/[0.08] dark:border-white/[0.08] bg-[#FBFBFD]/95 dark:bg-[#141416]/95 backdrop-blur-xl px-5 sm:px-8 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Tooltip label={likedIds.includes(activeArticle.id) ? '取消点赞' : '点赞'}>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.92 }}
+                      onClick={() => onToggleLike(activeArticle.id)}
+                      aria-label={likedIds.includes(activeArticle.id) ? '取消点赞' : '点赞'}
+                      className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
+                        likedIds.includes(activeArticle.id)
+                          ? 'bg-[#FF375F]/12 border-[#FF375F]/35 text-[#FF375F]'
+                          : 'border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <Heart
+                        className={`w-4 h-4 ${
+                          likedIds.includes(activeArticle.id) ? 'fill-current' : ''
+                        }`}
+                      />
+                    </motion.button>
+                  </Tooltip>
+
+                  <Tooltip label={savedIds.includes(activeArticle.id) ? '取消收藏' : '收藏'}>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.92 }}
+                      onClick={() => onToggleSave(activeArticle.id)}
+                      aria-label={savedIds.includes(activeArticle.id) ? '取消收藏' : '收藏'}
+                      className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
+                        savedIds.includes(activeArticle.id)
+                          ? 'bg-[#0071E3]/12 border-[#0071E3]/35 text-[#0071E3] dark:text-[#0A84FF]'
+                          : 'border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <Bookmark
+                        className={`w-4 h-4 ${
+                          savedIds.includes(activeArticle.id) ? 'fill-current' : ''
+                        }`}
+                      />
+                    </motion.button>
+                  </Tooltip>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveArticle(null)}
+                  className="px-5 py-2 min-h-[44px] rounded-xl text-sm font-medium bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]"
+                >
+                  关闭
+                </button>
               </div>
             </motion.div>
           </motion.div>
