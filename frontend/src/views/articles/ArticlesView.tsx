@@ -126,6 +126,7 @@ export function ArticlesView({
       <div className="columns-1 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
         {filteredArticles.map((article, idx) => {
           const isSaved = savedIds.includes(article.id);
+          const isLiked = likedIds.includes(article.id);
           return (
             <motion.article
               key={article.id}
@@ -155,7 +156,7 @@ export function ArticlesView({
 
                   {/* 底部渐变：标题与简介在左下、收藏在右下 */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-                  <div className="pointer-events-none absolute bottom-2 left-2.5 right-10 z-10">
+                  <div className="pointer-events-none absolute bottom-2 left-2.5 right-[4.75rem] z-10">
                     <h3 className="text-[16px] sm:text-[18px] font-semibold leading-snug text-white line-clamp-2">
                       {article.title}
                     </h3>
@@ -165,6 +166,25 @@ export function ArticlesView({
                       </p>
                     )}
                   </div>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    transition={SWIFTUI_BOUNCY}
+                    onClick={() => onToggleLike(article.id)}
+                    aria-label={isLiked ? '取消喜欢文章' : '喜欢文章'}
+                    aria-pressed={isLiked}
+                    className={`absolute bottom-2 right-10 z-10 flex h-8 items-center justify-center gap-1 rounded-full px-2 backdrop-blur-sm transition-colors ${
+                      isLiked
+                        ? 'bg-[#FF375F]/90 text-white'
+                        : 'bg-black/45 text-white hover:bg-black/60'
+                    }`}
+                  >
+                    <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+                    <span className="text-[11px] font-medium tabular-nums">
+                      {article.likes || ''}
+                    </span>
+                  </motion.button>
+
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.85 }}
@@ -325,12 +345,12 @@ export function ArticlesView({
               {/* Fixed Modal Footer：点赞/收藏 + 关闭，固定在最底部 */}
               <div className="shrink-0 border-t border-black/[0.08] dark:border-white/[0.08] bg-[#FBFBFD]/95 dark:bg-[#141416]/95 backdrop-blur-xl px-5 sm:px-8 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <Tooltip label={likedIds.includes(activeArticle.id) ? '取消点赞' : '点赞'}>
+                  <Tooltip label={likedIds.includes(activeArticle.id) ? '取消喜欢' : '喜欢'}>
                     <motion.button
                       type="button"
                       whileTap={{ scale: 0.92 }}
                       onClick={() => onToggleLike(activeArticle.id)}
-                      aria-label={likedIds.includes(activeArticle.id) ? '取消点赞' : '点赞'}
+                      aria-label={likedIds.includes(activeArticle.id) ? '取消喜欢' : '喜欢'}
                       className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
                         likedIds.includes(activeArticle.id)
                           ? 'bg-[#FF375F]/12 border-[#FF375F]/35 text-[#FF375F]'

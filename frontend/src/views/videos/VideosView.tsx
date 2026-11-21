@@ -221,13 +221,10 @@ function FeedSlide({
   const playerRef = useRef<MediaPlayerInstance | null>(null);
   const restoredRef = useRef<boolean>(false);
   const lastSaveRef = useRef<number>(0);
-  // 父组件传入的 onToggleMute 是内联函数，用 ref 固定引用，避免进入自动播放 effect 依赖导致重复播放
-  const onToggleMuteRef = useRef(onToggleMute);
-  useEffect(() => {
-    onToggleMuteRef.current = onToggleMute;
-  }, [onToggleMute]);
   // 每个 Slide 自己持有播放状态，由真实 onPlay/onPause 事件驱动
   const [playing, setPlaying] = useState(false);
+  // 视频是否仍在加载缓冲：用于显示 loading 动画，并避免加载期间误显示暂停按钮
+  const [loading, setLoading] = useState(true);
 
   const setPlayerRef = useCallback(
     (player: MediaPlayerInstance | null) => {
@@ -282,16 +279,10 @@ function FeedSlide({
     }
     player.playbackRate = playbackRate;
     player.muted = isMuted;
-    // 划到当前视频即尝试自动播放。若浏览器拦截有声自动播放，
-    // 则切为静音后重试，保证滑动切换后一定会播放。
-    void player.play().catch(() => {
-      if (!isMuted) {
-        player.muted = true;
-        onToggleMuteRef.current();
-      }
-      void player.play().catch(() => {});
-    });
-  }, [active, isMuted, playbackRate]);
+    // 划到当前视频即尝试自动播放。
+    // 不再因浏览器拦截有声自动播放而强制静音：静音状态只由用户控制。
+    void player.play().catch(() => {});
+  }, [active, video.id, isMuted, playbackRate]);
 
   // 进入迷你窗口时继续播放：静音状态下浏览器允许自动播放
   useEffect(() => {
@@ -303,10 +294,11 @@ function FeedSlide({
     }
   }, [mini, active]);
 
-  // video 切换时重置恢复标记
+  // video 切换时重置恢复标记与加载状态
   useEffect(() => {
     restoredRef.current = false;
-  }, [video.id]);
+    if (active) setLoading(true);
+  }, [video.id, active]);
 
   // 防抖保存播放进度（1s 一次）
   const handleTimeUpdate = useCallback((t: number) => {
@@ -343,10 +335,15 @@ function FeedSlide({
         onClick={active ? onTogglePlay : undefined}
         onPlay={() => {
           setPlaying(true);
+          setLoading(false);
         }}
         onPause={() => {
           setPlaying(false);
         }}
+        onCanPlay={() => setLoading(false)}
+        onWaiting={() => setLoading(true)}
+        onPlaying={() => setLoading(false)}
+        onError={() => setLoading(false)}
         onTimeUpdate={(detail) => {
           handleTimeUpdate(detail.currentTime);
         }}
@@ -362,9 +359,26 @@ function FeedSlide({
           {/* 轻度渐层保证底部文字可读，不压暗画面 */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
 
-          {/* Center Paused Indicator — mini 窗口已经有底部播放按钮，不再叠加大图标 */}
+          {/* 视频加载中：显示环形加载动画 */}
           <AnimatePresence>
-            {!playing && !mini && (
+            {loading && !mini && (
+              <motion.div
+                key="video-loading"
+                role="status"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="absolute inset-0 m-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-white/25 border-t-white animate-spin"
+              >
+                <span className="sr-only">视频加载中</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Center Paused Indicator — mini 窗口已经有底部播放按钮，不再叠加大图标；加载中不显示 */}
+          <AnimatePresence>
+            {!playing && !loading && !mini && (
               <motion.button
                 type="button"
                 onClick={onTogglePlay}
@@ -432,22 +446,27 @@ function FeedSlide({
 
           {/* Douyin-style Right-Side Vertical Action Dock */}
           {!mini && (
-            <div className="absolute right-3 sm:right-5 bottom-20 flex flex-col items-center gap-4 z-20 text-white">
+            <div className="absolute right-3 sm:right-5 bottom-[110px] flex flex-col items-center gap-4 z-20 text-white">
             <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.84 }}
-                transition={SWIFTUI_BOUNCY}
-                onClick={onToggleLike}
-                aria-label={liked ? '取消喜欢' : '喜欢'}
-                className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
-                  liked
-                    ? 'bg-[#FF2C55]/25 border-[#FF2C55]/60 text-[#FF2C55]'
-                    : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
-                }`}
-              >
-                <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
-              </motion.button>
+              <div className="flex flex-col items-center">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.84 }}
+                  transition={SWIFTUI_BOUNCY}
+                  onClick={onToggleLike}
+                  aria-label={liked ? '取消喜欢' : '喜欢'}
+                  className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
+                    liked
+                      ? 'bg-[#FF2C55]/25 border-[#FF2C55]/60 text-[#FF2C55]'
+                      : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
+                  }`}
+                >
+                  <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
+                </motion.button>
+                <span className="mt-0.5 text-[11px] font-medium tabular-nums">
+                  {video.likeCount || 0}
+                </span>
+              </div>
             </Tooltip>
 
             <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
@@ -502,11 +521,11 @@ function FeedSlide({
             className={`absolute bottom-0 left-0 right-0 text-white z-10 pointer-events-none ${
               mini
                 ? 'p-2'
-                : 'space-y-3 px-4 pt-4 pr-20 pb-[calc(3rem_+_max(0.5rem,env(safe-area-inset-bottom)))] sm:px-6 sm:pt-6 sm:pr-24 md:pb-6'
+                : 'space-y-3 pt-4 pb-[calc(3rem_+_max(0.5rem,env(safe-area-inset-bottom)))] sm:pl-6 sm:pr-24 sm:pt-6 md:pb-6'
             }`}
           >
             {!mini && (
-              <div className="space-y-1.5 max-w-2xl">
+              <div className="space-y-1.5 max-w-2xl pl-4 pr-20 sm:pl-0 sm:pr-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
                   <span className="font-semibold text-white">@{video.director}</span>
                   <span aria-hidden="true">·</span>
@@ -707,6 +726,24 @@ export function VideosView({
     setActiveIndex(swiper.realIndex);
     setCurrentTime(0);
   };
+
+  /** 网格卡片点击后，把沉浸式 Swiper 切到对应视频，避免仍停留在第一屏 */
+  const openVideoAt = useCallback((index: number) => {
+    setActiveIndex(index);
+    setCurrentTime(0);
+    setViewMode('feed');
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    // 等网格隐藏、Swiper 重新可见后再同步内部索引，避免 display:none 下尺寸计算错误
+    window.requestAnimationFrame(() => {
+      swiper.update();
+      if (swiper.params.loop) {
+        swiper.slideToLoop(index, 0, false);
+      } else {
+        swiper.slideTo(index, 0, false);
+      }
+    });
+  }, []);
 
   const handleNext = () => swiperRef.current?.slideNext();
   const handlePrev = () => swiperRef.current?.slidePrev();
@@ -997,11 +1034,7 @@ export function VideosView({
               saved={savedIds.includes(video.id)}
               onToggleLike={() => onToggleLike(video.id)}
               onToggleSave={() => onToggleSave(video.id)}
-              onOpen={() => {
-                setActiveIndex(idx);
-                setCurrentTime(0);
-                setViewMode('feed');
-              }}
+              onOpen={() => openVideoAt(idx)}
             />
           ))}
         </div>

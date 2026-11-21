@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Heart, LogIn, MessageCircle, Send, X } from 'lucide-react';
+import { Check, Heart, MessageCircle, Send, X } from 'lucide-react';
 import type { MessageItem, MessageReply } from '../../data/content.ts';
 import type { ReplyDraft } from '../../lib/api.ts';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -169,11 +169,11 @@ export default function MessagesView({
   }, [replySuccess]);
 
   function openComposer() {
+    setHint(null);
     if (!isLoggedIn) {
       onRequireLogin();
       return;
     }
-    setHint(null);
     setComposerOpen(true);
   }
 
@@ -275,24 +275,13 @@ export default function MessagesView({
             </h1>
           </div>
 
-          {isLoggedIn ? (
-            <button
-              type="button"
-              onClick={openComposer}
-              className="h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
-            >
-              写留言
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onRequireLogin}
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
-            >
-              <LogIn className="w-4 h-4" />
-              登录后留言
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={openComposer}
+            className="h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
+          >
+            写留言
+          </button>
         </motion.div>
 
         <AnimatePresence>

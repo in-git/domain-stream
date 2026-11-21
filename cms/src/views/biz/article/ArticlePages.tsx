@@ -147,7 +147,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const liveWordCount = useMemo(() => plainText(content).length, [content]);
   const liveReadMin = Math.max(1, Math.ceil(liveWordCount / 300));
 
-  /** 选择原始图片 → 先进入 16:9 裁剪弹窗，确认后只在本地暂存 */
+  /** 选择原始图片 → 进入裁剪弹窗（默认 16:9），确认后只在本地暂存 */
   function handleCoverPick(file: File) {
     if (!file.type.startsWith('image/')) {
       setFormError('封面图片仅支持 JPG / PNG / WebP');

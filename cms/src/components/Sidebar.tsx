@@ -45,11 +45,6 @@ interface SidebarProps {
   /** 点击任意菜单叶子节点；由 App 层分流到内置模块或外部菜单占位页 */
   onSelectMenu: (node: SnowyMenu) => void;
   user: UserProfile;
-  counts: {
-    videos: number;
-    imagetexts: number;
-    articles: number;
-  };
   onLogout: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
@@ -137,18 +132,11 @@ function findNodePath(
   return null;
 }
 
-const MODULE_COUNTS: Partial<Record<ModuleKey, keyof SidebarProps['counts']>> = {
-  videos: 'videos',
-  imagetexts: 'imagetexts',
-  articles: 'articles',
-};
-
 interface RenderCtx {
   expanded: Set<string>;
   toggle: (id: string) => void;
   activeModule: ModuleKey;
   activeMenuId: string | null;
-  counts: SidebarProps['counts'];
   onSelectMenu: (node: SnowyMenu) => void;
   onCloseMobile: () => void;
 }
@@ -203,8 +191,6 @@ function MenuNodes({
         const active = isExternal
           ? ctx.activeMenuId === node.id
           : ctx.activeMenuId === null && ctx.activeModule === target;
-        const countKey = target ? MODULE_COUNTS[target] : undefined;
-        const count = countKey ? ctx.counts[countKey] : undefined;
         const Icon = iconForNode(node);
 
         return (
@@ -228,15 +214,6 @@ function MenuNodes({
               strokeWidth={1.8}
             />
             <span className="flex-1 truncate text-left">{nodeTitle(node)}</span>
-            {count !== undefined && (
-              <span
-                className={`text-[11px] tabular-nums shrink-0 ${
-                  active ? 'text-[#0071E3]' : 'text-[#AEAEB2]'
-                }`}
-              >
-                {count}
-              </span>
-            )}
             {isExternal && (
               <ExternalLink
                 className={`w-3 h-3 shrink-0 ${active ? 'text-[#0071E3]' : 'text-[#C7C7CC]'}`}
@@ -261,7 +238,6 @@ export function Sidebar({
   onSelectModule,
   onSelectMenu,
   user,
-  counts,
   onLogout,
   mobileOpen,
   onCloseMobile,
@@ -312,7 +288,6 @@ export function Sidebar({
     toggle,
     activeModule,
     activeMenuId,
-    counts,
     onSelectMenu,
     onCloseMobile,
   };

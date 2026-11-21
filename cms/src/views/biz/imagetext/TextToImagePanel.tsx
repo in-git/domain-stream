@@ -64,11 +64,6 @@ export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImage
   }, [resultOpen, generating]);
 
   async function handleGenerate() {
-    // 标题是卡片的必要信息，缺失时提示而不是偷偷用正文代替
-    if (!trimmedTitle) {
-      setError('请先在左侧「图文标题」中填写标题，再生成图文');
-      return;
-    }
     if (!canGenerate) return;
     setGenerating(true);
     setError('');
@@ -111,22 +106,12 @@ export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImage
 
       {/* 卡片标题复用左侧基础信息，避免两处维护 */
       /* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-      <div
-        className={`rounded-xl px-3 py-2 text-[12px] ${
-          trimmedTitle
-            ? 'bg-[#F5F5F7] text-[#6E6E73]'
-            : 'bg-[#FFF1F0] border border-[#FFCCC7] text-[#CF1322]'
-        }`}
-      >
-        {trimmedTitle ? (
-          <>
-            卡片标题：<span className="font-medium text-[#1D1D1F]">{trimmedTitle}</span>
-            <span className="text-[#86868B]">（取自左侧「图文标题」）</span>
-          </>
-        ) : (
-          '请先在左侧「图文标题」中填写标题，否则无法生成图片'
-        )}
-      </div>
+      {trimmedTitle && (
+        <div className="rounded-xl bg-[#F5F5F7] px-3 py-2 text-[12px] text-[#6E6E73]">
+          卡片标题：<span className="font-medium text-[#1D1D1F]">{trimmedTitle}</span>
+          <span className="text-[#86868B]">（取自左侧「图文标题」）</span>
+        </div>
+      )}
 
       <div>
         <span className="block mb-1.5 text-[12px] font-medium text-[#1D1D1F]">卡片主题</span>

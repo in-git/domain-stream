@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, ScanLine, UserRound } from 'lucide-react';
-import { AuthLayout } from './AuthLayout';
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, ScanLine, UserRound, X } from 'lucide-react';
 import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
 import { navigate } from '../../lib/router';
 import qqIcon from '../../assets/images/authSource/qq.png';
@@ -9,6 +8,7 @@ import wechatIcon from '../../assets/images/authSource/wechat.png';
 
 interface LoginViewProps {
   onSuccess: (token: string) => void;
+  onClose: () => void;
 }
 
 type LoginMode = 'wechat' | 'password';
@@ -21,7 +21,8 @@ const primaryButtonClass =
 const secondaryButtonClass =
   'w-full h-14 rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white dark:bg-[#242426] flex items-center justify-center gap-2.5 text-[15px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F5F5F7] dark:hover:bg-[#2C2C2E] disabled:opacity-50 transition-colors';
 
-export function LoginView({ onSuccess }: LoginViewProps) {
+/** 当前页面上层展示的登录弹窗 */
+export function LoginView({ onSuccess, onClose }: LoginViewProps) {
   const [mode, setMode] = useState<LoginMode>('wechat');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
@@ -60,6 +61,20 @@ export function LoginView({ onSuccess }: LoginViewProps) {
         // 配置不可读时按默认关闭验证码处理
       });
   }, []);
+
+  // 弹窗打开时锁定背景滚动，并支持 Esc / 点击遮罩关闭
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const switchMode = (next: LoginMode) => {
     setError('');
@@ -115,196 +130,229 @@ export function LoginView({ onSuccess }: LoginViewProps) {
   const showWechat = flags.SNOWY_THIRD_WECHAT_ALLOW_LOGIN_FLAG !== false;
 
   return (
-    <AuthLayout
-      title={mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
-      subtitle={mode === 'wechat' ? '微信扫一扫，登录或注册一步完成' : '使用账号密码登录你的账号'}
-      footer={
-        mode === 'wechat' ? undefined : (
-          <span>
-            还没有账号？{' '}
-            <button
-              type="button"
-              onClick={() => navigate('/register')}
-              className="font-semibold text-white underline decoration-white/40 underline-offset-4 hover:text-[#6CB6FF] transition-colors"
-            >
-              立即注册
-            </button>
-          </span>
-        )
-      }
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 backdrop-blur-md sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
-      {mode === 'wechat' ? (
-        <div className="space-y-5">
-          <div className="py-1 text-center space-y-4">
-            <div className="relative mx-auto h-24 w-24">
-              <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-[#07C160]/35" />
-              <div className="absolute inset-3 flex items-center justify-center rounded-2xl bg-[#07C160]/10">
-                <img src={wechatIcon} alt="" className="h-12 w-12" />
-              </div>
-              <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
-                <ScanLine className="h-4 w-4" />
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-[17px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                微信扫码登录 / 注册
-              </p>
-              <p className="mx-auto max-w-xs text-[13px] leading-relaxed text-[#86868B]">
-                点击下方按钮，在微信中扫码确认即可登录，新用户将自动完成注册
-              </p>
-            </div>
-          </div>
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-modal-title"
+        initial={{ opacity: 0, y: 20, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        className="relative max-h-[100dvh] w-full max-w-[460px] overflow-y-auto rounded-none border border-black/[0.06] bg-white px-6 pb-7 pt-8 shadow-[0_32px_100px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-[#111318] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px] sm:px-9 sm:pb-9 sm:pt-9"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="关闭登录弹窗"
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-[#86868B] transition-colors hover:bg-black/[0.05] hover:text-[#1D1D1F] dark:hover:bg-white/[0.08] dark:hover:text-white"
+        >
+          <X className="h-5 w-5" />
+        </button>
 
-          {showWechat ? (
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.99 }}
-              onClick={() => void handleThirdLogin('WECHAT')}
-              disabled={!!thirdLoading}
-              className="flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-[#07C160] text-[15px] font-medium text-white hover:brightness-110 disabled:opacity-60 transition-all"
-            >
-              {thirdLoading === 'WECHAT' ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <QrCode className="h-5 w-5" />
-              )}
-              {thirdLoading === 'WECHAT' ? '正在跳转微信授权...' : '微信扫码登录 / 注册'}
-            </motion.button>
-          ) : (
-            <div className="rounded-2xl bg-[#F5F5F7] dark:bg-[#242426] px-4 py-3.5 text-center text-[13px] text-[#6E6E73] dark:text-[#98989D]">
-              微信登录暂未开通，请使用账号密码登录
-            </div>
-          )}
-
-          <div className="space-y-3 pt-1">
-            {showQq && (
-              <button type="button" onClick={() => void handleThirdLogin('QQ')} disabled={!!thirdLoading} className={secondaryButtonClass}>
-                <img src={qqIcon} alt="" className="h-5 w-5" />
-                QQ 快捷登录
-              </button>
-            )}
-            <button type="button" onClick={() => switchMode('password')} className={secondaryButtonClass}>
-              <UserRound className="h-5 w-5" />
-              使用账号密码登录
-            </button>
+        <div className="mb-6 pr-9">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0071E3]/10 text-[#0071E3] dark:bg-[#0A84FF]/15 dark:text-[#0A84FF]">
+            <UserRound className="h-5 w-5" />
           </div>
+          <h2 id="login-modal-title" className="text-[24px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+            {mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
+          </h2>
+          <p className="mt-1.5 text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+            {mode === 'wechat' ? '微信扫一扫，登录或注册一步完成' : '使用账号密码登录你的账号'}
+          </p>
         </div>
-      ) : (
-        <div className="space-y-5">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="login-account" className={labelClass}>
-                账号
-              </label>
-              <div className="relative">
-                <UserRound className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="login-account"
-                  type="text"
-                  autoComplete="username"
-                  value={account}
-                  onChange={(event) => setAccount(event.target.value)}
-                  placeholder="请输入账号"
-                  className={`${fieldClass} pl-12 pr-5`}
-                />
+
+        {mode === 'wechat' ? (
+          <div className="space-y-4">
+            <div className="py-1 text-center space-y-4">
+              <div className="relative mx-auto h-24 w-24">
+                <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-[#07C160]/35" />
+                <div className="absolute inset-3 flex items-center justify-center rounded-2xl bg-[#07C160]/10">
+                  <img src={wechatIcon} alt="" className="h-12 w-12" />
+                </div>
+                <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
+                  <ScanLine className="h-4 w-4" />
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  微信扫码登录 / 注册
+                </p>
+                <p className="mx-auto max-w-xs text-[13px] leading-relaxed text-[#86868B]">
+                  点击下方按钮，在微信中扫码确认即可登录，新用户将自动完成注册
+                </p>
               </div>
             </div>
 
-            <div>
-              <label htmlFor="login-password" className={labelClass}>
-                密码
-              </label>
-              <div className="relative">
-                <Lock className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="请输入密码"
-                  className={`${fieldClass} pl-12 pr-12`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showWechat ? (
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.99 }}
+                onClick={() => void handleThirdLogin('WECHAT')}
+                disabled={!!thirdLoading}
+                className="flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-[#07C160] text-[15px] font-medium text-white hover:brightness-110 disabled:opacity-60 transition-all"
+              >
+                {thirdLoading === 'WECHAT' ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <QrCode className="h-5 w-5" />
+                )}
+                {thirdLoading === 'WECHAT' ? '正在跳转微信授权...' : '微信扫码登录 / 注册'}
+              </motion.button>
+            ) : (
+              <div className="rounded-2xl bg-[#F5F5F7] dark:bg-[#242426] px-4 py-3.5 text-center text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+                微信登录暂未开通，请使用账号密码登录
+              </div>
+            )}
+
+            <div className="space-y-3 pt-1">
+              {showQq && (
+                <button type="button" onClick={() => void handleThirdLogin('QQ')} disabled={!!thirdLoading} className={secondaryButtonClass}>
+                  <img src={qqIcon} alt="" className="h-5 w-5" />
+                  QQ 快捷登录
                 </button>
-              </div>
+              )}
+              <button type="button" onClick={() => switchMode('password')} className={secondaryButtonClass}>
+                <UserRound className="h-5 w-5" />
+                使用账号密码登录
+              </button>
             </div>
-
-            {captchaOpen && captcha?.validCodeBase64 && (
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="login-captcha" className={labelClass}>
-                  验证码
+                <label htmlFor="login-account" className={labelClass}>
+                  账号
                 </label>
-                <div className="flex gap-2.5">
+                <div className="relative">
+                  <UserRound className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    id="login-captcha"
+                    id="login-account"
                     type="text"
-                    value={validCode}
-                    onChange={(event) => setValidCode(event.target.value)}
-                    placeholder="请输入图中字符"
-                    className={`${fieldClass} flex-1 px-4`}
+                    autoComplete="username"
+                    autoFocus
+                    value={account}
+                    onChange={(event) => setAccount(event.target.value)}
+                    placeholder="请输入账号"
+                    className={`${fieldClass} pl-12 pr-5`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="login-password" className={labelClass}>
+                  密码
+                </label>
+                <div className="relative">
+                  <Lock className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="请输入密码"
+                    className={`${fieldClass} pl-12 pr-12`}
                   />
                   <button
                     type="button"
-                    onClick={loadCaptcha}
-                    title="点击刷新验证码"
-                    className="h-14 shrink-0 rounded-2xl overflow-hidden border border-black/[0.06] dark:border-white/[0.1] bg-white flex items-center justify-center hover:opacity-80 transition-opacity"
+                    onClick={() => setShowPassword((value) => !value)}
+                    aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
                   >
-                    <img src={captcha.validCodeBase64} alt="图形验证码" className="h-full w-auto object-contain" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={loadCaptcha}
-                    aria-label="刷新验证码"
-                    className="w-14 h-14 shrink-0 rounded-2xl border border-black/[0.06] dark:border-white/[0.1] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
-                  >
-                    <RefreshCw className="w-4 h-4" />
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
-            )}
 
-            <motion.button
-              type="submit"
-              whileTap={{ scale: 0.99 }}
-              disabled={submitting}
-              className={primaryButtonClass}
-            >
-              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-              {submitting ? '正在登录...' : '登录'}
-              {!submitting && <ArrowRight className="w-5 h-5" />}
-            </motion.button>
-          </form>
+              {captchaOpen && captcha?.validCodeBase64 && (
+                <div>
+                  <label htmlFor="login-captcha" className={labelClass}>
+                    验证码
+                  </label>
+                  <div className="flex gap-2.5">
+                    <input
+                      id="login-captcha"
+                      type="text"
+                      value={validCode}
+                      onChange={(event) => setValidCode(event.target.value)}
+                      placeholder="请输入图中字符"
+                      className={`${fieldClass} flex-1 px-4`}
+                    />
+                    <button
+                      type="button"
+                      onClick={loadCaptcha}
+                      title="点击刷新验证码"
+                      className="h-14 shrink-0 rounded-2xl overflow-hidden border border-black/[0.06] dark:border-white/[0.1] bg-white flex items-center justify-center hover:opacity-80 transition-opacity"
+                    >
+                      <img src={captcha.validCodeBase64} alt="图形验证码" className="h-full w-auto object-contain" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={loadCaptcha}
+                      aria-label="刷新验证码"
+                      className="w-14 h-14 shrink-0 rounded-2xl border border-black/[0.06] dark:border-white/[0.1] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-          <button type="button" onClick={() => switchMode('wechat')} className={secondaryButtonClass}>
-            <img src={wechatIcon} alt="" className="h-5 w-5" />
-            返回微信扫码登录
+              <motion.button
+                type="submit"
+                whileTap={{ scale: 0.99 }}
+                disabled={submitting}
+                className={primaryButtonClass}
+              >
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                {submitting ? '正在登录...' : '登录'}
+                {!submitting && <ArrowRight className="w-5 h-5" />}
+              </motion.button>
+            </form>
+
+            <button type="button" onClick={() => switchMode('wechat')} className={secondaryButtonClass}>
+              <img src={wechatIcon} alt="" className="h-5 w-5" />
+              返回微信扫码登录
+            </button>
+          </div>
+        )}
+
+        <div className="mt-5 border-t border-black/[0.06] pt-4 text-center text-[13px] text-[#6E6E73] dark:border-white/[0.08] dark:text-[#98989D]">
+          还没有账号？{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/register')}
+            className="font-semibold text-[#0071E3] hover:underline dark:text-[#0A84FF]"
+          >
+            立即注册
           </button>
         </div>
-      )}
 
-      {/* 错误信息统一放底部提示，不占用表单布局 */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            key={error}
-            role="alert"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="fixed bottom-6 left-0 right-0 z-50 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-2xl bg-[#FF3B30] px-5 py-3 text-center text-[13px] font-medium text-white shadow-lg"
-          >
-            {error}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </AuthLayout>
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              key={error}
+              role="alert"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="mt-4 rounded-2xl bg-[#FF3B30]/10 px-4 py-3 text-center text-[13px] font-medium text-[#D70015] dark:bg-[#FF3B30]/15 dark:text-[#FF453A]"
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 }

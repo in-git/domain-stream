@@ -10,6 +10,7 @@ import {
   type SnowyClientUser,
 } from '../lib/snowyAuth';
 import { currentRoute, navigate, subscribeRoute, type RouteInfo } from '../lib/router';
+import { likeApi } from '../lib/api';
 import {
   FAVORITES_KEY,
   LEGACY_FAVORITES_KEY,
@@ -21,6 +22,8 @@ import { usePersistentState } from './usePersistentState';
 /** 登录态、用户资料、收藏/点赞、主题、路由跳转等会话级状态与操作 */
 export function useUserSession() {
   const [route, setRoute] = useState<RouteInfo>(() => currentRoute());
+  // 打开登录弹窗前的页面，关闭弹窗时回到这里；直接访问 /login 时回到首页
+  const [loginReturnPath, setLoginReturnPath] = useState('/');
   const [isDark, setIsDark] = usePersistentState<boolean>('lumina:dark', false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSnowyToken());
   const [currentUserId, setCurrentUserId] = useState(() => getCachedClientUser()?.id || '');
@@ -53,7 +56,14 @@ export function useUserSession() {
     () => favoriteBuckets[favoriteOwner] ?? [],
     [favoriteBuckets, favoriteOwner]
   );
-  const [likedIds, setLikedIds] = usePersistentState<string[]>('lumina:liked', []);
+  const [storedLikedIds, setLikedIds] = usePersistentState<string[]>('lumina:liked', []);
+  // 未登录不展示/不写入本地喜欢状态，避免旧游客数据被当成登录用户的喜欢
+  const likedIds = useMemo(
+    () => (isLoggedIn ? storedLikedIds : []),
+    [isLoggedIn, storedLikedIds]
+  );
+  /** 喜欢数由后端 LIKE_COUNT 返回，切换后按 ID 覆盖本地展示值 */
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
 
   const toggleIdInList = useCallback(
     (setter: React.Dispatch<React.SetStateAction<string[]>>, id: string) => {
@@ -62,14 +72,50 @@ export function useUserSession() {
     []
   );
 
+  /** 打开登录弹窗：记录来源页后切到 /login，由 App 在当前页面上层渲染弹窗 */
+  const goLogin = useCallback(() => {
+    setLoginReturnPath(window.location.pathname + window.location.search || '/');
+    navigate('/login');
+  }, []);
+
+  /** 切换喜欢：未登录打开登录弹窗；已登录先乐观更新，再以服务端结果为准 */
   const toggleLike = useCallback(
-    (id: string) => toggleIdInList(setLikedIds, id),
-    [setLikedIds, toggleIdInList]
+    (id: string) => {
+      if (!isLoggedIn) {
+        goLogin();
+        return;
+      }
+      toggleIdInList(setLikedIds, id);
+      likeApi
+        .toggle(id)
+        .then((result) => {
+          setLikedIds((prev) =>
+            result.liked
+              ? prev.includes(id) ? prev : [...prev, id]
+              : prev.filter((item) => item !== id)
+          );
+          setLikeCounts((prev) => ({ ...prev, [id]: result.likeCount }));
+        })
+        .catch(() => {
+          // 请求失败时回滚乐观状态，避免界面与数据库不一致
+          toggleIdInList(setLikedIds, id);
+        });
+    },
+    [goLogin, isLoggedIn, setLikedIds, toggleIdInList]
   );
 
-  /** 切换收藏：写入当前用户（未登录为 guest）对应的收藏桶 */
+  /** 关闭登录弹窗，回到打开前的页面 */
+  const closeLogin = useCallback(() => {
+    navigate(loginReturnPath, true);
+  }, [loginReturnPath]);
+
+  /** 切换收藏：未登录打开登录弹窗；已登录写入当前用户收藏桶 */
   const toggleFavorite = useCallback(
     (id: string) => {
+      if (!isLoggedIn) {
+        goLogin();
+        return;
+      }
       setFavoriteBuckets((prev) => {
         const owner = currentUserId || 'guest';
         const list = prev[owner] ?? [];
@@ -77,7 +123,7 @@ export function useUserSession() {
         return { ...prev, [owner]: next };
       });
     },
-    [currentUserId, setFavoriteBuckets]
+    [currentUserId, goLogin, isLoggedIn, setFavoriteBuckets]
   );
 
   const applyUser = useCallback(
@@ -152,6 +198,24 @@ export function useUserSession() {
     };
   }, [applyUser]);
 
+  /* 登录后以服务端喜欢记录为准；接口不可用时保留本地缓存，不影响浏览 */
+  useEffect(() => {
+    if (!isLoggedIn || !currentUserId) {
+      setLikedIds([]);
+      return undefined;
+    }
+    let cancelled = false;
+    likeApi
+      .mine()
+      .then((ids) => {
+        if (!cancelled) setLikedIds(ids);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, isLoggedIn, setLikedIds]);
+
   /* 旧版本把收藏存在全站共享的 lumina:saved，首次加载时并入 guest 桶后清理 */
   useEffect(() => {
     try {
@@ -178,11 +242,11 @@ export function useUserSession() {
       setAccountEmail('');
       setUserInfo({});
       setProfile(INITIAL_PROFILE);
+      setLikeCounts({});
       navigate('/', true);
     });
   }, [setProfile]);
 
-  const goLogin = useCallback(() => navigate('/login'), []);
   const goRegister = useCallback(() => navigate('/register'), []);
   const goProfile = useCallback(() => {
     navigate('/profile');
@@ -192,6 +256,8 @@ export function useUserSession() {
 
   return {
     route,
+    loginReturnPath,
+    closeLogin,
     isDark,
     toggleTheme,
     isLoggedIn,
@@ -203,6 +269,7 @@ export function useUserSession() {
     savedIds,
     toggleFavorite,
     likedIds,
+    likeCounts,
     toggleLike,
     handleAuthSuccess,
     handleLogout,

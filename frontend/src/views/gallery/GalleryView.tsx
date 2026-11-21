@@ -4,7 +4,7 @@ import { Check, Heart, Star } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
-import { NoteDetail } from './NoteDetail';
+import NoteDetail from './NoteDetail';
 
 interface GalleryViewProps {
   photos: PhotoItem[];
@@ -157,11 +157,11 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
           </span>
         )}
 
-        {/* 图片底部压暗：保证叠加的文字清晰 */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+        {/* 图片底部压暗：桌面端叠加文字才需要 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent md:block" />
 
-        {/* 标题 + 描述：左下角（右侧让出 48px 图标列 + 间距） */}
-        <div className="pointer-events-none absolute inset-x-3 bottom-6 right-16">
+        {/* 标题 + 描述：移动端不显示，桌面端左下角显示 */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-6 right-16 hidden md:block">
           <p className="line-clamp-2 text-[17px] font-semibold leading-[1.35] text-white drop-shadow-sm">
             {note.title}
           </p>
@@ -172,8 +172,8 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
           )}
         </div>
 
-        {/* 点赞 / 收藏：右下角竖向排列，图标 48px，距底留出安全距离 */}
-        <div className="absolute bottom-6 right-2 flex flex-col items-center gap-3 text-white">
+        {/* 点赞 / 收藏：右下角竖向排列，按钮 42px，间距收紧 */}
+        <div className="absolute bottom-6 right-2 flex flex-col items-center gap-1 text-white">
           <motion.button
             type="button"
             whileTap={{ scale: 0.85 }}
@@ -185,14 +185,14 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
             }}
             aria-pressed={liked}
             aria-label={liked ? '取消点赞' : '点赞'}
-            className="flex h-12 w-12 flex-col items-center justify-center drop-shadow-sm"
+            className="flex h-[42px] w-[42px] flex-col items-center justify-center drop-shadow-sm"
           >
             <Heart
-              className={`h-7 w-7 ${liked ? 'fill-[#FF2442] text-[#FF2442]' : ''}`}
+              className={`h-4 w-4 ${liked ? 'fill-[#FF2442] text-[#FF2442]' : ''}`}
               strokeWidth={1.8}
             />
             <span className="mt-0.5 text-[11px] font-medium leading-none tabular-nums">
-              {(note.likeCount || 0) + (liked ? 1 : 0) || ''}
+              {note.likeCount || ''}
             </span>
           </motion.button>
           <button
@@ -204,10 +204,10 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
             }}
             aria-pressed={saved}
             aria-label={saved ? '取消收藏' : '收藏'}
-            className="flex h-12 w-12 items-center justify-center drop-shadow-sm"
+            className="flex h-[42px] w-[42px] items-center justify-center drop-shadow-sm"
           >
             <Star
-              className={`h-7 w-7 ${saved ? 'fill-[#FFB300] text-[#FFB300]' : ''}`}
+              className={`h-4 w-4 ${saved ? 'fill-[#FFB300] text-[#FFB300]' : ''}`}
               strokeWidth={1.8}
             />
           </button>

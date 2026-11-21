@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  Bookmark,
   Check,
   Edit3,
+  Heart,
   LogOut,
   Moon,
   Sun,
@@ -52,6 +54,79 @@ interface ProfileViewProps {
   photos?: PhotoItem[];
   savedIds?: string[];
   onToggleSave?: (id: string) => void;
+  likedIds?: string[];
+  onToggleLike?: (id: string) => void;
+}
+
+type ProfilePane = 'profile' | 'likes' | 'favorites';
+
+function ProfileNav({
+  activePane,
+  onSelect,
+  likedCount,
+  savedCount,
+  mobile = false,
+}: {
+  activePane: ProfilePane;
+  onSelect: (pane: ProfilePane) => void;
+  likedCount: number;
+  savedCount: number;
+  mobile?: boolean;
+}) {
+  const items = [
+    { id: 'profile', label: '个人资料', Icon: UserRound, count: undefined },
+    { id: 'likes', label: '喜欢', Icon: Heart, count: likedCount },
+    { id: 'favorites', label: '收藏', Icon: Bookmark, count: savedCount },
+  ] as const;
+  const activeClass = 'bg-white text-[#1D1D1F] shadow-xs dark:bg-[#242426] dark:text-[#F5F5F7]';
+  const idleClass =
+    'text-[#6E6E73] hover:bg-black/[0.04] dark:text-[#98989D] dark:hover:bg-white/[0.06]';
+
+  return (
+    <nav
+      aria-label="个人中心导航"
+      className={
+        mobile
+          ? 'fixed inset-x-0 bottom-0 z-40 flex justify-around gap-1 border-t border-black/[0.06] bg-white/95 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0C0C0E]/95 md:hidden'
+          : 'hidden md:sticky md:top-20 md:flex md:w-44 md:shrink-0 md:flex-col md:gap-1.5'
+      }
+    >
+      {items.map(({ id, label, Icon, count }) => {
+        const isActive = activePane === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onSelect(id)}
+            aria-current={isActive ? 'page' : undefined}
+            className={
+              mobile
+                ? `relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-medium transition-colors ${
+                    isActive ? activeClass : idleClass
+                  }`
+                : `inline-flex min-h-11 w-full items-center gap-2 rounded-xl px-3.5 text-[13px] font-medium transition-colors ${
+                    isActive ? activeClass : idleClass
+                  }`
+            }
+          >
+            <Icon className={mobile ? 'h-5 w-5' : 'h-4 w-4'} />
+            <span>{label}</span>
+            {count !== undefined && (
+              <span
+                className={
+                  mobile
+                    ? 'absolute right-2 top-1 text-[10px] tabular-nums opacity-60'
+                    : 'ml-auto text-[11px] tabular-nums opacity-60'
+                }
+              >
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 export function ProfileView({
@@ -70,7 +145,10 @@ export function ProfileView({
   photos = [],
   savedIds = [],
   onToggleSave,
+  likedIds = [],
+  onToggleLike,
 }: ProfileViewProps) {
+  const [activePane, setActivePane] = useState<ProfilePane>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
   const [draftLocation, setDraftLocation] = useState(profile.location);
@@ -95,7 +173,7 @@ export function ProfileView({
   };
 
   return (
-    <section aria-label="个人中心" className="py-2 sm:py-4">
+    <section aria-label="个人中心" className="py-0 sm:py-2">
       <AnimatePresence mode="wait">
         {!isLoggedIn ? (
           /* Simple Login & Register View */
@@ -105,7 +183,7 @@ export function ProfileView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={SWIFTUI_SMOOTH}
-            className="max-w-md mx-auto mt-4 sm:mt-10 rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-sm space-y-6"
+            className="max-w-md mx-auto mt-0 sm:mt-4 rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-none sm:shadow-sm space-y-6"
           >
             <div className="mx-auto max-w-sm py-10 text-center space-y-6">
               <div className="w-16 h-16 rounded-[20px] bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] flex items-center justify-center mx-auto">
@@ -145,10 +223,20 @@ export function ProfileView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={SWIFTUI_SMOOTH}
-            className="max-w-2xl mx-auto space-y-6"
+            className="mx-auto flex w-full max-w-5xl flex-col gap-0 pb-24 sm:gap-5 md:flex-row md:items-start md:pb-0"
           >
+            <ProfileNav
+              activePane={activePane}
+              onSelect={setActivePane}
+              likedCount={likedIds.length}
+              savedCount={savedIds.length}
+            />
+
+            <div className="min-w-0 flex-1 space-y-6">
+              {activePane === 'profile' && (
+                <>
             {/* Basic Account Header Card */}
-            <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-xs">
+            <div className="rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-none sm:shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
                 <div className="flex items-center gap-4">
                   <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 border border-black/[0.08] dark:border-white/[0.12]">
@@ -203,7 +291,7 @@ export function ProfileView({
             </div>
 
             {/* Clean Apple Grouped Account Details */}
-            <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
+            <div className="rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
               <div className="px-6 py-4 flex items-center justify-between text-sm">
                 <span className="text-[#6E6E73] dark:text-[#98989D]">账号状态</span>
                 <span className="font-medium text-[#34C759]">已登录</span>
@@ -278,16 +366,43 @@ export function ProfileView({
               </button>
             </div>
 
-            <FavoritesSection
-              videos={videos}
-              articles={articles}
-              photos={photos}
-              savedIds={savedIds}
-              onToggleSave={onToggleSave || (() => {})}
-            />
+                </>
+              )}
+
+              {activePane === 'likes' && (
+                <FavoritesSection
+                  videos={videos}
+                  articles={articles}
+                  photos={photos}
+                  ids={likedIds}
+                  onToggle={onToggleLike || (() => {})}
+                  mode="like"
+                />
+              )}
+
+              {activePane === 'favorites' && (
+                <FavoritesSection
+                  videos={videos}
+                  articles={articles}
+                  photos={photos}
+                  ids={savedIds}
+                  onToggle={onToggleSave || (() => {})}
+                />
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isLoggedIn && (
+        <ProfileNav
+          mobile
+          activePane={activePane}
+          onSelect={setActivePane}
+          likedCount={likedIds.length}
+          savedCount={savedIds.length}
+        />
+      )}
 
       {/* Edit Profile Sheet */}
       <AnimatePresence>

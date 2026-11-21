@@ -226,11 +226,17 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
     @Override
     public void streamForPlay(String id, String sign, jakarta.servlet.http.HttpServletRequest request,
                               HttpServletResponse response) throws IOException {
-        log.info(">>> 视频流式播放请求，id: {}，sign前缀: {}", id,
+        log.debug(">>> 视频流式播放请求，id: {}，sign前缀: {}", id,
                 StrUtil.isBlank(sign) ? "" : sign.substring(0, Math.min(12, sign.length())));
         try {
             doStreamForPlay(id, sign, request, response);
         } catch (Exception e) {
+            // 客户端切换视频、拖动进度条或关闭页面会中断 Range 请求，
+            // 这类断开不是服务端异常，静默处理即可
+            if (isClientDisconnect(e)) {
+                log.debug(">>> 视频流式播放连接已断开，id: {}，原因: {}", id, e.getMessage());
+                return;
+            }
             log.error(">>> 视频流式播放异常，id: {}", id, e);
             if (!response.isCommitted()) {
                 CommonResponseUtil.renderError(response, "播放失败：" + e.getMessage());
@@ -344,7 +350,16 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
             if (read < 0) {
                 break;
             }
-            outputStream.write(buffer, 0, read);
+            try {
+                outputStream.write(buffer, 0, read);
+            } catch (IOException e) {
+                // 浏览器停止接收视频分片后，继续写入会触发 Connection reset / Broken pipe
+                if (isClientDisconnect(e)) {
+                    log.debug(">>> 视频流式播放写入中断，原因: {}", e.getMessage());
+                    return;
+                }
+                throw e;
+            }
             remaining -= read;
         }
     }
@@ -359,8 +374,39 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         int from = (int) Math.min(start, bytes.length);
         int to = (int) Math.min(from + length, bytes.length);
         if (from < to) {
-            outputStream.write(bytes, from, to - from);
+            try {
+                outputStream.write(bytes, from, to - from);
+            } catch (IOException e) {
+                if (isClientDisconnect(e)) {
+                    log.debug(">>> 视频流式播放对象存储写入中断，原因: {}", e.getMessage());
+                    return;
+                }
+                throw e;
+            }
         }
+    }
+
+    /**
+     * 判断是否为客户端主动断开连接导致的异常
+     */
+    private boolean isClientDisconnect(Throwable e) {
+        Throwable current = e;
+        while (current != null) {
+            String className = current.getClass().getName();
+            String message = current.getMessage();
+            if (className.contains("ClientAbortException") ||
+                    className.contains("AsyncRequestNotUsableException") ||
+                    StrUtil.containsAnyIgnoreCase(message,
+                            "Connection reset by peer",
+                            "Connection reset",
+                            "Broken pipe",
+                            "Connection aborted",
+                            "Socket closed")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     /**

@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import {
+  DefaultVideoLayout,
+  defaultLayoutIcons,
+} from '@vidstack/react/player/layouts/default';
 import { CheckCircle2, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
 import { api, convertToWebp } from '../../../lib/api.ts';
-import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
+import {
+  deleteFilesByUrls,
+  removedUrls,
+  toPlayableVideoUrl,
+} from '../../../lib/fileCenter.ts';
 import { uploadTaskQueue } from '../../../lib/uploadTaskQueue.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
@@ -49,19 +57,21 @@ function VideoPreview({
   resolution,
 }: VideoPreviewProps) {
   const compact = device === 'mobile';
+  const playableVideoUrl = toPlayableVideoUrl(videoUrl);
   return (
     <div className="bg-white">
       <div className="relative aspect-video bg-black overflow-hidden">
-        {videoUrl ? (
+        {playableVideoUrl ? (
           // 有视频源时渲染真实播放器，可直接在预览区播放
           <MediaPlayer
-            src={videoUrl}
+            src={playableVideoUrl}
             poster={coverUrl || undefined}
             title={title || '视频预览'}
             playsInline
             className="absolute inset-0 w-full h-full"
           >
             <MediaProvider className="w-full h-full" />
+            <DefaultVideoLayout icons={defaultLayoutIcons} />
           </MediaPlayer>
         ) : (
           <>
@@ -460,7 +470,6 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   return (
     <EditorWorkspace
       title={item ? '编辑视频信息' : '上传新视频'}
-      subtitle="支持拖拽选择视频，系统本地读取时长、分辨率并截取封面，点击保存后才上传"
       onBack={onBack}
       previewOpen={previewOpen}
       onPreviewOpenChange={setPreviewOpen}
@@ -684,6 +693,7 @@ interface VideoViewPageProps {
 
 /** 视频播放独立页面（原播放弹窗） */
 export function VideoViewPage({ item, onBack }: VideoViewPageProps) {
+  const playableVideoUrl = toPlayableVideoUrl(item.videoUrl);
   return (
     <PageShell
       title={item.title}
@@ -692,17 +702,18 @@ export function VideoViewPage({ item, onBack }: VideoViewPageProps) {
       maxWidth="max-w-[900px]"
     >
       <div className="relative rounded-2xl overflow-hidden bg-black flex items-center justify-center">
-        {item.videoUrl ? (
+        {playableVideoUrl ? (
           // 使用统一播放器，控件一致；16:9 容器避免不同分辨率导致布局跳动
           <div className="relative w-full aspect-video">
             <MediaPlayer
-              src={item.videoUrl}
+              src={playableVideoUrl}
               poster={item.coverUrl || undefined}
               title={item.title}
               playsInline
               className="absolute inset-0 w-full h-full"
             >
               <MediaProvider className="w-full h-full" />
+              <DefaultVideoLayout icons={defaultLayoutIcons} />
             </MediaPlayer>
           </div>
         ) : (

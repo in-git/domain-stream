@@ -168,3 +168,28 @@
   font-size: 16px;
   line-height: 1.75;
 }
+
+/* 裁剪弹窗：保持深灰黑遮罩，裁剪框/网格/控制点只用白色，不加其他颜色 */
+[data-cropper-root] .ReactCrop {
+  --rc-border-color: rgba(255, 255, 255, 0.5);
+  --rc-drag-handle-bg-colour: rgba(255, 255, 255, 0.2);
+  --rc-focus-color: rgba(255, 255, 255, 0.6);
+  --rc-drag-handle-size: 14px;
+  --rc-drag-handle-mobile-size: 22px;
+}
+
+[data-cropper-root] .ReactCrop__crop-mask rect[mask] {
+  fill-opacity: 0.58 !important;
+}
+
+[data-cropper-root] .ReactCrop__crop-selection {
+  outline: 1px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -1px;
+}
+
+[data-cropper-root] .ReactCrop__rule-of-thirds-vt::before,
+[data-cropper-root] .ReactCrop__rule-of-thirds-vt::after,
+[data-cropper-root] .ReactCrop__rule-of-thirds-hz::before,
+[data-cropper-root] .ReactCrop__rule-of-thirds-hz::after {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+}

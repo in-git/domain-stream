@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ArticleItem,
   MessageItem,
@@ -26,7 +26,11 @@ import { isSectionId, type ContentSection } from './constants';
  * 门户内容数据：按板块懒加载（进入板块才请求，已加载不再重复），
  * 分类接口全站只请求一次，分类失败时降级用内容自身携带的分类。
  */
-export function usePortalData(currentUserName: string, initialSection: string) {
+export function usePortalData(
+  currentUserName: string,
+  initialSection: string,
+  likeCounts: Record<string, number>
+) {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [replies, setReplies] = useState<MessageReply[]>([]);
   const [videoCategories, setVideoCategories] = useState<string[]>([]);
@@ -44,6 +48,26 @@ export function usePortalData(currentUserName: string, initialSection: string) {
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
   /** 与 loadingMap 同步的 ref，供 loadSection 内同步判断防重入 */
   const loadingMapRef = useRef<Partial<Record<SectionId, boolean>>>({});
+
+  /** 喜欢数以后端统计为准：切换喜欢后同步覆盖已加载内容的展示值 */
+  useEffect(() => {
+    if (!Object.keys(likeCounts).length) return;
+    setVideos((prev) =>
+      prev.map((item) =>
+        likeCounts[item.id] === undefined ? item : { ...item, likeCount: likeCounts[item.id] }
+      )
+    );
+    setArticles((prev) =>
+      prev.map((item) =>
+        likeCounts[item.id] === undefined ? item : { ...item, likes: likeCounts[item.id] }
+      )
+    );
+    setPhotos((prev) =>
+      prev.map((item) =>
+        likeCounts[item.id] === undefined ? item : { ...item, likeCount: likeCounts[item.id] }
+      )
+    );
+  }, [likeCounts]);
 
   /** 分类接口全站只请求一次，失败时允许下次重试 */
   const getCategories = useCallback(() => {

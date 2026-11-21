@@ -21,6 +21,8 @@ interface ProfilePageProps {
   photos?: PhotoItem[];
   savedIds?: string[];
   onToggleSave?: (id: string) => void;
+  likedIds?: string[];
+  onToggleLike?: (id: string) => void;
 }
 
 /** 独立个人中心页面（/profile）：展示登录用户的基本信息 */
@@ -40,6 +42,8 @@ export function ProfilePage({
   photos,
   savedIds,
   onToggleSave,
+  likedIds,
+  onToggleLike,
 }: ProfilePageProps) {
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] dark:bg-[#000000] dark:text-[#F5F5F7]">
@@ -70,7 +74,7 @@ export function ProfilePage({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
+      <main className="mx-auto w-full max-w-3xl px-0 sm:px-6 sm:py-6">
         <ProfileView
           isLoggedIn={isLoggedIn}
           accountEmail={accountEmail}
@@ -87,6 +91,8 @@ export function ProfilePage({
           photos={photos}
           savedIds={savedIds}
           onToggleSave={onToggleSave}
+          likedIds={likedIds}
+          onToggleLike={onToggleLike}
         />
       </main>
     </div>

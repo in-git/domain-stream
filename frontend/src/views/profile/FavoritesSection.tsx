@@ -1,20 +1,59 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BookmarkX, FileText, Film, Image as ImageIcon } from 'lucide-react';
+import { BookmarkX, FileText, Film, Heart, Image as ImageIcon, Sparkles } from 'lucide-react';
 import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoriteDetailModal, type FavoriteTarget } from '../shared/FavoriteDetailModal';
 import { ResilientImage } from '../../components/ResilientImage';
 
 export type FavoriteKind = 'video' | 'article' | 'graphic';
+type CollectionMode = 'favorite' | 'like';
 
 interface FavoritesSectionProps {
   videos: VideoItem[];
   articles: ArticleItem[];
   photos: PhotoItem[];
-  savedIds: string[];
-  onToggleSave: (id: string) => void;
+  /** 收藏/喜欢的内容ID列表 */
+  ids: string[];
+  onToggle: (id: string) => void;
+  mode?: CollectionMode;
 }
+
+const MODE_META: Record<CollectionMode, {
+  heading: string;
+  orderHint: string;
+  emptyHint: string;
+  emptyKindHint: (label: string) => string;
+  removeLabel: string;
+  indicator: string;
+  EmptyIcon: typeof Film;
+  RemoveIcon: typeof Film;
+  /** 收藏列表本地按时间追加，需要倒序；喜欢列表后端已按时间倒序返回 */
+  reverseIds: boolean;
+}> = {
+  favorite: {
+    heading: '我的收藏',
+    orderHint: '按收藏时间倒序',
+    emptyHint: '还没有收藏内容，在视频、文章、图文页点击书签图标即可收藏',
+    emptyKindHint: (label) => `还没有收藏的${label}`,
+    removeLabel: '取消收藏',
+    indicator: 'favorites-tab-indicator',
+    EmptyIcon: FileText,
+    RemoveIcon: BookmarkX,
+    reverseIds: true,
+  },
+  like: {
+    heading: '我的喜欢',
+    orderHint: '按喜欢时间倒序',
+    emptyHint: '还没有喜欢内容，在视频、文章、图文页点击爱心图标即可喜欢',
+    emptyKindHint: (label) => `还没有喜欢的${label}`,
+    removeLabel: '删除',
+    indicator: 'likes-tab-indicator',
+    EmptyIcon: Sparkles,
+    RemoveIcon: Heart,
+    reverseIds: false,
+  },
+};
 
 const KIND_META: Record<FavoriteKind, { label: string; Icon: typeof Film }> = {
   video: { label: '视频', Icon: Film },
@@ -41,16 +80,16 @@ function buildEntries(
   videos: VideoItem[],
   articles: ArticleItem[],
   photos: PhotoItem[],
-  savedIds: string[]
+  ids: string[],
+  reverseIds: boolean
 ): FavoriteEntry[] {
   const videoMap = new Map(videos.map((item) => [item.id, item]));
   const articleMap = new Map(articles.map((item) => [item.id, item]));
   const photoMap = new Map(photos.map((item) => [item.id, item]));
 
-  // 收藏列表按最近一次收藏在前展示；收藏 ID 指向的内容被删除时直接跳过
-  return savedIds
-    .slice()
-    .reverse()
+  // 内容被删除时直接跳过；收藏本地记录是追加顺序，需倒序展示
+  const orderedIds = reverseIds ? ids.slice().reverse() : ids;
+  return orderedIds
     .reduce<FavoriteEntry[]>((acc, id) => {
       const video = videoMap.get(id);
       if (video) {
@@ -88,14 +127,16 @@ function buildEntries(
     }, []);
 }
 
-/** 个人中心的收藏列表：按类型筛选展示用户收藏的视频、文章、图文 */
+/** 个人中心的收藏/喜欢列表：按类型筛选展示对应的视频、文章、图文 */
 export function FavoritesSection({
   videos,
   articles,
   photos,
-  savedIds,
-  onToggleSave,
+  ids,
+  onToggle,
+  mode = 'favorite',
 }: FavoritesSectionProps) {
+  const meta = MODE_META[mode];
   const [tab, setTab] = useState<'all' | FavoriteKind>('all');
   /** 当前在弹窗中查看的收藏项 */
   const [activeItem, setActiveItem] = useState<{ kind: FavoriteKind; id: string } | null>(null);
@@ -115,8 +156,8 @@ export function FavoritesSection({
   }, [activeItem, videos, articles, photos]);
 
   const entries = useMemo(
-    () => buildEntries(videos, articles, photos, savedIds),
-    [videos, articles, photos, savedIds]
+    () => buildEntries(videos, articles, photos, ids, meta.reverseIds),
+    [videos, articles, photos, ids, meta.reverseIds]
   );
 
   const counts = useMemo(() => {
@@ -134,32 +175,30 @@ export function FavoritesSection({
 
   const visibleEntries = tab === 'all' ? entries : entries.filter((entry) => entry.kind === tab);
   const emptyHint =
-    tab === 'all'
-      ? '还没有收藏内容，在视频、文章、图文页点击书签图标即可收藏'
-      : `还没有收藏的${KIND_META[tab].label}`;
+    tab === 'all' ? meta.emptyHint : meta.emptyKindHint(KIND_META[tab].label);
 
   return (
     <>
     <section
-      aria-labelledby="favorites-heading"
-      className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 space-y-5"
+      aria-labelledby={`${mode}-heading`}
+      className="rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 space-y-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h2
-            id="favorites-heading"
+            id={`${mode}-heading`}
             className="text-base font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
           >
-            我的收藏
+            {meta.heading}
           </h2>
           <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-            共 {counts.all} 条 · 按收藏时间倒序
+            共 {counts.all} 条 · {meta.orderHint}
           </p>
         </div>
 
         <div
           role="tablist"
-          aria-label="收藏类型筛选"
+          aria-label={`${meta.heading}类型筛选`}
           className="flex items-center gap-1 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] p-0.5 sm:p-1"
         >
           {TABS.map((item) => {
@@ -179,7 +218,7 @@ export function FavoritesSection({
               >
                 {isActive && (
                   <motion.span
-                    layoutId="favorites-tab-indicator"
+                    layoutId={meta.indicator}
                     transition={SWIFTUI_SMOOTH}
                     className="absolute inset-0 rounded-full bg-white dark:bg-[#3A3A3C] shadow-xs"
                   />
@@ -197,20 +236,22 @@ export function FavoritesSection({
       <AnimatePresence mode="wait" initial={false}>
         {visibleEntries.length === 0 ? (
           <motion.div
-            key={`favorites-empty-${tab}`}
+            key={`${mode}-empty-${tab}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={SWIFTUI_SMOOTH}
-            className="rounded-2xl border border-dashed border-black/[0.08] dark:border-white/[0.12] px-5 py-10 text-center space-y-1.5"
+            className="rounded-none sm:rounded-2xl border border-dashed border-black/[0.08] dark:border-white/[0.12] px-5 py-10 text-center space-y-1.5"
           >
-            <FileText className="w-5 h-5 mx-auto text-[#86868B]" />
-            <p className="text-[13px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">暂无收藏</p>
+            <meta.EmptyIcon className="w-5 h-5 mx-auto text-[#86868B]" />
+            <p className="text-[13px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+              {mode === 'favorite' ? '暂无收藏' : '暂无喜欢'}
+            </p>
             <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">{emptyHint}</p>
           </motion.div>
         ) : (
           <motion.ul
-            key={`favorites-${tab}`}
+            key={`${mode}-${tab}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -222,7 +263,7 @@ export function FavoritesSection({
               return (
                 <li
                   key={`${entry.kind}-${entry.id}`}
-                  className="group relative rounded-2xl overflow-hidden bg-[#FBFBFD] dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] transition-colors hover:border-black/[0.12] dark:hover:border-white/[0.16]"
+                  className="group relative rounded-none sm:rounded-2xl overflow-hidden bg-[#FBFBFD] dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] transition-colors hover:border-black/[0.12] dark:hover:border-white/[0.16]"
                 >
                   <button
                     type="button"
@@ -252,11 +293,11 @@ export function FavoritesSection({
 
                   <button
                     type="button"
-                    onClick={() => onToggleSave(entry.id)}
-                    aria-label={`取消收藏：${entry.title}`}
+                    onClick={() => onToggle(entry.id)}
+                    aria-label={`${meta.removeLabel}：${entry.title}`}
                     className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-black/65"
                   >
-                    <BookmarkX className="w-3.5 h-3.5" />
+                    <meta.RemoveIcon className="w-3.5 h-3.5" />
                   </button>
                 </li>
               );
@@ -266,11 +307,13 @@ export function FavoritesSection({
       </AnimatePresence>
     </section>
 
-    {/* 收藏详情：直接在当前页以弹窗打开，不跳转板块 */}
+    {/* 内容详情：直接在当前页以弹窗打开，不跳转板块 */}
     <FavoriteDetailModal
       target={activeTarget}
       onClose={() => setActiveItem(null)}
-      onRemove={onToggleSave}
+      onRemove={onToggle}
+      removeLabel={meta.removeLabel}
+      removeIcon={mode === 'like' ? 'heart' : 'bookmark'}
     />
     </>
   );

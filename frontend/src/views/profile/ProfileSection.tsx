@@ -17,6 +17,8 @@ interface ProfileSectionProps {
   photos: PhotoItem[];
   savedIds: string[];
   onToggleSave: (id: string) => void;
+  likedIds: string[];
+  onToggleLike: (id: string) => void;
 }
 
 export function ProfileSection({
@@ -35,6 +37,8 @@ export function ProfileSection({
   photos,
   savedIds,
   onToggleSave,
+  likedIds,
+  onToggleLike,
 }: ProfileSectionProps) {
   return (
     <ProfileView
@@ -53,6 +57,8 @@ export function ProfileSection({
       photos={photos}
       savedIds={savedIds}
       onToggleSave={onToggleSave}
+      likedIds={likedIds}
+      onToggleLike={onToggleLike}
     />
   );
 }

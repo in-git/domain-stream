@@ -26,18 +26,27 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const session = useUserSession();
-  const data = usePortalData(session.profile.name, activeSection);
+  const data = usePortalData(session.profile.name, activeSection, session.likeCounts);
   const player = usePersistentPlayer();
 
-  /* 每次切换到板块时都重新拉取该板块数据，保证内容是最新的；
-     自定义模块没有数据源，直接跳过，避免无意义请求 */
+  const isProfileBehindLogin =
+    session.route.kind === 'login' && session.loginReturnPath === '/profile';
+  const isProfileView = session.route.kind === 'profile' || isProfileBehindLogin;
+
+  /* 每次切换到板块时都重新拉取该板块数据；个人中心的喜欢/收藏需要三类内容，
+     进入个人中心时先把视频、文章、图文都加载好。自定义模块没有数据源，直接跳过。 */
   useEffect(() => {
-    if (activeSection === 'profile') return;
+    if (isProfileView) {
+      (['videos', 'articles', 'gallery'] as const).forEach((section) =>
+        void data.loadSection(section)
+      );
+      return;
+    }
     if (!isSectionId(activeSection)) return;
     void data.loadSection(activeSection);
-    // loadSection 内部有 loading 防重入，依赖只随 activeSection 变化
+    // loadSection 内部有 loading 防重入，依赖只随 activeSection / isProfileView 变化
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection]);
+  }, [activeSection, isProfileView]);
 
   // 应用启动时拉取系统基础信息（网页标题 / 开屏文本）
   useEffect(() => {
@@ -72,53 +81,53 @@ export default function App() {
 
   const handleSplashComplete = useCallback(() => setShowSplash(false), []);
 
-  if (session.route.kind === 'login') {
-    return <LoginView onSuccess={session.handleAuthSuccess} />;
-  }
-  if (session.route.kind === 'register') {
-    return <RegisterView />;
-  }
-  if (session.route.kind === 'callback') {
-    return (
-      <CallbackView platform={session.route.platform || ''} onSuccess={session.handleAuthSuccess} />
-    );
-  }
-  if (session.route.kind === 'profile') {
-    return (
-      <ProfilePage
-        isLoggedIn={session.isLoggedIn}
-        accountEmail={session.accountEmail}
-        profile={session.profile}
-        userInfo={session.userInfo}
-        isDark={session.isDark}
-        onToggleTheme={session.toggleTheme}
-        onLogout={session.handleLogout}
-        onGoLogin={session.goLogin}
-        onGoRegister={session.goRegister}
-        onUpdateProfile={session.setProfile}
-        videos={data.videos}
-        articles={data.articles}
-        photos={data.photos}
-        savedIds={session.savedIds}
-        onToggleSave={session.toggleFavorite}
-      />
-    );
-  }
-
+  // 登录不再占用整页路由：/login 时保留原页面，在其上层叠加登录弹窗
   return (
-    <PortalShell
-      showSplash={showSplash}
-      onSplashComplete={handleSplashComplete}
-      activeSection={activeSection}
-      onSelectSection={handleSelectSection}
-      searchQuery={searchQuery}
-      onChangeSearch={setSearchQuery}
-      isSearchOpen={isSearchOpen}
-      onOpenSearch={() => setIsSearchOpen(true)}
-      onCloseSearch={() => setIsSearchOpen(false)}
-      session={session}
-      data={data}
-      player={player}
-    />
+    <>
+      {session.route.kind === 'register' ? (
+        <RegisterView />
+      ) : session.route.kind === 'callback' ? (
+        <CallbackView platform={session.route.platform || ''} onSuccess={session.handleAuthSuccess} />
+      ) : isProfileView ? (
+        <ProfilePage
+          isLoggedIn={session.isLoggedIn}
+          accountEmail={session.accountEmail}
+          profile={session.profile}
+          userInfo={session.userInfo}
+          isDark={session.isDark}
+          onToggleTheme={session.toggleTheme}
+          onLogout={session.handleLogout}
+          onGoLogin={session.goLogin}
+          onGoRegister={session.goRegister}
+          onUpdateProfile={session.setProfile}
+          videos={data.videos}
+          articles={data.articles}
+          photos={data.photos}
+          savedIds={session.savedIds}
+          onToggleSave={session.toggleFavorite}
+          likedIds={session.likedIds}
+          onToggleLike={session.toggleLike}
+        />
+      ) : (
+        <PortalShell
+          showSplash={showSplash}
+          onSplashComplete={handleSplashComplete}
+          activeSection={activeSection}
+          onSelectSection={handleSelectSection}
+          searchQuery={searchQuery}
+          onChangeSearch={setSearchQuery}
+          isSearchOpen={isSearchOpen}
+          onOpenSearch={() => setIsSearchOpen(true)}
+          onCloseSearch={() => setIsSearchOpen(false)}
+          session={session}
+          data={data}
+          player={player}
+        />
+      )}
+
+      {session.route.kind === 'login' && (
+        <LoginView onSuccess={session.handleAuthSuccess} onClose={session.closeLogin} />
+      )}
+    </>
   );
 }

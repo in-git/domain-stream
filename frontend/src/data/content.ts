@@ -17,6 +17,8 @@ export interface VideoItem {
   date: string;
   cover: string;
   src: string;
+  /** 点赞数（后端统计） */
+  likeCount?: number;
   width: number;
   height: number;
   accentTint: string;

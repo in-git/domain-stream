@@ -47,7 +47,7 @@ export function ResilientImage({
   }
 
   return (
-    <div className={`relative overflow-hidden bg-[#F2F2F7] dark:bg-[#1C1C1E] ${className}`}>
+    <div className={`relative overflow-hidden bg-black ${className}`}>
       {!isLoaded && (
         <div
           aria-hidden="true"
@@ -66,7 +66,7 @@ export function ResilientImage({
         }}
         onLoad={() => setIsLoaded(true)}
         onError={() => setHasError(true)}
-        className={`w-full h-full transition-opacity duration-500 ease-out ${
+        className={`w-full h-full max-w-full max-h-full transition-opacity duration-500 ease-out ${
           fit === 'contain' ? 'object-contain' : 'object-cover'
         } ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={interactive ? undefined : { pointerEvents: 'none' }}

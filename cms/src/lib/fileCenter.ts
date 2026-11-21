@@ -120,6 +120,27 @@ export function toStreamUrl(file: DevFile): string {
   return url.replace('/dev/file/download', '/public/file/stream');
 }
 
+/**
+ * 把视频字段里保存的下载地址转成可直接播放的流式地址。
+ * CMS 保存的是 /dev/file/download?id=...&sign=...，该接口返回
+ * application/octet-stream 且不支持 Range，浏览器无法播放/拖动进度；
+ * /public/file/stream 支持 Range，可用于 <video>/播放器。
+ * 其它地址（blob:、直链 mp4、已是 stream）原样返回。
+ */
+export function toPlayableVideoUrl(raw?: string): string {
+  if (!raw) return '';
+  try {
+    const u = new URL(raw, window.location.origin);
+    if (!u.pathname.includes('/dev/file/download')) return raw;
+    const id = u.searchParams.get('id');
+    const sign = u.searchParams.get('sign');
+    if (!id || !sign) return raw;
+    return `/snowy/public/file/stream?id=${encodeURIComponent(id)}&sign=${encodeURIComponent(sign)}`;
+  } catch {
+    return raw;
+  }
+}
+
 /** 文件在浏览器中直接打开的地址（新窗口下载/查看），公开文件可用 */
 export function toOpenUrl(file: DevFile): string {
   return normalizeFileUrl(file.downloadPath);

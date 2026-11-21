@@ -280,6 +280,8 @@ export function PortalShell({
                     photos={photos}
                     savedIds={savedIds}
                     onToggleSave={toggleFavorite}
+                    likedIds={likedIds}
+                    onToggleLike={toggleLike}
                   />
                 </motion.div>
               )}

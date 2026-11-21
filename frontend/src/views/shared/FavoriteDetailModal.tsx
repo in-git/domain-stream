@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BookmarkX, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { BookmarkX, ChevronLeft, ChevronRight, Heart, X } from 'lucide-react';
 import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
 import { sanitizeRichHtml } from '../../lib/richtext';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
@@ -16,8 +16,12 @@ export type FavoriteTarget =
 interface FavoriteDetailModalProps {
   target: FavoriteTarget;
   onClose: () => void;
-  /** 传入时才显示「取消收藏」，搜索等场景只做内容预览 */
+  /** 传入时才显示移除按钮，搜索等场景只做内容预览 */
   onRemove?: (id: string) => void;
+  /** 移除按钮文案，喜欢列表传「删除」 */
+  removeLabel?: string;
+  /** 移除按钮图标：喜欢列表用爱心，收藏用书签 */
+  removeIcon?: 'heart' | 'bookmark';
 }
 
 function metaLine(parts: (string | number | undefined)[]): string {
@@ -25,8 +29,15 @@ function metaLine(parts: (string | number | undefined)[]): string {
 }
 
 /** 个人中心收藏详情：视频可播放、文章可阅读、图文可翻页，不跳转其他板块 */
-export function FavoriteDetailModal({ target, onClose, onRemove }: FavoriteDetailModalProps) {
+export function FavoriteDetailModal({
+  target,
+  onClose,
+  onRemove,
+  removeLabel = '取消收藏',
+  removeIcon = 'bookmark',
+}: FavoriteDetailModalProps) {
   const [slide, setSlide] = useState(0);
+  const isLike = removeIcon === 'heart';
 
   // 切换收藏项时重置图文图片索引
   useEffect(() => {
@@ -243,8 +254,8 @@ export function FavoriteDetailModal({ target, onClose, onRemove }: FavoriteDetai
                   }}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl bg-[#FF3B30]/[0.08] dark:bg-[#FF453A]/[0.14] text-xs font-medium text-[#FF3B30] dark:text-[#FF453A] hover:bg-[#FF3B30]/[0.14] dark:hover:bg-[#FF453A]/[0.22] transition-colors"
                 >
-                  <BookmarkX className="w-3.5 h-3.5" />
-                  取消收藏
+                  {isLike ? <Heart className="w-3.5 h-3.5" /> : <BookmarkX className="w-3.5 h-3.5" />}
+                  {removeLabel}
                 </button>
               ) : (
                 <span />

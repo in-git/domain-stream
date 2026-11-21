@@ -312,6 +312,7 @@ export function videoFromPortal(
     date: formatYearMonth(row.publishTime || row.createTime),
     cover: row.cover || str(ext.cover),
     src: toPlayableUrl(row.videoUrl) || toPlayableUrl(str(ext.src)),
+    likeCount: row.likeCount || 0,
     width: num(ext.width, 1280),
     height: num(ext.height, 720),
     accentTint: str(ext.accentTint, ACCENT_TINTS[index % ACCENT_TINTS.length]),
@@ -472,6 +473,21 @@ export interface PublicSystemInfo {
   title: string;
   config: Record<string, string>;
 }
+
+export interface LikeToggleResult {
+  liked: boolean;
+  likeCount: number;
+}
+
+/** 前台喜欢/点赞接口：身份由 C 端登录态决定，targetType 省略时后端按ID自动识别 */
+export const likeApi = {
+  mine: () => request<string[]>('/public/like/mine'),
+  toggle: (targetId: string) =>
+    request<LikeToggleResult>('/public/like/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ targetId }),
+    }),
+};
 
 export const portalApi = {
   systemInfo: () => request<PublicSystemInfo>('/public/system/info'),

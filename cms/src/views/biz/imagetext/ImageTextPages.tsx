@@ -19,6 +19,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Switch } from '@heroui/react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -214,10 +215,7 @@ function PendingImagesBoard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-[#1D1D1F]">图片</span>
-          <span className="text-[11px] text-[#86868B]">
-            已选 {images.length} 张
-            {images.length > 0 && '（第 1 张为封面）'}
-          </span>
+          <span className="text-[11px] text-[#86868B]">已选 {images.length} 张</span>
         </div>
         {images.length > 1 && (
           <span className="text-[11px] text-[#86868B] shrink-0">拖拽图片可调整顺序</span>
@@ -225,8 +223,8 @@ function PendingImagesBoard({
       </div>
 
       {images.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[#D1D1D6] bg-[#FAFAFC] px-3 py-6 text-center text-[12px] text-[#86868B]">
-          还没有图片，从下方「上传图片」或「文本转图文」添加
+        <div className="min-h-[160px] flex items-center justify-center rounded-xl border border-dashed border-[#D1D1D6] bg-[#FAFAFC] px-3 py-6 text-center text-[12px] text-[#86868B]">
+          暂无预览
         </div>
       ) : (
         <DndContext
@@ -237,7 +235,7 @@ function PendingImagesBoard({
           onDragEnd={onDragEnd}
         >
           <SortableContext items={images.map((entry) => entry.key)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2.5">
+            <div className="grid min-h-[160px] grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2.5">
               {images.map((entry, idx) => (
                 <SortableImageCard
                   key={entry.key}
@@ -289,9 +287,11 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
   // 图片先在浏览器本地暂存，点击保存时才真正上传到服务器
   const [images, setImages] = useState<ImageEntry[]>(() => entriesFromUrls(item?.images ?? []));
-  // 逐张裁剪队列：批量选择后依次弹出 9:16 裁剪弹窗
+  // 逐张裁剪队列：勾选裁剪后，批量选择的图片依次进入裁剪弹窗，可选择常见媒体比例
   const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [cropTotal, setCropTotal] = useState(0);
+  // 是否裁剪上传的图片：默认上传原图，只有勾选后才进入裁剪流程
+  const [needCrop, setNeedCrop] = useState(false);
   const [saveProgress, setSaveProgress] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
   // 正在拖拽的图片 key，用于 DragOverlay 跟随效果
@@ -380,7 +380,16 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
       return;
     }
     setFormError('');
-    // 每张图片都要按 9:16 逐个裁剪，裁剪结果直接作为本地待上传文件
+    if (!needCrop) {
+      // 未勾选裁剪：原图直接作为本地待上传文件，点保存时才上传
+      const entries: ImageEntry[] = validFiles.map((file) => {
+        const pending = createPendingFile(file);
+        return { key: pending.key, url: '', pending, previewUrl: pending.previewUrl };
+      });
+      setImages((prev) => [...prev, ...entries]);
+      return;
+    }
+    // 勾选裁剪后，每张图片在裁剪弹窗中按所选比例裁剪，结果作为本地待上传文件
     setCropTotal(validFiles.length);
     setCropQueue(validFiles);
   }
@@ -513,7 +522,6 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
     <>
       <EditorWorkspace
       title={item ? '编辑图文内容' : '上传并编排图文'}
-      subtitle="支持一次批量拖入多张图片，点击星标即可设为首页封面图"
       onBack={onBack}
       actions={
         <>
@@ -656,6 +664,22 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
         </div>
 
         {imageMode === 'upload' ? (
+        <>
+        <Switch
+          isSelected={needCrop}
+          onChange={setNeedCrop}
+          aria-label="上传前裁剪图片"
+          className="mb-2 flex flex-row items-center self-start gap-2"
+        >
+          <Switch.Content className="gap-2">
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <span className="text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+              上传前裁剪图片
+            </span>
+          </Switch.Content>
+        </Switch>
         <div
           onDragOver={(e) => {
             // 只响应文件拖入，忽略图片卡片之间的排序拖拽
@@ -690,9 +714,12 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
             点击批量选择或拖拽多张图片至此
           </div>
           <div className="text-[12px] text-[#86868B] mt-0.5">
-            仅支持图片（JPG / PNG / WebP），选图后按 9:16 逐张裁剪 · 保存时才上传
+            {needCrop
+              ? '仅支持图片（JPG / PNG / WebP），勾选后可在裁剪弹窗选择 9:16 / 16:9 等比例 · 保存时才上传'
+              : '仅支持图片（JPG / PNG / WebP），未勾选裁剪将上传原图 · 保存时才上传'}
           </div>
         </div>
+        </>
         ) : (
           <TextToImagePanel cardTitle={title} onApply={handleApplyGenerated} />
         )}
@@ -710,15 +737,15 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
         />
       )}
       />
-      {/* 批量选图后按 9:16 逐张裁剪，裁剪结果直接作为本地待上传文件 */}
+      {/* 勾选裁剪后，批量选图逐张进入裁剪弹窗，比例可在弹窗内切换 */}
       <CoverCropper
         file={cropQueue[0] ?? null}
         aspect={9 / 16}
         outputWidth={1080}
         heading={
           cropTotal > 1
-            ? `裁剪第 ${cropTotal - cropQueue.length + 1} / ${cropTotal} 张（9:16）`
-            : '裁剪图文图片（9:16）'
+            ? `裁剪第 ${cropTotal - cropQueue.length + 1} / ${cropTotal} 张`
+            : '裁剪图文图片'
         }
         confirmText="使用此图片"
         onCancel={handleCropCancel}

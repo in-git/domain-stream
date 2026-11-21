@@ -484,11 +484,6 @@ export default function App() {
         onSelectModule={goModule}
         onSelectMenu={handleSelectMenu}
         user={user}
-        counts={{
-          videos: videos.length,
-          imagetexts: imagetexts.length,
-          articles: articles.length,
-        }}
         onLogout={handleLogout}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
