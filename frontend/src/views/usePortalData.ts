@@ -20,13 +20,13 @@ import {
   type PortalMessage,
   type ReplyDraft,
 } from '../lib/api';
-import type { ContentSection } from './constants';
+import { isSectionId, type ContentSection } from './constants';
 
 /**
  * 门户内容数据：按板块懒加载（进入板块才请求，已加载不再重复），
  * 分类接口全站只请求一次，分类失败时降级用内容自身携带的分类。
  */
-export function usePortalData(currentUserName: string, initialSection: SectionId) {
+export function usePortalData(currentUserName: string, initialSection: string) {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [replies, setReplies] = useState<MessageReply[]>([]);
   const [videoCategories, setVideoCategories] = useState<string[]>([]);
@@ -37,7 +37,8 @@ export function usePortalData(currentUserName: string, initialSection: SectionId
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loadedSections, setLoadedSections] = useState<Partial<Record<SectionId, boolean>>>({});
   const [loadingMap, setLoadingMap] = useState<Partial<Record<SectionId, boolean>>>(() => ({
-    [initialSection]: true,
+    // 仅为内置板块初始化 loading：自定义模块没有数据源，不应进入加载态
+    ...(isSectionId(initialSection) ? { [initialSection]: true } : {}),
   }));
   const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
@@ -87,7 +88,10 @@ export function usePortalData(currentUserName: string, initialSection: SectionId
 
   /** 进入某板块时才加载该板块数据；重复进入已加载板块不会再次请求 */
   const loadSection = useCallback(
-    async (section: SectionId) => {
+    async (rawSection: string) => {
+      // 自定义模块没有数据源，直接忽略
+      if (!isSectionId(rawSection)) return;
+      const section = rawSection;
       if (section === 'profile') return;
       setLoadingMap((prev) => ({ ...prev, [section]: true }));
       setErrors((prev) => ({ ...prev, [section]: undefined }));
@@ -190,6 +194,30 @@ export function usePortalData(currentUserName: string, initialSection: SectionId
     [currentUserName]
   );
 
+  /** 发布图文后重新拉取图文列表（不进入 loading 态，避免整页闪骨架屏） */
+  const reloadGraphics = useCallback(async () => {
+    try {
+      const [rows, categories] = await Promise.all([
+        portalApi.graphics(),
+        portalApi
+          .categories()
+          .catch((): PortalCategory[] => []),
+      ]);
+      const names = categoryNameMap(categories);
+      const items = graphicsToPhotos(rows, names);
+      setPhotos(items);
+      setGraphicCategories(
+        pickCategories(categoriesForModule(categories, 'GRAPHIC'), items.map((item) => item.album))
+      );
+      setLoadedSections((prev) => ({ ...prev, gallery: true }));
+    } catch (error) {
+      setErrors((prev) => ({
+        ...prev,
+        gallery: error instanceof Error ? error.message : '图文加载失败',
+      }));
+    }
+  }, [pickCategories]);
+
   return {
     videos,
     articles,
@@ -205,5 +233,6 @@ export function usePortalData(currentUserName: string, initialSection: SectionId
     loadSection,
     addMessage,
     addReply,
+    reloadGraphics,
   };
 }

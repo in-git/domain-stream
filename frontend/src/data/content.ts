@@ -55,6 +55,12 @@ export interface PhotoItem {
   camera: string;
   lens: string;
   settings: string;
+  /** 正文（笔记文字内容），详情页展示 */
+  content?: string;
+  /** 作者昵称（文本转图文的发布者） */
+  author?: string;
+  /** 点赞数（后端计数） */
+  likeCount?: number;
 }
 
 export interface UserProfile {

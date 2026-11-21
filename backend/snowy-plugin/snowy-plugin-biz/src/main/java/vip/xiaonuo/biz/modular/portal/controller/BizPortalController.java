@@ -14,6 +14,7 @@ package vip.xiaonuo.biz.modular.portal.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,9 @@ import vip.xiaonuo.biz.modular.category.entity.BizCategory;
 import vip.xiaonuo.biz.modular.category.mapper.BizCategoryMapper;
 import vip.xiaonuo.biz.modular.graphic.entity.BizGraphic;
 import vip.xiaonuo.biz.modular.graphic.mapper.BizGraphicMapper;
+import vip.xiaonuo.biz.modular.graphic.param.BizGraphicPosterApplyParam;
+import vip.xiaonuo.biz.modular.graphic.param.BizGraphicPosterParam;
+import vip.xiaonuo.biz.modular.graphic.service.BizGraphicPosterService;
 import vip.xiaonuo.biz.modular.message.entity.BizMessage;
 import vip.xiaonuo.biz.modular.message.mapper.BizMessageMapper;
 import vip.xiaonuo.biz.modular.message.param.BizMessageAddParam;
@@ -40,6 +44,7 @@ import vip.xiaonuo.auth.core.pojo.SaBaseClientLoginUser;
 import vip.xiaonuo.auth.core.util.StpClientUtil;
 import vip.xiaonuo.common.pojo.CommonResult;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -75,6 +80,9 @@ public class BizPortalController {
 
     @Resource
     private BizCategoryMapper bizCategoryMapper;
+
+    @Resource
+    private BizGraphicPosterService bizGraphicPosterService;
 
     @Resource(name = "clientLoginUserApi")
     private SaBaseLoginUserApi clientLoginUserApi;
@@ -144,6 +152,124 @@ public class BizPortalController {
                 .orderByAsc(BizGraphic::getSortCode)
                 .orderByDesc(BizGraphic::getPublishTime);
         return CommonResult.data(bizGraphicMapper.selectList(queryWrapper));
+    }
+
+    /**
+     * 文本转图片：把访客输入的文本渲染成小红书风格的图文卡片并入库。
+     * 图片由服务端绘制，不接受客户端上传图片，天然规避违规图片。
+     *
+     * @author domain-stream
+     * @date  2026/11/21
+     */
+    @Operation(summary = "文本转图文")
+    @PostMapping("/public/graphics/poster")
+    public CommonResult<BizGraphic> createPoster(@RequestBody @Validated BizGraphicPosterParam param) {
+        if (param == null || StrUtil.isBlank(param.getContent())) {
+            return CommonResult.error("内容不能为空");
+        }
+        // 登录用户优先用真实昵称，未登录则用传参或匿名
+        String author = StrUtil.isBlank(param.getNickname()) ? null : param.getNickname().trim();
+        Object loginId = StpClientUtil.getLoginIdDefaultNull();
+        if (StrUtil.isBlank(author) && loginId != null) {
+            SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(String.valueOf(loginId));
+            if (user != null && StrUtil.isNotBlank(user.getNickname())) {
+                author = user.getNickname();
+            }
+        }
+        if (StrUtil.isBlank(author)) {
+            author = "匿名用户";
+        }
+
+        List<String> images = bizGraphicPosterService.render(param, author);
+
+        BizGraphic graphic = new BizGraphic();
+        String rawTitle = StrUtil.isBlank(param.getTitle()) ? param.getContent() : param.getTitle();
+        graphic.setTitle(StrUtil.maxLength(rawTitle.trim(), 60));
+        graphic.setCover(images.get(0));
+        graphic.setImages(JSONUtil.toJsonStr(images));
+        graphic.setSummary(StrUtil.maxLength(param.getContent().trim(), 200));
+        graphic.setContent(param.getContent().trim());
+        graphic.setStatus("PUBLISHED");
+        graphic.setPublishTime(new Date());
+        graphic.setViewCount(0);
+        graphic.setLikeCount(0);
+        graphic.setCommentCount(0);
+        graphic.setExtJson(JSONUtil.createObj()
+                .set("author", author)
+                .set("theme", StrUtil.nullToDefault(param.getTheme(), "warm"))
+                .set("source", "TEXT_POSTER")
+                .toString());
+        bizGraphicMapper.insert(graphic);
+        return CommonResult.data(graphic);
+    }
+
+    /**
+     * 文本转图文（只渲染不落库）。
+     * 供 CMS「上传并编排图文」预览使用：返回图片地址，由运营勾选后再保存图文。
+     *
+     * @author domain-stream
+     * @date  2026/11/21
+     */
+    @Operation(summary = "文本转图文（预览）")
+    @PostMapping("/public/graphics/poster/preview")
+    public CommonResult<List<String>> previewPoster(@RequestBody @Validated BizGraphicPosterParam param) {
+        if (param == null || StrUtil.isBlank(param.getContent())) {
+            return CommonResult.error("内容不能为空");
+        }
+        String author = resolveAuthor(param.getNickname());
+        return CommonResult.data(bizGraphicPosterService.render(param, author));
+    }
+
+    /**
+     * 应用图文预览结果：只保留用户选中的图片，按顺序入库。
+     * 与重新生成不同，这里不重新排版，直接使用已渲染好的图片地址。
+     *
+     * @author domain-stream
+     * @date  2026/11/21
+     */
+    @Operation(summary = "应用图文生成结果")
+    @PostMapping("/public/graphics/poster/apply")
+    public CommonResult<BizGraphic> applyPoster(@RequestBody @Validated BizGraphicPosterApplyParam param) {
+        if (param == null || param.getImages() == null || param.getImages().isEmpty()) {
+            return CommonResult.error("请至少选择一张图片");
+        }
+        String author = resolveAuthor(param.getNickname());
+        String content = StrUtil.trimToEmpty(param.getContent());
+
+        BizGraphic graphic = new BizGraphic();
+        String rawTitle = StrUtil.isBlank(param.getTitle()) ? content : param.getTitle();
+        graphic.setTitle(StrUtil.sub(StrUtil.blankToDefault(rawTitle, "图文笔记").trim(), 0, 60));
+        graphic.setCover(param.getImages().get(0));
+        graphic.setImages(JSONUtil.toJsonStr(param.getImages()));
+        graphic.setSummary(StrUtil.sub(content, 0, 200));
+        graphic.setContent(content);
+        graphic.setStatus("PUBLISHED");
+        graphic.setPublishTime(new Date());
+        graphic.setViewCount(0);
+        graphic.setLikeCount(0);
+        graphic.setCommentCount(0);
+        graphic.setExtJson(JSONUtil.createObj()
+                .set("author", author)
+                .set("theme", StrUtil.nullToDefault(param.getTheme(), "warm"))
+                .set("source", "TEXT_POSTER")
+                .toString());
+        bizGraphicMapper.insert(graphic);
+        return CommonResult.data(graphic);
+    }
+
+    /** 解析展示用作者名：入参 → 登录用户昵称 → 匿名 */
+    private String resolveAuthor(String nickname) {
+        String author = StrUtil.isBlank(nickname) ? null : nickname.trim();
+        if (StrUtil.isBlank(author)) {
+            Object loginId = StpClientUtil.getLoginIdDefaultNull();
+            if (loginId != null) {
+                SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(String.valueOf(loginId));
+                if (user != null && StrUtil.isNotBlank(user.getNickname())) {
+                    author = user.getNickname();
+                }
+            }
+        }
+        return StrUtil.isBlank(author) ? "匿名用户" : author;
     }
 
     /**

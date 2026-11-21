@@ -7,6 +7,12 @@ interface ResilientImageProps {
   className?: string;
   fallbackTitle?: string;
   priority?: boolean;
+  /** 是否允许浏览器原生拖拽图片（默认禁用，避免与自定义滑动冲突） */
+  draggable?: boolean;
+  /** 是否响应指针事件（轮播场景常设为 false，交给父级统一处理） */
+  interactive?: boolean;
+  /** 图片填充方式：cover 裁切铺满，contain 完整显示（默认 cover） */
+  fit?: 'cover' | 'contain';
 }
 
 export function ResilientImage({
@@ -15,6 +21,10 @@ export function ResilientImage({
   className = '',
   fallbackTitle,
   priority = false,
+  // 默认禁用原生拖拽：图片被拖动会生成 ghost image 并打断横向滑动
+  draggable = false,
+  interactive = true,
+  fit = 'cover',
 }: ResilientImageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -49,11 +59,17 @@ export function ResilientImage({
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         referrerPolicy="no-referrer"
+        draggable={draggable}
+        onDragStart={(event) => {
+          // 兜底：即使外部传入 draggable，也阻止默认拖拽行为
+          if (!draggable) event.preventDefault();
+        }}
         onLoad={() => setIsLoaded(true)}
         onError={() => setHasError(true)}
-        className={`w-full h-full object-cover transition-opacity duration-500 ease-out ${
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`w-full h-full transition-opacity duration-500 ease-out ${
+          fit === 'contain' ? 'object-contain' : 'object-cover'
+        } ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+        style={interactive ? undefined : { pointerEvents: 'none' }}
       />
     </div>
   );

@@ -402,6 +402,9 @@ export function graphicsToPhotos(
       album: str(ext.album, album) as PhotoItem['album'],
       src: images[0],
       images,
+      content: row.content || '',
+      author: str(ext.author),
+      likeCount: row.likeCount || 0,
       aspectRatio: (ASPECT_RATIOS.includes(ext.aspectRatio as PhotoItem['aspectRatio'])
         ? ext.aspectRatio
         : ASPECT_RATIOS[index % ASPECT_RATIOS.length]) as PhotoItem['aspectRatio'],
@@ -468,6 +471,27 @@ export interface ReplyDraft {
   replyToNickname?: string;
 }
 
+/** 文本转图文的提交参数 */
+export interface GraphicPosterDraft {
+  /** 正文，最多 1000 字 */
+  content: string;
+  /** 标题，留空时后端取正文首行 */
+  title?: string;
+  /** 昵称，留空时后端取登录用户昵称 */
+  nickname?: string;
+  /** 卡片主题 */
+  theme?: string;
+}
+
+/**
+ * 应用生成结果：只保留用户选中的图片。
+ * 与重新生成相比省去二次排版，仅按给定顺序重排图片列表入库。
+ */
+export interface GraphicPosterApplyDraft extends GraphicPosterDraft {
+  /** 已应用的图片地址（顺序即展示顺序） */
+  images: string[];
+}
+
 /** 公共系统基础信息（无需登录） */
 export interface PublicSystemInfo {
   siteName: string;
@@ -481,6 +505,21 @@ export const portalApi = {
   videos: () => request<PortalVideo[]>('/public/videos'),
   articles: () => request<PortalArticle[]>('/public/articles'),
   graphics: () => request<PortalGraphic[]>('/public/graphics'),
+  /**
+   * 文本转图文：把纯文本交给后端渲染成卡片图片并入库。
+   * 图片由服务端绘制，前端只提交文本与主题。
+   */
+  createGraphicPoster: (draft: GraphicPosterDraft) =>
+    request<PortalGraphic>('/public/graphics/poster', {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    }),
+  /** 确认应用预览结果：只保留选中的图片，直接入库 */
+  createGraphicPosterImages: (draft: GraphicPosterApplyDraft) =>
+    request<PortalGraphic>('/public/graphics/poster/apply', {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    }),
   /** 顶级留言与回复同在一张表，一次拉取后由调用方按 parentId 组装 */
   messages: () => request<PortalMessage[]>('/public/messages'),
   addMessage: (draft: MessageDraft) =>

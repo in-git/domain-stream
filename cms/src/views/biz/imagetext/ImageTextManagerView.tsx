@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit3,
+  Heart,
   ImagePlus,
   Images,
   Plus,
@@ -26,17 +27,15 @@ interface ImageTextManagerViewProps {
 
 interface ImageTextCardProps {
   item: ImageTextItem;
-  categoryLabel: string;
   canEdit: boolean;
   canDelete: boolean;
   onOpen: ImageTextManagerViewProps['onOpen'];
   onToggleStatus: () => void;
 }
 
-/** 图文卡片：封面多图轮播，点击封面进入对应幻灯片的查看页 */
+/** 图文卡片：与客户端 NoteCard 同款，封面多图轮播 + 图上标题/配文/点赞 */
 function ImageTextCard({
   item,
-  categoryLabel,
   canEdit,
   canDelete,
   onOpen,
@@ -51,25 +50,27 @@ function ImageTextCard({
     setActive((idx) => (idx + delta + total) % total);
   };
 
+  // 与客户端 NoteCard 完全一致的结构与尺寸：只有一张图 + 图上文字
   return (
-    <article className="bg-white rounded-[16px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col">
+    <article className="group mb-2 break-inside-avoid">
       <div
         onClick={() => onOpen('view', item.id, active)}
-        className="relative aspect-[4/3] bg-[#F2F2F7] overflow-hidden cursor-pointer group"
+        className="relative w-full cursor-pointer overflow-hidden rounded-lg bg-[#F5F5F7] dark:bg-[#1C1C1E]"
+        style={{ aspectRatio: '3 / 4' }}
       >
         <MediaImage
           src={current}
           alt={item.title}
           fallbackLabel={item.title}
-          className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+          className="w-full h-full object-cover select-none"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
 
+        {/* 多图角标：右上角「1/3」 */}
         {total > 1 && (
           <>
-            <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/55 backdrop-blur-md text-[11px] font-medium text-white tabular-nums">
-              {Math.min(active + 1, total)} / {total}
-            </div>
+            <span className="absolute right-2 top-2 rounded-full bg-black/40 px-1.5 py-[1px] text-[10px] font-medium text-white backdrop-blur-sm tabular-nums">
+              {active + 1}/{total}
+            </span>
             <button
               type="button"
               aria-label="上一张"
@@ -77,9 +78,9 @@ function ImageTextCard({
                 event.stopPropagation();
                 go(-1);
               }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center opacity-90 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+              className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 group-hover:opacity-100 focus-visible:opacity-100"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -88,75 +89,74 @@ function ImageTextCard({
                 event.stopPropagation();
                 go(1);
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center opacity-90 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 group-hover:opacity-100 focus-visible:opacity-100"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="h-4 w-4" />
             </button>
           </>
         )}
-      </div>
 
-      <div className="p-4 flex-1 flex flex-col">
-        <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73]">
-          <div className="flex items-center gap-1.5 truncate">
-            <span className="truncate">{categoryLabel}</span>
-            <span aria-hidden="true">·</span>
-            <span className="tabular-nums shrink-0">{formatDateShort(item.updatedAt)}</span>
-          </div>
-          <span
-            className={`font-medium shrink-0 ${
-              item.status === 'published' ? 'text-[#16A34A]' : 'text-[#D97706]'
-            }`}
-          >
-            {item.status === 'published' ? '已发布' : '草稿'}
-          </span>
+        {/* 图片底部压暗：让覆盖在图片上的标题与点赞始终清晰 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+
+        {/* 标题 + 配文：左下角，标题更大，配文紧贴其下 */}
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 pr-9">
+          <p className="line-clamp-2 text-[15px] font-semibold leading-[1.35] text-white drop-shadow-sm">
+            {item.title}
+          </p>
+          {item.body && (
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.5] text-white/80 drop-shadow-sm">
+              {item.body}
+            </p>
+          )}
         </div>
 
-        <h3
-          onClick={() => onOpen('view', item.id, active)}
-          className="mt-1 text-[15px] font-semibold text-[#1D1D1F] leading-snug line-clamp-1 cursor-pointer hover:text-[#0071E3] transition-colors"
-        >
-          {item.title}
-        </h3>
-        <p className="mt-1 text-[12px] text-[#6E6E73] line-clamp-1 leading-relaxed">
-          {item.body || '暂无图文配文描述'}
-        </p>
+        {/* 点赞：右下角，与客户端一致 */}
+        <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-0.5 rounded-full px-1 text-[11px] font-medium text-white tabular-nums drop-shadow-sm">
+          <Heart className="h-3.5 w-3.5" />
+          {formatNumber(item.likes)}
+        </span>
 
-        <div className="mt-auto pt-3 flex items-center justify-between gap-2 text-[12px] text-[#86868B]">
-          <span className="tabular-nums truncate">
-            {formatNumber(item.views)} 次浏览 · {formatNumber(item.likes)} 赞
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            {canEdit && (
-              <button
-                type="button"
-                onClick={onToggleStatus}
-                className="px-2 py-1 rounded-lg text-[12px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
-              >
-                {item.status === 'published' ? '转草稿' : '发布'}
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => onOpen('edit', item.id)}
-                aria-label={`编辑 ${item.title}`}
-                className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F5F5F7] transition-colors"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-            )}
-            {canDelete && (
-              <button
-                type="button"
-                onClick={() => onOpen('delete', item.id)}
-                aria-label={`删除 ${item.title}`}
-                className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+        {/* 管理操作：仅悬停时在右上角出现，不影响卡片外观 */}
+        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          {canEdit && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleStatus();
+              }}
+              className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-[#1D1D1F] shadow-xs backdrop-blur-sm hover:bg-white"
+            >
+              {item.status === 'published' ? '转草稿' : '发布'}
+            </button>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen('edit', item.id);
+              }}
+              aria-label={`编辑 ${item.title}`}
+              className="rounded-lg bg-white/90 p-1.5 text-[#1D1D1F] shadow-xs backdrop-blur-sm hover:bg-white hover:text-[#0071E3]"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen('delete', item.id);
+              }}
+              aria-label={`删除 ${item.title}`}
+              className="rounded-lg bg-white/90 p-1.5 text-[#1D1D1F] shadow-xs backdrop-blur-sm hover:bg-white hover:text-[#D70015]"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -174,13 +174,21 @@ export function ImageTextManagerView({
   const canDelete = hasModulePerm('imagetexts', 'Delete', permissions);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const { options: categoryOptions } = usePublishCategories('GRAPHIC');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
+
+  /** 分类 chip：只列出实际有数据的分类，避免空分类占位 */
+  const categoryChips = useMemo(() => {
+    const codes = Array.from(new Set(items.map((it) => it.category).filter(Boolean)));
+    return codes.map((code) => ({ code, label: categoryName(code) || code }));
+  }, [items, categoryOptions]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((it) => {
       if (statusFilter !== 'all' && it.status !== statusFilter) return false;
+      if (categoryFilter !== 'all' && it.category !== categoryFilter) return false;
       if (!q) return true;
       return (
         it.title.toLowerCase().includes(q) ||
@@ -189,7 +197,7 @@ export function ImageTextManagerView({
         categoryName(it.category).toLowerCase().includes(q)
       );
     });
-  }, [items, search, statusFilter, categoryOptions]);
+  }, [items, search, statusFilter, categoryFilter, categoryOptions]);
 
   async function handleToggleStatus(item: ImageTextItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -249,6 +257,30 @@ export function ImageTextManagerView({
         )}
       </div>
 
+      {/* 分类筛选：与客户端图文页顶部的分类 chip 一致 */}
+      {categoryChips.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[{ code: 'all', label: '全部' }, ...categoryChips].map((chip) => {
+            const active = categoryFilter === chip.code;
+            return (
+              <button
+                key={chip.code}
+                type="button"
+                onClick={() => setCategoryFilter(chip.code)}
+                aria-pressed={active}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                  active
+                    ? 'bg-[#1D1D1F] font-medium text-white'
+                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07]'
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Empty State */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
@@ -269,12 +301,12 @@ export function ImageTextManagerView({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+        /* 瀑布流：与客户端图文列表一致的多列卡片布局（列宽紧凑、卡片自带间距） */
+        <div className="columns-2 gap-2 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6">
           {filtered.map((item) => (
             <ImageTextCard
               key={item.id}
               item={item}
-              categoryLabel={categoryName(item.category)}
               canEdit={canEdit}
               canDelete={canDelete}
               onOpen={onOpen}

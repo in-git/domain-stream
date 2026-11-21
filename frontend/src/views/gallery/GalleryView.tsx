@@ -1,18 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import {
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  Heart,
-  Info,
-  X,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { Heart, Plus } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
+import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
+import { NoteComposer } from './NoteComposer';
+import { NoteDetail } from './NoteDetail';
 
 interface GalleryViewProps {
   photos: PhotoItem[];
@@ -22,153 +15,190 @@ interface GalleryViewProps {
   searchQuery?: string;
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
+  /** 发布成功后的刷新回调 */
+  onPublished?: () => void;
+  /** 当前用户昵称，用于新笔记署名 */
+  currentUserName?: string;
   externalSelectedId?: string | null;
   onClearExternalSelection?: () => void;
 }
 
-const DEFAULT_ALBUMS = ['建筑', '自然', '静物', '光影'];
-type AlbumFilter = string;
+const ALL = '全部';
 
-function getAspectClass(ratio: PhotoItem['aspectRatio']): string {
-  switch (ratio) {
-    case '3:4':
-      return 'aspect-[3/4]';
-    case '4:3':
-      return 'aspect-[4/3]';
-    case '1:1':
-      return 'aspect-square';
-    case '16:9':
-      return 'aspect-video';
-  }
-}
+/** 判定为「滑动」而非「点击」的位移阈值（px） */
+const SWIPE_THRESHOLD = 30;
 
-interface PhotoCardProps {
-  photo: PhotoItem;
+/* ------------------------------------------------------------------ */
+/* 笔记卡片（小红书版式）                                              */
+/* ------------------------------------------------------------------ */
+
+interface NoteCardProps {
+  note: PhotoItem;
   index: number;
-  saved: boolean;
-  onOpen: (id: string, slide: number) => void;
-  onToggleSave: (id: string) => void;
+  liked: boolean;
+  onOpen: () => void;
+  onToggleLike: () => void;
 }
 
 /**
- * 图文卡片：一条图文只占一张卡，多图在封面上轮播
- * （与 CMS 图文列表一致，不再把多图拆成多张并列卡片）
+ * 小红书式笔记卡片
+ * - 图片原始比例展示（不裁切、不留底色），瀑布流自然错落
+ * - 多图可左右拖动 / 点击箭头切换
+ * - 底部标题 + 作者 + 点赞，整体紧凑
  */
-function PhotoCard({ photo, index, saved, onOpen, onToggleSave }: PhotoCardProps) {
-  const total = photo.images.length;
-  const [slide, setSlide] = useState(0);
-  const currentSlide = Math.min(slide, Math.max(total - 1, 0));
-  const current = photo.images[currentSlide] ?? photo.src;
+function NoteCard({ note, index, liked, onOpen, onToggleLike }: NoteCardProps) {
+  const [active, setActive] = useState(0);
+  const total = note.images.length;
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  /* 手势滑动切图：触摸位移超过阈值即翻页，并抑制随后的 click 打开大图 */
-  const touchStartX = useRef<number | null>(null);
-  const swipedRef = useRef(false);
+  const dragStartX = useRef<number | null>(null);
+  const dragged = useRef(false);
+  const [dragDelta, setDragDelta] = useState(0);
+  const [width, setWidth] = useState(0);
 
-  const step = (delta: number) => {
-    if (total < 2) return;
-    setSlide((idx) => (idx + delta + total) % total);
-  };
+  const goTo = (next: number) => setActive(((next % total) + total) % total);
 
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    touchStartX.current = event.touches[0]?.clientX ?? null;
-    swipedRef.current = false;
-  };
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver(() => setWidth(node.clientWidth));
+    observer.observe(node);
+    setWidth(node.clientWidth);
+    return () => observer.disconnect();
+  }, []);
 
-  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartX.current === null) return;
-    const deltaX = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(deltaX) < 36) return;
-    swipedRef.current = true;
-    step(deltaX < 0 ? 1 : -1);
-  };
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (total <= 1) return;
+    dragStartX.current = event.clientX;
+    dragged.current = false;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
 
-  const handleOpen = () => {
-    if (swipedRef.current) {
-      swipedRef.current = false;
-      return;
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartX.current === null) return;
+    const delta = event.clientX - dragStartX.current;
+    if (Math.abs(delta) > 6) dragged.current = true;
+    setDragDelta(delta);
+  }
+
+  function handlePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartX.current === null) return;
+    const delta = dragDelta;
+    dragStartX.current = null;
+    setDragDelta(0);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    onOpen(photo.id, currentSlide);
-  };
+    if (Math.abs(delta) >= SWIPE_THRESHOLD) {
+      goTo(delta < 0 ? active + 1 : active - 1);
+      window.setTimeout(() => {
+        dragged.current = false;
+      }, 0);
+    } else {
+      dragged.current = false;
+    }
+  }
+
+  const trackOffset = -(active * 100) + (width ? (dragDelta / width) * 100 : 0);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.94 }}
-      transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-      className="break-inside-avoid mb-3 sm:mb-5"
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 10) * 0.025 }}
+      className="mb-2 break-inside-avoid"
     >
-      <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+      {/* 图片区：无圆角包裹、无边框，就是一张图（小红书原样） */}
+      <div
+        ref={containerRef}
+        className="relative w-full overflow-hidden rounded-lg bg-[#F5F5F7] dark:bg-[#1C1C1E]"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onClick={() => {
+          if (dragged.current) return;
+          onOpen();
+        }}
+        style={{ aspectRatio: '3 / 4', touchAction: total > 1 ? 'pan-y' : undefined, userSelect: 'none' }}
+      >
         <div
-          className={`relative w-full max-h-[360px] overflow-hidden bg-[#EEEEF0] dark:bg-[#1C1C1E] ${getAspectClass(
-            photo.aspectRatio
-          )}`}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
+          className="absolute inset-0 grid"
+          style={{
+            gridTemplateColumns: `repeat(${total}, 100%)`,
+            gridTemplateRows: '100%',
+            transform: `translate3d(${trackOffset}%, 0, 0)`,
+            transition:
+              dragStartX.current === null ? 'transform 300ms cubic-bezier(0.25,0.8,0.25,1)' : 'none',
+          }}
         >
-          <button
-            type="button"
-            onClick={handleOpen}
-            className="absolute inset-0 w-full h-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
-            aria-label={`查看大图：${photo.title}`}
-          >
-            <motion.div
-              layoutId={`photo-frame-${photo.id}-${currentSlide}`}
-              transition={SWIFTUI_SMOOTH}
-              className="w-full h-full"
+          {note.images.map((url, i) => (
+            <div
+              key={`${url}-${i}`}
+              aria-hidden={i !== active}
+              className="relative overflow-hidden"
+              style={{ gridColumn: i + 1, gridRow: 1 }}
             >
               <ResilientImage
-                src={current}
-                alt={photo.title}
-                fallbackTitle={photo.title}
-                className="w-full h-full transition-transform duration-700 ease-out group-hover:scale-[1.035]"
+                src={url}
+                alt={i === active ? note.title : ''}
+                fallbackTitle={note.title}
+                fit="cover"
+                className="w-full h-full select-none pointer-events-none"
+                draggable={false}
               />
-            </motion.div>
-          </button>
-
-          <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
-            {photo.album}
-          </span>
-
-          {total > 1 && (
-            <div className="absolute right-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm tabular-nums">
-              {currentSlide + 1} / {total}
             </div>
-          )}
-
-          {/* 底部渐变：标题在左下、收藏在右下 */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <h3 className="pointer-events-none absolute bottom-2 left-2.5 right-12 text-[12px] sm:text-[13px] font-medium leading-snug text-white line-clamp-2">
-            {photo.title}
-          </h3>
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.85 }}
-            transition={SWIFTUI_BOUNCY}
-            onClick={() => onToggleSave(photo.id)}
-            aria-label={saved ? '取消收藏' : '收藏图片'}
-            aria-pressed={saved}
-            className={`absolute bottom-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
-              saved ? 'bg-[#0071E3] text-white' : 'bg-black/45 text-white hover:bg-black/60'
-            }`}
-          >
-            <Bookmark className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-          </motion.button>
+          ))}
         </div>
 
-        <div className="px-3 pt-2 pb-2.5">
-          <p className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
-            {photo.location} · {photo.date}
-          </p>
-          <span className="mt-0.5 block text-[11px] font-mono-tabular text-[#86868B] dark:text-[#8E8E93] truncate">
-            {photo.camera}
+        {/* 多图角标：右上角「1/3」 */}
+        {total > 1 && (
+          <span className="absolute right-2 top-2 rounded-full bg-black/40 px-1.5 py-[1px] text-[10px] font-medium text-white backdrop-blur-sm tabular-nums">
+            {active + 1}/{total}
           </span>
+        )}
+
+        {/* 图片底部压暗：让覆盖在图片上的标题与点赞始终清晰 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+
+        {/* 标题 + 描述：左下角，标题更大，描述紧贴其下 */}
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 pr-9">
+          <p className="line-clamp-2 text-[15px] font-semibold leading-[1.35] text-white drop-shadow-sm">
+            {note.title}
+          </p>
+          {note.content && (
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.5] text-white/80 drop-shadow-sm">
+              {note.content}
+            </p>
+          )}
         </div>
+
+        {/* 点赞：右下角（不参与拖拽/打开详情） */}
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.85 }}
+          transition={SWIFTUI_BOUNCY}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleLike();
+          }}
+          aria-pressed={liked}
+          aria-label={liked ? '取消点赞' : '点赞'}
+          className="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-full px-1 text-[11px] font-medium text-white tabular-nums drop-shadow-sm"
+        >
+          <Heart className={`h-3.5 w-3.5 ${liked ? 'fill-[#FF2442] text-[#FF2442]' : ''}`} />
+          {(note.likeCount || 0) + (liked ? 1 : 0) || ''}
+        </motion.button>
       </div>
-    </motion.div>
+    </motion.article>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* 列表                                                                */
+/* ------------------------------------------------------------------ */
 
 export function GalleryView({
   photos,
@@ -178,359 +208,118 @@ export function GalleryView({
   searchQuery = '',
   onToggleSave,
   onToggleLike,
+  onPublished,
+  currentUserName,
   externalSelectedId,
   onClearExternalSelection,
 }: GalleryViewProps) {
-  const filterAlbums = categories && categories.length ? categories : DEFAULT_ALBUMS;
-  const [album, setAlbum] = useState<AlbumFilter>('全部');
-  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
-  // 当前图文内正在查看的图片索引（详情按图片浏览）
-  const [activeSlide, setActiveSlide] = useState(0);
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [showExif, setShowExif] = useState(true);
+  const [album, setAlbum] = useState<string>(ALL);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredPhotos = useMemo(
+  // 分类标签：全部 + 数据里出现的分类
+  const chips = useMemo(() => {
+    const fromData = photos.map((p) => p.album).filter(Boolean);
+    const merged = Array.from(new Set([...(categories ?? []), ...fromData]));
+    return [ALL, ...merged.slice(0, 12)];
+  }, [categories, photos]);
+
+  const query = searchQuery.trim().toLowerCase();
+  const list = useMemo(
     () =>
-      photos.filter((p) => {
-        const matchAlbum = album === '全部' || p.album === album;
-        const matchQuery =
-          !normalizedQuery ||
-          p.title.toLowerCase().includes(normalizedQuery) ||
-          p.location.toLowerCase().includes(normalizedQuery) ||
-          p.camera.toLowerCase().includes(normalizedQuery);
-        return matchAlbum && matchQuery;
+      photos.filter((note) => {
+        const okAlbum = album === ALL || note.album === album;
+        const okQuery =
+          !query ||
+          note.title.toLowerCase().includes(query) ||
+          (note.content ?? '').toLowerCase().includes(query);
+        return okAlbum && okQuery;
       }),
-    [photos, album, normalizedQuery]
+    [photos, album, query]
   );
 
-  // 展平后的图片序列：详情里可跨图文连续浏览
-  const slideList = useMemo(
-    () =>
-      filteredPhotos.flatMap((photo, cardIndex) =>
-        photo.images.map((src, imageIndex) => ({ photo, cardIndex, imageIndex, src }))
-      ),
-    [filteredPhotos]
-  );
-
-  const activeSlideIndex = activePhotoId
-    ? slideList.findIndex(
-        (item) => item.photo.id === activePhotoId && item.imageIndex === activeSlide
-      )
-    : -1;
-  const activeItem = activeSlideIndex >= 0 ? slideList[activeSlideIndex] : null;
-  const activePhoto = activeItem?.photo ?? null;
-
-  useEffect(() => {
-    if (externalSelectedId) {
-      setAlbum('全部');
-      setActivePhotoId(externalSelectedId);
-      setActiveSlide(0);
-      setIsZoomed(false);
-      onClearExternalSelection?.();
-    }
-  }, [externalSelectedId, onClearExternalSelection]);
-
-  const openPhoto = (id: string, slide = 0) => {
-    setActivePhotoId(id);
-    setActiveSlide(slide);
-    setIsZoomed(false);
-  };
-
-  const closePhoto = () => {
-    setActivePhotoId(null);
-    setActiveSlide(0);
-    setIsZoomed(false);
-  };
-
-  const goPrev = () => {
-    if (slideList.length === 0) return;
-    setIsZoomed(false);
-    const prev = (activeSlideIndex - 1 + slideList.length) % slideList.length;
-    setActivePhotoId(slideList[prev].photo.id);
-    setActiveSlide(slideList[prev].imageIndex);
-  };
-
-  const goNext = () => {
-    if (slideList.length === 0) return;
-    setIsZoomed(false);
-    const next = (activeSlideIndex + 1) % slideList.length;
-    setActivePhotoId(slideList[next].photo.id);
-    setActiveSlide(slideList[next].imageIndex);
-  };
-
-  useEffect(() => {
-    if (!activeItem) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePhoto();
-      if (e.key === 'ArrowLeft') goPrev();
-      if (e.key === 'ArrowRight') goNext();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [activeItem, activeSlideIndex, slideList]);
+  const activeNote = useMemo(() => {
+    const id = externalSelectedId || activeId;
+    return id ? photos.find((note) => note.id === id) ?? null : null;
+  }, [photos, activeId, externalSelectedId]);
 
   return (
-    <section aria-label="图文列表" className="space-y-10">
-      {/* Album Filter */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-5">
-        <div
-          role="tablist"
-          aria-label="图集筛选"
-          className="inline-flex items-center p-0.5 sm:p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] self-start md:self-auto overflow-x-auto max-w-full"
-        >
-          {(['全部', ...filterAlbums] as AlbumFilter[]).map((item) => {
+    <section aria-label="图文笔记" className="space-y-3">
+      {/* 顶部分类：小红书式的横向 chip 条，吸顶滚动 */}
+      <div className="sticky top-14 z-20 -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-4 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
+        <div className="flex items-center gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {chips.map((item) => {
             const active = album === item;
             return (
               <button
                 key={item}
                 type="button"
-                role="tab"
-                aria-selected={active}
                 onClick={() => setAlbum(item)}
-                className={`relative px-2.5 py-1.5 min-h-[32px] text-[11px] font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] sm:px-3.5 sm:py-2 sm:min-h-[40px] sm:text-xs ${
+                aria-pressed={active}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   active
-                    ? 'text-[#1D1D1F] dark:text-white'
-                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
+                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
                 }`}
               >
-                {active && (
-                  <motion.span
-                    layoutId="galleryAlbumPill"
-                    transition={SWIFTUI_SNAPPY}
-                    className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-                  />
-                )}
-                <span className="relative z-10">{item}</span>
+                {item}
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setComposerOpen(true)}
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-[#FF2442] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[#e81f3b]"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            发布
+          </button>
         </div>
       </div>
 
-      {/* Image-and-Text Masonry Wall — 一条图文一张卡，多图封面轮播 */}
-      <div className="columns-2 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-3 sm:gap-5 xl:gap-6">
-        <AnimatePresence mode="popLayout">
-          {filteredPhotos.map((photo, idx) => (
-            <PhotoCard
-              key={photo.id}
-              photo={photo}
-              index={idx}
-              saved={savedIds.includes(photo.id)}
-              onOpen={openPhoto}
-              onToggleSave={onToggleSave}
-            />
-          ))}
-        </AnimatePresence>
-      </div>
-
-      {/* SwiftUI Matched-Geometry Fullscreen Lightbox */}
-      <AnimatePresence>
-        {activeItem && activePhoto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.24 }}
-            className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-2xl text-white select-none"
-            onClick={closePhoto}
-            role="dialog"
-            aria-modal="true"
-            aria-label={activePhoto.title}
-          >
-            {/* Top Bar Controls */}
-            <div
-              className="shrink-0 px-4 sm:px-8 h-16 flex items-center justify-between z-10"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="text-xs font-mono-tabular text-white/70">
-                {activeSlideIndex + 1} / {slideList.length}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setIsZoomed((z) => !z)}
-                  aria-label={isZoomed ? '还原缩放' : '放大查看细节'}
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                >
-                  {isZoomed ? <ZoomOut className="w-4 h-4" /> : <ZoomIn className="w-4 h-4" />}
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setShowExif((s) => !s)}
-                  aria-label="显示或隐藏拍摄参数"
-                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full transition-colors ${
-                    showExif ? 'bg-[#0A84FF] text-white' : 'bg-white/10 hover:bg-white/20'
-                  }`}
-                >
-                  <Info className="w-4 h-4" />
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.88 }}
-                  transition={SWIFTUI_BOUNCY}
-                  onClick={() => onToggleLike(activePhoto.id)}
-                  aria-label={likedIds.includes(activePhoto.id) ? '取消喜欢' : '喜欢图片'}
-                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full transition-colors ${
-                    likedIds.includes(activePhoto.id)
-                      ? 'bg-[#FF375F]/20 text-[#FF375F]'
-                      : 'bg-white/10 hover:bg-white/20'
-                  }`}
-                >
-                  <Heart
-                    className={`w-4 h-4 ${
-                      likedIds.includes(activePhoto.id) ? 'fill-current' : ''
-                    }`}
-                  />
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.88 }}
-                  transition={SWIFTUI_BOUNCY}
-                  onClick={() => onToggleSave(activePhoto.id)}
-                  aria-label={savedIds.includes(activePhoto.id) ? '取消收藏' : '收藏图片'}
-                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full transition-colors ${
-                    savedIds.includes(activePhoto.id)
-                      ? 'bg-[#0A84FF]/25 text-[#0A84FF]'
-                      : 'bg-white/10 hover:bg-white/20'
-                  }`}
-                >
-                  <Bookmark
-                    className={`w-4 h-4 ${
-                      savedIds.includes(activePhoto.id) ? 'fill-current' : ''
-                    }`}
-                  />
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.9 }}
-                  onClick={closePhoto}
-                  aria-label="关闭大图"
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors ml-1"
-                >
-                  <X className="w-5 h-5" />
-                </motion.button>
-              </div>
-            </div>
-
-            {/* Main Lightbox Stage */}
-            <div className="relative flex-1 flex items-center justify-center px-4 sm:px-16 overflow-hidden">
-              {/* Prev Button */}
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.9 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goPrev();
+      {/* 瀑布流：CSS columns，小红书同款自然错落 */}
+      {list.length === 0 ? (
+        <div className="py-20 text-center">
+          <p className="text-[13px] text-[#86868B]">还没有笔记，发布第一篇试试。</p>
+        </div>
+      ) : (
+        <div className="columns-2 gap-2 md:columns-3 lg:columns-4 xl:columns-5">
+          <AnimatePresence mode="popLayout">
+            {list.map((note, idx) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                index={idx}
+                liked={likedIds.includes(note.id)}
+                onOpen={() => {
+                  setActiveId(note.id);
+                  onClearExternalSelection?.();
                 }}
-                aria-label="上一张"
-                className="hidden sm:flex absolute left-5 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center backdrop-blur-md transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </motion.button>
+                onToggleLike={() => onToggleLike(note.id)}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
 
-              <motion.div
-                layoutId={`photo-frame-${activePhoto.id}-${activeItem.imageIndex}`}
-                transition={SWIFTUI_SMOOTH}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsZoomed((z) => !z);
-                }}
-                className="relative max-w-5xl max-h-[72vh] flex items-center justify-center cursor-zoom-in"
-              >
-                <motion.img
-                  src={activeItem.src}
-                  alt={activePhoto.title}
-                  referrerPolicy="no-referrer"
-                  animate={{ scale: isZoomed ? 1.65 : 1 }}
-                  transition={SWIFTUI_SMOOTH}
-                  className="max-h-[72vh] max-w-full w-auto h-auto rounded-xl object-contain shadow-2xl"
-                />
-              </motion.div>
+      <NoteDetail
+        note={activeNote}
+        liked={activeNote ? likedIds.includes(activeNote.id) : false}
+        saved={activeNote ? savedIds.includes(activeNote.id) : false}
+        onToggleLike={() => activeNote && onToggleLike(activeNote.id)}
+        onToggleSave={() => activeNote && onToggleSave(activeNote.id)}
+        onClose={() => {
+          setActiveId(null);
+          onClearExternalSelection?.();
+        }}
+      />
 
-              {/* Next Button */}
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.9 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goNext();
-                }}
-                aria-label="下一张"
-                className="hidden sm:flex absolute right-5 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center backdrop-blur-md transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </motion.button>
-            </div>
-
-            {/* Bottom EXIF & Mobile Navigation Strip */}
-            <AnimatePresence>
-              {showExif && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 16 }}
-                  transition={SWIFTUI_SNAPPY}
-                  onClick={(e) => e.stopPropagation()}
-                  className="shrink-0 px-5 sm:px-8 py-4 border-t border-white/10 bg-black/60 backdrop-blur-md"
-                >
-                  <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-medium text-white">
-                        <span>{activePhoto.title}</span>
-                        {activePhoto.images.length > 1 && (
-                          <>
-                            <span className="text-white/40" aria-hidden="true">·</span>
-                            <span className="text-white/70 font-normal text-xs tabular-nums">
-                              第 {activeItem.imageIndex + 1} / {activePhoto.images.length} 张
-                            </span>
-                          </>
-                        )}
-                        <span className="text-white/40" aria-hidden="true">·</span>
-                        <span className="text-white/70 font-normal text-xs">
-                          {activePhoto.location}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-white/60">
-                        <span>{activePhoto.camera}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{activePhoto.lens}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{activePhoto.settings}</span>
-                      </div>
-                    </div>
-
-                    {/* Mobile Prev/Next Buttons */}
-                    <div className="flex sm:hidden items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={goPrev}
-                        className="flex-1 py-2.5 min-h-[44px] rounded-xl bg-white/10 text-xs font-medium"
-                      >
-                        上一张
-                      </button>
-                      <button
-                        type="button"
-                        onClick={goNext}
-                        className="flex-1 py-2.5 min-h-[44px] rounded-xl bg-white/10 text-xs font-medium"
-                      >
-                        下一张
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <NoteComposer
+        open={composerOpen}
+        authorName={currentUserName}
+        onClose={() => setComposerOpen(false)}
+        onPublished={() => onPublished?.()}
+      />
     </section>
   );
 }

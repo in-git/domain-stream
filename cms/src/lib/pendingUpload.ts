@@ -29,6 +29,38 @@ export function createPendingFile(file: File): PendingFile {
   };
 }
 
+/**
+ * 把 data URI（如后端生成的图片）转成本地待上传文件。
+ * 用于「文本转图文」这类由服务端直接返回图片数据的场景：
+ * 预览阶段不落盘，只有保存时才真正上传，避免冗余文件。
+ *
+ * @param dataUri 形如 data:image/jpeg;base64,xxxx
+ * @param fileName 上传时使用的文件名
+ * @returns 待上传句柄；解析失败返回 null
+ */
+export function createPendingFileFromDataUri(dataUri: string, fileName: string): PendingFile | null {
+  const matched = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(dataUri);
+  if (!matched) return null;
+  const [, mime = 'image/jpeg', isBase64, payload] = matched;
+  try {
+    let bytes: Uint8Array;
+    if (isBase64) {
+      const binary = atob(payload);
+      bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    } else {
+      // 非 base64 的 data URI 按 URI 编码处理
+      const decoded = decodeURIComponent(payload);
+      bytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i += 1) bytes[i] = decoded.charCodeAt(i);
+    }
+    const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+    return createPendingFile(new File([bytes], `${fileName}.${ext}`, { type: mime }));
+  } catch {
+    return null;
+  }
+}
+
 /** 释放单个本地预览地址 */
 export function releasePendingFile(item?: PendingFile | null): void {
   if (!item) return;

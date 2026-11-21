@@ -664,7 +664,17 @@ async function fetchAll<T>(module: string): Promise<T[]> {
   return all;
 }
 
+/** 文本转图文预览参数：只渲染不落库，供 CMS 勾选后再保存 */
+export interface GraphicPosterDraft {
+  content: string;
+  title?: string;
+  nickname?: string;
+  theme?: string;
+}
+
 export interface SnowyBizApi {
+  /** 文本转图文：调用后端渲染，返回图片地址列表 */
+  renderGraphicPoster(draft: GraphicPosterDraft): Promise<string[]>;
   listVideos(): Promise<VideoItem[]>;
   createVideo(payload: Partial<VideoItem>): Promise<void>;
   updateVideo(id: string, payload: Partial<VideoItem>): Promise<void>;
@@ -734,6 +744,11 @@ function graphicPayload(p: Partial<ImageTextItem>) {
 }
 
 export const snowyBiz: SnowyBizApi = {
+  async renderGraphicPoster(draft) {
+    // 注意：BizPortalController 没有类级 @RequestMapping，
+    // 方法上直接是 /public/graphics/...，不存在 /biz/portal 前缀
+    return post<string[]>('/public/graphics/poster/preview', draft);
+  },
   async listVideos() {
     return (await fetchAll<SnowyVideo>('video')).map(videoFromSnowy);
   },

@@ -24,6 +24,7 @@ import {
   snowyVisitorDashboard,
   snowyVisitorLive,
   userProfileFromSnowy,
+  type GraphicPosterDraft,
   type SnowyLoginUser,
   type SnowyMenu,
 } from './snowy.ts';
@@ -164,6 +165,8 @@ export const api = {
   deleteVideo: (id: string) => snowyBiz.deleteVideo(id),
 
   // ---- 图文 ----
+  /** 文本转图文：返回渲染好的图片地址，供编辑页勾选后作为图文图片 */
+  renderGraphicPoster: (draft: GraphicPosterDraft) => snowyBiz.renderGraphicPoster(draft),
   getImageTexts: async () => ({ items: await snowyBiz.listImageTexts() }),
   createImageText: (payload: Partial<ImageTextItem>) => snowyBiz.createImageText(payload),
   updateImageText: (id: string, payload: Partial<ImageTextItem>) => snowyBiz.updateImageText(id, payload),

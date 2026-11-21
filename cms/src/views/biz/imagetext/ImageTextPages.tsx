@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -22,154 +23,37 @@ import {
   ChevronLeft,
   ChevronRight,
   ImagePlus,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
 import { deleteFilesByUrls, removedUrls } from '../../../lib/fileCenter.ts';
 import {
   createPendingFile,
+  createPendingFileFromDataUri,
   releasePendingFile,
   releasePendingFiles,
   uploadPendingFiles,
   type PendingFile,
 } from '../../../lib/pendingUpload.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
-import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
+import {
+  filterPublishCategories,
+  publishCategoryName,
+  resolvePublishCategoryCode,
+} from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
 import { CategorySelect } from '../../../components/CategorySelect.tsx';
 import { CoverCropper } from '../../../components/CoverCropper.tsx';
+import { TextToImagePanel } from './TextToImagePanel.tsx';
+import { ImageTextPreview } from './ImageTextPreview.tsx';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
 } from '../../../components/EditorWorkspace.tsx';
-
-interface ImageTextPreviewProps {
-  device: PreviewDevice;
-  images: string[];
-  title: string;
-  body: string;
-  category: string;
-  status: ContentStatus;
-}
-
-/** 右侧实时预览：图文卡片按设备宽度自适应，多图以轮播形式预览 */
-function ImageTextPreview({
-  device,
-  images,
-  title,
-  body,
-  category,
-  status,
-}: ImageTextPreviewProps) {
-  const compact = device === 'mobile';
-  const total = images.length;
-  const [active, setActive] = useState(0);
-
-  // 图片被删除后当前索引可能越界，回到第一张
-  useEffect(() => {
-    if (active > total - 1) setActive(0);
-  }, [active, total]);
-
-  const goPrev = () => setActive((i) => (total ? (i - 1 + total) % total : 0));
-  const goNext = () => setActive((i) => (total ? (i + 1) % total : 0));
-  const current = images[Math.min(active, Math.max(total - 1, 0))];
-
-  return (
-    <div className="bg-white">
-      <div className="relative aspect-[4/3] bg-[#F2F2F7] overflow-hidden">
-        <MediaImage
-          src={current}
-          alt="图文封面预览"
-          fallbackLabel="图文封面预览"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/15" />
-        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-black/55 backdrop-blur-md text-[11px] font-medium text-white tabular-nums">
-          {total ? `${active + 1} / ${total}` : '0 张图片'}
-        </div>
-        {total > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={goPrev}
-              aria-label="上一张"
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-md transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              aria-label="下一张"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-md transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
-              {images.map((url, idx) => (
-                <button
-                  key={`${url}-dot-${idx}`}
-                  type="button"
-                  onClick={() => setActive(idx)}
-                  aria-label={`第 ${idx + 1} 张图片`}
-                  aria-current={idx === active}
-                  className={`h-1.5 rounded-full transition-all ${
-                    idx === active ? 'w-4 bg-white' : 'w-1.5 bg-white/55 hover:bg-white/80'
-                  }`}
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-      <div className={compact ? 'p-4' : 'p-5'}>
-        <div className="flex items-center justify-between gap-2 text-[11px] text-[#6E6E73]">
-          <span className="truncate">{category || '未分类'} · 刚刚</span>
-          <span
-            className={`font-medium shrink-0 ${
-              status === 'published' ? 'text-[#16A34A]' : 'text-[#D97706]'
-            }`}
-          >
-            {status === 'published' ? '已发布' : '草稿'}
-          </span>
-        </div>
-        <h3 className={`${compact ? 'text-[16px]' : 'text-[18px]'} font-semibold text-[#1D1D1F] mt-1.5 leading-snug`}>
-          {title || '未命名图文'}
-        </h3>
-        <p className="mt-2 text-[13px] text-[#6E6E73] leading-relaxed whitespace-pre-line">
-          {body || '暂无图文配文描述'}
-        </p>
-        {total > 1 && (
-          <div className="mt-4 pt-3 border-t border-[#F2F2F7] flex items-center gap-1.5">
-            {images.slice(0, 6).map((url, idx) => (
-              <button
-                key={`${url}-${idx}`}
-                type="button"
-                onClick={() => setActive(idx)}
-                aria-label={`查看第 ${idx + 1} 张图片`}
-                className={`w-11 h-9 rounded-md overflow-hidden border shrink-0 transition-all ${
-                  idx === active
-                    ? 'border-[#0071E3] ring-1 ring-[#0071E3]/40'
-                    : 'border-[#E5E5EA] opacity-70 hover:opacity-100'
-                }`}
-              >
-                <MediaImage src={url} alt="" className="w-full h-full object-cover" />
-              </button>
-            ))}
-            {images.length > 6 && (
-              <span className="text-[11px] text-[#86868B] tabular-nums">
-                +{images.length - 6}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /** 编辑区里的一张图片：可能是已上传的地址，也可能是本地暂存待上传的文件 */
 interface ImageEntry {
@@ -196,6 +80,8 @@ interface SortableImageCardProps {
   total: number;
   onMove: (delta: number) => void;
   onRemove: () => void;
+  /** 设为封面：把当前图片移到首位 */
+  onMakeCover?: () => void;
 }
 
 /**
@@ -208,6 +94,7 @@ function SortableImageCard({
   total,
   onMove,
   onRemove,
+  onMakeCover,
 }: SortableImageCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.key,
@@ -233,10 +120,22 @@ function SortableImageCard({
         alt={`图片 ${index + 1}`}
         className="w-full h-full object-cover pointer-events-none select-none"
       />
-      {index === 0 && (
+      {index === 0 ? (
         <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-[#0071E3] text-white text-[10px] font-medium">
           封面
         </div>
+      ) : (
+        onMakeCover && (
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={onMakeCover}
+            title="设为封面"
+            className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#0071E3]"
+          >
+            设为封面
+          </button>
+        )
       )}
       {entry.pending && (
         <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
@@ -280,6 +179,102 @@ function SortableImageCard({
   );
 }
 
+interface PendingImagesBoardProps {
+  images: ImageEntry[];
+  sensors: ReturnType<typeof useSensors>;
+  activeImage: ImageEntry | null;
+  onDragStart: (event: DragStartEvent) => void;
+  onDragCancel: () => void;
+  onDragEnd: (event: DragEndEvent) => void;
+  onMove: (index: number, delta: number) => void;
+  onRemove: (index: number) => void;
+  /** 设为封面：把该图移到首位 */
+  onMakeCover: (index: number) => void;
+}
+
+/**
+ * 待上传图片看板
+ * ------------------------------------------------------------------
+ * 顶部横向预览区：已选 / 已上传的图片在此集中管理，
+ * 支持拖拽排序、删除、一键设为封面；下方挂载上传方式（上传 / 文本转图文）。
+ */
+function PendingImagesBoard({
+  images,
+  sensors,
+  activeImage,
+  onDragStart,
+  onDragCancel,
+  onDragEnd,
+  onMove,
+  onRemove,
+  onMakeCover,
+}: PendingImagesBoardProps) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-semibold text-[#1D1D1F]">图片</span>
+          <span className="text-[11px] text-[#86868B]">
+            已选 {images.length} 张
+            {images.length > 0 && '（第 1 张为封面）'}
+          </span>
+        </div>
+        {images.length > 1 && (
+          <span className="text-[11px] text-[#86868B] shrink-0">拖拽图片可调整顺序</span>
+        )}
+      </div>
+
+      {images.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[#D1D1D6] bg-[#FAFAFC] px-3 py-6 text-center text-[12px] text-[#86868B]">
+          还没有图片，从下方「上传图片」或「文本转图文」添加
+        </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={onDragStart}
+          onDragCancel={onDragCancel}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext items={images.map((entry) => entry.key)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2.5">
+              {images.map((entry, idx) => (
+                <SortableImageCard
+                  key={entry.key}
+                  entry={entry}
+                  index={idx}
+                  total={images.length}
+                  onMove={(delta) => onMove(idx, delta)}
+                  onRemove={() => onRemove(idx)}
+                  onMakeCover={() => onMakeCover(idx)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+
+          {/* 拖拽中的浮层卡片：跟随指针并带落位回弹动画 */}
+          <DragOverlay dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+            {activeImage && (
+              <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-[#0071E3] bg-[#F2F2F7] shadow-[0_16px_40px_rgba(0,0,0,0.24)] rotate-1 scale-[1.02]">
+                <MediaImage
+                  src={activeImage.previewUrl}
+                  alt=""
+                  className="w-full h-full object-cover pointer-events-none select-none"
+                />
+                {activeImage.pending && (
+                  <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
+                    待上传
+                  </div>
+                )}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
+    </div>
+  );
+}
+
 interface ImageTextEditorPageProps {
   item?: ImageTextItem;
   onSaved: () => Promise<void>;
@@ -313,6 +308,31 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  /** 图片添加方式：上传图片 / 文本转图文 */
+  const [imageMode, setImageMode] = useState<'upload' | 'text'>('upload');
+
+  /**
+   * 把「文本转图文」生成的图片追加到图片列表（排在最前，方便设为封面）。
+   * 后端返回的是 data URI，这里转成本地待上传文件：
+   * 预览直接用 blob 地址，点保存时才上传，避免服务端堆积冗余文件。
+   */
+  function handleApplyGenerated(dataUris: string[]) {
+    if (!dataUris.length) return;
+    const stamp = Date.now();
+    const entries: ImageEntry[] = [];
+    dataUris.forEach((dataUri, index) => {
+      const pending = createPendingFileFromDataUri(dataUri, `graphic-${stamp}-${index + 1}`);
+      if (pending) {
+        entries.push({ key: pending.key, url: '', pending, previewUrl: pending.previewUrl });
+      }
+    });
+    if (!entries.length) {
+      setFormError('图片解析失败，请重新生成');
+      return;
+    }
+    setImages((prev) => [...entries, ...prev]);
+    setFormError('');
+  }
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imagesRef = useRef(images);
@@ -340,6 +360,17 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   }, [category, categoryLoading, categoryOptions]);
 
   const categoryLabel = publishCategoryName(categoryOptions, category);
+
+  /**
+   * 分类下拉的可选项：与保存校验共用同一份数据。
+   * 分类表单的「适用模块」是选填的，历史数据可能为空或标错，
+   * 严格按模块过滤会让这些分类在下拉里消失（表现为「选不了」），
+   * 因此这里复用 fetchPublishCategories 的宽松排序结果。
+   */
+  const categoryOptionsForSelect = useMemo(
+    () => filterPublishCategories(categoryOptions, 'GRAPHIC'),
+    [categoryOptions]
+  );
 
   function handleImageFiles(fileList: FileList | File[]) {
     const validFiles = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
@@ -504,8 +535,122 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           </button>
         </>
       }
+      info={
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">图文标题</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例如：北向窗台下的粗陶静物光影"
+              className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px]"
+            />
+          </div>
+
+          <CategorySelect
+            module="GRAPHIC"
+            value={category}
+            onChange={setCategory}
+            label="主题分类"
+            required
+            ariaLabel="主题分类"
+            className="w-full"
+            options={categoryOptionsForSelect}
+          />
+
+          <div>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">图文配文</label>
+            <textarea
+              rows={6}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="写下这组影像背后的故事、质感描述或细节记录..."
+              className="w-full p-3 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[13px] resize-none leading-relaxed"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
+            <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
+              <button
+                type="button"
+                onClick={() => setStatus('published')}
+                className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
+                  status === 'published' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
+                }`}
+              >
+                发布
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatus('draft')}
+                className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
+                  status === 'draft' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
+                }`}
+              >
+                草稿
+              </button>
+            </div>
+          </div>
+
+          {formError && (
+            <div className="rounded-xl bg-[#FF3B30]/8 px-3 py-2 text-[12px] text-[#D70015]">
+              {formError}
+            </div>
+          )}
+        </div>
+      }
       editor={
-        <div className="space-y-5">
+        <div className="space-y-4">
+        {/* 已选图片：置顶预览，可拖拽排序、设为封面、删除 */}
+        <PendingImagesBoard
+          images={images}
+          sensors={imageSensors}
+          activeImage={activeImage}
+          onDragStart={(event) => setActiveImageKey(String(event.active.id))}
+          onDragCancel={() => setActiveImageKey(null)}
+          onDragEnd={handleImageDragEnd}
+          onMove={moveImage}
+          onRemove={removeImage}
+          onMakeCover={(index) => moveImage(index, -index)}
+        />
+
+        {/* 图片添加方式切换：两种模式互斥，避免同屏两套入口 */}
+        <div
+          role="tablist"
+          aria-label="图片添加方式"
+          className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA]"
+        >
+          {(
+            [
+              { key: 'upload', label: '上传图片', icon: ImagePlus },
+              { key: 'text', label: '文本转图文', icon: Sparkles },
+            ] as const
+          ).map((tab) => {
+            const active = imageMode === tab.key;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setImageMode(tab.key)}
+                className={`h-9 px-3.5 rounded-lg text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+                  active
+                    ? 'bg-white text-[#1D1D1F] shadow-xs'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {imageMode === 'upload' ? (
         <div
           onDragOver={(e) => {
             // 只响应文件拖入，忽略图片卡片之间的排序拖拽
@@ -543,123 +688,10 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
             仅支持图片（JPG / PNG / WebP），选图后按 9:16 逐张裁剪 · 保存时才上传
           </div>
         </div>
-
-        {images.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73] mb-2">
-              <span>已添加 {images.length} 张图片（第 1 张为展示封面）</span>
-              <span className="text-[#86868B] shrink-0">拖拽图片可调整顺序</span>
-            </div>
-            <DndContext
-              sensors={imageSensors}
-              collisionDetection={closestCenter}
-              onDragStart={(event) => setActiveImageKey(String(event.active.id))}
-              onDragCancel={() => setActiveImageKey(null)}
-              onDragEnd={handleImageDragEnd}
-            >
-              <SortableContext
-                items={images.map((entry) => entry.key)}
-                strategy={rectSortingStrategy}
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {images.map((entry, idx) => (
-                    <SortableImageCard
-                      key={entry.key}
-                      entry={entry}
-                      index={idx}
-                      total={images.length}
-                      onMove={(delta) => moveImage(idx, delta)}
-                      onRemove={() => removeImage(idx)}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-
-              {/* 拖拽中的浮层卡片：跟随指针并带落位回弹动画 */}
-              <DragOverlay
-                dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}
-              >
-                {activeImage && (
-                  <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-[#0071E3] bg-[#F2F2F7] shadow-[0_16px_40px_rgba(0,0,0,0.24)] rotate-1 scale-[1.02]">
-                    <MediaImage
-                      src={activeImage.previewUrl}
-                      alt=""
-                      className="w-full h-full object-cover pointer-events-none select-none"
-                    />
-                    {activeImage.pending && (
-                      <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/55 text-white text-[10px] font-medium">
-                        待上传
-                      </div>
-                    )}
-                  </div>
-                )}
-              </DragOverlay>
-            </DndContext>
-          </div>
+        ) : (
+          <TextToImagePanel cardTitle={title} onApply={handleApplyGenerated} />
         )}
 
-        <div>
-          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">图文标题</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="例如：北向窗台下的粗陶静物光影"
-            className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px]"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <CategorySelect
-            module="GRAPHIC"
-            value={category}
-            onChange={setCategory}
-            label="主题分类"
-            required
-            ariaLabel="主题分类"
-            className="w-full"
-          />
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">发布状态</label>
-            <div className="flex items-center p-1 bg-[#F2F2F7] rounded-xl h-10">
-              <button
-                type="button"
-                onClick={() => setStatus('published')}
-                className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
-                  status === 'published' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
-                }`}
-              >
-                发布
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatus('draft')}
-                className={`flex-1 h-8 rounded-lg text-[13px] font-medium transition-all ${
-                  status === 'draft' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
-                }`}
-              >
-                草稿
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">图文配文</label>
-          <textarea
-            rows={5}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="写下这组影像背后的故事、质感描述或细节记录..."
-            className="w-full p-3.5 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none text-[14px] resize-none leading-relaxed"
-          />
-        </div>
-
-        {formError && (
-          <div className="rounded-xl bg-[#FF3B30]/8 px-3.5 py-2 text-[13px] text-[#D70015]">
-            {formError}
-          </div>
-        )}
         </div>
       }
       preview={(device) => (

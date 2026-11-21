@@ -11,22 +11,24 @@ import {
 } from 'lucide-react';
 import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
-import type { SectionId } from '../../data/content';
 import { SWIFTUI_SNAPPY } from '../../lib/motion';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 
 interface LeftSidebarProps {
-  activeSection: SectionId;
-  onSelectSection: (section: SectionId) => void;
+  activeSection: string;
+  onSelectSection: (section: string) => void;
 }
 
 /** 板块 id → 默认图标组件；CMS 未上传自定义图标时作为兜底 */
-const ICON_MAP: Record<SectionId, typeof Film> = {
+const ICON_MAP: Record<string, typeof Film> = {
   videos: Film,
   articles: BookOpen,
   gallery: ImageIcon,
   messages: MessageCircleHeart,
   profile: UserRound,
+  star: Star,
+  music: Music,
+  image: ImagePlus,
 };
 
 /** 默认导航项：配置缺失或解析失败时使用，与后台默认一致 */
@@ -37,14 +39,19 @@ const DEFAULT_NAV: SidebarNavItem[] = [
   { id: 'messages', label: '留言' },
 ];
 
-/** 可导航的板块白名单，避免配置里出现未知 id 导致点击无效 */
-const VALID_SECTIONS: SectionId[] = ['videos', 'articles', 'gallery', 'messages', 'profile'];
+/**
+ * 已内置页面的板块 id。
+ * 不在此列表中的 id（CMS 新增的自定义模块）仍然渲染入口，
+ * 但内容区会退化为占位页面，避免「点了没反应」。
+ */
+export const BUILTIN_SECTIONS: readonly string[] = ['videos', 'articles', 'gallery', 'messages', 'profile'];
 
 /** 导航项名称最大长度，与 CMS 保持一致（超长会挤爆侧栏） */
 const LABEL_MAX_LENGTH = 4;
 
-interface SidebarNavItem {
-  id: SectionId;
+export interface SidebarNavItem {
+  /** 板块 id：内置板块为固定字面量，自定义模块为任意字符串 */
+  id: string;
   label: string;
   /** CMS 上传的自定义图标地址；留空时按 id 回退默认图标 */
   iconUrl?: string;
@@ -62,9 +69,9 @@ function parseNav(raw: string | undefined): SidebarNavItem[] {
       if (!entry || typeof entry !== 'object') continue;
       const row = entry as Record<string, unknown>;
       if (row.enabled === false) continue;
-      const id = String(row.id ?? '') as SectionId;
-      // 白名单校验 + 去重，避免重复 key 与点了没反应的条目
-      if (!VALID_SECTIONS.includes(id) || seen.has(id)) continue;
+      const id = String(row.id ?? '').trim();
+      // 仅去重：未知 id 保留，交给内容区渲染占位页
+      if (!id || seen.has(id)) continue;
       seen.add(id);
       const label = String(row.label ?? id).trim() || id;
       const iconUrl = String(row.iconUrl ?? '').trim();

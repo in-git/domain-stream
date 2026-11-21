@@ -3,6 +3,7 @@ import { FolderPlus } from 'lucide-react';
 import {
   filterPublishCategories,
   type PublishCategoryModule,
+  type PublishCategoryOption,
 } from '../lib/category.ts';
 import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import { SelectField } from './SelectField.tsx';
@@ -25,6 +26,12 @@ export interface CategorySelectProps {
   includeCommon?: boolean;
   /** 是否显示「新建分类」快捷入口，默认显示 */
   allowQuickCreate?: boolean;
+  /**
+   * 外部已加载好的分类选项（可选）：
+   * 调用方若已有分类数据（如已通过 usePublishCategories 加载并做过宽松过滤），
+   * 可直接传入，避免组件内部再拉一次并按模块严格过滤导致选项缺失。
+   */
+  options?: PublishCategoryOption[];
 }
 
 /**
@@ -42,21 +49,26 @@ export function CategorySelect({
   className = 'w-full',
   includeCommon = true,
   allowQuickCreate = true,
+  options: externalOptions,
 }: CategorySelectProps) {
   const { options, loading, error, reload } = usePublishCategories(module);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
+  // 外部传入时以外部数据为准，并视为已加载完成
+  const source = externalOptions ?? options;
+  const isLoading = externalOptions ? false : loading;
+
   const filtered = useMemo(
-    () => filterPublishCategories(options, module, includeCommon),
-    [options, module, includeCommon]
+    () => filterPublishCategories(source, module, includeCommon),
+    [source, module, includeCommon]
   );
 
   // 历史数据可能绑定了其它模块的分类，保留当前值避免编辑时被清空
   const selectable = useMemo(() => {
     if (!value || filtered.some((option) => option.code === value)) return filtered;
-    const current = options.find((option) => option.code === value);
+    const current = source.find((option) => option.code === value);
     return current ? [...filtered, current] : filtered;
-  }, [filtered, options, value]);
+  }, [filtered, source, value]);
 
   return (
     <div>
@@ -69,8 +81,8 @@ export function CategorySelect({
         <SelectField
           value={value}
           onChange={onChange}
-          isDisabled={loading || !!error}
-          placeholder={loading ? '正在加载分类...' : error ? '分类加载失败' : placeholder}
+          isDisabled={isLoading || !!error}
+          placeholder={isLoading ? '正在加载分类...' : error ? '分类加载失败' : placeholder}
           ariaLabel={ariaLabel || (typeof label === 'string' ? label : '分类')}
           className="flex-1 min-w-0"
           options={selectable.map((option) => ({ value: option.code, label: option.label }))}

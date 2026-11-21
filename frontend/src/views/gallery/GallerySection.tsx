@@ -13,6 +13,10 @@ interface GallerySectionProps {
   onRetry: () => void;
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
+  /** 发布成功后刷新图文列表 */
+  onPublished?: () => void;
+  /** 当前用户昵称，用于新笔记署名 */
+  currentUserName?: string;
 }
 
 export function GallerySection({
@@ -26,6 +30,8 @@ export function GallerySection({
   onRetry,
   onToggleSave,
   onToggleLike,
+  onPublished,
+  currentUserName,
 }: GallerySectionProps) {
   return (
     <>
@@ -44,6 +50,8 @@ export function GallerySection({
           searchQuery={searchQuery}
           onToggleSave={onToggleSave}
           onToggleLike={onToggleLike}
+          onPublished={onPublished}
+          currentUserName={currentUserName}
         />
       )}
     </>

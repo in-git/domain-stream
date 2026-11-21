@@ -1,8 +1,10 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import type { SectionId } from '../../data/content';
+import { useMemo } from 'react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
+import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
-import { LeftSidebar } from './LeftSidebar';
+import { BUILTIN_SECTIONS, LeftSidebar } from './LeftSidebar';
+import { SectionPlaceholder } from './SectionPlaceholder';
 import { MainHeader } from './MainHeader';
 import { MobileTabBar } from './MobileTabBar';
 import { SearchOverlay } from '../search/SearchOverlay';
@@ -22,8 +24,8 @@ type PersistentPlayer = ReturnType<typeof usePersistentPlayer>;
 interface PortalShellProps {
   showSplash: boolean;
   onSplashComplete: () => void;
-  activeSection: SectionId;
-  onSelectSection: (section: SectionId) => void;
+  activeSection: string;
+  onSelectSection: (section: string) => void;
   searchQuery: string;
   onChangeSearch: (query: string) => void;
   isSearchOpen: boolean;
@@ -92,6 +94,28 @@ export function PortalShell({
     saveVideoProgress,
     handlePlayVideo,
   } = player;
+
+  /* 当前板块若不在内置列表里（CMS 新增的自定义模块），退化为占位页 */
+  const { config } = useSystemInfo();
+  const isCustomSection = !BUILTIN_SECTIONS.includes(activeSection);
+  const customNavItem = useMemo(() => {
+    if (!isCustomSection) return null;
+    try {
+      const list: unknown = JSON.parse(config.navItems || '[]');
+      if (!Array.isArray(list)) return null;
+      const row = list.find(
+        (entry): entry is Record<string, unknown> =>
+          !!entry && typeof entry === 'object' && String((entry as Record<string, unknown>).id) === activeSection
+      );
+      if (!row) return null;
+      return {
+        label: String(row.label ?? activeSection).slice(0, 4) || activeSection,
+        iconUrl: publicFileUrl(String(row.iconUrl ?? '')),
+      };
+    } catch {
+      return null;
+    }
+  }, [config.navItems, activeSection, isCustomSection]);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -194,6 +218,8 @@ export function PortalShell({
                     onRetry={() => void loadSection('gallery')}
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
+                    onPublished={() => void reloadGraphics()}
+                    currentUserName={session.profile.name}
                   />
                 </motion.div>
               )}
@@ -255,6 +281,17 @@ export function PortalShell({
                     onToggleSave={toggleFavorite}
                   />
                 </motion.div>
+              )}
+
+              {/* 自定义模块占位页：后台已启用、客户端尚无对应页面 */}
+              {isCustomSection && (
+                <SectionPlaceholder
+                  key={`section-custom-${activeSection}`}
+                  label={customNavItem?.label || activeSection}
+                  sectionId={activeSection}
+                  iconUrl={customNavItem?.iconUrl}
+                  onGoHome={() => onSelectSection('videos')}
+                />
               )}
             </AnimatePresence>
           </main>
