@@ -315,13 +315,27 @@ public class BizPortalController {
         return CommonResult.data(messages);
     }
 
-    /** 按用户 ID 反查昵称，仅用于展示；用户不存在时返回空 */
+    /** 按用户 ID 反查展示昵称：昵称 → 姓名 → 账号；用户不存在时返回空 */
     private String nicknameOf(String userId) {
         if (StrUtil.isBlank(userId)) {
             return null;
         }
         SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(userId);
-        return user == null ? null : user.getNickname();
+        if (user == null) {
+            return null;
+        }
+        return displayNameOf(user);
+    }
+
+    /** 展示名兜底：昵称 → 姓名 → 账号 */
+    private String displayNameOf(SaBaseClientLoginUser user) {
+        if (StrUtil.isNotBlank(user.getNickname())) {
+            return user.getNickname();
+        }
+        if (StrUtil.isNotBlank(user.getName())) {
+            return user.getName();
+        }
+        return StrUtil.isBlank(user.getAccount()) ? null : user.getAccount();
     }
 
     /**

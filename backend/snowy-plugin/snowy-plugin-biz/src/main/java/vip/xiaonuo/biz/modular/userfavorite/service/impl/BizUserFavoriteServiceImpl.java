@@ -57,6 +57,8 @@ import java.io.File;
 import java.io.Serializable;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * 用户收藏Service接口实现类
@@ -160,6 +162,25 @@ public class BizUserFavoriteServiceImpl extends ServiceImpl<BizUserFavoriteMappe
             throw new CommonException("用户收藏不存在，id值为：{}", id);
         }
         return bizUserFavorite;
+    }
+
+    @Override
+    public Map<String, Integer> countByTargetType(String targetType) {
+        Map<String, Integer> result = new HashMap<>();
+        if (StrUtil.isBlank(targetType)) {
+            return result;
+        }
+        List<BizUserFavorite> rows = this.list(new LambdaQueryWrapper<BizUserFavorite>()
+                .select(BizUserFavorite::getTargetId)
+                .eq(BizUserFavorite::getTargetType, targetType)
+                .eq(BizUserFavorite::getStatus, "ENABLE"));
+        for (BizUserFavorite row : rows) {
+            String targetId = row.getTargetId();
+            if (StrUtil.isNotBlank(targetId)) {
+                result.put(targetId, result.getOrDefault(targetId, 0) + 1);
+            }
+        }
+        return result;
     }
 
     @Override

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Heart, Star } from 'lucide-react';
+import { Check } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
+import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import NoteDetail from './NoteDetail';
 
@@ -30,12 +30,7 @@ const SWIPE_THRESHOLD = 30;
 interface NoteCardProps {
   note: PhotoItem;
   index: number;
-  liked: boolean;
-  /** 是否已收藏，决定收藏图标的状态 */
-  saved: boolean;
   onOpen: () => void;
-  onToggleLike: () => void;
-  onToggleSave: () => void;
 }
 
 /**
@@ -44,7 +39,7 @@ interface NoteCardProps {
  * - 多图可左右拖动 / 点击箭头切换
  * - 底部标题 + 作者 + 点赞，整体紧凑
  */
-function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSave }: NoteCardProps) {
+function NoteCard({ note, index, onOpen }: NoteCardProps) {
   const [active, setActive] = useState(0);
   const total = note.images.length;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -105,7 +100,7 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 10) * 0.02 }}
-      className="break-inside-avoid pb-4"
+      className="break-inside-avoid pb-2.5"
     >
       {/* 图片：竖版 3:4，小红书图文的标准比例；卡片大小由列宽控制 */}
       <div
@@ -161,7 +156,7 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
         <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent md:block" />
 
         {/* 标题 + 描述：移动端不显示，桌面端左下角显示 */}
-        <div className="pointer-events-none absolute inset-x-3 bottom-6 right-16 hidden md:block">
+        <div className="pointer-events-none absolute inset-x-3 bottom-6 right-4 hidden md:block">
           <p className="line-clamp-2 text-[17px] font-semibold leading-[1.35] text-white drop-shadow-sm">
             {note.title}
           </p>
@@ -172,46 +167,6 @@ function NoteCard({ note, index, liked, saved, onOpen, onToggleLike, onToggleSav
           )}
         </div>
 
-        {/* 点赞 / 收藏：右下角竖向排列，按钮 42px，间距收紧 */}
-        <div className="absolute bottom-6 right-2 flex flex-col items-center gap-1 text-white">
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.85 }}
-            transition={SWIFTUI_BOUNCY}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleLike();
-            }}
-            aria-pressed={liked}
-            aria-label={liked ? '取消点赞' : '点赞'}
-            className="flex h-[42px] w-[42px] flex-col items-center justify-center drop-shadow-sm"
-          >
-            <Heart
-              className={`h-4 w-4 ${liked ? 'fill-[#FF2442] text-[#FF2442]' : ''}`}
-              strokeWidth={1.8}
-            />
-            <span className="mt-0.5 text-[11px] font-medium leading-none tabular-nums">
-              {note.likeCount || ''}
-            </span>
-          </motion.button>
-          <button
-            type="button"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleSave();
-            }}
-            aria-pressed={saved}
-            aria-label={saved ? '取消收藏' : '收藏'}
-            className="flex h-[42px] w-[42px] items-center justify-center drop-shadow-sm"
-          >
-            <Star
-              className={`h-4 w-4 ${saved ? 'fill-[#FFB300] text-[#FFB300]' : ''}`}
-              strokeWidth={1.8}
-            />
-          </button>
-        </div>
       </div>
     </motion.article>
   );
@@ -276,12 +231,12 @@ export function GalleryView({
   }, [photos, activeId, externalSelectedId]);
 
   return (
-    <section aria-label="图文笔记" className="space-y-3">
+    <section aria-label="图文笔记" className="space-y-0">
       {/* 顶部分类：小红书式的横向 chip 条，吸顶滚动。
           层级压到 z-10，必须低于 Header(z-20) 与账号下拉弹层(z-100)，
           否则会盖住右上角的个人信息菜单 */}
-      <div className="sticky top-14 z-10 -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-4 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
-        <div className="flex items-center gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="sticky top-14 z-10 -mx-2.5 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-2.5 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
+        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {chips.map((item) => {
             const active = album === item;
             return (
@@ -317,14 +272,10 @@ export function GalleryView({
                 key={note.id}
                 note={note}
                 index={idx}
-                liked={likedIds.includes(note.id)}
-                saved={savedIds.includes(note.id)}
-                onToggleSave={() => handleToggleSave(note.id)}
                 onOpen={() => {
                   setActiveId(note.id);
                   onClearExternalSelection?.();
                 }}
-                onToggleLike={() => onToggleLike(note.id)}
               />
             ))}
           </AnimatePresence>

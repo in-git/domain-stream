@@ -366,7 +366,8 @@ export function articleFromPortal(
 
 export function graphicsToPhotos(
   rows: PortalGraphic[],
-  categoryNames?: Map<string, string>
+  categoryNames?: Map<string, string>,
+  favoriteCounts?: Record<string, number>
 ): PhotoItem[] {
   const result: PhotoItem[] = [];
   let index = 0;
@@ -402,6 +403,7 @@ export function graphicsToPhotos(
       content: row.content || '',
       author: str(ext.author),
       likeCount: row.likeCount || 0,
+      favoriteCount: favoriteCounts?.[String(row.id)] ?? 0,
       aspectRatio: (ASPECT_RATIOS.includes(ext.aspectRatio as PhotoItem['aspectRatio'])
         ? ext.aspectRatio
         : ASPECT_RATIOS[index % ASPECT_RATIOS.length]) as PhotoItem['aspectRatio'],
@@ -419,7 +421,7 @@ export function graphicsToPhotos(
 export function messageFromPortal(row: PortalMessage): MessageItem {
   return {
     id: String(row.id),
-    nickname: row.nickname || '匿名访客',
+    nickname: row.nickname || '访客',
     userId: row.userId,
     content: row.content || '',
     createdAt: row.createTime || '',
@@ -439,7 +441,7 @@ export function replyFromPortal(row: PortalMessage, rootMessageId: string): Mess
   return {
     id: String(row.id),
     messageId: rootMessageId,
-    nickname: row.nickname || '匿名访客',
+    nickname: row.nickname || '访客',
     userId: row.userId,
     content: row.content || '',
     createdAt: row.createTime || '',
@@ -479,6 +481,14 @@ export interface LikeToggleResult {
   liked: boolean;
   likeCount: number;
 }
+
+/** 前台收藏数统计接口 */
+export const favoriteApi = {
+  counts: (targetType: string) =>
+    request<Record<string, number>>(
+      `/public/favorite/counts?targetType=${encodeURIComponent(targetType)}`
+    ),
+};
 
 /** 前台喜欢/点赞接口：身份由 C 端登录态决定，targetType 省略时后端按ID自动识别 */
 export const likeApi = {

@@ -25,6 +25,7 @@ import vip.xiaonuo.biz.modular.userfavorite.param.BizUserFavoritePageParam;
 import java.io.Serializable;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 用户收藏Service接口
@@ -81,6 +82,14 @@ public interface BizUserFavoriteService extends IService<BizUserFavorite> {
      * @date  2026/11/19 20:53
      **/
     BizUserFavorite queryEntity(Serializable id);
+
+    /**
+     * 前台：统计指定类型各内容的收藏数
+     *
+     * @param targetType 目标类型，如 IMAGE_TEXT
+     * @return 目标ID -> 收藏数
+     */
+    Map<String, Integer> countByTargetType(String targetType);
 
     /**
      * 下载用户收藏导入模板

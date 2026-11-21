@@ -229,7 +229,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   }`}
                 >
                   <Star className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-                  收藏
+                  {note.favoriteCount ?? 0}
                 </button>
 
                 <button

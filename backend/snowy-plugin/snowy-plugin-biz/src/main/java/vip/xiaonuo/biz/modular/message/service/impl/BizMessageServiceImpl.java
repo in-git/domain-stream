@@ -91,9 +91,23 @@ public class BizMessageServiceImpl extends ServiceImpl<BizMessageMapper, BizMess
         Map<String, String> nicknameByUserId = new HashMap<>();
         userIds.forEach(userId -> {
             SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(userId);
-            nicknameByUserId.put(userId, user == null ? null : user.getNickname());
+            nicknameByUserId.put(userId, displayNameOf(user));
         });
         messages.forEach(message -> message.setNickname(nicknameByUserId.get(message.getUserId())));
+    }
+
+    /** 展示名兜底：昵称 → 姓名 → 账号；用户不存在返回空 */
+    private String displayNameOf(SaBaseClientLoginUser user) {
+        if (user == null) {
+            return null;
+        }
+        if (StrUtil.isNotBlank(user.getNickname())) {
+            return user.getNickname();
+        }
+        if (StrUtil.isNotBlank(user.getName())) {
+            return user.getName();
+        }
+        return StrUtil.isBlank(user.getAccount()) ? null : user.getAccount();
     }
 
     @Override
@@ -192,7 +206,7 @@ public class BizMessageServiceImpl extends ServiceImpl<BizMessageMapper, BizMess
         }
         if (StrUtil.isNotBlank(bizMessage.getUserId())) {
             SaBaseClientLoginUser user = clientLoginUserApi.getClientUserById(bizMessage.getUserId());
-            bizMessage.setNickname(user == null ? null : user.getNickname());
+            bizMessage.setNickname(displayNameOf(user));
         }
         return bizMessage;
     }

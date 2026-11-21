@@ -21,6 +21,7 @@ interface ArticlesViewProps {
 }
 
 const DEFAULT_ARTICLE_CATEGORIES = ['设计', '影像', '技术', '随笔'];
+const ARTICLE_PAGE_SIZE = 10;
 type ArticleCategory = string;
 
 // 文章封面统一按 16:9 横版展示，与 CMS 上传裁剪比例保持一致
@@ -57,6 +58,29 @@ export function ArticlesView({
     return matchCategory && matchQuery;
   });
 
+  const [visibleCount, setVisibleCount] = useState(ARTICLE_PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = visibleCount < filteredArticles.length;
+
+  useEffect(() => {
+    setVisibleCount(ARTICLE_PAGE_SIZE);
+  }, [category, normalizedQuery, articles]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((count) => Math.min(count + ARTICLE_PAGE_SIZE, filteredArticles.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, filteredArticles.length]);
+
   useEffect(() => {
     if (externalSelectedId) {
       const target = articles.find((a) => a.id === externalSelectedId);
@@ -91,15 +115,15 @@ export function ArticlesView({
     setScrollProgress(Math.min(1, Math.max(0, el.scrollTop / maxScroll)));
   };
 
+  const visibleArticles = filteredArticles.slice(0, visibleCount);
+  const bannerArticle = visibleArticles[0];
+  const gridArticles = visibleArticles.slice(1);
+
   return (
-    <section aria-label="文章列表" className="space-y-6">
-      {/* Filter */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div
-          role="tablist"
-          aria-label="文章分类筛选"
-          className="flex items-center gap-1.5 sm:gap-2 self-start md:self-auto overflow-x-auto max-w-full pb-0.5"
-        >
+    <section aria-label="文章列表" className="space-y-0">
+      {/* 顶部分类：与图文一致的横向 chip 条 */}
+      <div className="sticky top-14 z-10 -mx-2.5 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-2.5 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
+        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(['全部', ...filterCategories] as ArticleCategory[]).map((item) => {
             const active = category === item;
             return (
@@ -109,10 +133,10 @@ export function ArticlesView({
                 role="tab"
                 aria-selected={active}
                 onClick={() => setCategory(item)}
-                className={`px-2.5 py-1 min-h-[30px] rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] sm:px-3.5 sm:py-1.5 sm:min-h-[36px] sm:text-xs ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   active
-                    ? 'bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]'
-                    : 'bg-[#F2F2F7] text-[#6E6E73] dark:bg-[#1C1C1E] dark:text-[#98989D] hover:bg-[#E8E8ED] dark:hover:bg-[#242426]'
+                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
+                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
                 }`}
               >
                 {item}
@@ -122,9 +146,80 @@ export function ArticlesView({
         </div>
       </div>
 
+      {/* Banner: 当前筛选结果的第一篇文章 */}
+      {bannerArticle && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={SWIFTUI_SMOOTH}
+          className="relative mb-2.5 overflow-hidden rounded-2xl bg-black"
+        >
+          <button
+            type="button"
+            onClick={() => openArticle(bannerArticle)}
+            className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+            aria-label={`阅读文章：${bannerArticle.title}`}
+          >
+            <ResilientImage
+              src={bannerArticle.cover}
+              alt={bannerArticle.title}
+              fallbackTitle={bannerArticle.title}
+              className="h-48 w-full object-cover transition-transform duration-500 ease-out hover:scale-[1.02] sm:h-64 lg:h-80"
+            />
+          </button>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+          <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            {bannerArticle.category}
+          </span>
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 sm:inset-x-5 sm:bottom-5">
+            <h2 className="text-xl sm:text-3xl font-semibold leading-tight text-white line-clamp-2">
+              {bannerArticle.title}
+            </h2>
+            {bannerArticle.excerpt && (
+              <p className="mt-1 text-[12px] sm:text-sm leading-relaxed text-white/75 line-clamp-2">
+                {bannerArticle.excerpt}
+              </p>
+            )}
+          </div>
+          <div className="absolute bottom-3 right-3 flex items-center gap-2 sm:bottom-5 sm:right-5">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              transition={SWIFTUI_BOUNCY}
+              onClick={() => onToggleLike(bannerArticle.id)}
+              aria-label={likedIds.includes(bannerArticle.id) ? '取消喜欢文章' : '喜欢文章'}
+              aria-pressed={likedIds.includes(bannerArticle.id)}
+              className={`flex h-9 items-center justify-center gap-1 rounded-full px-3 backdrop-blur-sm transition-colors ${
+                likedIds.includes(bannerArticle.id)
+                  ? 'bg-[#FF375F]/90 text-white'
+                  : 'bg-black/45 text-white hover:bg-black/60'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${likedIds.includes(bannerArticle.id) ? 'fill-current' : ''}`} />
+              <span className="text-[11px] font-medium tabular-nums">{bannerArticle.likes || ''}</span>
+            </motion.button>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              transition={SWIFTUI_BOUNCY}
+              onClick={() => onToggleSave(bannerArticle.id)}
+              aria-label={savedIds.includes(bannerArticle.id) ? '取消收藏文章' : '收藏文章'}
+              aria-pressed={savedIds.includes(bannerArticle.id)}
+              className={`flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
+                savedIds.includes(bannerArticle.id)
+                  ? 'bg-[#0071E3] text-white'
+                  : 'bg-black/45 text-white hover:bg-black/60'
+              }`}
+            >
+              <Bookmark className={`w-4 h-4 ${savedIds.includes(bannerArticle.id) ? 'fill-current' : ''}`} />
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Xiaohongshu-style Two-Column Waterfall Feed */}
-      <div className="columns-1 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
-        {filteredArticles.map((article, idx) => {
+      <div className="columns-2 gap-2.5 md:columns-3 xl:columns-4 2xl:columns-5">
+        {gridArticles.map((article, idx) => {
           const isSaved = savedIds.includes(article.id);
           const isLiked = likedIds.includes(article.id);
           return (
@@ -133,7 +228,7 @@ export function ArticlesView({
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(idx, 8) * 0.03 }}
-              className="break-inside-avoid mb-3 sm:mb-4"
+              className="break-inside-avoid pb-2.5"
             >
               <div className="group overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
                 <div className="relative overflow-hidden">
@@ -206,6 +301,21 @@ export function ArticlesView({
           );
         })}
       </div>
+
+      {/* 触底加载：还有更多时显示哨兵，全部加载完显示提示 */}
+      {hasMore ? (
+        <div ref={loadMoreRef} className="flex justify-center py-6">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => Math.min(count + ARTICLE_PAGE_SIZE, filteredArticles.length))}
+            className="rounded-full bg-[#F2F2F7] px-5 py-2 text-[12px] font-medium text-[#6E6E73] transition-colors hover:bg-[#E8E8ED] dark:bg-[#1C1C1E] dark:text-[#98989D] dark:hover:bg-[#242426]"
+          >
+            加载更多
+          </button>
+        </div>
+      ) : (
+        <p className="py-6 text-center text-[12px] text-[#98989D]">没有更多了</p>
+      )}
 
       {/* Apple Reader Sheet Modal */}
       <AnimatePresence>

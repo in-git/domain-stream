@@ -255,13 +255,13 @@ export default function MessagesView({
   }
 
   return (
-    <section aria-labelledby="messages-heading" className="space-y-6">
+    <section aria-labelledby="messages-heading" className="space-y-2.5">
       <div>
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: APPLE_EASE }}
-          className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6"
+          className="flex flex-col md:flex-row md:items-end justify-between gap-2.5 mb-2.5"
         >
           <div>
             <p className="text-xs font-medium tracking-wide text-[#0071E3] dark:text-[#0A84FF] mb-1.5">
@@ -292,7 +292,7 @@ export default function MessagesView({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className={`mb-6 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[13px] ${
+              className={`mb-2.5 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[13px] ${
                 hint.startsWith('留言已')
                   ? 'bg-[#16A34A]/10 text-[#16A34A]'
                   : 'bg-[#FF3B30]/10 text-[#D70015]'
@@ -314,7 +314,7 @@ export default function MessagesView({
           )}
         </AnimatePresence>
 
-        <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center justify-between gap-2.5 mb-2.5">
           <div className="flex items-center gap-2">
             <h2 className="text-[15px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
               全部留言
@@ -378,7 +378,7 @@ export default function MessagesView({
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-                  className="break-inside-avoid pb-4"
+                  className="break-inside-avoid pb-2.5"
                 >
                   {/* 3:4 竖版卡片，与图文笔记卡片同尺寸；宽度由列宽决定 */}
                   <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
@@ -478,6 +478,7 @@ export default function MessagesView({
         )}
       </div>
 
+      {/* 写留言模态框 */}
       <AnimatePresence>
         {composerOpen && (
           <motion.div
@@ -633,7 +634,7 @@ export default function MessagesView({
               {/* 语录内容区：严格 9:16，高度取 64vh（上限 700px），
                   模态框容器更宽，内容居中显示 */}
               <div className="flex flex-1 items-center justify-center px-5 pt-6 pb-5">
-                <div className="relative h-[min(64vh,700px)] w-[calc(min(64vh,700px)*9/16)] max-w-full aspect-[9/16] shrink-0 rounded-2xl bg-[#F7F9FD] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.07] px-6 pt-7 pb-5 flex flex-col">
+                <div className="relative w-[80%] max-w-full aspect-[9/16] shrink-0 rounded-2xl bg-[#F7F9FD] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.07] px-6 pt-7 pb-5 flex flex-col">
                 <span
                   aria-hidden="true"
                   className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
@@ -711,7 +712,8 @@ export default function MessagesView({
                 </div>
               </div>
 
-              {/* 底部留言输入框 */}
+              {/* 底部留言输入框：未登录时隐藏输入，改为登录按钮 */}
+              {isLoggedIn ? (
               <form
                 onSubmit={(event) => void submitReply(event)}
                 className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-[#F5F5F7] dark:bg-white/[0.03] p-3"
@@ -763,6 +765,17 @@ export default function MessagesView({
                   </AnimatePresence>
                 </div>
               </form>
+              ) : (
+                <div className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-[#F5F5F7] dark:bg-white/[0.03] p-3">
+                  <button
+                    type="button"
+                    onClick={onRequireLogin}
+                    className="h-11 w-full rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium"
+                  >
+                    登录后参与留言
+                  </button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}

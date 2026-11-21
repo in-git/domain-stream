@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Moon, Search, Sun, X } from 'lucide-react';
+import { LayoutGrid, Moon, Rows3, Search, Sun, X } from 'lucide-react';
 import { AccountMenu, type AccountMenuProps } from '../../components/AccountMenu';
 import { Tooltip } from '../../components/Tooltip';
 import { useSystemInfo } from '../../lib/systemInfo';
@@ -14,6 +14,12 @@ interface MainHeaderProps {
   account: AccountMenuProps;
   /** 移动端首页（视频板块）：顶栏透明悬浮在视频上方 */
   overlay?: boolean;
+  /** 移动端卡片模式：顶栏占据空间，且背景始终纯黑 */
+  solidBlack?: boolean;
+  /** 移动端首页：顶栏搜索旁显示视图切换按钮 */
+  showViewToggle?: boolean;
+  viewMode?: 'feed' | 'grid';
+  onToggleViewMode?: () => void;
 }
 
 export function MainHeader({
@@ -24,13 +30,19 @@ export function MainHeader({
   onToggleTheme,
   account,
   overlay = false,
+  solidBlack = false,
+  showViewToggle = false,
+  viewMode = 'feed',
+  onToggleViewMode,
 }: MainHeaderProps) {
   const { title } = useSystemInfo();
-  const shellClass = overlay
-    ? 'fixed inset-x-0 top-0 z-30 md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
-    : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
+  const shellClass = solidBlack
+    ? 'sticky top-0 z-30 border-b border-white/10 bg-black'
+    : overlay
+      ? 'fixed inset-x-0 top-0 z-30 bg-black md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
+      : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
 
-  const iconClass = overlay
+  const iconClass = solidBlack || overlay
     ? 'text-white hover:bg-white/15'
     : 'text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]';
 
@@ -42,7 +54,7 @@ export function MainHeader({
       <div className="flex items-center gap-2.5 shrink-0">
         <span
           className={`md:hidden text-base font-semibold tracking-tight ${
-            overlay ? 'text-white drop-shadow' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+            overlay || solidBlack ? 'text-white drop-shadow' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
           }`}
         >
           {title}
@@ -74,8 +86,23 @@ export function MainHeader({
         </div>
       </div>
 
-      {/* Right: Mobile Search Entry + Theme Toggle + Account */}
+      {/* Right: Mobile Search Entry + View Toggle (仅首页) + Theme Toggle + Account */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {showViewToggle && (
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            onClick={onToggleViewMode}
+            aria-label={viewMode === 'feed' ? '切换到网格视图' : '切换到刷看视图'}
+            className={`md:hidden w-9 h-9 flex items-center justify-center rounded-full transition-colors ${iconClass}`}
+          >
+            {viewMode === 'feed' ? (
+              <Rows3 className="w-4 h-4" />
+            ) : (
+              <LayoutGrid className="w-4 h-4" />
+            )}
+          </motion.button>
+        )}
         <Tooltip label="搜索" side="bottom">
           <motion.button
             type="button"
@@ -98,7 +125,7 @@ export function MainHeader({
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </motion.button>
         </Tooltip>
-        <AccountMenu {...account} overlay={overlay} />
+        <AccountMenu {...account} overlay={overlay || solidBlack} />
       </div>
     </header>
   );

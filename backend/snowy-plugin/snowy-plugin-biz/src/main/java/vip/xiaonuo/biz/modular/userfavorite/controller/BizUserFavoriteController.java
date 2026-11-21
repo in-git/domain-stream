@@ -52,6 +52,18 @@ public class BizUserFavoriteController {
     private BizUserFavoriteService bizUserFavoriteService;
 
     /**
+     * 前台：指定类型各内容的收藏数（公开）
+     *
+     * @author domain-stream
+     * @date  2026/11/21
+     */
+    @Operation(summary = "前台：统计收藏数")
+    @GetMapping("/public/favorite/counts")
+    public CommonResult<java.util.Map<String, Integer>> counts(@RequestParam("targetType") String targetType) {
+        return CommonResult.data(bizUserFavoriteService.countByTargetType(targetType));
+    }
+
+    /**
      * 获取用户收藏分页
      *
      * @author wuwenlong

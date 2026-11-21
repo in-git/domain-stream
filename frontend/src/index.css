@@ -46,54 +46,31 @@
   }
 }
 
-/* Skeleton loading shimmer */
-@keyframes skeleton-shimmer {
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.skeleton-shimmer {
-  position: relative;
-  overflow: hidden;
-}
-
-.skeleton-shimmer::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.55),
-    transparent
-  );
-  animation: skeleton-shimmer 1.6s infinite;
-}
-
-.dark .skeleton-shimmer::after {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.07),
-    transparent
-  );
-}
-
 /* Safe area support for modern mobile devices */
 .pb-safe {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
-/* Body 不显示滚动条：移动端全屏滚动时避免出现灰色条 */
+/* 页面不显示滚动条：移动端全屏滚动时避免出现灰色条 */
+html,
 body {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* 旧版 Edge / IE */
 }
 
+html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none; /* Chrome / Safari */
+}
+
+/* 容器可滚动但不显示滚动条（登录弹窗等全屏面板） */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* 容器内部滚动仍保留 Apple 风格的细滚动条 */

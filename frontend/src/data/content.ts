@@ -65,6 +65,8 @@ export interface PhotoItem {
   author?: string;
   /** 点赞数（后端计数） */
   likeCount?: number;
+  /** 收藏数（后端计数） */
+  favoriteCount?: number;
 }
 
 export interface UserProfile {

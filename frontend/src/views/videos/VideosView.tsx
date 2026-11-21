@@ -27,6 +27,8 @@ import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion
 import { Tooltip } from '../../components/Tooltip';
 import { ResilientImage } from '../../components/ResilientImage';
 
+const VIDEO_PAGE_SIZE = 8;
+
 /** 同一个浏览器标签页内，每个视频只上报一次播放量，避免重复滑动/暂停重播刷量 */
 const countedVideoViews = new Set<string>();
 function countVideoViewOnce(id: string) {
@@ -62,6 +64,9 @@ interface VideosViewProps {
   /** 迷你形态下的操作回调 */
   onMiniClose?: () => void;
   onMiniExpand?: () => void;
+  /** 视图模式由外壳控制，便于顶部搜索框旁的单一切换按钮复用 */
+  viewMode?: 'feed' | 'grid';
+  onViewModeChange?: (mode: 'feed' | 'grid') => void;
 }
 
 const DEFAULT_CATEGORIES = ['设计纪实', '城市影像', '自然声景'];
@@ -430,32 +435,6 @@ function FeedSlide({
             </>
           )}
 
-          {/* Top Status + Playback Rate */}
-          {!mini && (
-            <div className="absolute top-16 md:top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
-              <div className="px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/10 text-[11px] text-white/90 tabular-nums whitespace-nowrap">
-                {index + 1} / {total} · {video.resolution}
-              </div>
-
-              <div className="pointer-events-auto flex items-center gap-1 bg-black/45 backdrop-blur-md border border-white/10 p-1 rounded-full">
-                {[1, 1.5, 2].map((rate) => (
-                  <button
-                    key={rate}
-                    type="button"
-                    onClick={() => onSetRate(rate)}
-                    className={`px-2 py-0.5 text-[11px] font-mono-tabular rounded-full transition-colors ${
-                      playbackRate === rate
-                        ? 'bg-white text-black font-medium'
-                        : 'text-white/75 hover:text-white'
-                    }`}
-                  >
-                    {rate}x
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Douyin-style Right-Side Vertical Action Dock */}
           {!mini && (
             <div className="absolute right-3 sm:right-5 bottom-[110px] flex flex-col items-center gap-4 z-20 text-white">
@@ -631,6 +610,8 @@ export function VideosView({
   mode = 'immersive',
   onMiniClose,
   onMiniExpand,
+  viewMode = 'feed',
+  onViewModeChange,
 }: VideosViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
   const isMini = mode === 'mini';
@@ -639,7 +620,7 @@ export function VideosView({
   // 用持久化的状态初始化 activeIndex / 静音 / 倍速，让 MiniPlayer ↔ FeedSlide 状态一致
   const initialIndex = videos.findIndex((v) => v.id === resumeVideoId);
   const [category, setCategory] = useState<CategoryFilter>('全部');
-  const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
+  const setViewMode = onViewModeChange ?? (() => {});
   const [activeIndex, setActiveIndex] = useState(Math.max(0, initialIndex));
   /** 用户是否真正播放过视频：只有播放过才把当前视频交给迷你播放器 */
   const [hasPlayed, setHasPlayed] = useState(false);
@@ -678,6 +659,32 @@ export function VideosView({
     setActiveIndex(0);
     setCurrentTime(0);
   }, [category, normalizedQuery]);
+
+  // 卡片模式：分批展示 + 触底加载
+  const [visibleCount, setVisibleCount] = useState(VIDEO_PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const visibleVideos = useMemo(
+    () => filteredVideos.slice(0, visibleCount),
+    [filteredVideos, visibleCount]
+  );
+  const hasMoreVideos = visibleCount < filteredVideos.length;
+  useEffect(() => {
+    setVisibleCount(VIDEO_PAGE_SIZE);
+  }, [category, normalizedQuery]);
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMoreVideos || viewMode !== 'grid') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((count) => Math.min(count + VIDEO_PAGE_SIZE, filteredVideos.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreVideos, filteredVideos.length, viewMode]);
 
   const safeIndex =
     filteredVideos.length > 0 ? Math.min(activeIndex, filteredVideos.length - 1) : 0;
@@ -836,12 +843,40 @@ export function VideosView({
           ? 'hidden'
           : isMini
             ? 'fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
-            : 'space-y-4'
+            : 'space-y-0'
       }
     >
+      {/* 移动端顶部分类：仅卡片模式显示，与图文一致的横向 chip 条（黑底为白色版本） */}
+      {!isMini && viewMode === 'grid' && (
+        <div className="sticky top-14 z-[65] bg-black px-2.5 backdrop-blur-xl sm:hidden">
+          <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {(['全部', ...filterCategories] as CategoryFilter[]).map((item) => {
+              const active = category === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setCategory(item)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                    active
+                      ? 'bg-white font-medium text-[#1D1D1F]'
+                      : 'bg-white/[0.08] text-[#98989D]'
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Compact Top Filter & View Mode Row（移动端隐藏分类筛选与浏览方式切换） */}
       {!isMini && (
       <div className="hidden sm:flex flex-wrap items-center justify-between gap-3">
+        {viewMode === 'grid' && (
         <div
           role="tablist"
           aria-label="视频分类"
@@ -874,6 +909,7 @@ export function VideosView({
             );
           })}
         </div>
+        )}
 
         {/* Feed vs Grid Switcher（不加 tooltip，避免悬浮提示遮挡内容） */}
         <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
@@ -1041,20 +1077,77 @@ export function VideosView({
       )}
 
       {/* Mode 2: Discovery Masonry */}
-      {!isMini && viewMode === 'grid' && filteredVideos.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 sm:gap-4 xl:gap-5">
-          {filteredVideos.map((video, idx) => (
-            <VideoGridCard
-              key={video.id}
-              video={video}
-              index={idx}
-              liked={likedIds.includes(video.id)}
-              saved={savedIds.includes(video.id)}
-              onToggleLike={() => onToggleLike(video.id)}
-              onToggleSave={() => onToggleSave(video.id)}
-              onOpen={() => openVideoAt(idx)}
-            />
-          ))}
+      {!isMini && viewMode === 'grid' && visibleVideos.length > 0 && (
+        <div className="px-2.5 sm:px-0">
+          {/* Banner: 当前筛选结果的第一条视频 */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={SWIFTUI_SMOOTH}
+            className="relative mb-2.5 overflow-hidden rounded-2xl bg-black"
+          >
+            <button
+              type="button"
+              onClick={() => openVideoAt(0)}
+              className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+              aria-label={`播放视频：${visibleVideos[0].title}`}
+            >
+              <ResilientImage
+                src={visibleVideos[0].cover}
+                alt={visibleVideos[0].title}
+                fallbackTitle={visibleVideos[0].title}
+                className="h-48 w-full object-cover transition-transform duration-500 ease-out hover:scale-[1.02] sm:h-64 lg:h-80"
+              />
+            </button>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/25 backdrop-blur-md">
+                <Play className="h-6 w-6 fill-white text-white" />
+              </span>
+            </div>
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 sm:inset-x-5 sm:bottom-5">
+              <h2 className="text-xl sm:text-3xl font-semibold leading-tight text-white line-clamp-2">
+                {visibleVideos[0].title}
+              </h2>
+              {visibleVideos[0].subtitle && (
+                <p className="mt-1 text-[12px] sm:text-sm leading-relaxed text-white/75 line-clamp-2">
+                  {visibleVideos[0].subtitle}
+                </p>
+              )}
+            </div>
+          </motion.div>
+
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {visibleVideos.slice(1).map((video, idx) => (
+              <VideoGridCard
+                key={video.id}
+                video={video}
+                index={idx + 1}
+                liked={likedIds.includes(video.id)}
+                saved={savedIds.includes(video.id)}
+                onToggleLike={() => onToggleLike(video.id)}
+                onToggleSave={() => onToggleSave(video.id)}
+                onOpen={() => openVideoAt(idx + 1)}
+              />
+            ))}
+          </div>
+
+          {/* 触底加载：还有更多时显示哨兵，全部加载完显示提示 */}
+          {hasMoreVideos ? (
+            <div ref={loadMoreRef} className="flex justify-center py-6">
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleCount((count) => Math.min(count + VIDEO_PAGE_SIZE, filteredVideos.length))
+                }
+                className="rounded-full bg-white/10 px-5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20"
+              >
+                加载更多
+              </button>
+            </div>
+          ) : (
+            <p className="py-6 text-center text-[12px] text-white/50">没有更多了</p>
+          )}
         </div>
       )}
     </section>

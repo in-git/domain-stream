@@ -14,6 +14,7 @@ import {
   graphicsToPhotos,
   messageFromPortal,
   portalApi,
+  favoriteApi,
   replyFromPortal,
   videoFromPortal,
   type PortalCategory,
@@ -164,8 +165,12 @@ export function usePortalData(
             );
           });
         } else if (section === 'gallery') {
-          await loadWithCategories(section, portalApi.graphics, (rows, names, categories) => {
-            const items = graphicsToPhotos(rows, names);
+          const [graphics, favoriteCounts] = await Promise.all([
+            portalApi.graphics(),
+            favoriteApi.counts('IMAGE_TEXT').catch(() => ({})),
+          ]);
+          await loadWithCategories(section, () => Promise.resolve(graphics), (rows, names, categories) => {
+            const items = graphicsToPhotos(rows, names, favoriteCounts);
             setPhotos(items);
             setGraphicCategories(
               pickCategories(categoriesForModule(categories, 'GRAPHIC'), items.map((item) => item.album))

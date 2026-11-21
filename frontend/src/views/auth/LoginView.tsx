@@ -134,7 +134,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.18 }}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 backdrop-blur-md sm:p-6"
+      className="fixed inset-0 z-[80] flex items-stretch justify-center bg-black/55 backdrop-blur-md sm:items-center sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -146,7 +146,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-        className="relative max-h-[100dvh] w-full max-w-[460px] overflow-y-auto rounded-none border border-black/[0.06] bg-white px-6 pb-7 pt-8 shadow-[0_32px_100px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-[#111318] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px] sm:px-9 sm:pb-9 sm:pt-9"
+        className="no-scrollbar relative h-[100dvh] max-h-[100dvh] w-full max-w-[460px] overflow-y-auto rounded-none border border-black/[0.06] bg-white px-6 pb-7 pt-8 shadow-[0_32px_100px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-[#111318] sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px] sm:px-9 sm:pb-9 sm:pt-9"
       >
         <button
           type="button"
@@ -157,16 +157,18 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
           <X className="h-5 w-5" />
         </button>
 
-        <div className="mb-6 pr-9">
-          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0071E3]/10 text-[#0071E3] dark:bg-[#0A84FF]/15 dark:text-[#0A84FF]">
+        <div className="mb-6 text-center sm:pr-9 sm:text-left">
+          <div className="mb-4 hidden h-11 w-11 items-center justify-center rounded-2xl bg-[#0071E3]/10 text-[#0071E3] dark:bg-[#0A84FF]/15 dark:text-[#0A84FF] sm:flex">
             <UserRound className="h-5 w-5" />
           </div>
           <h2 id="login-modal-title" className="text-[24px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
           </h2>
-          <p className="mt-1.5 text-[13px] text-[#6E6E73] dark:text-[#98989D]">
-            {mode === 'wechat' ? '微信扫一扫，登录或注册一步完成' : '使用账号密码登录你的账号'}
-          </p>
+          {mode === 'password' && (
+            <p className="mt-1.5 text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+              使用账号密码登录你的账号
+            </p>
+          )}
         </div>
 
         {mode === 'wechat' ? (
@@ -184,9 +186,6 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
               <div className="space-y-1.5">
                 <p className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                   微信扫码登录 / 注册
-                </p>
-                <p className="mx-auto max-w-xs text-[13px] leading-relaxed text-[#86868B]">
-                  点击下方按钮，在微信中扫码确认即可登录，新用户将自动完成注册
                 </p>
               </div>
             </div>

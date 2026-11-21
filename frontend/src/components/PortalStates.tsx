@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Film,
   Images,
+  LoaderCircle,
   MessageCircleHeart,
   Newspaper,
   RefreshCw,
@@ -12,148 +13,21 @@ import { APPLE_EASE } from '../lib/motion';
 
 type ContentSection = Exclude<SectionId, 'profile'>;
 
-const SKELETON_BASE =
-  'skeleton-shimmer rounded-[14px] bg-[#EDEDF0] dark:bg-white/[0.07]';
-
-function Block({
-  className,
-  style,
-}: {
-  className: string;
-  style?: React.CSSProperties;
-}) {
-  return <div aria-hidden style={style} className={`${SKELETON_BASE} ${className}`} />;
-}
-
-function HeaderSkeleton() {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <Block className="w-11 h-11 rounded-2xl" />
-        <div className="space-y-2">
-          <Block className="h-7 w-40" />
-          <Block className="h-3.5 w-64 max-w-[70vw]" />
-        </div>
-      </div>
-      <div className="flex items-center gap-3 pt-1">
-        <Block className="h-3 w-16" />
-        <Block className="w-px h-3" />
-        <Block className="h-3 w-20" />
-      </div>
-    </div>
-  );
-}
-
-function FilterChips() {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {[72, 88, 80, 96, 68].map((width, index) => (
-        <Block key={index} className="h-9 rounded-full" style={{ width }} />
-      ))}
-    </div>
-  );
-}
-
-function VideosSkeleton() {
-  return (
-    <div className="space-y-6">
-      <FilterChips />
-      {/* 沉浸刷看：整块舞台 */}
-      <Block className="w-full h-[calc(100dvh-14.25rem)] sm:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-[24px]" />
-    </div>
-  );
-}
-
-const CARD_HEIGHTS = ['h-44', 'h-[340px]', 'h-52', 'h-[300px]', 'h-48', 'h-64', 'h-56', 'h-[320px]'];
-
-function ArticlesSkeleton() {
-  return (
-    <div className="space-y-6">
-      <FilterChips />
-      <div className="columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-3 sm:gap-4 xl:gap-5">
-        {CARD_HEIGHTS.map((height, index) => (
-          <div key={index} className="break-inside-avoid mb-3 sm:mb-4 xl:mb-5 space-y-2">
-            <Block className={`w-full ${height} rounded-[16px]`} />
-            <Block className="h-3.5 w-4/5" />
-            <Block className="h-3 w-1/2" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GallerySkeleton() {
-  return (
-    <div className="space-y-6">
-      <FilterChips />
-      <div className="columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-5 xl:gap-6">
-        {CARD_HEIGHTS.map((height, index) => (
-          <div key={index} className="break-inside-avoid mb-5 space-y-3">
-            <Block className={`w-full ${height} rounded-[20px]`} />
-            <Block className="h-3.5 w-2/3" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MessagesSkeleton() {
-  return (
-    <div className="space-y-6">
-      <HeaderSkeleton />
-      <div className="flex justify-end">
-        <Block className="h-10 w-24 rounded-xl" />
-      </div>
-      <div className="flex items-center justify-between">
-        <Block className="h-5 w-24" />
-        <Block className="h-9 w-28 rounded-xl" />
-      </div>
-      <div className="columns-2 gap-3 sm:gap-4 xl:gap-5 md:columns-3 xl:columns-4 2xl:columns-5">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
-          <div
-            key={index}
-            className="break-inside-avoid mb-3 sm:mb-4 overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.07] bg-white dark:bg-[#161618]"
-          >
-            {/* 语录区占位 */}
-            <div className="flex flex-col px-4 pt-4 pb-4 min-h-[180px] sm:min-h-[210px]">
-              <Block className="h-6 w-6 rounded-md" />
-              <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
-                <Block className="h-4 w-4/5" />
-                <Block className="h-4 w-3/5" />
-              </div>
-            </div>
-
-            {/* 作者行占位 */}
-            <div className="px-3 py-2 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Block className="w-7 h-7 rounded-full" />
-                <div className="space-y-1">
-                  <Block className="h-2.5 w-16" />
-                  <Block className="h-2 w-12" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Block className="h-3 w-6" />
-                <Block className="h-3 w-7" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
+/** 统一的加载态：旋转图标 + 「加载中…」，替代原来的骨架屏 */
 export function SectionSkeleton({ section }: { section: ContentSection }) {
   return (
-    <div aria-busy="true" aria-label="内容加载中" className="space-y-8">
-      {section !== 'messages' ? <HeaderSkeleton /> : null}
-      {section === 'videos' && <VideosSkeleton />}
-      {section === 'articles' && <ArticlesSkeleton />}
-      {section === 'gallery' && <GallerySkeleton />}
-      {section === 'messages' && <MessagesSkeleton />}
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex min-h-[50dvh] w-full flex-col items-center justify-center gap-3"
+    >
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, ease: 'linear', duration: 1 }}
+      >
+        <LoaderCircle className="h-8 w-8 text-[#8E8E93] dark:text-[#98989D]" strokeWidth={1.8} />
+      </motion.div>
+      <span className="text-[13px] text-[#6E6E73] dark:text-[#98989D]">加载中…</span>
     </div>
   );
 }

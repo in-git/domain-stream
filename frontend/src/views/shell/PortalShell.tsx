@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
@@ -54,6 +54,8 @@ export function PortalShell({
 }: PortalShellProps) {
   // 搜索范围只接受内置板块；自定义模块没有专属数据，退化为搜索全部内容
   const searchSection = isSectionId(activeSection) ? activeSection : 'profile';
+  /** 视频首页的视图模式，由顶栏按钮与视频页内部共用 */
+  const [videoViewMode, setVideoViewMode] = useState<'feed' | 'grid'>('feed');
   const {
     isDark,
     toggleTheme,
@@ -136,7 +138,13 @@ export function PortalShell({
             onOpenSearch={onOpenSearch}
             isDark={isDark}
             onToggleTheme={toggleTheme}
-            overlay={activeSection === 'videos' && isMobileViewport}
+            overlay={activeSection === 'videos' && isMobileViewport && videoViewMode === 'feed'}
+            solidBlack={activeSection === 'videos' && isMobileViewport && videoViewMode === 'grid'}
+            showViewToggle={activeSection === 'videos' && isMobileViewport}
+            viewMode={videoViewMode}
+            onToggleViewMode={() =>
+              setVideoViewMode((mode) => (mode === 'feed' ? 'grid' : 'feed'))
+            }
             account={{
               isLoggedIn,
               displayName: profile.name,
@@ -151,8 +159,16 @@ export function PortalShell({
           <main
             className={`flex-1 w-full ${
               activeSection === 'videos'
-                ? 'px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8'
-                : 'px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-0 md:pb-8'
+                ? `px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8${
+                    isMobileViewport && videoViewMode === 'grid' ? ' bg-black' : ''
+                  }`
+                : activeSection === 'gallery'
+                  ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
+                  : activeSection === 'articles'
+                    ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
+                    : activeSection === 'messages'
+                      ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
+                      : 'px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-0 md:pb-8'
             }`}
           >
             <VideosSection
@@ -176,6 +192,8 @@ export function PortalShell({
               onSaveProgress={saveVideoProgress}
               onMiniClose={() => setPersistentVideo(null)}
               onMiniExpand={() => onSelectSection('videos')}
+              viewMode={videoViewMode}
+              onViewModeChange={setVideoViewMode}
             />
 
             <AnimatePresence mode="wait">

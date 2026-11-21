@@ -23,6 +23,8 @@ interface VideosSectionProps {
   onSaveProgress: (id: string, time: number) => void;
   onMiniClose: () => void;
   onMiniExpand: () => void;
+  viewMode?: 'feed' | 'grid';
+  onViewModeChange?: (mode: 'feed' | 'grid') => void;
 }
 
 /**
@@ -50,6 +52,8 @@ export function VideosSection({
   onSaveProgress,
   onMiniClose,
   onMiniExpand,
+  viewMode,
+  onViewModeChange,
 }: VideosSectionProps) {
   return (
     <div className={active ? 'block' : 'contents'}>
@@ -71,6 +75,8 @@ export function VideosSection({
           mode={isMini ? 'mini' : 'hidden'}
           onMiniClose={onMiniClose}
           onMiniExpand={onMiniExpand}
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
         />
       ) : loading ? (
         <SectionSkeleton section="videos" />
@@ -94,6 +100,8 @@ export function VideosSection({
           resumeMuted={resumeMuted}
           resumePlaybackRate={resumePlaybackRate}
           mode="immersive"
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
         />
       )}
     </div>
