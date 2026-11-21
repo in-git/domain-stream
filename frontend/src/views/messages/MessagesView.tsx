@@ -381,9 +381,9 @@ export default function MessagesView({
                   className="break-inside-avoid pb-2.5"
                 >
                   {/* 3:4 竖版卡片，与图文笔记卡片同尺寸；宽度由列宽决定 */}
-                  <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-2xl bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-md bg-[#161618] border border-white/[0.07] transition-shadow hover:shadow-md">
                   {/* 时间固定在卡片右上角 */}
-                  <span className="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] text-[10px] leading-tight text-[#AEAEB2] dark:text-[#86868B] tabular-nums">
+                  <span className="absolute top-2 right-2 z-20 rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[10px] leading-tight tabular-nums text-[#86868B]">
                     {formatShortDate(message.createdAt)}
                   </span>
                   {/* 语录区 + 弹幕层 */}
@@ -397,13 +397,13 @@ export default function MessagesView({
                   >
                     <span
                       aria-hidden="true"
-                      className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
+                      className="font-editorial text-[38px] leading-[0.45] text-[#6E9BE8]/80 select-none"
                     >
                       &ldquo;
                     </span>
 
                     <div className="flex-1 flex items-center justify-center py-4 min-h-0">
-                      <p className="text-center font-editorial text-[19px] sm:text-[23px] leading-[1.75] text-[#2C4C82] dark:text-[#8AB4F2] whitespace-pre-wrap break-words line-clamp-5 sm:line-clamp-[8]">
+                      <p className="text-center font-editorial text-[19px] sm:text-[23px] leading-[1.75] text-[#8AB4F2] whitespace-pre-wrap break-words line-clamp-5 sm:line-clamp-[8]">
                         {message.content}
                       </p>
                     </div>
@@ -634,7 +634,7 @@ export default function MessagesView({
               {/* 语录内容区：严格 9:16，高度取 64vh（上限 700px），
                   模态框容器更宽，内容居中显示 */}
               <div className="flex flex-1 items-center justify-center px-5 pt-6 pb-5">
-                <div className="relative w-[80%] max-w-full aspect-[9/16] shrink-0 rounded-2xl bg-[#F7F9FD] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.07] px-6 pt-7 pb-5 flex flex-col">
+                <div className="relative w-[80%] max-w-full aspect-[9/16] shrink-0 rounded-md bg-[#F7F9FD] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.07] px-6 pt-7 pb-5 flex flex-col">
                 <span
                   aria-hidden="true"
                   className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
