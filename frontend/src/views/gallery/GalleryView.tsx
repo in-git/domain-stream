@@ -100,7 +100,7 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 10) * 0.02 }}
-      className="break-inside-avoid pb-2.5"
+      className="break-inside-avoid pb-2.5 sm:pb-1.5 md:pb-2 lg:pb-3 xl:pb-4 2xl:pb-4"
     >
       {/* 图片：竖版 3:4，小红书图文的标准比例；卡片大小由列宽控制 */}
       <div
@@ -231,12 +231,10 @@ export function GalleryView({
   }, [photos, activeId, externalSelectedId]);
 
   return (
-    <section aria-label="图文笔记" className="space-y-0">
-      {/* 顶部分类：小红书式的横向 chip 条，吸顶滚动。
-          层级压到 z-10，必须低于 Header(z-20) 与账号下拉弹层(z-100)，
-          否则会盖住右上角的个人信息菜单 */}
-      <div className="sticky top-14 z-10 -mx-2.5 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-2.5 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
-        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <section aria-label="图文笔记" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
+      {/* 顶部分类：PC 端间距按断点递进 6/8/12/16px，移动端保持原刻度 */}
+      <div className="sticky top-14 z-10 -mx-2.5 bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:-mx-1.5 sm:px-1.5 md:-mx-2 md:px-2 lg:-mx-3 lg:px-3 xl:-mx-4 xl:px-4 2xl:-mx-4 2xl:px-4">
+        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {chips.map((item) => {
             const active = album === item;
             return (
@@ -265,7 +263,7 @@ export function GalleryView({
         </div>
       ) : (
         /* 小红书桌面端约 5 列，卡片宽 ≈ 350px；列数更多卡片自然更小 */
-        <div className="columns-2 gap-2.5 sm:columns-3 md:columns-4 lg:columns-5 2xl:columns-6">
+        <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">
           <AnimatePresence mode="popLayout">
             {list.map((note, idx) => (
               <NoteCard

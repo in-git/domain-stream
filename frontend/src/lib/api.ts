@@ -503,7 +503,12 @@ export const likeApi = {
 export const portalApi = {
   systemInfo: () => request<PublicSystemInfo>('/public/system/info'),
   categories: () => request<PortalCategory[]>('/public/categories'),
-  videos: () => request<PortalVideo[]>('/public/videos'),
+  videos: (category?: string) =>
+    request<PortalVideo[]>(
+      category && category !== '全部'
+        ? `/public/videos?category=${encodeURIComponent(category)}`
+        : '/public/videos'
+    ),
   recordVideoView: (id: string) =>
     request<boolean>(`/public/videos/${encodeURIComponent(id)}/view`, { method: 'POST' }),
   articles: () => request<PortalArticle[]>('/public/articles'),

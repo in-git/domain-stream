@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vip.xiaonuo.biz.modular.article.entity.BizArticle;
 import vip.xiaonuo.biz.modular.article.mapper.BizArticleMapper;
@@ -114,11 +115,12 @@ public class BizPortalController {
      * @author wuwenlong
      * @date  2026/11/19
      */
-    @Operation(summary = "获取已发布视频列表（随机推荐）")
+    @Operation(summary = "获取已发布视频列表（随机推荐，可按分类筛选）")
     @GetMapping("/public/videos")
-    public CommonResult<List<BizVideo>> videos() {
+    public CommonResult<List<BizVideo>> videos(@RequestParam(value = "category", required = false) String category) {
         LambdaQueryWrapper<BizVideo> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(BizVideo::getStatus, "PUBLISHED")
+                .eq(StrUtil.isNotBlank(category) && !"全部".equals(category), BizVideo::getCategory, category)
                 .last("ORDER BY RAND()");
         return CommonResult.data(bizVideoMapper.selectList(queryWrapper));
     }

@@ -8,6 +8,8 @@ interface VideosSectionProps {
   error?: string;
   videos: VideoItem[];
   categories: string[];
+  category: string;
+  onCategoryChange: (category: string) => void;
   savedIds: string[];
   likedIds: string[];
   searchQuery: string;
@@ -37,6 +39,8 @@ export function VideosSection({
   error,
   videos,
   categories,
+  category,
+  onCategoryChange,
   savedIds,
   likedIds,
   searchQuery,
@@ -61,6 +65,8 @@ export function VideosSection({
         <VideosView
           videos={videos}
           categories={categories}
+          category={category}
+          onCategoryChange={onCategoryChange}
           savedIds={savedIds}
           likedIds={likedIds}
           searchQuery={searchQuery}
@@ -88,6 +94,8 @@ export function VideosSection({
         <VideosView
           videos={videos}
           categories={categories}
+          category={category}
+          onCategoryChange={onCategoryChange}
           savedIds={savedIds}
           likedIds={likedIds}
           searchQuery={searchQuery}

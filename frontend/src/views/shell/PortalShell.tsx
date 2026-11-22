@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
@@ -56,6 +56,15 @@ export function PortalShell({
   const searchSection = isSectionId(activeSection) ? activeSection : 'profile';
   /** 视频首页的视图模式，由顶栏按钮与视频页内部共用 */
   const [videoViewMode, setVideoViewMode] = useState<'feed' | 'grid'>('feed');
+  /** 搜索结果点击文章时，交给文章板块打开同一个阅读器 */
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
+
+  // 在视频板块搜索时自动切到卡片模式，便于查看多条搜索结果（清空搜索后不强制切回）
+  useEffect(() => {
+    if (activeSection === 'videos' && searchQuery.trim()) {
+      setVideoViewMode('grid');
+    }
+  }, [activeSection, searchQuery]);
   const {
     isDark,
     toggleTheme,
@@ -81,6 +90,8 @@ export function PortalShell({
     messages,
     replies,
     videoCategories,
+    videoCategory,
+    loadVideosByCategory,
     articleCategories,
     graphicCategories,
     loadingMap,
@@ -165,14 +176,8 @@ export function PortalShell({
           <main
             className={`flex-1 w-full ${
               activeSection === 'videos'
-                ? 'px-0 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 md:pt-6 pb-0 md:pb-8'
-                : activeSection === 'gallery'
-                  ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
-                  : activeSection === 'articles'
-                    ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
-                    : activeSection === 'messages'
-                      ? 'px-2.5 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-0 pb-0 md:pb-8'
-                      : 'px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 pt-4 sm:pt-6 pb-0 md:pb-8'
+                ? 'px-0 pt-0 pb-0 md:pb-8'
+                : 'px-2.5 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 pt-0 pb-0 md:pb-8'
             }`}
           >
             <VideosSection
@@ -181,6 +186,8 @@ export function PortalShell({
               error={errors.videos}
               videos={videos}
               categories={videoCategories}
+              category={videoCategory}
+              onCategoryChange={(c) => void loadVideosByCategory(c)}
               savedIds={savedIds}
               likedIds={likedIds}
               searchQuery={searchQuery}
@@ -220,6 +227,8 @@ export function PortalShell({
                     onRetry={() => void loadSection('articles')}
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
+                    externalSelectedId={selectedArticleId}
+                    onClearExternalSelection={() => setSelectedArticleId(null)}
                   />
                 </motion.div>
               )}
@@ -337,6 +346,11 @@ export function PortalShell({
               photos={photos}
               messages={messages}
               onClose={onCloseSearch}
+              onOpenArticle={(articleId) => {
+                setSelectedArticleId(articleId);
+                onSelectSection('articles');
+                onCloseSearch();
+              }}
             />
           )}
         </AnimatePresence>

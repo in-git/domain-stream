@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { LayoutGrid, Moon, Rows3, Search, Sun, X } from 'lucide-react';
 import { AccountMenu, type AccountMenuProps } from '../../components/AccountMenu';
@@ -36,6 +37,16 @@ export function MainHeader({
   onToggleViewMode,
 }: MainHeaderProps) {
   const { title } = useSystemInfo();
+  // 搜索框草稿：输入只改 draft，点搜索按钮 / Enter 才提交为真正的查询
+  const [draft, setDraft] = useState(searchQuery);
+  useEffect(() => setDraft(searchQuery), [searchQuery]);
+
+  const submitSearch = () => onChangeSearch(draft.trim());
+  const clearSearch = () => {
+    setDraft('');
+    onChangeSearch('');
+  };
+
   const shellClass = solidBlack
     ? 'sticky top-0 z-30 border-b border-white/10 bg-black'
     : overlay
@@ -66,23 +77,38 @@ export function MainHeader({
         <div className="relative flex items-center">
           <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 pointer-events-none" />
           <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => onChangeSearch(e.target.value)}
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitSearch();
+              }
+            }}
             placeholder="搜索视频、文章、作品或留言"
             aria-label="搜索内容"
-            className="w-full h-9 pl-9 pr-8 rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-transparent focus:border-[#0071E3]/40 dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-xs sm:text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none transition-colors"
+            className="w-full h-9 pl-9 pr-[4.5rem] rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-transparent focus:border-[#0071E3]/40 dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-xs sm:text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none transition-colors"
           />
-          {searchQuery && (
+          {draft && (
             <button
               type="button"
-              onClick={() => onChangeSearch('')}
+              onClick={clearSearch}
               aria-label="清空搜索"
-              className="absolute right-2.5 w-5 h-5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+              className="absolute right-10 w-5 h-5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
+          <button
+            type="button"
+            onClick={submitSearch}
+            aria-label="搜索"
+            title="搜索"
+            className="absolute right-1.5 w-7 h-7 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center justify-center transition-colors"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 

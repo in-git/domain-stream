@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bookmark, Heart, Type, X } from 'lucide-react';
 import type { ArticleItem } from '../../data/content';
@@ -41,7 +41,7 @@ export function ArticlesView({
 }: ArticlesViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_ARTICLE_CATEGORIES;
   const [category, setCategory] = useState<ArticleCategory>('全部');
-  const [activeArticle, setActiveArticle] = useState<ArticleItem | null>(null);
+  const [localActiveId, setLocalActiveId] = useState<string | null>(null);
   const [largeFont, setLargeFont] = useState(false);
   const [serifMode, setSerifMode] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -81,24 +81,27 @@ export function ArticlesView({
     return () => observer.disconnect();
   }, [hasMore, filteredArticles.length]);
 
-  useEffect(() => {
-    if (externalSelectedId) {
-      const target = articles.find((a) => a.id === externalSelectedId);
-      if (target) openArticle(target);
-      onClearExternalSelection?.();
-    }
-  }, [externalSelectedId, articles, onClearExternalSelection]);
+  // 阅读器打开的文章：外部选中（搜索结果）优先，其次本地点击；与图文模块保持同一模式
+  const activeArticle = useMemo(() => {
+    const id = externalSelectedId || localActiveId;
+    return id ? articles.find((a) => a.id === id) ?? null : null;
+  }, [articles, externalSelectedId, localActiveId]);
 
   const openArticle = (article: ArticleItem) => {
-    setActiveArticle(article);
+    setLocalActiveId(article.id);
     setScrollProgress(0);
     onReadArticle(article.id);
+  };
+
+  const closeArticle = () => {
+    setLocalActiveId(null);
+    onClearExternalSelection?.();
   };
 
   useEffect(() => {
     if (!activeArticle) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setActiveArticle(null);
+      if (e.key === 'Escape') closeArticle();
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -120,10 +123,10 @@ export function ArticlesView({
   const gridArticles = visibleArticles.slice(1);
 
   return (
-    <section aria-label="文章列表" className="space-y-0">
-      {/* 顶部分类：与图文一致的横向 chip 条 */}
-      <div className="sticky top-14 z-10 -mx-2.5 sm:-mx-6 lg:-mx-8 xl:-mx-10 bg-[#FBFBFD]/95 dark:bg-black/95 px-2.5 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-xl">
-        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <section aria-label="文章列表" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
+      {/* 顶部分类：PC 端间距按断点递进 6/8/12/16px，移动端保持原刻度 */}
+      <div className="sticky top-14 z-10 -mx-2.5 bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:-mx-1.5 sm:px-1.5 md:-mx-2 md:px-2 lg:-mx-3 lg:px-3 xl:-mx-4 xl:px-4 2xl:-mx-4 2xl:px-4">
+        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(['全部', ...filterCategories] as ArticleCategory[]).map((item) => {
             const active = category === item;
             return (
@@ -146,25 +149,25 @@ export function ArticlesView({
         </div>
       </div>
 
-      {/* Banner: 当前筛选结果的第一篇文章 */}
+      {/* Banner: 仅移动端显示，PC 端所有文章都用普通卡片 */}
       {bannerArticle && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SWIFTUI_SMOOTH}
-          className="relative mb-2.5 overflow-hidden rounded-md bg-black"
+          className="relative mb-2.5 h-52 overflow-hidden rounded-md bg-black sm:hidden"
         >
           <button
             type="button"
             onClick={() => openArticle(bannerArticle)}
-            className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+            className="block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
             aria-label={`阅读文章：${bannerArticle.title}`}
           >
             <ResilientImage
               src={bannerArticle.cover}
               alt={bannerArticle.title}
               fallbackTitle={bannerArticle.title}
-              className="h-48 w-full object-cover transition-transform duration-500 ease-out hover:scale-[1.02] sm:h-64 lg:h-80"
+              className="h-full w-full object-cover transition-transform duration-500 ease-out hover:scale-[1.02]"
             />
           </button>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
@@ -217,9 +220,9 @@ export function ArticlesView({
         </motion.div>
       )}
 
-      {/* Xiaohongshu-style Two-Column Waterfall Feed */}
-      <div className="columns-2 gap-2.5 md:columns-3 xl:columns-4 2xl:columns-5">
-        {gridArticles.map((article, idx) => {
+      {/* 瀑布流：移动端第一条由横幅展示（此处隐藏），PC 端全部显示 */}
+      <div className="columns-2 gap-2.5 sm:gap-1.5 md:gap-2 md:columns-3 lg:gap-3 xl:gap-4 xl:columns-4 2xl:gap-4 2xl:columns-5">
+        {visibleArticles.map((article, idx) => {
           const isSaved = savedIds.includes(article.id);
           const isLiked = likedIds.includes(article.id);
           return (
@@ -228,7 +231,7 @@ export function ArticlesView({
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(idx, 8) * 0.03 }}
-              className="break-inside-avoid pb-2.5"
+              className={`break-inside-avoid pb-2.5 sm:pb-1.5 md:pb-2 lg:pb-3 xl:pb-4 2xl:pb-4 ${idx === 0 ? 'hidden sm:block' : ''}`}
             >
               <div className="group overflow-hidden rounded-md bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
                 <div className="relative overflow-hidden">
@@ -252,8 +255,8 @@ export function ArticlesView({
                   {/* 底部渐变：标题与简介在左下、收藏在右下 */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
                   <div className="pointer-events-none absolute bottom-2 left-2.5 right-[4.75rem] z-10">
-                    <h3 className="text-[16px] sm:text-[18px] font-semibold leading-snug text-white line-clamp-2">
-                      {article.title}
+                    <h3 className="truncate text-[16px] font-semibold leading-snug text-white sm:text-[18px]">
+                      {article.title.length > 20 ? `${article.title.slice(0, 20)}…` : article.title}
                     </h3>
                     {article.excerpt && (
                       <p className="mt-0.5 text-[11px] sm:text-[12px] leading-relaxed text-white/75 line-clamp-1">
@@ -325,8 +328,8 @@ export function ArticlesView({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6 bg-black/55 backdrop-blur-md"
-            onClick={() => setActiveArticle(null)}
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-6 bg-black/55 backdrop-blur-md"
+            onClick={() => closeArticle()}
           >
             <motion.div
               initial={{ opacity: 0, y: 48, scale: 0.97 }}
@@ -378,7 +381,7 @@ export function ArticlesView({
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => setActiveArticle(null)}
+                    onClick={() => closeArticle()}
                     aria-label="关闭阅读器"
                     className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-colors"
                   >
@@ -453,22 +456,22 @@ export function ArticlesView({
               </div>
 
               {/* Fixed Modal Footer：点赞/收藏 + 关闭，固定在最底部 */}
-              <div className="shrink-0 border-t border-black/[0.08] dark:border-white/[0.08] bg-[#FBFBFD]/95 dark:bg-[#141416]/95 backdrop-blur-xl px-5 sm:px-8 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
+              <div className="shrink-0 border-t border-black/[0.08] dark:border-white/[0.08] bg-[#FBFBFD]/95 dark:bg-[#141416]/95 backdrop-blur-xl px-4 sm:px-8 py-1.5 sm:py-3 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 sm:gap-2.5">
                   <Tooltip label={likedIds.includes(activeArticle.id) ? '取消喜欢' : '喜欢'}>
                     <motion.button
                       type="button"
                       whileTap={{ scale: 0.92 }}
                       onClick={() => onToggleLike(activeArticle.id)}
                       aria-label={likedIds.includes(activeArticle.id) ? '取消喜欢' : '喜欢'}
-                      className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
+                      className={`w-9 h-9 sm:w-11 sm:h-11 inline-flex items-center justify-center rounded-lg sm:rounded-xl border transition-colors ${
                         likedIds.includes(activeArticle.id)
                           ? 'bg-[#FF375F]/12 border-[#FF375F]/35 text-[#FF375F]'
                           : 'border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
                       }`}
                     >
                       <Heart
-                        className={`w-4 h-4 ${
+                        className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                           likedIds.includes(activeArticle.id) ? 'fill-current' : ''
                         }`}
                       />
@@ -481,14 +484,14 @@ export function ArticlesView({
                       whileTap={{ scale: 0.92 }}
                       onClick={() => onToggleSave(activeArticle.id)}
                       aria-label={savedIds.includes(activeArticle.id) ? '取消收藏' : '收藏'}
-                      className={`w-11 h-11 inline-flex items-center justify-center rounded-xl border transition-colors ${
+                      className={`w-9 h-9 sm:w-11 sm:h-11 inline-flex items-center justify-center rounded-lg sm:rounded-xl border transition-colors ${
                         savedIds.includes(activeArticle.id)
                           ? 'bg-[#0071E3]/12 border-[#0071E3]/35 text-[#0071E3] dark:text-[#0A84FF]'
                           : 'border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
                       }`}
                     >
                       <Bookmark
-                        className={`w-4 h-4 ${
+                        className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                           savedIds.includes(activeArticle.id) ? 'fill-current' : ''
                         }`}
                       />
@@ -498,8 +501,8 @@ export function ArticlesView({
 
                 <button
                   type="button"
-                  onClick={() => setActiveArticle(null)}
-                  className="px-5 py-2 min-h-[44px] rounded-xl text-sm font-medium bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]"
+                  onClick={() => closeArticle()}
+                  className="px-4 py-1.5 min-h-[36px] sm:px-5 sm:py-2 sm:min-h-[44px] rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-medium bg-[#1D1D1F] text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]"
                 >
                   关闭
                 </button>

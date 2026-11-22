@@ -255,18 +255,15 @@ export default function MessagesView({
   }
 
   return (
-    <section aria-labelledby="messages-heading" className="space-y-2.5">
+    <section aria-labelledby="messages-heading" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
       <div>
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: APPLE_EASE }}
-          className="flex flex-col md:flex-row md:items-end justify-between gap-2.5 mb-2.5"
+          className="flex flex-col md:flex-row md:items-end justify-between gap-2.5 mt-2.5 mb-2.5 sm:gap-1.5 sm:mt-1.5 sm:mb-1.5 md:gap-2 md:mt-2 md:mb-2 lg:gap-3 lg:mt-3 lg:mb-3 xl:gap-4 xl:mt-4 xl:mb-4 2xl:gap-4 2xl:mt-4 2xl:mb-4"
         >
           <div>
-            <p className="text-xs font-medium tracking-wide text-[#0071E3] dark:text-[#0A84FF] mb-1.5">
-              留言与回应
-            </p>
             <h1
               id="messages-heading"
               className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
@@ -274,15 +271,18 @@ export default function MessagesView({
               留言墙
             </h1>
           </div>
+        </motion.div>
 
+        {/* 写留言按钮：置于标题下方 */}
+        <div className="mb-2.5 sm:mb-1.5 md:mb-2 lg:mb-3 xl:mb-4 2xl:mb-4">
           <button
             type="button"
             onClick={openComposer}
-            className="h-10 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium self-start md:self-auto"
+            className="h-10 px-6 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium transition-colors"
           >
             写留言
           </button>
-        </motion.div>
+        </div>
 
         <AnimatePresence>
           {hint && !composerOpen && (
@@ -292,7 +292,7 @@ export default function MessagesView({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className={`mb-2.5 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[13px] ${
+              className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-2.5 text-[13px] sm:mb-1.5 md:mb-2 lg:mb-3 xl:mb-4 2xl:mb-4 ${
                 hint.startsWith('留言已')
                   ? 'bg-[#16A34A]/10 text-[#16A34A]'
                   : 'bg-[#FF3B30]/10 text-[#D70015]'
@@ -314,14 +314,14 @@ export default function MessagesView({
           )}
         </AnimatePresence>
 
-        <div className="flex items-center justify-between gap-2.5 mb-2.5">
+        <div className="mb-2.5 flex items-center justify-between gap-2.5 sm:mb-1.5 sm:gap-1.5 md:mb-2 md:gap-2 lg:mb-3 lg:gap-3 xl:mb-4 xl:gap-4 2xl:mb-4 2xl:gap-4">
           <div className="flex items-center gap-2">
             <h2 className="text-[15px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
               全部留言
             </h2>
             <span className="text-[11px] text-[#AEAEB2] tabular-nums">{visibleMessages.length}</span>
           </div>
-          <div className="inline-flex items-center p-0.5 sm:p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
+          <div role="tablist" aria-label="留言排序" className="flex items-center gap-2.5 sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4">
             {(
               [
                 { key: 'latest', label: '最新' },
@@ -331,22 +331,16 @@ export default function MessagesView({
               <button
                 key={item.key}
                 type="button"
+                role="tab"
+                aria-selected={sortMode === item.key}
                 onClick={() => setSortMode(item.key)}
-                aria-pressed={sortMode === item.key}
-                className={`relative px-2.5 py-1 min-h-[30px] rounded-lg text-[11px] font-medium transition-colors sm:px-3.5 sm:py-1.5 sm:min-h-[36px] sm:text-xs ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   sortMode === item.key
-                    ? 'text-[#1D1D1F] dark:text-white'
-                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
+                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
+                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
                 }`}
               >
-                {sortMode === item.key && (
-                  <motion.span
-                    layoutId="message-sort-pill"
-                    transition={SWIFTUI_SNAPPY}
-                    className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-                  />
-                )}
-                <span className="relative z-10">{item.label}</span>
+                {item.label}
               </button>
             ))}
           </div>
@@ -363,7 +357,7 @@ export default function MessagesView({
           </div>
         ) : (
           /* 与图文笔记一致：CSS columns 瀑布流，列数/间距相同，卡片宽度由列宽决定 */
-          <div className="columns-2 gap-2.5 sm:columns-3 md:columns-4 lg:columns-5 2xl:columns-6">
+          <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">
             {visibleMessages.map((message, index) => {
               const messageReplies = repliesByMessage.get(message.id) || [];
               // 弹幕轨道：回复数超过轨道数时循环滚动
@@ -378,7 +372,7 @@ export default function MessagesView({
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-                  className="break-inside-avoid pb-2.5"
+                  className="break-inside-avoid pb-2.5 sm:pb-1.5 md:pb-2 lg:pb-3 xl:pb-4 2xl:pb-4"
                 >
                   {/* 3:4 竖版卡片，与图文笔记卡片同尺寸；宽度由列宽决定 */}
                   <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-md bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
@@ -476,6 +470,7 @@ export default function MessagesView({
             })}
           </div>
         )}
+
       </div>
 
       {/* 写留言模态框 */}

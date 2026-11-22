@@ -35,6 +35,8 @@ export function usePortalData(
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [replies, setReplies] = useState<MessageReply[]>([]);
   const [videoCategories, setVideoCategories] = useState<string[]>([]);
+  /** 当前视频分类（提升到数据层，切换时按分类请求后端；用于跨板块保持一致） */
+  const [videoCategory, setVideoCategory] = useState<string>('全部');
   const [articleCategories, setArticleCategories] = useState<string[]>([]);
   const [graphicCategories, setGraphicCategories] = useState<string[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -149,7 +151,7 @@ export function usePortalData(
               .map((row) => replyFromPortal(row, rootIdOf(row)))
           );
         } else if (section === 'videos') {
-          await loadWithCategories(section, portalApi.videos, (rows, names, categories) => {
+          await loadWithCategories(section, () => portalApi.videos(videoCategory), (rows, names, categories) => {
             const items = rows.map((row, i) => videoFromPortal(row, i, names));
             setVideos(items);
             setVideoCategories(
@@ -188,7 +190,28 @@ export function usePortalData(
         setLoadedSections((prev) => ({ ...prev, [section]: true }));
       }
     },
-    [loadWithCategories, pickCategories]
+    [loadWithCategories, pickCategories, videoCategory]
+  );
+
+  /** 切换视频分类：按分类重新请求后端，只替换视频列表，不重拉分类字典、不触发全屏骨架屏 */
+  const loadVideosByCategory = useCallback(
+    async (category: string) => {
+      setVideoCategory(category);
+      setErrors((prev) => ({ ...prev, videos: undefined }));
+      try {
+        const rows = await portalApi.videos(category);
+        const names = categoryNameMap(
+          categoriesPromiseRef.current ? await categoriesPromiseRef.current : []
+        );
+        setVideos(rows.map((row, i) => videoFromPortal(row, i, names)));
+      } catch (error) {
+        setErrors((prev) => ({
+          ...prev,
+          videos: error instanceof Error ? error.message : '分类加载失败',
+        }));
+      }
+    },
+    []
   );
 
   const addMessage = useCallback(async (message: MessageItem) => {
@@ -236,6 +259,8 @@ export function usePortalData(
     messages,
     replies,
     videoCategories,
+    videoCategory,
+    loadVideosByCategory,
     articleCategories,
     graphicCategories,
     loadedSections,

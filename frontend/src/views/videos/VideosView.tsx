@@ -1,47 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react';
+import type { MediaPlayerInstance } from '@vidstack/react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { A11y, Keyboard, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
-import {
-  Bookmark,
-  ChevronDown,
-  ChevronUp,
-  Heart,
-  LayoutGrid,
-  Maximize,
-  Maximize2,
-  Minimize,
-  Pause,
-  Play,
-  Rows3,
-  Volume2,
-  VolumeX,
-  X,
-} from 'lucide-react';
 import type { VideoItem } from '../../data/content';
-import { portalApi } from '../../lib/api';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
-import { Tooltip } from '../../components/Tooltip';
-import { ResilientImage } from '../../components/ResilientImage';
-
-const VIDEO_PAGE_SIZE = 8;
-
-/** 同一个浏览器标签页内，每个视频只上报一次播放量，避免重复滑动/暂停重播刷量 */
-const countedVideoViews = new Set<string>();
-function countVideoViewOnce(id: string) {
-  if (!id || countedVideoViews.has(id)) return;
-  countedVideoViews.add(id);
-  void portalApi.recordVideoView(id).catch(() => {
-    countedVideoViews.delete(id);
-  });
-}
+import { FeedSlide } from './FeedSlide';
+import { ImmersiveModal } from './ImmersiveModal';
+import {
+  DesktopFeedCategories,
+  DesktopGridCategories,
+  DesktopVideoGrid,
+} from './DesktopView';
+import { MobileGridCategories, MobileVideoGrid } from './MobileView';
+import { DEFAULT_CATEGORIES, VIDEO_PAGE_SIZE, type ViewMode } from './shared';
 
 interface VideosViewProps {
   videos: VideoItem[];
   categories?: string[];
+  /** 当前分类由数据层持有，切换时触发后端按分类请求 */
+  category: string;
+  onCategoryChange: (category: string) => void;
   savedIds: string[];
   likedIds: string[];
   searchQuery?: string;
@@ -61,548 +40,18 @@ interface VideosViewProps {
    * - hidden：完全隐藏但保留播放器实例，避免切换时重建 <video> 导致卡顿
    */
   mode?: 'immersive' | 'mini' | 'hidden';
-  /** 迷你形态下的操作回调 */
   onMiniClose?: () => void;
   onMiniExpand?: () => void;
   /** 视图模式由外壳控制，便于顶部搜索框旁的单一切换按钮复用 */
-  viewMode?: 'feed' | 'grid';
-  onViewModeChange?: (mode: 'feed' | 'grid') => void;
-}
-
-const DEFAULT_CATEGORIES = ['设计纪实', '城市影像', '自然声景'];
-type CategoryFilter = string;
-
-function formatTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const mins = Math.floor(s / 60);
-  const secs = s % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-interface VideoGridCardProps {
-  video: VideoItem;
-  index: number;
-  liked: boolean;
-  saved: boolean;
-  onOpen: () => void;
-  onToggleLike: () => void;
-  onToggleSave: () => void;
-}
-
-function VideoGridCard({
-  video,
-  index,
-  liked,
-  saved,
-  onOpen,
-  onToggleLike,
-  onToggleSave,
-}: VideoGridCardProps) {
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
-      className="min-w-0"
-    >
-      <div className="group overflow-hidden rounded-md bg-[#161618] border border-white/[0.07] transition-shadow hover:shadow-md">
-        <div className="relative overflow-hidden">
-          <button
-            type="button"
-            onClick={onOpen}
-            aria-label={`播放 ${video.title}`}
-            className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
-          >
-            <ResilientImage
-              src={video.cover}
-              alt={video.title}
-              fallbackTitle={video.title}
-              className={`w-full aspect-[16/9] transition-transform duration-500 ease-out group-hover:scale-[1.03]`}
-            />
-          </button>
-          <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
-            {video.category}
-          </span>
-          <span className="absolute right-2 top-2 hidden rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-mono-tabular text-white sm:block">
-            {video.durationLabel}
-          </span>
-
-          {/* 桌面端：标题与简介叠在封面左下，点赞/收藏在右下；移动端移到封面下方 */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent sm:block" />
-          <div className="pointer-events-none absolute bottom-2 left-2.5 right-[4.75rem] z-10 hidden sm:block">
-            <h3 className="text-[18px] font-semibold leading-snug text-white line-clamp-2">
-              {video.title}
-            </h3>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-white/75 line-clamp-1">
-              {video.description || video.subtitle}
-            </p>
-          </div>
-          <div className="absolute bottom-2 right-2 z-10 hidden items-center gap-1.5 sm:flex">
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.85 }}
-              transition={SWIFTUI_BOUNCY}
-              onClick={onToggleLike}
-              aria-label={liked ? '取消点赞视频' : '点赞视频'}
-              aria-pressed={liked}
-              className={`flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
-                liked
-                  ? 'bg-[#FF2E4D] text-white'
-                  : 'bg-black/45 text-white hover:bg-black/60'
-              }`}
-            >
-              <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
-            </motion.button>
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.85 }}
-              transition={SWIFTUI_BOUNCY}
-              onClick={onToggleSave}
-              aria-label={saved ? '取消收藏视频' : '收藏视频'}
-              aria-pressed={saved}
-              className={`flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
-                saved
-                  ? 'bg-[#0071E3] text-white'
-                  : 'bg-black/45 text-white hover:bg-black/60'
-              }`}
-            >
-              <Bookmark className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-            </motion.button>
-          </div>
-        </div>
-
-        {/* 移动端：标题写在封面下方，12px */}
-        <div className="px-2.5 py-2 sm:hidden">
-          <h3 className="text-[12px] leading-snug text-[#F5F5F7] line-clamp-2">
-            {video.title}
-          </h3>
-        </div>
-      </div>
-    </motion.article>
-  );
-}
-
-interface FeedSlideProps {
-  video: VideoItem;
-  index: number;
-  total: number;
-  active: boolean;
-  isMuted: boolean;
-  playbackRate: number;
-  liked: boolean;
-  saved: boolean;
-  currentTime: number;
-  duration: number;
-  isFullscreen: boolean;
-  savedTime?: number;
-  onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
-  onTogglePlay: () => void;
-  onToggleMute: () => void;
-  onSetRate: (rate: number) => void;
-  onToggleLike: () => void;
-  onToggleSave: () => void;
-  onToggleFullscreen: () => void;
-  onSeek: (time: number) => void;
-  onTimeUpdate: (time: number) => void;
-  onDurationChange: (duration: number) => void;
-  onSaveProgress?: (time: number) => void;
-  /** 迷你窗口形态：精简界面，仅保留播放控制 */
-  mini?: boolean;
-  onMiniClose?: () => void;
-  onMiniExpand?: () => void;
-}
-
-/** One full-bleed page of the seamless vertical carousel. */
-function FeedSlide({
-  video,
-  index,
-  total,
-  active,
-  isMuted,
-  playbackRate,
-  liked,
-  saved,
-  currentTime,
-  duration,
-  isFullscreen,
-  savedTime,
-  onRegisterPlayer,
-  onTogglePlay,
-  onToggleMute,
-  onSetRate,
-  onToggleLike,
-  onToggleSave,
-  onToggleFullscreen,
-  onSeek,
-  onTimeUpdate,
-  onDurationChange,
-  onSaveProgress,
-  mini,
-  onMiniClose,
-  onMiniExpand,
-}: FeedSlideProps) {
-  const playerRef = useRef<MediaPlayerInstance | null>(null);
-  const restoredRef = useRef<boolean>(false);
-  const lastSaveRef = useRef<number>(0);
-  // 每个 Slide 自己持有播放状态，由真实 onPlay/onPause 事件驱动
-  const [playing, setPlaying] = useState(false);
-  // 视频是否仍在加载缓冲：用于显示 loading 动画，并避免加载期间误显示暂停按钮
-  const [loading, setLoading] = useState(true);
-
-  const setPlayerRef = useCallback(
-    (player: MediaPlayerInstance | null) => {
-      playerRef.current = player;
-      onRegisterPlayer(video.id, player);
-    },
-    [onRegisterPlayer, video.id],
-  );
-
-  // 恢复播放进度：等元数据就绪后 seek 到保存的位置
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    if (!savedTime || savedTime <= 1) {
-      restoredRef.current = true;
-      return;
-    }
-    // 轮询 duration 就绪（Vidstack 没有 EventTarget.on()，用 setTimeout 简单可靠）
-    let cancelled = false;
-    let timer: number | undefined;
-    const tryRestore = () => {
-      if (cancelled || restoredRef.current) return;
-      const d = player.duration;
-      if (!d || d <= 0) {
-        timer = window.setTimeout(tryRestore, 150);
-        return;
-      }
-      const safe = Math.min(savedTime, d - 3);
-      if (safe > 0 && safe < d) player.currentTime = safe;
-      restoredRef.current = true;
-    };
-    // 最多等 4s，防止卡死
-    timer = window.setTimeout(tryRestore, 100);
-    const giveUp = window.setTimeout(() => {
-      restoredRef.current = true;
-      if (timer) window.clearTimeout(timer);
-    }, 4000);
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-      window.clearTimeout(giveUp);
-    };
-  }, [video.id, savedTime]);
-
-  // Only the visible page plays; others stay paused (保留进度，不再重置到 0)
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    if (!active) {
-      player.pause();
-      return;
-    }
-    player.playbackRate = playbackRate;
-    player.muted = isMuted;
-    // 划到当前视频即尝试自动播放。
-    // 不再因浏览器拦截有声自动播放而强制静音：静音状态只由用户控制。
-    void player.play().catch(() => {});
-  }, [active, video.id, isMuted, playbackRate]);
-
-  // 进入迷你窗口时继续播放：静音状态下浏览器允许自动播放
-  useEffect(() => {
-    if (!mini || !active) return;
-    const player = playerRef.current;
-    if (!player) return;
-    if (isMuted) {
-      void player.play().catch(() => {});
-    }
-  }, [mini, active]);
-
-  // video 切换时重置恢复标记与加载状态
-  useEffect(() => {
-    restoredRef.current = false;
-    if (active) setLoading(true);
-  }, [video.id, active]);
-
-  // 防抖保存播放进度（1s 一次）
-  const handleTimeUpdate = useCallback((t: number) => {
-    onTimeUpdate(t);
-    if (!active || !onSaveProgress) return;
-    const now = Date.now();
-    if (now - lastSaveRef.current < 1000) return;
-    lastSaveRef.current = now;
-    onSaveProgress(t);
-  }, [onTimeUpdate, onSaveProgress, active]);
-
-  const progressMax = Math.max(duration, video.durationSeconds, 1);
-  const progressValue = Math.min(currentTime, progressMax);
-
-  // 必须缓存源对象：每次渲染新建对象会被 Vidstack 当成新源，导致播放请求被中断
-  const source = useMemo<{ src: string; type: 'video/mp4' }>(
-    () => ({ src: video.src, type: 'video/mp4' }),
-    [video.src]
-  );
-
-  return (
-    <div data-video-stage className="relative w-full h-full bg-black overflow-hidden">
-      <MediaPlayer
-        ref={setPlayerRef}
-        // 流式地址没有扩展名，显式声明类型，避免播放器无法匹配加载器
-        src={source}
-        poster={video.cover}
-        title={video.title}
-        playsInline
-        loop
-        muted={isMuted}
-        playbackRate={playbackRate}
-        className="absolute inset-0 w-full h-full"
-        onClick={active ? onTogglePlay : undefined}
-        onPlay={() => {
-          setPlaying(true);
-          setLoading(false);
-          countVideoViewOnce(video.id);
-        }}
-        onPause={() => {
-          setPlaying(false);
-        }}
-        onCanPlay={() => setLoading(false)}
-        onWaiting={() => setLoading(true)}
-        onPlaying={() => setLoading(false)}
-        onError={() => setLoading(false)}
-        onTimeUpdate={(detail) => {
-          handleTimeUpdate(detail.currentTime);
-        }}
-        onDurationChange={(value) => {
-          if (active) onDurationChange(value);
-        }}
-      >
-        <MediaProvider className="w-full h-full" />
-      </MediaPlayer>
-
-      {active && (
-        <>
-          {/* 轻度渐层保证底部文字可读，不压暗画面 */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
-
-          {/* 视频加载中：显示环形加载动画 */}
-          <AnimatePresence>
-            {loading && !mini && (
-              <motion.div
-                key="video-loading"
-                role="status"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
-                className="absolute inset-0 m-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-white/25 border-t-white animate-spin"
-              >
-                <span className="sr-only">视频加载中</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Center Paused Indicator — mini 窗口已经有底部播放按钮，不再叠加大图标；加载中不显示 */}
-          <AnimatePresence>
-            {!playing && !loading && !mini && (
-              <motion.button
-                type="button"
-                onClick={onTogglePlay}
-                aria-label="播放"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.85 }}
-                transition={SWIFTUI_BOUNCY}
-                className="absolute inset-0 m-auto w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-black/55 hover:bg-black/65 backdrop-blur-md border border-white/30 flex items-center justify-center text-white transition-colors"
-              >
-                <Play className="fill-white translate-x-[2px] w-6 h-6 sm:w-8 sm:h-8" />
-              </motion.button>
-            )}
-          </AnimatePresence>
-
-          {/* 迷你窗口控制条：关闭 / 回到视频板块 */}
-          {mini && (
-            <>
-              <button
-                type="button"
-                onClick={onMiniExpand}
-                aria-label="回到视频"
-                title="回到视频"
-                className="absolute top-1.5 left-1.5 z-30 w-6 h-6 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
-              >
-                <Maximize2 className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                onClick={onMiniClose}
-                aria-label="关闭迷你播放器"
-                title="关闭"
-                className="absolute top-1.5 right-1.5 z-30 w-6 h-6 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </>
-          )}
-
-          {/* Douyin-style Right-Side Vertical Action Dock */}
-          {!mini && (
-            <div className="absolute right-3 sm:right-5 bottom-[110px] flex flex-col items-center gap-4 z-20 text-white">
-            <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
-              <div className="flex flex-col items-center">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.84 }}
-                  transition={SWIFTUI_BOUNCY}
-                  onClick={onToggleLike}
-                  aria-label={liked ? '取消喜欢' : '喜欢'}
-                  className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
-                    liked
-                      ? 'bg-[#FF2C55]/25 border-[#FF2C55]/60 text-[#FF2C55]'
-                      : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
-                  }`}
-                >
-                  <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
-                </motion.button>
-                <span className="mt-0.5 text-[11px] font-medium tabular-nums">
-                  {video.likeCount || 0}
-                </span>
-              </div>
-            </Tooltip>
-
-            <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.84 }}
-                transition={SWIFTUI_BOUNCY}
-                onClick={onToggleSave}
-                aria-label={saved ? '取消收藏' : '收藏'}
-                className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
-                  saved
-                    ? 'bg-[#FFB800]/25 border-[#FFB800]/60 text-[#FFD60A]'
-                    : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
-                }`}
-              >
-                <Bookmark className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
-              </motion.button>
-            </Tooltip>
-
-            <Tooltip label={isFullscreen ? '退出全屏' : '全屏'} side="left">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.88 }}
-                onClick={onToggleFullscreen}
-                aria-label={isFullscreen ? '退出全屏' : '全屏播放'}
-                className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
-              >
-                {isFullscreen ? (
-                  <Minimize className="w-5 h-5" />
-                ) : (
-                  <Maximize className="w-5 h-5" />
-                )}
-              </motion.button>
-            </Tooltip>
-
-            <Tooltip label={isMuted ? '取消静音' : '静音'} side="left">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.88 }}
-                onClick={onToggleMute}
-                aria-label={isMuted ? '取消静音' : '静音'}
-                className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
-              >
-                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </motion.button>
-            </Tooltip>
-            </div>
-          )}
-
-          {/* Bottom Info + Progress Scrubber */}
-          <div
-            className={`absolute bottom-0 left-0 right-0 text-white z-10 pointer-events-none ${
-              mini
-                ? 'p-2'
-                : 'space-y-3 pt-4 pb-[calc(3rem_+_max(0.5rem,env(safe-area-inset-bottom)))] sm:pl-6 sm:pr-24 sm:pt-6 md:pb-6'
-            }`}
-          >
-            {!mini && (
-              <div className="space-y-1.5 max-w-2xl pl-4 pr-20 sm:pl-0 sm:pr-0">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
-                  <span className="font-semibold text-white">@{video.director}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{video.category}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{video.date}</span>
-                  {!!video.viewCount && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>{video.viewCount} 次播放</span>
-                    </>
-                  )}
-                </div>
-                <h2 className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug">
-                  {video.title}
-                </h2>
-                <p className="text-xs sm:text-sm text-white/75 line-clamp-2 leading-relaxed">
-                  {video.subtitle}
-                </p>
-              </div>
-            )}
-
-            {/* 进度条：沉浸模式下铺满整行，只保留拖动条；迷你窗口保留播放键与时间 */}
-            <div className={`flex items-center pointer-events-auto ${mini ? 'gap-1.5' : ''}`}>
-              {mini && (
-                <button
-                  type="button"
-                  onClick={onTogglePlay}
-                  aria-label={playing ? '暂停' : '播放'}
-                  className="w-6 h-6 rounded-full bg-white/18 hover:bg-white/28 flex items-center justify-center shrink-0"
-                >
-                  {playing ? (
-                    <Pause className="fill-white w-3 h-3" />
-                  ) : (
-                    <Play className="fill-white translate-x-[1px] w-3 h-3" />
-                  )}
-                </button>
-              )}
-              {mini && (
-                <span className="w-8 text-[10px] font-mono-tabular text-white/80">
-                  {formatTime(currentTime)}
-                </span>
-              )}
-              {/* 抖音风格纤细进度条：2px 细线 + 已播放高亮，不显示拖动圆点 */}
-              <div className="relative flex-1 min-w-0 flex items-center h-4">
-                <div className="relative w-full h-[2px] rounded-full bg-white/25 overflow-hidden">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-white/90"
-                    style={{ width: `${Math.min(100, (progressValue / progressMax) * 100)}%` }}
-                  />
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={progressMax}
-                  step={0.05}
-                  value={progressValue}
-                  onChange={(e) => onSeek(Number(e.target.value))}
-                  aria-label="播放进度"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-              </div>
-              {mini && (
-                <span className="w-8 text-[10px] font-mono-tabular text-white/65 text-right">
-                  {formatTime(progressMax)}
-                </span>
-              )}
-            </div>
-          </div>
-
-        </>
-      )}
-    </div>
-  );
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
 export function VideosView({
   videos,
   categories,
+  category,
+  onCategoryChange,
   savedIds,
   likedIds,
   searchQuery = '',
@@ -624,26 +73,26 @@ export function VideosView({
   const isMini = mode === 'mini';
   const isHidden = mode === 'hidden';
 
-  // 用持久化的状态初始化 activeIndex / 静音 / 倍速，让 MiniPlayer ↔ FeedSlide 状态一致
   const initialIndex = videos.findIndex((v) => v.id === resumeVideoId);
-  const [category, setCategory] = useState<CategoryFilter>('全部');
   const setViewMode = onViewModeChange ?? (() => {});
   const [activeIndex, setActiveIndex] = useState(Math.max(0, initialIndex));
-  /** 用户是否真正播放过视频：只有播放过才把当前视频交给迷你播放器 */
   const [hasPlayed, setHasPlayed] = useState(false);
-  // Autoplay is only allowed when muted, so the feed starts silent like Douyin.
   const [isMuted, setIsMuted] = useState(typeof resumeMuted === 'boolean' ? resumeMuted : true);
-  const [playbackRate, setPlaybackRate] = useState(typeof resumePlaybackRate === 'number' ? resumePlaybackRate : 1);
+  /** 用户是否主动点过静音；为 true 时滑动不再自动解除静音（尊重用户选择） */
+  const userMutedManuallyRef = useRef(false);
+  const [playbackRate, setPlaybackRate] = useState(
+    typeof resumePlaybackRate === 'number' ? resumePlaybackRate : 1,
+  );
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [unmuteOnNextPlay, setUnmuteOnNextPlay] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  /** 从卡片点选后要直接播放的视频（含 src），为 null 时走沉浸流当前索引 */
+  const [pickedVideo, setPickedVideo] = useState<VideoItem | null>(null);
 
   const playersRef = useRef<Map<string, MediaPlayerInstance>>(new Map());
   const swiperRef = useRef<SwiperClass | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
 
-  // 跟踪播放区的全屏状态，切换按钮图标
   useEffect(() => {
     const handleChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
     document.addEventListener('fullscreenchange', handleChange);
@@ -651,28 +100,25 @@ export function VideosView({
   }, []);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredVideos = videos.filter((v) => {
-    const matchCategory = category === '全部' || v.category === category;
-    const matchQuery =
-      !normalizedQuery ||
-      v.title.toLowerCase().includes(normalizedQuery) ||
-      v.subtitle.toLowerCase().includes(normalizedQuery) ||
-      v.director.toLowerCase().includes(normalizedQuery);
-    return matchCategory && matchQuery;
-  });
+  // 分类已由后端按 category 过滤，这里只做搜索关键词的本地过滤
+  const filteredVideos = videos.filter((v) =>
+    !normalizedQuery ||
+    v.title.toLowerCase().includes(normalizedQuery) ||
+    v.subtitle.toLowerCase().includes(normalizedQuery) ||
+    v.director.toLowerCase().includes(normalizedQuery)
+  );
 
-  // Reset index cleanly when filter changes
   useEffect(() => {
+    setPickedVideo(null);
     setActiveIndex(0);
     setCurrentTime(0);
   }, [category, normalizedQuery]);
 
-  // 卡片模式：分批展示 + 触底加载
   const [visibleCount, setVisibleCount] = useState(VIDEO_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const visibleVideos = useMemo(
     () => filteredVideos.slice(0, visibleCount),
-    [filteredVideos, visibleCount]
+    [filteredVideos, visibleCount],
   );
   const hasMoreVideos = visibleCount < filteredVideos.length;
   useEffect(() => {
@@ -687,7 +133,7 @@ export function VideosView({
           setVisibleCount((count) => Math.min(count + VIDEO_PAGE_SIZE, filteredVideos.length));
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '200px' },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -700,37 +146,41 @@ export function VideosView({
   useEffect(() => {
     setCurrentTime(0);
     setDuration(currentVideo?.durationSeconds ?? 0);
-    // 只有用户播放过视频，才把当前视频交给悬浮迷你播放器；
-    // 否则进入站点就会凭空出现迷你播放器
     if (viewMode === 'feed' && currentVideo && hasPlayed) {
       onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
     }
   }, [currentVideo?.id, hasPlayed]);
 
-  // 同步静音/倍速设置到悬浮迷你播放器
   useEffect(() => {
     if (viewMode === 'feed' && currentVideo && hasPlayed) {
       onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
     }
   }, [isMuted, playbackRate, hasPlayed]);
 
-  const registerPlayer = useCallback(
-    (id: string, player: MediaPlayerInstance | null) => {
-      if (player) playersRef.current.set(id, player);
-      else playersRef.current.delete(id);
-    },
-    [],
-  );
+  const registerPlayer = useCallback((id: string, player: MediaPlayerInstance | null) => {
+    if (player) playersRef.current.set(id, player);
+    else playersRef.current.delete(id);
+  }, []);
 
   const getActivePlayer = () =>
     currentVideo ? playersRef.current.get(currentVideo.id) ?? null : null;
 
+  /** 用户点击静音/取消静音：记录是否为用户主动静音，后续滑动据此决定是否自动解除 */
+  const handleToggleMute = () => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      // 切到静音 → 标记用户主动静音；取消静音 → 清除标记
+      userMutedManuallyRef.current = next;
+      return next;
+    });
+  };
+
   const togglePlayback = () => {
     const player = getActivePlayer();
     if (!player) return;
-    // 静音（自动播放）状态下点击：解除静音并保持播放，而不是暂停
     if (isMuted) {
       setIsMuted(false);
+      userMutedManuallyRef.current = false;
       player.muted = false;
       setHasPlayed(true);
       if (player.paused) void player.play().catch(() => {});
@@ -746,10 +196,7 @@ export function VideosView({
 
   const seekTo = (time: number) => {
     const player = getActivePlayer();
-    const clamped = Math.max(
-      0,
-      Math.min(time, duration || currentVideo?.durationSeconds || 0),
-    );
+    const clamped = Math.max(0, Math.min(time, duration || currentVideo?.durationSeconds || 0));
     setCurrentTime(clamped);
     if (player) player.currentTime = clamped;
   };
@@ -757,30 +204,28 @@ export function VideosView({
   const handleSlideChange = (swiper: SwiperClass) => {
     setActiveIndex(swiper.realIndex);
     setCurrentTime(0);
+    // 滑动切换视频时，只要用户没有主动点过静音，就自动解除静音，保证能听到声音
+    if (!userMutedManuallyRef.current) {
+      setIsMuted(false);
+    }
   };
 
-  /** 网格卡片点击后，把沉浸式 Swiper 切到对应视频，避免仍停留在第一屏 */
-  const openVideoAt = useCallback((index: number) => {
-    setActiveIndex(index);
-    setCurrentTime(0);
-    setViewMode('feed');
-    const swiper = swiperRef.current;
-    if (!swiper) return;
-    // 等网格隐藏、Swiper 重新可见后再同步内部索引，避免 display:none 下尺寸计算错误
-    window.requestAnimationFrame(() => {
-      swiper.update();
-      if (swiper.params.loop) {
-        swiper.slideToLoop(index, 0, false);
-      } else {
-        swiper.slideTo(index, 0, false);
-      }
-    });
+  /** 卡片点击：打开全屏模态框直接播放被点视频（用列表数据里自带的 src） */
+  const openVideoAt = useCallback((video: VideoItem) => {
+    if (!video?.src) return;
+    setPickedVideo(video);
   }, []);
 
-  const handleNext = () => swiperRef.current?.slideNext();
-  const handlePrev = () => swiperRef.current?.slidePrev();
+  // 全屏播放模态框：ESC 关闭
+  useEffect(() => {
+    if (!pickedVideo) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPickedVideo(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pickedVideo]);
 
-  /** 将整个播放区（含右侧操作栏与底部进度条）切入全屏 */
   const toggleFullscreen = () => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -793,28 +238,24 @@ export function VideosView({
       void request().catch(() => {});
       return;
     }
-    // iOS Safari 不支持元素全屏，退化为原生视频全屏
     const videoEl = stage.querySelector('video') as
       | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
       | null;
     videoEl?.webkitEnterFullscreen?.();
   };
 
-  // 网格模式下沉浸式播放区虽然被隐藏，但 <video> 仍在运行，需要主动暂停避免后台出声
   useEffect(() => {
     if (viewMode !== 'grid') return;
     const player = getActivePlayer();
     if (player && !player.paused) player.pause();
   }, [viewMode, currentVideo?.id]);
 
-  // 迷你窗口关闭后播放器被完全隐藏，需要主动暂停，避免后台继续出声
   useEffect(() => {
     if (mode !== 'hidden') return;
     const player = getActivePlayer();
     if (player && !player.paused) player.pause();
   }, [mode, currentVideo?.id]);
 
-  // 迷你窗口内禁用滚轮/键盘滑动，避免劫持其他板块的滚动与快捷键
   useEffect(() => {
     const swiper = swiperRef.current;
     if (!swiper) return;
@@ -827,7 +268,6 @@ export function VideosView({
     }
   }, [isMini, currentVideo?.id]);
 
-  // Space toggles playback; arrow keys are handled by Swiper's keyboard module.
   useEffect(() => {
     if (viewMode !== 'feed' || !currentVideo) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -843,6 +283,7 @@ export function VideosView({
   }, [viewMode, currentVideo?.id]);
 
   return (
+    <>
     <section
       aria-label="视频频道"
       className={
@@ -853,121 +294,24 @@ export function VideosView({
             : 'space-y-0'
       }
     >
-      {/* 移动端顶部分类：仅卡片模式显示，与图文一致的横向 chip 条（黑底为白色版本） */}
+      {/* 卡片模式分类：PC / 移动端各自模块，内部用 CSS 断点决定挂载形态 */}
       {!isMini && viewMode === 'grid' && (
-        <div className="sticky top-14 z-[65] bg-black px-2.5 backdrop-blur-xl sm:hidden">
-          <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {(['全部', ...filterCategories] as CategoryFilter[]).map((item) => {
-              const active = category === item;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setCategory(item)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-                    active
-                      ? 'bg-white font-medium text-[#1D1D1F]'
-                      : 'bg-white/[0.08] text-[#98989D]'
-                  }`}
-                >
-                  {item}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <>
+          <DesktopGridCategories
+            categories={filterCategories}
+            category={category}
+            onChange={onCategoryChange}
+            viewMode={viewMode}
+            onSetViewMode={setViewMode}
+          />
+          <MobileGridCategories
+            categories={filterCategories}
+            category={category}
+            onChange={onCategoryChange}
+          />
+        </>
       )}
 
-      {/* Compact Top Filter & View Mode Row（移动端隐藏分类筛选与浏览方式切换） */}
-      {!isMini && (
-      <div className="hidden sm:flex flex-wrap items-center justify-between gap-3">
-        {viewMode === 'grid' && (
-        <div
-          role="tablist"
-          aria-label="视频分类"
-          className="inline-flex items-center p-0.5 sm:p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06] overflow-x-auto max-w-full"
-        >
-          {(['全部', ...filterCategories] as CategoryFilter[]).map((item) => {
-            const active = category === item;
-            return (
-              <button
-                key={item}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setCategory(item)}
-                className={`relative px-2.5 py-1 min-h-[30px] text-[11px] font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 sm:px-3.5 sm:py-1.5 sm:min-h-[36px] sm:text-xs ${
-                  active
-                    ? 'text-[#1D1D1F] dark:text-white'
-                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-                }`}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="douyinVideoCatPill"
-                    transition={SWIFTUI_SNAPPY}
-                    className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-                  />
-                )}
-                <span className="relative z-10">{item}</span>
-              </button>
-            );
-          })}
-        </div>
-        )}
-
-        {/* Feed vs Grid Switcher（不加 tooltip，避免悬浮提示遮挡内容） */}
-        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.06]">
-          <button
-            type="button"
-            onClick={() => setViewMode('feed')}
-            aria-label="沉浸刷看"
-            aria-pressed={viewMode === 'feed'}
-            title="沉浸刷看"
-            className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-              viewMode === 'feed'
-                ? 'text-[#1D1D1F] dark:text-white'
-                : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-            }`}
-          >
-            {viewMode === 'feed' && (
-              <motion.span
-                layoutId="videoModeSwitch"
-                transition={SWIFTUI_SNAPPY}
-                className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-              />
-            )}
-            <Rows3 className="relative z-10 w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            aria-label="发现网格"
-            aria-pressed={viewMode === 'grid'}
-            title="发现网格"
-            className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-              viewMode === 'grid'
-                ? 'text-[#1D1D1F] dark:text-white'
-                : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white'
-            }`}
-          >
-            {viewMode === 'grid' && (
-              <motion.span
-                layoutId="videoModeSwitch"
-                transition={SWIFTUI_SNAPPY}
-                className="absolute inset-0 rounded-lg bg-white dark:bg-[#2C2C2E] shadow-xs"
-              />
-            )}
-            <LayoutGrid className="relative z-10 w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      )}
-
-      {/* Empty Search Result */}
       {!isMini && filteredVideos.length === 0 && (
         <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] py-20 text-center space-y-2">
           <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -979,9 +323,7 @@ export function VideosView({
         </div>
       )}
 
-      {/* Mode 1: Douyin-style Immersive Seamless Feed
-          始终挂载（网格模式用 CSS 隐藏），切换板块时只改变容器形态，
-          <video> 元素不会被销毁重建，从而避免重新加载造成的卡顿 */}
+      {/* 沉浸刷看：始终挂载，网格模式下用 CSS 隐藏，保证 <video> 不被销毁重建 */}
       {currentVideo && (
         <div
           className={
@@ -989,20 +331,25 @@ export function VideosView({
               ? 'hidden'
               : isMini
                 ? 'h-full w-full'
-                : 'flex items-stretch gap-3 lg:gap-4'
+                : 'block'
           }
         >
-          {/* Full-bleed carousel stage: every slide fills the whole container */}
           <div
             ref={stageRef}
             className={
               isMini
                 ? 'relative w-full h-full overflow-hidden'
-                : // 移动端底栏透明悬浮、不占布局空间，视频区铺满整个视口；
-                  // 桌面端顶栏占位，高度扣掉 Header 与上下留白
-                  'relative flex-1 min-w-0 h-[100dvh] md:h-[calc(100dvh-10.75rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                : 'relative w-full h-[100dvh] md:h-[calc(100dvh-6.5rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
+            {!isMini && viewMode === 'feed' && (
+              <DesktopFeedCategories
+                categories={filterCategories}
+                category={category}
+                onChange={onCategoryChange}
+                onToggleViewMode={() => setViewMode('grid')}
+              />
+            )}
             <Swiper
               key={`${category}-${normalizedQuery}`}
               onSwiper={(instance) => {
@@ -1037,7 +384,7 @@ export function VideosView({
                     savedTime={progressById?.[video.id]}
                     onRegisterPlayer={registerPlayer}
                     onTogglePlay={togglePlayback}
-                    onToggleMute={() => setIsMuted((m) => !m)}
+                    onToggleMute={handleToggleMute}
                     onSetRate={setPlaybackRate}
                     onToggleLike={() => onToggleLike(video.id)}
                     onToggleSave={() => onToggleSave(video.id)}
@@ -1054,92 +401,28 @@ export function VideosView({
               ))}
             </Swiper>
           </div>
-
-          {/* Douyin-style External Up/Down Video Switcher Column (Desktop & Tablet) */}
-          {!isMini && (
-            <div className="hidden sm:flex flex-col justify-center gap-3 shrink-0">
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.9 }}
-              onClick={handlePrev}
-              disabled={filteredVideos.length <= 1}
-              aria-label="上一个视频"
-              className="w-11 h-11 rounded-full bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] shadow-xs flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] disabled:opacity-40 transition-colors"
-            >
-              <ChevronUp className="w-5 h-5" />
-            </motion.button>
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.9 }}
-              onClick={handleNext}
-              disabled={filteredVideos.length <= 1}
-              aria-label="下一个视频"
-              className="w-11 h-11 rounded-full bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] shadow-xs flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E] disabled:opacity-40 transition-colors"
-            >
-              <ChevronDown className="w-5 h-5" />
-            </motion.button>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Mode 2: Discovery Masonry */}
+      {/* 卡片模式网格：PC / 移动端各自模块，触底加载由主入口统一持有 */}
       {!isMini && viewMode === 'grid' && visibleVideos.length > 0 && (
-        <div className="px-2.5 sm:px-0">
-          {/* Banner: 当前筛选结果的第一条视频 */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={SWIFTUI_SMOOTH}
-            className="relative mb-2.5 overflow-hidden rounded-md bg-black"
-          >
-            <button
-              type="button"
-              onClick={() => openVideoAt(0)}
-              className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
-              aria-label={`播放视频：${visibleVideos[0].title}`}
-            >
-              <ResilientImage
-                src={visibleVideos[0].cover}
-                alt={visibleVideos[0].title}
-                fallbackTitle={visibleVideos[0].title}
-                className="h-48 w-full object-cover transition-transform duration-500 ease-out hover:scale-[1.02] sm:h-64 lg:h-80"
-              />
-            </button>
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/25 backdrop-blur-md">
-                <Play className="h-6 w-6 fill-white text-white" />
-              </span>
-            </div>
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 sm:inset-x-5 sm:bottom-5">
-              <h2 className="text-xl sm:text-3xl font-semibold leading-tight text-white line-clamp-2">
-                {visibleVideos[0].title}
-              </h2>
-              {visibleVideos[0].subtitle && (
-                <p className="mt-1 text-[12px] sm:text-sm leading-relaxed text-white/75 line-clamp-2">
-                  {visibleVideos[0].subtitle}
-                </p>
-              )}
-            </div>
-          </motion.div>
-
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {visibleVideos.slice(1).map((video, idx) => (
-              <VideoGridCard
-                key={video.id}
-                video={video}
-                index={idx + 1}
-                liked={likedIds.includes(video.id)}
-                saved={savedIds.includes(video.id)}
-                onToggleLike={() => onToggleLike(video.id)}
-                onToggleSave={() => onToggleSave(video.id)}
-                onOpen={() => openVideoAt(idx + 1)}
-              />
-            ))}
-          </div>
-
-          {/* 触底加载：还有更多时显示哨兵，全部加载完显示提示 */}
+        <div className="px-2.5 sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
+          <DesktopVideoGrid
+            videos={visibleVideos}
+            likedIds={likedIds}
+            savedIds={savedIds}
+            onToggleLike={onToggleLike}
+            onToggleSave={onToggleSave}
+            onOpen={openVideoAt}
+          />
+          <MobileVideoGrid
+            videos={visibleVideos}
+            likedIds={likedIds}
+            savedIds={savedIds}
+            onToggleLike={onToggleLike}
+            onToggleSave={onToggleSave}
+            onOpen={openVideoAt}
+          />
           {hasMoreVideos ? (
             <div ref={loadMoreRef} className="flex justify-center py-6">
               <button
@@ -1158,5 +441,24 @@ export function VideosView({
         </div>
       )}
     </section>
+
+    {/* 卡片点击：复用主页播放器的全屏模态框，播放当前页搜索结果 */}
+    {pickedVideo && (
+      <ImmersiveModal
+        videos={filteredVideos.length > 0 ? filteredVideos : [pickedVideo]}
+        initialIndex={Math.max(
+          0,
+          filteredVideos.findIndex((v) => v.id === pickedVideo.id),
+        )}
+        likedIds={likedIds}
+        savedIds={savedIds}
+        progressById={progressById}
+        onToggleLike={onToggleLike}
+        onToggleSave={onToggleSave}
+        onSaveProgress={onSaveProgress}
+        onClose={() => setPickedVideo(null)}
+      />
+    )}
+    </>
   );
 }

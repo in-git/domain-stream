@@ -23,6 +23,8 @@ interface SearchOverlayProps {
   photos: PhotoItem[];
   messages: MessageItem[];
   onClose: () => void;
+  /** 点击文章结果：交给文章板块用同一个阅读器打开 */
+  onOpenArticle?: (articleId: string) => void;
 }
 
 type RowKind = 'video' | 'article' | 'graphic' | 'message';
@@ -108,14 +110,23 @@ export function SearchOverlay({
   photos,
   messages,
   onClose,
+  onOpenArticle,
 }: SearchOverlayProps) {
-  const [query, setQuery] = useState('');
+  const [draft, setDraft] = useState('');
+  const [query, setQuery] = useState(''); // 已提交的查询：输入不触发搜索，点按钮/Enter 才更新
   const [activeTarget, setActiveTarget] = useState<FavoriteTarget>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const scope = SCOPE[section];
   const scopeLabel = SCOPE_LABEL[section];
   const keyword = query.trim().toLowerCase();
+
+  const submitSearch = () => setQuery(draft.trim());
+  const clearSearch = () => {
+    setDraft('');
+    setQuery('');
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -173,8 +184,13 @@ export function SearchOverlay({
   }, [keyword, scope, videos, articles, photos, messages]);
 
   const openRow = (row: SearchRow) => {
+    if (row.kind === 'article') {
+      // 文章与卡片点击共用同一个阅读器：交给文章板块打开，并关闭搜索页
+      onOpenArticle?.(row.article.id);
+      onClose();
+      return;
+    }
     if (row.kind === 'video') setActiveTarget({ kind: 'video', video: row.video });
-    else if (row.kind === 'article') setActiveTarget({ kind: 'article', article: row.article });
     else if (row.kind === 'graphic') setActiveTarget({ kind: 'graphic', photo: row.photo });
   };
 
@@ -200,24 +216,43 @@ export function SearchOverlay({
           <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 pointer-events-none" />
           <input
             ref={inputRef}
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                submitSearch();
+                inputRef.current?.blur();
+              }
+            }}
             placeholder={`搜索${scopeLabel}`}
             aria-label={`搜索${scopeLabel}`}
             enterKeyHint="search"
-            className="w-full h-9 pl-9 pr-9 rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/35 transition-shadow"
+            className="w-full h-9 pl-9 pr-[4.5rem] rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/35 transition-shadow"
           />
-          {query && (
+          {draft && (
             <button
               type="button"
-              onClick={() => setQuery('')}
+              onClick={clearSearch}
               aria-label="清空搜索"
-              className="absolute right-2.5 w-5 h-5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+              className="absolute right-10 w-5 h-5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              submitSearch();
+              inputRef.current?.blur();
+            }}
+            aria-label="搜索"
+            title="搜索"
+            className="absolute right-1.5 w-7 h-7 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center justify-center transition-colors"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
         </div>
       </header>
 
