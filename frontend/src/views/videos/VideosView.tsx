@@ -338,10 +338,10 @@ export function VideosView({
       {!isMini && viewMode === 'grid' && filteredVideos.length === 0 && (
         <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] py-20 text-center space-y-2">
           <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-            没有找到匹配的视频
+            该分类下暂无视频
           </p>
           <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-            尝试更换关键词或切换其他分类
+            可通过上方分类切换其他分类
           </p>
         </div>
       )}

@@ -1,6 +1,6 @@
 import type { VideoItem } from '../../data/content';
 import { VideosView } from './VideosView';
-import { PortalEmpty, PortalError, SectionSkeleton } from '../../components/PortalStates';
+import { PortalError, SectionSkeleton } from '../../components/PortalStates';
 
 interface VideosSectionProps {
   active: boolean;
@@ -88,8 +88,6 @@ export function VideosSection({
         <SectionSkeleton section="videos" />
       ) : error ? (
         <PortalError section="videos" message={error} onRetry={onRetry} />
-      ) : videos.length === 0 ? (
-        <PortalEmpty section="videos" onRetry={onRetry} />
       ) : (
         <VideosView
           videos={videos}
