@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react';
 import {
   BookOpen,
+  Check,
   Edit3,
   FileText,
   Plus,
   Search,
   Trash2,
+  X,
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
+import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
@@ -34,6 +37,10 @@ export function ArticleManagerView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  /** 批量选择：选中的文章ID集合 */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 待删除的文章（单条或批量），非空时打开通用删除确认模态框 */
+  const [pendingDelete, setPendingDelete] = useState<ArticleItem[]>([]);
   const { options: categoryOptions } = usePublishCategories('ARTICLE');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
@@ -64,7 +71,48 @@ export function ArticleManagerView({
     await onRefresh();
   }
 
+  /** 当前筛选结果的全选状态 */
+  const allSelected = filtered.length > 0 && filtered.every((a) => selected.has(a.id));
+  const someSelected = filtered.some((a) => selected.has(a.id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** 全选/取消全选当前筛选结果 */
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) filtered.forEach((a) => next.delete(a.id));
+      else filtered.forEach((a) => next.add(a.id));
+      return next;
+    });
+  }
+
+  /** 单条删除：打开模态框 */
+  function requestDelete(item: ArticleItem) {
+    setPendingDelete([item]);
+  }
+
+  /** 批量删除：打开模态框 */
+  function requestBatchDelete() {
+    setPendingDelete(articles.filter((a) => selected.has(a.id)));
+  }
+
+  /** 确认删除 */
+  async function handleConfirmDelete() {
+    await api.deleteArticles(pendingDelete.map((a) => a.id));
+    setSelected(new Set());
+    await onRefresh();
+  }
+
   return (
+    <>
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
@@ -140,6 +188,59 @@ export function ArticleManagerView({
         </div>
       )}
 
+      {/* 批量操作条：全选与已选数量放一起，始终显示（有数据时） */}
+      {canDelete && filtered.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#E5E5EA] bg-white px-4 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              aria-label={allSelected ? '取消全选' : '全选'}
+              className={`flex h-4 w-4 items-center justify-center rounded border ${
+                allSelected
+                  ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                  : someSelected
+                    ? 'border-[#0071E3] text-[#0071E3]'
+                    : 'border-[#C7C7CC] text-transparent'
+              }`}
+            >
+              {allSelected ? (
+                <Check className="h-3 w-3" strokeWidth={3} />
+              ) : someSelected ? (
+                <span className="h-0.5 w-2 rounded-full bg-[#0071E3]" />
+              ) : null}
+            </button>
+            <span
+              className={`text-[13px] font-medium ${
+                selected.size > 0 ? 'text-[#0071E3]' : 'text-[#6E6E73]'
+              }`}
+            >
+              全选 · 已选择 {selected.size} 篇文章
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] text-[12px] font-medium text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors inline-flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              取消选择
+            </button>
+            <button
+              type="button"
+              onClick={requestBatchDelete}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-40 text-white text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              批量删除{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Article List */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
@@ -166,6 +267,21 @@ export function ArticleManagerView({
               key={item.id}
               className="p-5 hover:bg-[#FAFAFC] transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5"
             >
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => toggleSelect(item.id)}
+                  aria-label={selected.has(item.id) ? `取消选择 ${item.title}` : `选择 ${item.title}`}
+                  aria-pressed={selected.has(item.id)}
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border self-start sm:self-center ${
+                    selected.has(item.id)
+                      ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                      : 'border-[#C7C7CC] text-transparent'
+                  }`}
+                >
+                  {selected.has(item.id) && <Check className="h-3 w-3" strokeWidth={3} />}
+                </button>
+              )}
               <div
                 onClick={() => onOpen('view', item.id)}
                 className="flex flex-col sm:flex-row items-start gap-4 flex-1 min-w-0 cursor-pointer group"
@@ -243,7 +359,7 @@ export function ArticleManagerView({
                   {canDelete && (
                     <button
                       type="button"
-                      onClick={() => onOpen('delete', item.id)}
+                      onClick={() => requestDelete(item)}
                       aria-label={`删除 ${item.title}`}
                       className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8"
                     >
@@ -257,5 +373,17 @@ export function ArticleManagerView({
         </div>
       )}
     </div>
+
+    {/* 通用删除确认模态框 */}
+    {pendingDelete.length > 0 && (
+      <DeleteConfirmModal
+        title={pendingDelete.length === 1 ? '确认删除该文章？' : `确认删除 ${pendingDelete.length} 篇文章？`}
+        itemTitles={pendingDelete.map((a) => a.title)}
+        description="此操作不可撤销，文章将从列表中永久移除。"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setPendingDelete([])}
+      />
+    )}
+    </>
   );
 }

@@ -324,6 +324,8 @@ export interface SnowyLoginUser {
   orgName?: string | null;
   positionName?: string | null;
   signature?: string | null;
+  /** 扩展信息（JSON 字符串，个人简介存于其中的 bio 字段） */
+  extJson?: string | null;
   lastLoginTime?: string | null;
   latestLoginTime?: string | null;
   buttonCodeList?: string[];
@@ -382,28 +384,43 @@ export function clearSnowyLoginCache(): void {
   }
 }
 
+/** 从扩展信息 JSON 中解析个人简介 */
+function parseBioFromExtJson(extJson?: string | null): string {
+  if (!extJson) return '';
+  try {
+    const parsed = typeof extJson === 'string' ? JSON.parse(extJson) : extJson;
+    return typeof parsed?.bio === 'string' ? parsed.bio : '';
+  } catch {
+    return '';
+  }
+}
+
 /** 把小诺真实用户信息映射为私域工作台的 UserProfile */
 export function userProfileFromSnowy(raw: SnowyLoginUser, defaultModule: string = 'dashboard'): UserProfile {
-  const roleTitle = raw.positionName || (raw.roleCodeList || []).join('、') || '系统用户';
   return {
     id: raw.id,
     account: raw.account,
     email: raw.email || `${raw.account}@snowy.local`,
     name: raw.nickname || raw.name || raw.account,
     nickname: raw.nickname || undefined,
-    roleTitle,
-    department: raw.orgName || '内容运营中心',
     avatarUrl: raw.avatar || '/src/assets/images/avatar_admin_lin_1795026084667.jpg',
-    bio: raw.signature || '通过小诺 Snowy 统一认证登录',
+    bio: parseBioFromExtJson(raw.extJson),
     defaultModule: (defaultModule as UserProfile['defaultModule']) || 'dashboard',
-    liveRefresh: true,
     lastLoginAt: raw.latestLoginTime || raw.lastLoginTime || new Date().toISOString(),
-    orgName: raw.orgName || undefined,
-    positionName: raw.positionName || undefined,
     buttonCodeList: raw.buttonCodeList || [],
     roleCodeList: raw.roleCodeList || [],
     permissionCodeList: raw.permissionCodeList || [],
   };
+}
+
+/** 更新当前登录用户的基本信息（昵称/姓名/签名简介），写入 Snowy 后端 */
+export function snowyUpdateUserInfo(payload: {
+  id: string;
+  name: string;
+  nickname: string;
+  extJson?: string;
+}): Promise<void> {
+  return post<void>('/sys/userCenter/updateUserInfo', payload);
 }
 
 /** 根据登录 token 构造 UserProfile（小诺无访客看板概念，用登录账号生成基础信息） */
@@ -413,12 +430,9 @@ export function buildUserProfile(account: string): UserProfile {
     id: account,
     email: `${account}@snowy.local`,
     name: isAdmin ? '超级管理员' : account,
-    roleTitle: isAdmin ? '超级管理员' : '系统用户',
-    department: '内容运营中心',
     avatarUrl: '/src/assets/images/avatar_admin_lin_1795026084667.jpg',
     bio: '通过小诺 Snowy 统一认证登录',
     defaultModule: 'dashboard',
-    liveRefresh: true,
     lastLoginAt: new Date().toISOString(),
     account,
     buttonCodeList: [],
@@ -433,18 +447,6 @@ export function buildUserProfile(account: string): UserProfile {
 /** 拉取首页访客聚合数据（对齐 DashboardPayload） */
 export function snowyVisitorDashboard(): Promise<DashboardPayload> {
   return get<DashboardPayload>('/biz/visitor/dashboard');
-}
-
-/** 拉取实时访客轻量快照（供前端定时轮询刷新 KPI） */
-export function snowyVisitorLive(): Promise<{
-  onlineNow: number;
-  todayPV: number;
-  todayUV: number;
-  avgDurationSec: number;
-  engagementRate: number;
-  updatedAt: string;
-}> {
-  return get('/biz/visitor/live');
 }
 
 /* ------------------------------------------------------------------ */
@@ -679,14 +681,17 @@ export interface SnowyBizApi {
   createVideo(payload: Partial<VideoItem>): Promise<void>;
   updateVideo(id: string, payload: Partial<VideoItem>): Promise<void>;
   deleteVideo(id: string): Promise<void>;
+  deleteVideos(ids: string[]): Promise<void>;
   listArticles(): Promise<ArticleItem[]>;
   createArticle(payload: Partial<ArticleItem>): Promise<void>;
   updateArticle(id: string, payload: Partial<ArticleItem>): Promise<void>;
   deleteArticle(id: string): Promise<void>;
+  deleteArticles(ids: string[]): Promise<void>;
   listImageTexts(): Promise<ImageTextItem[]>;
   createImageText(payload: Partial<ImageTextItem>): Promise<void>;
   updateImageText(id: string, payload: Partial<ImageTextItem>): Promise<void>;
   deleteImageText(id: string): Promise<void>;
+  deleteImageTexts(ids: string[]): Promise<void>;
 }
 
 /** 三个模块共有的通用字段映射（cms 模型 -> 小诺 biz 参数） */
@@ -761,6 +766,9 @@ export const snowyBiz: SnowyBizApi = {
   deleteVideo(id) {
     return post<void>('/biz/video/delete', [{ id }]);
   },
+  deleteVideos(ids) {
+    return post<void>('/biz/video/delete', ids.map((id) => ({ id })));
+  },
 
   async listArticles() {
     return (await fetchAll<SnowyArticle>('article')).map(articleFromSnowy);
@@ -774,6 +782,9 @@ export const snowyBiz: SnowyBizApi = {
   deleteArticle(id) {
     return post<void>('/biz/article/delete', [{ id }]);
   },
+  deleteArticles(ids) {
+    return post<void>('/biz/article/delete', ids.map((id) => ({ id })));
+  },
 
   async listImageTexts() {
     return (await fetchAll<SnowyGraphic>('graphic')).map(graphicFromSnowy);
@@ -786,5 +797,8 @@ export const snowyBiz: SnowyBizApi = {
   },
   deleteImageText(id) {
     return post<void>('/biz/graphic/delete', [{ id }]);
+  },
+  deleteImageTexts(ids) {
+    return post<void>('/biz/graphic/delete', ids.map((id) => ({ id })));
   },
 };

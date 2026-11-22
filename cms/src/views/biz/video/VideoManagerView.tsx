@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react';
 import {
+  Check,
   Edit3,
   Film,
   LayoutGrid,
   List,
-  Play,
   Plus,
   Search,
+  Square,
   Trash2,
   UploadCloud,
+  X,
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
+import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
+import { deleteFilesByUrls } from '../../../lib/fileCenter.ts';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import {
   formatDateShort,
@@ -21,7 +25,7 @@ import {
 import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
 import { publishCategoryName } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
-import { MediaImage } from '../../../components/MediaImage.tsx';
+import { toPlayableVideoUrl } from '../../../lib/fileCenter.ts';
 
 interface VideoManagerViewProps {
   videos: VideoItem[];
@@ -43,6 +47,10 @@ export function VideoManagerView({
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  /** 批量选择：选中的视频ID集合 */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 待删除的视频（单条或批量），非空时打开通用删除确认模态框 */
+  const [pendingDelete, setPendingDelete] = useState<VideoItem[]>([]);
   const { options: categoryOptions } = usePublishCategories('VIDEO');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
@@ -67,6 +75,49 @@ export function VideoManagerView({
     });
   }, [videos, search, statusFilter, categoryFilter, categoryOptions]);
 
+  /** 当前筛选结果的全选状态 */
+  const allSelected = filtered.length > 0 && filtered.every((v) => selected.has(v.id));
+  const someSelected = filtered.some((v) => selected.has(v.id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** 全选/取消全选当前筛选结果 */
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) filtered.forEach((v) => next.delete(v.id));
+      else filtered.forEach((v) => next.add(v.id));
+      return next;
+    });
+  }
+
+  /** 单条删除：改为打开模态框（不再跳转独立页面） */
+  function requestDelete(item: VideoItem) {
+    setPendingDelete([item]);
+  }
+
+  /** 批量删除：打开模态框 */
+  function requestBatchDelete() {
+    setPendingDelete(videos.filter((v) => selected.has(v.id)));
+  }
+
+  /** 确认删除：删记录 + 清理视频与封面文件，最后刷新 */
+  async function handleConfirmDelete() {
+    const targets = pendingDelete;
+    await api.deleteVideos(targets.map((v) => v.id));
+    // 清理视频源文件与封面，避免孤儿文件
+    void deleteFilesByUrls(targets.flatMap((v) => [v.videoUrl, v.coverUrl]));
+    setSelected(new Set());
+    await onRefresh();
+  }
+
   async function handleToggleStatus(item: VideoItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
     await api.updateVideo(item.id, { status: nextStatus });
@@ -74,6 +125,7 @@ export function VideoManagerView({
   }
 
   return (
+    <>
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
@@ -174,6 +226,59 @@ export function VideoManagerView({
         </div>
       )}
 
+      {/* 批量操作条：全选与已选数量放一起，始终显示（有数据时） */}
+      {canDelete && filtered.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#E5E5EA] bg-white px-4 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              aria-label={allSelected ? '取消全选' : '全选'}
+              className={`flex h-4 w-4 items-center justify-center rounded border ${
+                allSelected
+                  ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                  : someSelected
+                    ? 'border-[#0071E3] text-[#0071E3]'
+                    : 'border-[#C7C7CC] text-transparent'
+              }`}
+            >
+              {allSelected ? (
+                <Check className="h-3 w-3" strokeWidth={3} />
+              ) : someSelected ? (
+                <span className="h-0.5 w-2 rounded-full bg-[#0071E3]" />
+              ) : null}
+            </button>
+            <span
+              className={`text-[13px] font-medium ${
+                selected.size > 0 ? 'text-[#0071E3]' : 'text-[#6E6E73]'
+              }`}
+            >
+              全选 · 已选择 {selected.size} 个视频
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] text-[12px] font-medium text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors inline-flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              取消选择
+            </button>
+            <button
+              type="button"
+              onClick={requestBatchDelete}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-40 text-white text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              批量删除{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
@@ -200,26 +305,38 @@ export function VideoManagerView({
               key={item.id}
               className="bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col"
             >
-              <div
-                onClick={() => onOpen('view', item.id)}
-                className="relative aspect-[5/2] bg-[#F2F2F7] overflow-hidden cursor-pointer group"
-              >
-                <MediaImage
-                  src={item.coverUrl}
-                  alt={item.title}
-                  fallbackLabel={item.title}
-                  className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+              <div className="relative aspect-[5/2] bg-black overflow-hidden group">
+                <video
+                  src={toPlayableVideoUrl(item.videoUrl)}
+                  poster={item.coverUrl || undefined}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full object-contain"
+                  aria-label={`播放 ${item.title}`}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent opacity-90" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-[#1D1D1F] shadow-md group-hover:scale-105 transition-transform">
-                    <Play className="w-3.5 h-3.5 ml-0.5 fill-current" />
-                  </div>
-                </div>
-                <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[12px] text-white/95 font-mono tabular-nums">
-                  <span>{item.resolution}</span>
-                  <span>{formatDuration(item.durationSec)}</span>
-                </div>
+                {canDelete && (
+                  <button
+                    type="button"
+                    aria-label={selected.has(item.id) ? `取消选择 ${item.title}` : `选择 ${item.title}`}
+                    aria-pressed={selected.has(item.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleSelect(item.id);
+                    }}
+                    className={`absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border shadow-sm backdrop-blur-sm transition-colors ${
+                      selected.has(item.id)
+                        ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                        : 'border-white/70 bg-black/35 text-transparent hover:bg-black/55'
+                    }`}
+                  >
+                    {selected.has(item.id) ? (
+                      <Check className="h-4 w-4" strokeWidth={3} />
+                    ) : (
+                      <Square className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
               </div>
 
               <div className="p-3 flex-1 flex flex-col justify-between">
@@ -239,10 +356,7 @@ export function VideoManagerView({
                     </span>
                   </div>
 
-                  <h3
-                    onClick={() => onOpen('view', item.id)}
-                    className="text-[14px] font-semibold text-[#1D1D1F] leading-snug line-clamp-1 cursor-pointer hover:text-[#0071E3] transition-colors"
-                  >
+                  <h3 className="text-[14px] font-semibold text-[#1D1D1F] leading-snug line-clamp-1">
                     {item.title}
                   </h3>
                   <p className="mt-0.5 text-[12px] text-[#6E6E73] line-clamp-1 leading-relaxed">
@@ -277,7 +391,7 @@ export function VideoManagerView({
                     {canDelete && (
                       <button
                         type="button"
-                        onClick={() => onOpen('delete', item.id)}
+                        onClick={() => requestDelete(item)}
                         aria-label={`删除 ${item.title}`}
                         className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
                       >
@@ -296,6 +410,28 @@ export function VideoManagerView({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#E5E5EA] text-[12px] font-medium text-[#86868B]">
+                  {canDelete && (
+                    <th className="py-3 pl-5 pr-1 w-10">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        aria-label={allSelected ? '取消全选' : '全选'}
+                        className={`flex h-4 w-4 items-center justify-center rounded border ${
+                          allSelected
+                            ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                            : someSelected
+                              ? 'border-[#0071E3] text-[#0071E3]'
+                              : 'border-[#C7C7CC] text-transparent'
+                        }`}
+                      >
+                        {allSelected ? (
+                          <Check className="h-3 w-3" strokeWidth={3} />
+                        ) : someSelected ? (
+                          <span className="h-0.5 w-2 rounded-full bg-[#0071E3]" />
+                        ) : null}
+                      </button>
+                    </th>
+                  )}
                   <th className="py-3 px-5">视频内容</th>
                   <th className="py-3 px-4">分类</th>
                   <th className="py-3 px-4">时长 / 画质</th>
@@ -307,27 +443,38 @@ export function VideoManagerView({
               <tbody className="divide-y divide-[#F2F2F7] text-[13px]">
                 {filtered.map((item) => (
                   <tr key={item.id} className="hover:bg-[#F5F5F7]/60 transition-colors">
-                    <td className="py-3 px-5">
-                      <div className="flex items-center gap-3 min-w-[240px]">
+                    {canDelete && (
+                      <td className="py-3 pl-5 pr-1">
                         <button
                           type="button"
-                          onClick={() => onOpen('view', item.id)}
-                          className="relative w-20 h-11 rounded-lg overflow-hidden shrink-0 bg-[#F2F2F7] group"
+                          onClick={() => toggleSelect(item.id)}
+                          aria-label={selected.has(item.id) ? `取消选择 ${item.title}` : `选择 ${item.title}`}
+                          aria-pressed={selected.has(item.id)}
+                          className={`flex h-4 w-4 items-center justify-center rounded border ${
+                            selected.has(item.id)
+                              ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                              : 'border-[#C7C7CC] text-transparent'
+                          }`}
                         >
-                          <MediaImage
-                            src={item.coverUrl}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                          />
+                          {selected.has(item.id) && <Check className="h-3 w-3" strokeWidth={3} />}
                         </button>
+                      </td>
+                    )}
+                    <td className="py-3 px-5">
+                      <div className="flex items-center gap-3 min-w-[240px]">
+                        <video
+                          src={toPlayableVideoUrl(item.videoUrl)}
+                          poster={item.coverUrl || undefined}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="w-20 h-11 rounded-lg shrink-0 bg-black object-contain"
+                          aria-label={`播放 ${item.title}`}
+                        />
                         <div className="min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => onOpen('view', item.id)}
-                            className="font-medium text-[#1D1D1F] hover:text-[#0071E3] text-left truncate block max-w-[280px]"
-                          >
+                          <div className="font-medium text-[#1D1D1F] truncate max-w-[280px]">
                             {item.title}
-                          </button>
+                          </div>
                           <div className="text-[12px] text-[#86868B] tabular-nums">
                             {formatDateShort(item.updatedAt)} · {item.authorName}
                           </div>
@@ -366,7 +513,7 @@ export function VideoManagerView({
                         {canDelete && (
                           <button
                             type="button"
-                            onClick={() => onOpen('delete', item.id)}
+                            onClick={() => requestDelete(item)}
                             className="px-2.5 py-1 rounded-lg text-[12px] text-[#D70015] hover:bg-[#FF3B30]/8 font-medium"
                           >
                             删除
@@ -382,5 +529,17 @@ export function VideoManagerView({
         </div>
       )}
     </div>
+
+    {/* 通用删除确认模态框：单条与批量共用 */}
+    {pendingDelete.length > 0 && (
+      <DeleteConfirmModal
+        title={pendingDelete.length === 1 ? '确认删除该视频？' : `确认删除 ${pendingDelete.length} 个视频？`}
+        itemTitles={pendingDelete.map((v) => v.title)}
+        description="此操作不可撤销，视频记录、封面图与视频源文件将一并永久删除。"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setPendingDelete([])}
+      />
+    )}
+    </>
   );
 }

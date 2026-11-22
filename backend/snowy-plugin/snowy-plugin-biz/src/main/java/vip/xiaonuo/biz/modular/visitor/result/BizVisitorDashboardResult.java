@@ -43,12 +43,40 @@ public class BizVisitorDashboardResult {
     /** 热门内容 */
     private List<TopContent> topContent;
 
+    /** 最新访问记录 */
+    private List<LatestVisit> latestVisits;
+
+    /** 本周/本月/本年周期统计 */
+    private PeriodStats periodStats;
+
+    /** 周期统计（PV/UV/IP） */
+    @Getter
+    @Setter
+    public static class PeriodStats {
+        private PeriodStat week;
+        private PeriodStat month;
+        private PeriodStat year;
+    }
+
+    /** 单个周期的 PV/UV/IP */
+    @Getter
+    @Setter
+    public static class PeriodStat {
+        private Integer pv;
+        private Integer uv;
+        private Integer ip;
+    }
+
     @Getter
     @Setter
     public static class Snapshot {
         private Integer onlineNow;
         private Integer todayPV;
         private Integer todayUV;
+        private Integer todayIP;
+        private Integer yesterdayPV;
+        private Integer yesterdayUV;
+        private Integer yesterdayIP;
         private Double pvGrowthPercent;
         private Double uvGrowthPercent;
         private Integer avgDurationSec;
@@ -56,6 +84,27 @@ public class BizVisitorDashboardResult {
         private Integer mobileSharePercent;
         private Integer desktopSharePercent;
         private String updatedAt;
+    }
+
+    /** 最新访问记录条目 */
+    @Getter
+    @Setter
+    public static class LatestVisit {
+        private String id;
+        private String ip;
+        /** IP 归属地（离线 ip2region 查询） */
+        private String region;
+        private String pageType;
+        private String contentTitle;
+        private String device;
+        private String source;
+        private String userAgent;
+        private Integer durationSec;
+        private String createTime;
+        /** 该IP访问过的页面（去重，形如「首页」「视频·标题」） */
+        private java.util.List<String> pages;
+        /** 该IP的访问次数 */
+        private Integer visitCount;
     }
 
     @Getter

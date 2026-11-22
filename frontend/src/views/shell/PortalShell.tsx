@@ -174,9 +174,9 @@ export function PortalShell({
 
           {/* 移动端视频板块全出血：去掉左右留白与顶部间距，让播放区贴满容器 */}
           <main
-            className={`flex-1 w-full ${
+            className={`flex-1 w-full  h-full ${
               activeSection === 'videos'
-                ? 'px-0 pt-0 pb-0 md:pb-8'
+                ? 'px-0 pt-0 pb-0'
                 : 'px-2.5 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 pt-0 pb-0 md:pb-8'
             }`}
           >

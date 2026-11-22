@@ -1,9 +1,10 @@
 /**
- * 访客在线追踪（WebSocket）
+ * 访客在线追踪（WebSocket + HTTP 上报）
  * ------------------------------------------------------------------
- * 仅上报关键事件（进入板块 PV / 内容浏览 CONTENT_VIEW），心跳走 WebSocket，
- * 不产生 HTTP 请求、不写数据库。在线会话由后端在内存中维护。
+ * 心跳走 WebSocket 维持在线会话；进入板块的 PV / 内容浏览 CONTENT_VIEW
+ * 同时通过 HTTP 上报落库（biz_visitor_event），供 CMS 访客统计与最近访问记录使用。
  */
+import { visitorApi } from './api';
 
 const HEARTBEAT_INTERVAL_MS = 60_000;
 const RECONNECT_DELAY_MS = 5_000;
@@ -125,6 +126,8 @@ export function startVisitorTracking(): () => void {
   if (started) return () => stopVisitorTracking();
   started = true;
   connect();
+  // 首次进入首页上报一次 PV，保证只停留首页也能产生访问记录
+  reportToDb({ eventType: 'PV', pageType: 'HOME' });
   window.addEventListener('beforeunload', handleUnload);
   return () => stopVisitorTracking();
 }
@@ -150,12 +153,36 @@ export function stopVisitorTracking(): void {
   window.removeEventListener('beforeunload', handleUnload);
 }
 
+/** HTTP 落库上报：失败静默，不影响用户浏览 */
+function reportToDb(payload: {
+  eventType: 'PV' | 'CONTENT_VIEW';
+  pageType: string;
+  contentId?: string;
+  contentTitle?: string;
+}): void {
+  const identity = getIdentity();
+  void visitorApi
+    .track({
+      visitorId: identity.visitorId,
+      sessionId: identity.sessionId,
+      eventType: payload.eventType,
+      pageType: payload.pageType,
+      contentId: payload.contentId,
+      contentTitle: payload.contentTitle,
+      source: identity.source,
+      device: identity.device,
+    })
+    .catch(() => {});
+}
+
 /** 上报一次页面浏览（进入某个板块时调用，低频）。 */
 export function trackPageView(pageType: PageType): void {
   send({ type: 'PV', pageType });
+  reportToDb({ eventType: 'PV', pageType });
 }
 
 /** 上报一次内容浏览（打开内容详情时调用）。 */
 export function trackContentView(pageType: PageType, contentId: string, contentTitle?: string): void {
   send({ type: 'CONTENT_VIEW', pageType, contentId, contentTitle });
+  reportToDb({ eventType: 'CONTENT_VIEW', pageType, contentId, contentTitle });
 }

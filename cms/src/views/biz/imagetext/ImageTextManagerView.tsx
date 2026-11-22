@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   Edit3,
@@ -8,9 +9,12 @@ import {
   Images,
   Plus,
   Search,
+  Square,
   Trash2,
+  X,
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
+import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
@@ -29,6 +33,9 @@ interface ImageTextCardProps {
   item: ImageTextItem;
   canEdit: boolean;
   canDelete: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  onRequestDelete: (item: ImageTextItem) => void;
   onOpen: ImageTextManagerViewProps['onOpen'];
   onToggleStatus: () => void;
 }
@@ -38,6 +45,9 @@ function ImageTextCard({
   item,
   canEdit,
   canDelete,
+  selected,
+  onToggleSelect,
+  onRequestDelete,
   onOpen,
   onToggleStatus,
 }: ImageTextCardProps) {
@@ -64,6 +74,26 @@ function ImageTextCard({
           fallbackLabel={item.title}
           className="w-full h-full object-cover select-none"
         />
+
+        {/* 单选复选框：左上角，点击不触发卡片打开 */}
+        {canDelete && (
+          <button
+            type="button"
+            aria-label={selected ? `取消选择 ${item.title}` : `选择 ${item.title}`}
+            aria-pressed={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSelect(item.id);
+            }}
+            className={`absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border shadow-sm backdrop-blur-sm transition-colors ${
+              selected
+                ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                : 'border-white/70 bg-black/35 text-transparent hover:bg-black/55'
+            }`}
+          >
+            {selected ? <Check className="h-4 w-4" strokeWidth={3} /> : <Square className="h-3.5 w-3.5" />}
+          </button>
+        )}
 
         {/* 多图角标：右上角「1/3」 */}
         {total > 1 && (
@@ -149,7 +179,7 @@ function ImageTextCard({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                onOpen('delete', item.id);
+                onRequestDelete(item);
               }}
               aria-label={`删除 ${item.title}`}
               className="rounded-lg bg-white/90 p-1.5 text-[#1D1D1F] shadow-xs backdrop-blur-sm hover:bg-white hover:text-[#D70015]"
@@ -175,6 +205,10 @@ export function ImageTextManagerView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  /** 批量选择：选中的图文ID集合 */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 待删除的图文（单条或批量），非空时打开通用删除确认模态框 */
+  const [pendingDelete, setPendingDelete] = useState<ImageTextItem[]>([]);
   const { options: categoryOptions } = usePublishCategories('GRAPHIC');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
@@ -199,6 +233,46 @@ export function ImageTextManagerView({
     });
   }, [items, search, statusFilter, categoryFilter, categoryOptions]);
 
+  /** 当前筛选结果的全选状态 */
+  const allSelected = filtered.length > 0 && filtered.every((it) => selected.has(it.id));
+  const someSelected = filtered.some((it) => selected.has(it.id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** 全选/取消全选当前筛选结果 */
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) filtered.forEach((it) => next.delete(it.id));
+      else filtered.forEach((it) => next.add(it.id));
+      return next;
+    });
+  }
+
+  /** 单条删除：打开模态框 */
+  function requestDelete(item: ImageTextItem) {
+    setPendingDelete([item]);
+  }
+
+  /** 批量删除：打开模态框 */
+  function requestBatchDelete() {
+    setPendingDelete(items.filter((it) => selected.has(it.id)));
+  }
+
+  /** 确认删除：调后端 delete（数组入参），成功后清空选择并刷新 */
+  async function handleConfirmDelete() {
+    await api.deleteImageTexts(pendingDelete.map((it) => it.id));
+    setSelected(new Set());
+    await onRefresh();
+  }
+
   async function handleToggleStatus(item: ImageTextItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
     await api.updateImageText(item.id, { status: nextStatus });
@@ -206,6 +280,7 @@ export function ImageTextManagerView({
   }
 
   return (
+    <>
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-4 flex flex-wrap items-center justify-between gap-3">
@@ -281,6 +356,59 @@ export function ImageTextManagerView({
         </div>
       )}
 
+      {/* 批量操作条：全选与已选数量放一起，始终显示（有数据时） */}
+      {canDelete && filtered.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#E5E5EA] bg-white px-4 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              aria-label={allSelected ? '取消全选' : '全选'}
+              className={`flex h-4 w-4 items-center justify-center rounded border ${
+                allSelected
+                  ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                  : someSelected
+                    ? 'border-[#0071E3] text-[#0071E3]'
+                    : 'border-[#C7C7CC] text-transparent'
+              }`}
+            >
+              {allSelected ? (
+                <Check className="h-3 w-3" strokeWidth={3} />
+              ) : someSelected ? (
+                <span className="h-0.5 w-2 rounded-full bg-[#0071E3]" />
+              ) : null}
+            </button>
+            <span
+              className={`text-[13px] font-medium ${
+                selected.size > 0 ? 'text-[#0071E3]' : 'text-[#6E6E73]'
+              }`}
+            >
+              全选 · 已选择 {selected.size} 篇图文
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] text-[12px] font-medium text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors inline-flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              取消选择
+            </button>
+            <button
+              type="button"
+              onClick={requestBatchDelete}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-40 text-white text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              批量删除{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
@@ -309,6 +437,9 @@ export function ImageTextManagerView({
               item={item}
               canEdit={canEdit}
               canDelete={canDelete}
+              selected={selected.has(item.id)}
+              onToggleSelect={toggleSelect}
+              onRequestDelete={requestDelete}
               onOpen={onOpen}
               onToggleStatus={() => void handleToggleStatus(item)}
             />
@@ -316,5 +447,17 @@ export function ImageTextManagerView({
         </div>
       )}
     </div>
+
+    {/* 通用删除确认模态框：单条与批量共用 */}
+    {pendingDelete.length > 0 && (
+      <DeleteConfirmModal
+        title={pendingDelete.length === 1 ? '确认删除该图文？' : `确认删除 ${pendingDelete.length} 篇图文？`}
+        itemTitles={pendingDelete.map((it) => it.title)}
+        description="此操作不可撤销，选中的图文将从列表中永久移除。"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setPendingDelete([])}
+      />
+    )}
+    </>
   );
 }

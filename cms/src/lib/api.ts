@@ -21,8 +21,8 @@ import {
   snowyLoginMenu,
   snowyLogout,
   snowyUpload,
+  snowyUpdateUserInfo,
   snowyVisitorDashboard,
-  snowyVisitorLive,
   userProfileFromSnowy,
   type GraphicPosterDraft,
   type SnowyLoginUser,
@@ -144,6 +144,40 @@ export const api = {
   },
 
   updateProfile: async (payload: Partial<UserProfile>): Promise<{ user: UserProfile }> => {
+    // 姓名/昵称按 Snowy 官方 userCenter.updateUserInfo 持久化；
+    // 个人简介存到扩展字段 extJson 的 bio 键里（Snowy 无独立简介字段，signature 是签名图片不能用）
+    const syncBio = payload.bio !== undefined;
+    const shouldSyncBackend =
+      payload.nickname !== undefined || payload.name !== undefined || syncBio;
+    if (shouldSyncBackend && currentUser) {
+      const cached = getCachedUserInfo();
+      // 保留 extJson 里其他业务字段，只覆盖 bio
+      let extJson: string | undefined;
+      if (syncBio) {
+        let extObj: Record<string, unknown> = {};
+        try {
+          extObj = cached?.extJson ? JSON.parse(cached.extJson) : {};
+        } catch {
+          extObj = {};
+        }
+        extJson = JSON.stringify({ ...extObj, bio: payload.bio ?? '' });
+      }
+      await snowyUpdateUserInfo({
+        id: currentUser.id,
+        name: payload.name ?? currentUser.name ?? currentUser.account ?? '',
+        nickname: payload.nickname ?? currentUser.nickname ?? payload.name ?? currentUser.name ?? '',
+        extJson,
+      });
+      // 同步更新 Snowy 用户信息缓存，避免刷新后 me() 覆盖回旧值
+      if (cached) {
+        cacheUserInfo({
+          ...cached,
+          name: payload.name ?? cached.name,
+          nickname: payload.nickname ?? cached.nickname ?? payload.name ?? cached.name,
+          extJson: extJson ?? cached.extJson,
+        });
+      }
+    }
     if (currentUser) currentUser = { ...currentUser, ...payload };
     return { user: currentUser || buildUserProfile('superAdmin') };
   },
@@ -155,14 +189,12 @@ export const api = {
 
   getDashboard: async (): Promise<DashboardPayload> => snowyVisitorDashboard(),
 
-  /** 实时访客快照（供仪表盘轮询刷新 KPI） */
-  getLiveSnapshot: () => snowyVisitorLive(),
-
   // ---- 视频 ----
   getVideos: async () => ({ items: await snowyBiz.listVideos() }),
   createVideo: (payload: Partial<VideoItem>) => snowyBiz.createVideo(payload),
   updateVideo: (id: string, payload: Partial<VideoItem>) => snowyBiz.updateVideo(id, payload),
   deleteVideo: (id: string) => snowyBiz.deleteVideo(id),
+  deleteVideos: (ids: string[]) => snowyBiz.deleteVideos(ids),
 
   // ---- 图文 ----
   /** 文本转图文：返回渲染好的图片地址，供编辑页勾选后作为图文图片 */
@@ -171,10 +203,12 @@ export const api = {
   createImageText: (payload: Partial<ImageTextItem>) => snowyBiz.createImageText(payload),
   updateImageText: (id: string, payload: Partial<ImageTextItem>) => snowyBiz.updateImageText(id, payload),
   deleteImageText: (id: string) => snowyBiz.deleteImageText(id),
+  deleteImageTexts: (ids: string[]) => snowyBiz.deleteImageTexts(ids),
 
   // ---- 文章 ----
   getArticles: async () => ({ items: await snowyBiz.listArticles() }),
   createArticle: (payload: Partial<ArticleItem>) => snowyBiz.createArticle(payload),
   updateArticle: (id: string, payload: Partial<ArticleItem>) => snowyBiz.updateArticle(id, payload),
   deleteArticle: (id: string) => snowyBiz.deleteArticle(id),
+  deleteArticles: (ids: string[]) => snowyBiz.deleteArticles(ids),
 };

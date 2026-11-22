@@ -385,10 +385,10 @@ export function Sidebar({
                   : 'text-[#1D1D1F]'
               }`}
             >
-              {user.name}
+              {user.nickname || user.name}
             </div>
             <div className="text-[12px] text-[#6E6E73] truncate">
-              {user.roleTitle}
+              {user.account || user.email}
             </div>
           </div>
           <UserCircle2

@@ -1,54 +1,27 @@
 import { useRef, useState, type FormEvent } from 'react';
-import {
-  Camera,
-  Check,
-  FileText,
-  Film,
-  Images,
-  KeyRound,
-  LogOut,
-  X,
-} from 'lucide-react';
+import { Camera, KeyRound, LogOut, X } from 'lucide-react';
 import { api, uploadFileWithProgress } from '../../lib/api.ts';
-import type { ModuleKey, UserProfile } from '../../types/cms.ts';
+import { showToast } from '../../components/AppToast.tsx';
+import type { UserProfile } from '../../types/cms.ts';
 import { MediaImage } from '../../components/MediaImage.tsx';
-import { SelectField, type SelectFieldOption } from '../../components/SelectField.tsx';
-
-const DEFAULT_MODULE_OPTIONS: SelectFieldOption[] = [
-  { value: 'dashboard', label: '首页看板' },
-  { value: 'videos', label: '视频管理' },
-  { value: 'imagetexts', label: '图文管理' },
-  { value: 'articles', label: '文章管理' },
-];
 
 interface PersonalCenterViewProps {
   user: UserProfile;
-  myCounts: {
-    videos: number;
-    imagetexts: number;
-    articles: number;
-  };
   onUserUpdated: (user: UserProfile) => void;
   onLogout: () => void;
 }
 
 export function PersonalCenterView({
   user,
-  myCounts,
   onUserUpdated,
   onLogout,
 }: PersonalCenterViewProps) {
-  const [name, setName] = useState(user.name);
-  const [roleTitle, setRoleTitle] = useState(user.roleTitle);
-  const [department, setDepartment] = useState(user.department);
+  const [nickname, setNickname] = useState(user.nickname || user.name);
   const [bio, setBio] = useState(user.bio);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
-  const [defaultModule, setDefaultModule] = useState<ModuleKey>(user.defaultModule);
-  const [liveRefresh, setLiveRefresh] = useState(user.liveRefresh);
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [profileNotice, setProfileNotice] = useState('');
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -62,15 +35,14 @@ export function PersonalCenterView({
   async function handleAvatarChange(file: File) {
     if (!file.type.startsWith('image/')) return;
     setAvatarUploading(true);
-    setProfileNotice('');
     try {
       const res = await uploadFileWithProgress(file);
       setAvatarUrl(res.url);
       const updated = await api.updateProfile({ avatarUrl: res.url });
       onUserUpdated(updated.user);
-      setProfileNotice('头像已更新');
+      showToast('头像已更新', 'success');
     } catch (err) {
-      setProfileNotice(err instanceof Error ? err.message : '头像上传失败');
+      showToast(err instanceof Error ? err.message : '头像上传失败', 'danger');
     } finally {
       setAvatarUploading(false);
     }
@@ -79,21 +51,17 @@ export function PersonalCenterView({
   async function handleSaveProfile(e: FormEvent) {
     e.preventDefault();
     setSavingProfile(true);
-    setProfileNotice('');
     try {
       const res = await api.updateProfile({
-        name,
-        roleTitle,
-        department,
+        name: nickname,
+        nickname,
         bio,
         avatarUrl,
-        defaultModule,
-        liveRefresh,
       });
       onUserUpdated(res.user);
-      setProfileNotice('个人资料与偏好设置已保存');
+      showToast('个人资料已保存', 'success');
     } catch (err) {
-      setProfileNotice(err instanceof Error ? err.message : '保存失败');
+      showToast(err instanceof Error ? err.message : '保存失败', 'danger');
     } finally {
       setSavingProfile(false);
     }
@@ -148,8 +116,8 @@ export function PersonalCenterView({
           <div className="relative shrink-0">
             <MediaImage
               src={avatarUrl}
-              alt={user.name}
-              fallbackLabel={user.name.slice(0, 1)}
+              alt={nickname}
+              fallbackLabel={nickname.slice(0, 1)}
               className="w-20 h-20 rounded-full object-cover border border-[#E5E5EA]"
             />
             <input
@@ -175,13 +143,9 @@ export function PersonalCenterView({
 
           <div>
             <h2 className="text-[22px] font-semibold tracking-tight text-[#1D1D1F]">
-              {user.name}
+              {nickname}
             </h2>
-            <div className="mt-1 text-[13px] text-[#6E6E73] flex flex-wrap items-center gap-2">
-              <span>{user.roleTitle}</span>
-              <span aria-hidden="true">·</span>
-              <span>{user.department}</span>
-              <span aria-hidden="true">·</span>
+            <div className="mt-1 text-[13px] text-[#6E6E73]">
               <span className="font-mono">{user.email}</span>
             </div>
             <p className="mt-2 text-[13px] text-[#86868B] max-w-xl">{user.bio}</p>
@@ -208,85 +172,23 @@ export function PersonalCenterView({
         </div>
       </section>
 
-      {/* Content Contribution Summary */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-5 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] text-[#6E6E73]">我管理的视频</div>
-            <div className="text-[28px] font-semibold text-[#1D1D1F] tabular-nums mt-1">
-              {myCounts.videos}
-            </div>
-          </div>
-          <Film className="w-6 h-6 text-[#0071E3]" strokeWidth={1.7} />
-        </div>
-        <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-5 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] text-[#6E6E73]">我发布的图文</div>
-            <div className="text-[28px] font-semibold text-[#1D1D1F] tabular-nums mt-1">
-              {myCounts.imagetexts}
-            </div>
-          </div>
-          <Images className="w-6 h-6 text-[#34C759]" strokeWidth={1.7} />
-        </div>
-        <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-5 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] text-[#6E6E73]">我撰写的文章</div>
-            <div className="text-[28px] font-semibold text-[#1D1D1F] tabular-nums mt-1">
-              {myCounts.articles}
-            </div>
-          </div>
-          <FileText className="w-6 h-6 text-[#5856D6]" strokeWidth={1.7} />
-        </div>
-      </section>
-
       {/* Profile & Workspace Preferences Form */}
       <form
         onSubmit={handleSaveProfile}
         className="bg-white rounded-[20px] border border-[#E5E5EA] p-6 space-y-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
       >
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-[17px] font-semibold text-[#1D1D1F]">基本资料与工作台偏好</h3>
-          {profileNotice && (
-            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#16A34A]">
-              <Check className="w-3.5 h-3.5" />
-              {profileNotice}
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-              姓名 / 署名
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 text-[14px]"
-            />
-          </div>
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-              职位角色
-            </label>
-            <input
-              type="text"
-              value={roleTitle}
-              onChange={(e) => setRoleTitle(e.target.value)}
-              className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 text-[14px]"
-            />
-          </div>
+          <h3 className="text-[17px] font-semibold text-[#1D1D1F]">基本资料</h3>
         </div>
 
         <div>
           <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-            所属部门
+            昵称
           </label>
           <input
             type="text"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
             className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 text-[14px]"
           />
         </div>
@@ -301,43 +203,6 @@ export function PersonalCenterView({
             onChange={(e) => setBio(e.target.value)}
             className="w-full p-3.5 rounded-xl bg-[#F5F5F7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 text-[14px] resize-none"
           />
-        </div>
-
-        <div className="pt-2 border-t border-[#F2F2F7] grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-          <div>
-            <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
-              登录后默认进入模块
-            </label>
-            <SelectField
-              value={defaultModule}
-              onChange={(value) => setDefaultModule(value as ModuleKey)}
-              ariaLabel="登录后默认进入模块"
-              className="w-full"
-              options={DEFAULT_MODULE_OPTIONS}
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-xl bg-[#F5F5F7]">
-            <div>
-              <div className="text-[13px] font-medium text-[#1D1D1F]">看板实时访客推送</div>
-              <div className="text-[11px] text-[#86868B]">开启后每 3 秒自动同步在线人数</div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={liveRefresh}
-              onClick={() => setLiveRefresh((v) => !v)}
-              className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 ${
-                liveRefresh ? 'bg-[#34C759]' : 'bg-[#D1D1D6]'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
-                  liveRefresh ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
         </div>
 
         <div className="pt-2 flex justify-end">

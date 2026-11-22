@@ -60,7 +60,7 @@ export function VideosSection({
   onViewModeChange,
 }: VideosSectionProps) {
   return (
-    <div className={active ? 'block' : 'contents'}>
+    <div className={active ? 'block h-full' : 'contents'}>
       {!active ? (
         <VideosView
           videos={videos}

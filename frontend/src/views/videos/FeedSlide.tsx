@@ -136,6 +136,12 @@ export function FeedSlide({
     player.playbackRate = playbackRate;
     player.muted = isMuted;
     void player.play().catch(() => {});
+    // src 是 active 后才挂载的，源就绪需要一点时间；补一次延迟 play 兜底，
+    // 配合 onCanPlay 里的主动播放，确保首次进入也能正常起播。
+    const retry = window.setTimeout(() => {
+      if (player.paused) void player.play().catch(() => {});
+    }, 120);
+    return () => window.clearTimeout(retry);
   }, [active, video.id, isMuted, playbackRate]);
 
   useEffect(() => {
@@ -174,11 +180,15 @@ export function FeedSlide({
     <div data-video-stage className="relative w-full h-full bg-black overflow-hidden">
       <MediaPlayer
         ref={setPlayerRef}
-        src={source}
         poster={video.cover}
         title={video.title}
         playsInline
         loop
+        // 只给 active 项挂载 src：非 active 的 slide（含 loop 副本）不设置源，
+        // 从根本上避免十几个播放器同时预加载同一个 /public/file/stream。
+        // 不设 load/preload，保持默认加载策略，保证 active 项能正常播放。
+        src={active ? source : undefined}
+        posterLoad="eager"
         muted={isMuted}
         playbackRate={playbackRate}
         className="absolute inset-0 w-full h-full"

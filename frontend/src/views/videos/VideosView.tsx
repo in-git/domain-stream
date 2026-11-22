@@ -212,10 +212,17 @@ export function VideosView({
   };
 
   /** 卡片点击：打开全屏模态框直接播放被点视频（用列表数据里自带的 src） */
-  const openVideoAt = useCallback((video: VideoItem) => {
-    if (!video?.src) return;
-    setPickedVideo(video);
-  }, []);
+  const openVideoAt = useCallback(
+    (video: VideoItem) => {
+      if (!video?.src) return;
+      // 打开模态框前暂停主页常驻的播放器，避免两套播放器同时请求同一视频流
+      playersRef.current.forEach((player) => {
+        if (player && !player.paused) player.pause();
+      });
+      setPickedVideo(video);
+    },
+    []
+  );
 
   // 全屏播放模态框：ESC 关闭
   useEffect(() => {
@@ -292,7 +299,7 @@ export function VideosView({
           ? 'hidden'
           : isMini
             ? 'fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
-            : 'relative space-y-0'
+            : 'relative space-y-0 h-full'
       }
     >
       {/* 卡片模式分类：PC / 移动端各自模块，内部用 CSS 断点决定挂载形态 */}
@@ -324,28 +331,20 @@ export function VideosView({
       )}
 
       {!isMini && viewMode === 'feed' && filteredVideos.length === 0 && (
-        <div className="flex h-[calc(100dvh-6.5rem)] items-center justify-center">
-          <EmptyState
-            className="w-fit px-10 py-16"
-            title="该分类下暂无视频"
-            description="可通过上方分类切换其他分类"
-          />
+        <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center bg-[#0A0A0C]">
+          <EmptyState className="w-fit px-10 py-16" title="暂无数据" bare onDark />
         </div>
       )}
 
       {!isMini && viewMode === 'grid' && filteredVideos.length === 0 && (
-        <EmptyState title="该分类下暂无视频" description="可通过上方分类切换其他分类" />
+        <EmptyState title="暂无数据" bare />
       )}
 
       {/* 沉浸刷看：始终挂载，网格模式下用 CSS 隐藏，保证 <video> 不被销毁重建 */}
       {currentVideo && (
         <div
           className={
-            viewMode === 'grid' && !isMini
-              ? 'hidden'
-              : isMini
-                ? 'h-full w-full'
-                : 'block'
+            viewMode === 'grid' && !isMini ? 'hidden' : 'h-full w-full'
           }
         >
           <div
@@ -353,7 +352,7 @@ export function VideosView({
             className={
               isMini
                 ? 'relative w-full h-full overflow-hidden'
-                : 'relative w-full h-[100dvh] md:h-[calc(100dvh-6.5rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                : 'relative w-full h-[calc(100dvh-3.5rem)] rounded-none overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
             <Swiper

@@ -52,4 +52,8 @@ public class SysUserUpdateInfoParam {
     /** 签名 */
     @Schema(description = "签名，图片base64")
     private String signature;
+
+    /** 扩展信息（业务自定义，如个人简介等，JSON字符串） */
+    @Schema(description = "扩展信息")
+    private String extJson;
 }

@@ -208,6 +208,22 @@ public interface DevFileService extends IService<DevFile> {
     void generateThumbnail(String fileId);
 
     /**
+     * 把缩略图写入本地磁盘，返回可公开访问的缩略图URL（不再用数据库base64字段存储图片本体）
+     *
+     * @author wuwenlong
+     * @date 2026/11/22
+     */
+    String storageThumbnailToDisk(String fileId, String bucketName, String fileKey, String suffix, byte[] imageBytes);
+
+    /**
+     * 公开输出缩略图到响应流
+     *
+     * @author wuwenlong
+     * @date 2026/11/22
+     */
+    void thumbnail(String id, String sign, HttpServletResponse response) throws IOException;
+
+    /**
      * 新建一条底座文件记录指向源记录的同一存储对象（名称用新的），源对象不在目标引擎或大小不符时返回null
      *
      * @author yubaoshan

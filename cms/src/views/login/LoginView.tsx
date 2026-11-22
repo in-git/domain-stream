@@ -11,9 +11,9 @@ const ACCOUNT_KEY = 'SNOWY_ACCOUNT';
 
 function readRememberedAccount(): string {
   try {
-    return localStorage.getItem(ACCOUNT_KEY) || 'superAdmin';
+    return localStorage.getItem(ACCOUNT_KEY) || '';
   } catch {
-    return 'superAdmin';
+    return '';
   }
 }
 
@@ -89,7 +89,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="superAdmin"
+                placeholder="请输入账号"
                 className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-[#0071E3] focus:outline-none focus:ring-4 focus:ring-[#0071E3]/10 text-[14px] text-[#1D1D1F] transition-all"
               />
             </div>

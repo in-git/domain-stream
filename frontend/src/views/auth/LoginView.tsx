@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, ScanLine, UserRound, X } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, UserRound, X } from 'lucide-react';
 import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
 import { navigate } from '../../lib/router';
 import qqIcon from '../../assets/images/authSource/qq.png';
@@ -158,9 +158,6 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
         </button>
 
         <div className="mb-6 text-center sm:pr-9 sm:text-left">
-          <div className="mb-4 hidden h-11 w-11 items-center justify-center rounded-2xl bg-[#0071E3]/10 text-[#0071E3] dark:bg-[#0A84FF]/15 dark:text-[#0A84FF] sm:flex">
-            <UserRound className="h-5 w-5" />
-          </div>
           <h2 id="login-modal-title" className="text-[24px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
           </h2>
@@ -172,7 +169,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
         </div>
 
         {mode === 'wechat' ? (
-          <div className="space-y-4">
+          <div className="flex flex-col items-center space-y-4">
             <div className="py-1 text-center space-y-4">
               <div className="relative mx-auto h-24 w-24">
                 <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-[#07C160]/35" />
@@ -180,7 +177,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                   <img src={wechatIcon} alt="" className="h-12 w-12" />
                 </div>
                 <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
-                  <ScanLine className="h-4 w-4" />
+                  <QrCode className="h-4 w-4" />
                 </span>
               </div>
               <div className="space-y-1.5">

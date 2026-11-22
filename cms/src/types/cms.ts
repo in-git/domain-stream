@@ -16,18 +16,13 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  roleTitle: string;
-  department: string;
   avatarUrl: string;
   bio: string;
   defaultModule: ModuleKey;
-  liveRefresh: boolean;
   lastLoginAt: string;
   // 以下为 Snowy 真实用户信息映射字段（可选，兼容旧调用）
   account?: string;
   nickname?: string;
-  orgName?: string;
-  positionName?: string;
   buttonCodeList?: string[];
   roleCodeList?: string[];
   permissionCodeList?: string[];
@@ -141,6 +136,10 @@ export interface VisitorSnapshot {
   onlineNow: number;
   todayPV: number;
   todayUV: number;
+  todayIP: number;
+  yesterdayPV: number;
+  yesterdayUV: number;
+  yesterdayIP: number;
   pvGrowthPercent: number;
   uvGrowthPercent: number;
   avgDurationSec: number;
@@ -148,6 +147,37 @@ export interface VisitorSnapshot {
   mobileSharePercent: number;
   desktopSharePercent: number;
   updatedAt: string;
+}
+
+/** 最新访问记录 */
+export interface LatestVisit {
+  id: string;
+  ip: string;
+  region: string;
+  pageType: string;
+  contentTitle: string;
+  device: string;
+  source: string;
+  userAgent: string;
+  durationSec: number;
+  createTime: string;
+  /** 该IP访问过的页面（去重） */
+  pages: string[];
+  /** 该IP的访问次数 */
+  visitCount: number;
+}
+
+/** 单个周期的 PV/UV/IP 统计 */
+export interface PeriodStat {
+  pv: number;
+  uv: number;
+  ip: number;
+}
+
+export interface PeriodStats {
+  week: PeriodStat;
+  month: PeriodStat;
+  year: PeriodStat;
 }
 
 export interface DashboardPayload {
@@ -163,6 +193,8 @@ export interface DashboardPayload {
     articles: { count: number; published: number; totalViews: number };
   };
   sources: TrafficSource[];
+  latestVisits: LatestVisit[];
+  periodStats: PeriodStats;
   topContent: Array<{
     id: string;
     type: 'video' | 'imagetext' | 'article';

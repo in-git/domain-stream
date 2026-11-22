@@ -104,6 +104,12 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
     /** 文件下载签名密钥 */
     private static final String FILE_DOWNLOAD_SIGN_SECRET = "snowy_file_download_secret_key_2025";
 
+    /** 缩略图文件名后缀（拼在源文件fileKey后，如 2026/11/22/123.webp -> 2026/11/22/123.webp_thumb.png） */
+    private static final String THUMBNAIL_KEY_SUFFIX = "_thumb.png";
+
+    /** 缩略图统一存到本地默认桶（与文件中心LOCAL引擎的固定桶一致） */
+    private static final String THUMBNAIL_LOCAL_BUCKET = "defaultBucketName";
+
     @Override
     public String uploadReturnId(String engine, MultipartFile file) {
         return this.uploadReturnId(engine, file, DevFileBizTypeEnum.USER.getValue());
@@ -537,6 +543,16 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
             log.error("文件删除失败：{}，路径：{}", devFile.getName(), devFile.getStoragePath(), e);
             throw new CommonException("文件删除失败"); // 触发事务回滚
         }
+        // 同步删除本地磁盘上的缩略图文件（存在才删，避免误报）
+        String thumbKey = devFile.getFileKey() + THUMBNAIL_KEY_SUFFIX;
+        try {
+            java.io.File thumbFile = DevFileLocalUtil.getFileByBucketNameAndKey(THUMBNAIL_LOCAL_BUCKET, thumbKey);
+            if (FileUtil.exist(thumbFile)) {
+                DevFileLocalUtil.deleteFile(THUMBNAIL_LOCAL_BUCKET, thumbKey);
+            }
+        } catch (Exception ignored) {
+            // 缩略图不存在或删除失败不影响主文件删除流程
+        }
         this.baseMapper.deleteAbsoluteById(devFile.getId());
     }
 
@@ -626,12 +642,16 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
                 .setScale(0,  RoundingMode.HALF_UP )));
         devFile.setSizeInfo(FileUtil.readableFileSize(file.getSize()));
         devFile.setObjName(ObjectUtil.isNotEmpty(devFile.getSuffix())?fileId + StrUtil.DOT + devFile.getSuffix():null);
-        // 如果是图片，则压缩生成缩略图
+        // 如果是图片，则压缩生成缩略图并落盘（不再存base64到数据库）
         if(ObjectUtil.isNotEmpty(suffix)) {
             if(isPic(suffix)) {
                 try {
-                    devFile.setThumbnail(ImgUtil.toBase64DataUri(ImgUtil.scale(ImgUtil.toImage(file.getBytes()),
-                            100, 100, null), suffix));
+                    BufferedImage thumbImage = ImgUtil.toBufferedImage(ImgUtil.scale(ImgUtil.toImage(file.getBytes()),
+                            THUMBNAIL_SIZE, THUMBNAIL_SIZE, null));
+                    ByteArrayOutputStream thumbOut = new ByteArrayOutputStream();
+                    ImageIO.write(thumbImage, "png", thumbOut);
+                    devFile.setThumbnail(this.storageThumbnailToDisk(fileId, bucketName, fileKey,
+                            suffix, thumbOut.toByteArray()));
                 } catch (Exception ignored) {
                 }
             }
@@ -847,7 +867,16 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         if (ObjectUtil.isNull(image)) {
             return;
         }
-        String thumbnail = ImgUtil.toBase64DataUri(ImgUtil.scale(image, THUMBNAIL_SIZE, THUMBNAIL_SIZE, null), devFile.getSuffix());
+        BufferedImage thumbImage = ImgUtil.toBufferedImage(ImgUtil.scale(image, THUMBNAIL_SIZE, THUMBNAIL_SIZE, null));
+        ByteArrayOutputStream thumbOut = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(thumbImage, "png", thumbOut);
+        } catch (IOException e) {
+            log.error("生成缩略图字节失败，文件id：{}，原因：{}", fileId, e.getMessage());
+            return;
+        }
+        String thumbnail = this.storageThumbnailToDisk(fileId, devFile.getBucket(), devFile.getFileKey(),
+                devFile.getSuffix(), thumbOut.toByteArray());
         // 只在仍无缩略图时写入，不覆盖其他途径已生成的结果
         this.update(new LambdaUpdateWrapper<DevFile>().eq(DevFile::getId, fileId).isNull(DevFile::getThumbnail)
                 .set(DevFile::getThumbnail, thumbnail));
@@ -1072,6 +1101,46 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
                 || ImgUtil.IMAGE_TYPE_BMP.equals(fileSuffix)
                 || ImgUtil.IMAGE_TYPE_PNG.equals(fileSuffix)
                 || ImgUtil.IMAGE_TYPE_PSD.equals(fileSuffix);
+    }
+
+    @Override
+    public String storageThumbnailToDisk(String fileId, String bucketName, String fileKey, String suffix, byte[] imageBytes) {
+        // 缩略图统一落盘到本地存储（与文件中心LOCAL引擎同一目录规则），fileKey加固定后缀区分
+        String thumbKey = fileKey + THUMBNAIL_KEY_SUFFIX;
+        DevFileLocalUtil.storageFile(THUMBNAIL_LOCAL_BUCKET, thumbKey, imageBytes);
+        String sign = generateDownloadSign(fileId);
+        return getBackendUrl() + "/dev/file/thumbnail?id=" + fileId + "&sign=" + sign;
+    }
+
+    @Override
+    public void thumbnail(String id, String sign, HttpServletResponse response) throws IOException {
+        if (!verifyDownloadSign(id, sign)) {
+            CommonResponseUtil.renderError(response, "缩略图链接无效，请使用正确的地址");
+            return;
+        }
+        DevFile devFile;
+        try {
+            devFile = this.queryEntity(id);
+        } catch (Exception e) {
+            CommonResponseUtil.renderError(response, e.getMessage());
+            return;
+        }
+        if (BooleanUtil.isTrue(devFile.getIsDownloadAuth())) {
+            CommonResponseUtil.renderError(response, "该文件不允许公开访问缩略图");
+            return;
+        }
+        String thumbKey = devFile.getFileKey() + THUMBNAIL_KEY_SUFFIX;
+        response.setContentType("image/png");
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Cache-Control", "public, max-age=86400");
+        try {
+            DevFileLocalUtil.writeFileToStream(THUMBNAIL_LOCAL_BUCKET, thumbKey, response.getOutputStream());
+        } catch (Exception e) {
+            log.error("读取缩略图失败，id：{}，原因：{}", id, e.getMessage());
+            if (!response.isCommitted()) {
+                CommonResponseUtil.renderError(response, "缩略图不存在");
+            }
+        }
     }
 
     /**

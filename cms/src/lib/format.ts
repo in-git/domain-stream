@@ -21,7 +21,9 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function formatNumber(n: number): string {
-  return new Intl.NumberFormat('zh-CN').format(n);
+  // 防御后端字段缺失/undefined/NaN：Intl.format(undefined) 会输出 "NaN"
+  const safe = typeof n === 'number' && Number.isFinite(n) ? n : 0;
+  return new Intl.NumberFormat('zh-CN').format(safe);
 }
 
 export function formatDateShort(iso: string): string {

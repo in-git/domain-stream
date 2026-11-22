@@ -389,6 +389,14 @@ public class DevFileController {
         devFileService.streamForPlay(id, sign, request, response);
     }
 
+    /** 公开获取图片缩略图（缩略图本体存磁盘，字段里只存URL） */
+    @Operation(summary = "获取图片缩略图")
+    @GetMapping("/dev/file/thumbnail")
+    public void thumbnail(@RequestParam String id, @RequestParam String sign,
+                          HttpServletResponse response) throws IOException {
+        devFileService.thumbnail(id, sign, response);
+    }
+
     @Operation(summary = "授权下载文件")
     @CommonLog("授权下载文件")
     @GetMapping(value = "/dev/file/authDownload", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)

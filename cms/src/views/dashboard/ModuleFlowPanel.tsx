@@ -193,9 +193,8 @@ export function ModuleFlowPanel({ onNavigate, permissions }: ModuleFlowPanelProp
   return (
     <section
       aria-label="导航"
-      className="h-full lg:col-span-1 xl:col-span-2 bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
+      className="h-full bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
     >
-      <h2 className="mb-3 text-[17px] font-semibold tracking-tight text-[#1D1D1F]">导航</h2>
       <ModuleFlowChart
         nodes={nodes}
         edges={edges}

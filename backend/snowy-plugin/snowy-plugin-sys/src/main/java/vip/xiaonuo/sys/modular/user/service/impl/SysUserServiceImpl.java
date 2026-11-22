@@ -1600,6 +1600,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if(ObjectUtil.isNotEmpty(sysUserUpdateInfoParam.getBirthday())) {
             lambdaUpdateWrapper.set(SysUser::getBirthday, sysUserUpdateInfoParam.getBirthday());
         }
+        // 扩展信息（个人简介等），允许传空串清空
+        if(sysUserUpdateInfoParam.getExtJson() != null) {
+            lambdaUpdateWrapper.set(SysUser::getExtJson, sysUserUpdateInfoParam.getExtJson());
+        }
         // 更新指定字段
         this.update(lambdaUpdateWrapper);
         refreshLoginUserCacheField(u -> {
@@ -1614,6 +1618,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             }
             if (ObjectUtil.isNotEmpty(sysUserUpdateInfoParam.getBirthday())) {
                 u.setBirthday(sysUserUpdateInfoParam.getBirthday());
+            }
+            if (sysUserUpdateInfoParam.getExtJson() != null) {
+                u.setExtJson(sysUserUpdateInfoParam.getExtJson());
             }
         });
     }

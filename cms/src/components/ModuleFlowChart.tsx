@@ -167,7 +167,7 @@ export default function ModuleFlowChart({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[18px] border border-[#E5E5EA] bg-white ${className}`}
+      className={`relative w-full overflow-hidden bg-white ${className}`}
     >
       <svg
         ref={svgRef}

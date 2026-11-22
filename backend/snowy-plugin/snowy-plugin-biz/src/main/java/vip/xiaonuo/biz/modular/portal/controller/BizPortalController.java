@@ -46,6 +46,7 @@ import vip.xiaonuo.auth.api.SaBaseLoginUserApi;
 import vip.xiaonuo.auth.core.pojo.SaBaseClientLoginUser;
 import vip.xiaonuo.auth.core.util.StpClientUtil;
 import vip.xiaonuo.common.pojo.CommonResult;
+import vip.xiaonuo.common.util.CommonIpAddressUtil;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -383,27 +384,11 @@ public class BizPortalController {
                     ? null : StrUtil.maxLength(replyTo.trim(), 100));
         }
 
-        bizMessage.setIp(getClientIp(request));
+        bizMessage.setIp(CommonIpAddressUtil.getIp(request));
         bizMessage.setUserAgent(StrUtil.maxLength(request.getHeader("User-Agent"), 500));
         bizMessageMapper.insert(bizMessage);
         // 返回新生成的主键，用于前端回填真实ID（否则前端临时ID无法作为后续回复的parentId）
         return CommonResult.data(bizMessage.getId());
     }
 
-    /**
-     * 获取访客IP
-     *
-     * @author wuwenlong
-     * @date  2026/11/19
-     */
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (StrUtil.isBlank(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (StrUtil.isBlank(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        return StrUtil.maxLength(ip.split(",")[0].trim(), 50);
-    }
 }

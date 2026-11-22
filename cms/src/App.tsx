@@ -29,6 +29,7 @@ import type {
   VideoItem,
 } from './types/cms.ts';
 import { Sidebar } from './components/Sidebar.tsx';
+import { AppToast } from './components/AppToast.tsx';
 import { DeleteConfirmPage } from './components/DeleteConfirmPage.tsx';
 import { QuickCreatePage } from './components/QuickCreatePage.tsx';
 import { UploadQueuePanel } from './components/UploadQueuePanel.tsx';
@@ -40,7 +41,7 @@ import { ImageTextManagerView } from './views/biz/imagetext/ImageTextManagerView
 import { ArticleManagerView } from './views/biz/article/ArticleManagerView.tsx';
 import { PersonalCenterView } from './views/profile/PersonalCenterView.tsx';
 import { ExternalMenuView } from './views/system/ExternalMenuView.tsx';
-import { VideoEditorPage, VideoViewPage } from './views/biz/video/VideoPages.tsx';
+import { VideoEditorPage } from './views/biz/video/VideoPages.tsx';
 import {
   ImageTextEditorPage,
   ImageViewPage,
@@ -279,27 +280,15 @@ export default function App() {
       setPermissions(session.user.buttonCodeList || []);
 
       if (opts?.forceDefault) {
-        go(
-          {
-            kind: 'module',
-            module: resolveDefaultModule(nextModules, session.user.defaultModule),
-          },
-          true
-        );
+        go({ kind: 'module', module: resolveDefaultModule(nextModules, 'dashboard') }, true);
         return;
       }
 
       // 恢复上次路由：优先 URL hash / localStorage，但必须落在可访问模块内
-      const restored = resolveInitialRoute(session.user.defaultModule || 'dashboard');
+      const restored = resolveInitialRoute('dashboard');
       const targetModule = routeModule(restored, 'dashboard');
       if (!nextModules.some((m) => m.key === targetModule)) {
-        go(
-          {
-            kind: 'module',
-            module: resolveDefaultModule(nextModules, session.user.defaultModule),
-          },
-          true
-        );
+        go({ kind: 'module', module: resolveDefaultModule(nextModules, 'dashboard') }, true);
       } else {
         go(restored, true);
       }
@@ -407,7 +396,6 @@ export default function App() {
     if (missing) return <PageNotFound label={CONTENT_NAMES[module]} onBack={back} />;
 
     if (action === 'view') {
-      if (video) return <VideoViewPage item={video} onRefresh={refresh} onBack={back} />;
       if (imageText) {
         return (
           <ImageViewPage
@@ -477,6 +465,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F7] flex text-[#1D1D1F]">
+      <AppToast />
       <Sidebar
         menuTree={menuTree}
         activeModule={activeModule}
@@ -515,9 +504,9 @@ export default function App() {
         </header>
 
         <main
-          className={`flex-1 min-h-0 w-full px-4 sm:px-8 py-6 ${
+          className={`flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden px-4 sm:px-8 py-6 ${
             route.kind === 'content'
-              ? 'lg:overflow-hidden lg:flex lg:flex-col'
+              ? 'lg:flex lg:flex-col'
               : ''
           }`}
         >
@@ -539,7 +528,11 @@ export default function App() {
             <DashboardView
               onNavigate={goModule}
               permissions={permissions}
-              liveRefreshEnabled={user.liveRefresh}
+              myCounts={{
+                videos: videos.filter((v) => v.authorId === user.id).length,
+                imagetexts: imagetexts.filter((i) => i.authorId === user.id).length,
+                articles: articles.filter((a) => a.authorId === user.id).length,
+              }}
             />
           ) : route.module === 'videos' ? (
             <VideoManagerView
@@ -575,11 +568,6 @@ export default function App() {
           ) : (
             <PersonalCenterView
               user={user}
-              myCounts={{
-                videos: videos.filter((v) => v.authorId === user.id).length,
-                imagetexts: imagetexts.filter((i) => i.authorId === user.id).length,
-                articles: articles.filter((a) => a.authorId === user.id).length,
-              }}
               onUserUpdated={(updated) => setUser(updated)}
               onLogout={handleLogout}
             />

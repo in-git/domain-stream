@@ -19,6 +19,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import vip.xiaonuo.common.util.CommonIpAddressUtil;
 import vip.xiaonuo.biz.modular.article.entity.BizArticle;
 import vip.xiaonuo.biz.modular.article.mapper.BizArticleMapper;
 import vip.xiaonuo.biz.modular.graphic.entity.BizGraphic;
@@ -103,7 +104,99 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
         result.setModuleStats(buildModuleStats());
         result.setSources(buildSources(events, now));
         result.setTopContent(buildTopContent(events, now));
+        result.setLatestVisits(buildLatestVisits());
+        result.setPeriodStats(buildPeriodStats(now));
         return result;
+    }
+
+    /**
+     * 本周/本月/本年统计：一次查询本年起的事件（只取必要列），在内存里按周期去重聚合
+     */
+    private BizVisitorDashboardResult.PeriodStats buildPeriodStats(Date now) {
+        Date yearStart = DateUtil.beginOfYear(now);
+        List<BizVisitorEvent> yearEvents = this.list(new LambdaQueryWrapper<BizVisitorEvent>()
+                .select(BizVisitorEvent::getCreateTime, BizVisitorEvent::getVisitorId, BizVisitorEvent::getIp)
+                .ge(BizVisitorEvent::getCreateTime, yearStart));
+
+        // 本周起始（周一 00:00），Hutool dayOfWeek 周日=7，减去相应天数回到周一
+        int dayOfWeek = DateUtil.dayOfWeek(DateUtil.beginOfDay(now)); // 1=周一 ... 7=周日
+        Date weekStart = DateUtil.offsetDay(DateUtil.beginOfDay(now), -(dayOfWeek - 1));
+        Date monthStart = DateUtil.beginOfMonth(now);
+
+        BizVisitorDashboardResult.PeriodStats stats = new BizVisitorDashboardResult.PeriodStats();
+        stats.setWeek(aggregatePeriod(yearEvents, weekStart, now));
+        stats.setMonth(aggregatePeriod(yearEvents, monthStart, now));
+        stats.setYear(aggregatePeriod(yearEvents, yearStart, now));
+        return stats;
+    }
+
+    /** 统计 [from, to] 区间内的 PV / UV(按visitorId去重) / IP(按ip去重) */
+    private BizVisitorDashboardResult.PeriodStat aggregatePeriod(List<BizVisitorEvent> events, Date from, Date to) {
+        int pv = 0;
+        Set<String> visitors = new HashSet<>();
+        Set<String> ips = new HashSet<>();
+        for (BizVisitorEvent e : events) {
+            Date t = e.getCreateTime();
+            if (t == null || t.before(from) || t.after(to)) continue;
+            pv++;
+            if (StrUtil.isNotBlank(e.getVisitorId())) visitors.add(e.getVisitorId());
+            if (StrUtil.isNotBlank(e.getIp())) ips.add(e.getIp());
+        }
+        BizVisitorDashboardResult.PeriodStat stat = new BizVisitorDashboardResult.PeriodStat();
+        stat.setPv(pv);
+        stat.setUv(visitors.size());
+        stat.setIp(ips.size());
+        return stat;
+    }
+
+    /**
+     * 最近访问记录：按IP聚合，同一IP只保留一条，展示它访问过的所有页面与访问次数。
+     * 取最近500条事件在内存中聚合，避免同一IP在列表中重复出现。
+     */
+    private List<BizVisitorDashboardResult.LatestVisit> buildLatestVisits() {
+        List<BizVisitorEvent> recent = this.list(new LambdaQueryWrapper<BizVisitorEvent>()
+                .orderByDesc(BizVisitorEvent::getCreateTime)
+                .last("LIMIT 500"));
+        // 按IP分组，LinkedHashMap 保持首次出现（最新事件）的顺序
+        Map<String, BizVisitorDashboardResult.LatestVisit> byIp = new LinkedHashMap<>();
+        for (BizVisitorEvent e : recent) {
+            String ip = StrUtil.isBlank(e.getIp()) ? "unknown-" + e.getId() : e.getIp();
+            BizVisitorDashboardResult.LatestVisit v = byIp.get(ip);
+            if (v == null) {
+                v = new BizVisitorDashboardResult.LatestVisit();
+                v.setId(e.getId());
+                v.setIp(e.getIp());
+                v.setRegion(StrUtil.isBlank(e.getIp()) ? null : CommonIpAddressUtil.getCityInfo(e.getIp()));
+                v.setPageType(e.getPageType());
+                v.setContentTitle(e.getContentTitle());
+                v.setDevice(e.getDevice());
+                v.setSource(e.getSource());
+                v.setUserAgent(e.getUserAgent());
+                v.setDurationSec(e.getDurationSec());
+                v.setCreateTime(e.getCreateTime() == null ? null : DateUtil.formatDateTime(e.getCreateTime()));
+                v.setPages(new ArrayList<>());
+                v.setVisitCount(0);
+                byIp.put(ip, v);
+            }
+            v.setVisitCount(v.getVisitCount() + 1);
+            String pageLabel = buildVisitPageLabel(e);
+            if (StrUtil.isNotBlank(pageLabel) && !v.getPages().contains(pageLabel)) {
+                v.getPages().add(pageLabel);
+            }
+        }
+        return new ArrayList<>(byIp.values());
+    }
+
+    /** 单条访问事件的页面描述，如「首页」「视频·某某视频」 */
+    private String buildVisitPageLabel(BizVisitorEvent e) {
+        String type = e.getPageType();
+        String label;
+        if ("HOME".equals(type)) label = "首页";
+        else if ("VIDEO".equals(type)) label = "视频";
+        else if ("ARTICLE".equals(type)) label = "文章";
+        else if ("GRAPHIC".equals(type)) label = "图文";
+        else label = StrUtil.blankToDefault(type, "页面");
+        return StrUtil.isBlank(e.getContentTitle()) ? label : label + "·" + e.getContentTitle();
     }
 
     @Override
@@ -135,6 +228,8 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
 
         Set<String> todayVisitors = new HashSet<>();
         Set<String> yesterdayVisitors = new HashSet<>();
+        Set<String> todayIps = new HashSet<>();
+        Set<String> yesterdayIps = new HashSet<>();
         int todayPV = 0;
         int yesterdayPV = 0;
         long durationSum = 0L;
@@ -154,6 +249,7 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
                 if (isView) {
                     todayPV++;
                     if (StrUtil.isNotBlank(e.getVisitorId())) todayVisitors.add(e.getVisitorId());
+                    if (StrUtil.isNotBlank(e.getIp())) todayIps.add(e.getIp());
                     int d = e.getDurationSec() == null ? 0 : e.getDurationSec();
                     if (d > 0) { durationSum += d; durationCount++; }
                     if (d >= 120) engaged++;
@@ -170,6 +266,7 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
                     if (offset <= elapsedToday) {
                         yesterdayPV++;
                         if (StrUtil.isNotBlank(e.getVisitorId())) yesterdayVisitors.add(e.getVisitorId());
+                        if (StrUtil.isNotBlank(e.getIp())) yesterdayIps.add(e.getIp());
                     }
                 }
             }
@@ -187,6 +284,10 @@ public class BizVisitorServiceImpl extends ServiceImpl<BizVisitorEventMapper, Bi
         s.setOnlineNow(BizVisitorWebSocket.onlineCount());
         s.setTodayPV(todayPV);
         s.setTodayUV(todayVisitors.size());
+        s.setTodayIP(todayIps.size());
+        s.setYesterdayPV(yesterdayPV);
+        s.setYesterdayUV(yesterdayVisitors.size());
+        s.setYesterdayIP(yesterdayIps.size());
         s.setPvGrowthPercent(pvGrowth);
         s.setUvGrowthPercent(uvGrowth);
         s.setAvgDurationSec(avgDuration);

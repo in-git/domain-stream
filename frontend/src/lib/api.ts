@@ -490,6 +490,25 @@ export const favoriteApi = {
     ),
 };
 
+/** 访客访问上报接口（匿名放行）：写入 biz_visitor_event，供 CMS 访客统计与最近访问记录使用 */
+export const visitorApi = {
+  track: (payload: {
+    visitorId: string;
+    sessionId?: string;
+    eventType: 'PV' | 'CONTENT_VIEW' | 'HEARTBEAT';
+    pageType: string;
+    contentId?: string;
+    contentTitle?: string;
+    source?: string;
+    device?: string;
+    durationSec?: number;
+  }) =>
+    request<boolean>('/biz/visitor/track', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
 /** 前台喜欢/点赞接口：身份由 C 端登录态决定，targetType 省略时后端按ID自动识别 */
 export const likeApi = {
   mine: () => request<string[]>('/public/like/mine'),

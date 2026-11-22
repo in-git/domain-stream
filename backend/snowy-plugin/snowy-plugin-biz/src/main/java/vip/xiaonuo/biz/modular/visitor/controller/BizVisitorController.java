@@ -23,6 +23,7 @@ import vip.xiaonuo.biz.modular.visitor.param.BizVisitorTrackParam;
 import vip.xiaonuo.biz.modular.visitor.result.BizVisitorDashboardResult;
 import vip.xiaonuo.biz.modular.visitor.service.BizVisitorService;
 import vip.xiaonuo.common.pojo.CommonResult;
+import vip.xiaonuo.common.util.CommonIpAddressUtil;
 import vip.xiaonuo.common.util.CommonServletUtil;
 
 import java.util.Map;
@@ -66,7 +67,7 @@ public class BizVisitorController {
     @PostMapping("/biz/visitor/track")
     public CommonResult<String> track(@RequestBody @Valid BizVisitorTrackParam param) {
         HttpServletRequest request = CommonServletUtil.getRequest();
-        bizVisitorService.track(param, request.getRemoteAddr(), request.getHeader("User-Agent"));
+        bizVisitorService.track(param, CommonIpAddressUtil.getIp(request), request.getHeader("User-Agent"));
         return CommonResult.ok();
     }
 
@@ -77,7 +78,7 @@ public class BizVisitorController {
     @PostMapping("/biz/visitor/heartbeat")
     public CommonResult<String> heartbeat(@RequestBody @Valid BizVisitorTrackParam param) {
         HttpServletRequest request = CommonServletUtil.getRequest();
-        bizVisitorService.heartbeat(param, request.getRemoteAddr(), request.getHeader("User-Agent"));
+        bizVisitorService.heartbeat(param, CommonIpAddressUtil.getIp(request), request.getHeader("User-Agent"));
         return CommonResult.ok();
     }
 }

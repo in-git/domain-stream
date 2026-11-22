@@ -468,21 +468,6 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {can('delete') && selected.size > 0 && (
-            <button
-              type="button"
-              onClick={() =>
-                setDialog({
-                  kind: 'delete',
-                  items: items.filter((i) => selected.has(i.id)),
-                })
-              }
-              className="h-9 px-3 rounded-xl bg-white border border-[#FF3B30]/30 text-[#D70015] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#FF3B30]/8 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              批量删除 ({selected.size})
-            </button>
-          )}
           {can('import') && (
             <button
               type="button"
@@ -491,21 +476,6 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
             >
               <Upload className="w-3.5 h-3.5" />
               导入
-            </button>
-          )}
-          {can('export') && (
-            <button
-              type="button"
-              onClick={() => void handleExport()}
-              disabled={exporting}
-              className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
-            >
-              {exporting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5" />
-              )}
-              导出{selected.size ? `选中 (${selected.size})` : '全部'}
             </button>
           )}
           {can('add') && (
@@ -531,6 +501,68 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
           >
             重试
           </button>
+        </div>
+      )}
+
+      {/* 批量操作条：全选当前页与已选数量放一起，单独一行常驻显示 */}
+      {can('delete') && rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#E5E5EA] bg-white px-4 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <input
+              type="checkbox"
+              aria-label="全选当前页"
+              checked={allPageSelected}
+              onChange={toggleSelectPage}
+              className="w-4 h-4 accent-[#0071E3] cursor-pointer"
+            />
+            <span
+              className={`text-[13px] font-medium ${
+                selected.size > 0 ? 'text-[#0071E3]' : 'text-[#6E6E73]'
+              }`}
+            >
+              全选当前页 · 已选择 {selected.size} 个分类
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] text-[12px] font-medium text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors inline-flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              取消选择
+            </button>
+            {can('export') && (
+              <button
+                type="button"
+                onClick={() => void handleExport()}
+                disabled={exporting}
+                className="h-8 px-3 rounded-[10px] bg-white border border-[#E5E5EA] text-[#3A3A3C] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+              >
+                {exporting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                导出{selected.size ? `选中 (${selected.size})` : '全部'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                setDialog({
+                  kind: 'delete',
+                  items: items.filter((i) => selected.has(i.id)),
+                })
+              }
+              disabled={selected.size === 0}
+              className="h-8 px-3 rounded-[10px] bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-40 text-white text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              批量删除{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          </div>
         </div>
       )}
 

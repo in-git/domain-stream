@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.ts';
-import type { DashboardPayload, TrafficPoint } from '../../types/cms.ts';
+import type { DashboardPayload } from '../../types/cms.ts';
 
 /**
- * 仪表盘数据：首次加载全量快照，之后按需轮询实时快照并就地合并。
- * 轮询关闭时保持静态快照，不影响已加载的数据。
+ * 仪表盘数据：加载一次全量快照即可，不进行实时轮询。
  */
-export function useDashboardData(liveRefreshEnabled: boolean) {
+export function useDashboardData() {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sseConnected, setSseConnected] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -25,69 +23,6 @@ export function useDashboardData(liveRefreshEnabled: boolean) {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!liveRefreshEnabled) {
-      setSseConnected(false);
-      return;
-    }
-
-    let active = true;
-    const refresh = () => {
-      api
-        .getLiveSnapshot()
-        .then((msg) => {
-          if (!active) return;
-          setSseConnected(true);
-          setData((prev) => {
-            if (!prev) return prev;
-            // 今日 UV/PV 覆盖到周/月序列的最后一个点
-            const nextWeek = prev.series.week.map((pt, idx, arr) =>
-              idx === arr.length - 1 ? { ...pt, uv: msg.todayUV, pv: msg.todayPV } : pt
-            );
-            const nextMonth = prev.series.month.map((pt, idx, arr) =>
-              idx === arr.length - 1 ? { ...pt, uv: msg.todayUV, pv: msg.todayPV } : pt
-            );
-            const now = new Date();
-            const latestPoint: TrafficPoint = {
-              label: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
-              uv: msg.onlineNow,
-              pv: msg.todayPV,
-              avgStaySec: msg.avgDurationSec,
-            };
-            return {
-              ...prev,
-              snapshot: {
-                ...prev.snapshot,
-                onlineNow: msg.onlineNow,
-                todayPV: msg.todayPV,
-                todayUV: msg.todayUV,
-                avgDurationSec: msg.avgDurationSec,
-                engagementRate: msg.engagementRate,
-                updatedAt: msg.updatedAt,
-              },
-              series: {
-                // 实时序列滑动窗口：挤掉最旧的点
-                realtime: [...prev.series.realtime.slice(1), latestPoint],
-                week: nextWeek,
-                month: nextMonth,
-              },
-            };
-          });
-        })
-        .catch(() => {
-          if (active) setSseConnected(false);
-        });
-    };
-
-    refresh();
-    const timer = window.setInterval(refresh, 3000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      setSseConnected(false);
-    };
-  }, [liveRefreshEnabled]);
 
   /** 内容模块的浏览量占比（用于环形图） */
   const moduleBreakdown = useMemo(() => {
@@ -142,5 +77,5 @@ export function useDashboardData(liveRefreshEnabled: boolean) {
     };
   }, [data]);
 
-  return { data, loading, sseConnected, moduleBreakdown };
+  return { data, loading, moduleBreakdown };
 }
