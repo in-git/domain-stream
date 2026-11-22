@@ -48,7 +48,7 @@ function MobileBanner({ video, onOpen }: { video: VideoItem; onOpen: () => void 
       <button
         type="button"
         onClick={onOpen}
-        className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+        className="block w-full text-left focus-visible:outline-none"
         aria-label={`播放视频：${video.title}`}
       >
         <ResilientImage
@@ -95,13 +95,13 @@ function MobileGridCard({ video, index, onOpen }: MobileGridCardProps) {
       transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
       className="min-w-0"
     >
-      <div className="group overflow-hidden rounded-md bg-[#161618] border border-white/[0.07] transition-shadow hover:shadow-md">
+      <div className="group overflow-hidden rounded-md">
         <div className="relative overflow-hidden">
           <button
             type="button"
             onClick={onOpen}
             aria-label={`播放 ${video.title}`}
-            className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+            className="block w-full text-left focus-visible:outline-none"
           >
             <ResilientImage
               src={video.cover}

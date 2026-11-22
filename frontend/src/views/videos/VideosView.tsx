@@ -291,7 +291,7 @@ export function VideosView({
           ? 'hidden'
           : isMini
             ? 'fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
-            : 'space-y-0'
+            : 'relative space-y-0'
       }
     >
       {/* 卡片模式分类：PC / 移动端各自模块，内部用 CSS 断点决定挂载形态 */}
@@ -312,7 +312,30 @@ export function VideosView({
         </>
       )}
 
-      {!isMini && filteredVideos.length === 0 && (
+      {/* 沉浸模式悬浮分类：独立于视频数据渲染，空分类时仍可见，用户可切回其他分类 */}
+      {!isMini && viewMode === 'feed' && (
+        <DesktopFeedCategories
+          categories={filterCategories}
+          category={category}
+          onChange={onCategoryChange}
+          onToggleViewMode={() => setViewMode('grid')}
+        />
+      )}
+
+      {!isMini && viewMode === 'feed' && filteredVideos.length === 0 && (
+        <div className="flex h-[calc(100dvh-6.5rem)] items-center justify-center">
+          <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] px-10 py-16 text-center space-y-2">
+            <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+              该分类下暂无视频
+            </p>
+            <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
+              可通过上方分类切换其他分类
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isMini && viewMode === 'grid' && filteredVideos.length === 0 && (
         <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] py-20 text-center space-y-2">
           <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
             没有找到匹配的视频
@@ -342,14 +365,6 @@ export function VideosView({
                 : 'relative w-full h-[100dvh] md:h-[calc(100dvh-6.5rem)] min-h-[420px] rounded-none md:rounded-3xl overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
-            {!isMini && viewMode === 'feed' && (
-              <DesktopFeedCategories
-                categories={filterCategories}
-                category={category}
-                onChange={onCategoryChange}
-                onToggleViewMode={() => setViewMode('grid')}
-              />
-            )}
             <Swiper
               key={`${category}-${normalizedQuery}`}
               onSwiper={(instance) => {
