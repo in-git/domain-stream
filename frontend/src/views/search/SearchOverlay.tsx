@@ -10,6 +10,7 @@ import {
   SearchX,
   X,
 } from 'lucide-react';
+import { EmptyState } from '../../components/PortalStates';
 import type { ArticleItem, MessageItem, PhotoItem, SectionId, VideoItem } from '../../data/content';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoriteDetailModal, type FavoriteTarget } from '../shared/FavoriteDetailModal';
@@ -272,11 +273,12 @@ export function SearchOverlay({
         )}
 
         {keyword && results.length === 0 && (
-          <div className="px-6 py-20 text-center space-y-2">
-            <SearchX className="w-6 h-6 mx-auto text-[#AEAEB2]" />
-            <p className="text-sm font-medium">没有找到相关内容</p>
-            <p className="text-xs text-[#86868B]">换个关键词试试</p>
-          </div>
+          <EmptyState
+            icon={SearchX}
+            title="没有找到相关内容"
+            description="换个关键词试试"
+            className="border-0 bg-transparent dark:bg-transparent"
+          />
         )}
 
         {results.length > 0 && (

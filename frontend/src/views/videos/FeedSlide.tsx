@@ -353,12 +353,10 @@ export function FeedSlide({
             {!mini && (
               <div className="space-y-1.5 max-w-2xl pl-4 pr-20 sm:pl-0 sm:pr-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
-                  <span className="font-semibold text-white">@{video.director}</span>
-                  <span aria-hidden="true">·</span>
                   <span>{video.category}</span>
                   <span aria-hidden="true">·</span>
                   <span>{video.date}</span>
-                  {!!video.viewCount && (
+                  {Number(video.viewCount) > 0 && (
                     <>
                       <span aria-hidden="true">·</span>
                       <span>{video.viewCount} 次播放</span>

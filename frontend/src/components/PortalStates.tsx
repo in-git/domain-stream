@@ -64,6 +64,56 @@ export function PortalError({
   );
 }
 
+/**
+ * 通用空白占位：图标 + 标题 + 描述 + 可选操作按钮。
+ * 统一的实线描边（无虚线），供各模块空状态复用。
+ */
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+  className = '',
+  compact = false,
+}: {
+  icon?: typeof Film;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  className?: string;
+  /** 紧凑模式：更小的内边距与图标，适合列表内联空态 */
+  compact?: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: APPLE_EASE }}
+      className={`rounded-3xl border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#161618] text-center ${
+        compact ? 'px-5 py-10' : 'px-6 py-20'
+      } ${className}`}
+    >
+      {Icon && (
+        <div
+          className={`mx-auto flex items-center justify-center rounded-[18px] bg-[#F5F5F7] dark:bg-white/[0.06] ${
+            compact ? 'mb-3 w-10 h-10' : 'mb-4 w-14 h-14'
+          }`}
+        >
+          <Icon
+            className={compact ? 'w-5 h-5 text-[#AEAEB2]' : 'w-6 h-6 text-[#AEAEB2] dark:text-[#636366]'}
+            strokeWidth={1.6}
+          />
+        </div>
+      )}
+      <h2 className="text-[17px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">{title}</h2>
+      {description && (
+        <p className="mt-2 text-[13px] text-[#86868B] dark:text-[#A1A1A6]">{description}</p>
+      )}
+      {action && <div className="mt-5">{action}</div>}
+    </motion.div>
+  );
+}
+
 export function PortalEmpty({
   section,
   onRetry,
@@ -73,31 +123,22 @@ export function PortalEmpty({
 }) {
   const { label, Icon } = SECTION_META[section];
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: APPLE_EASE }}
-      className="rounded-[24px] border border-dashed border-[#D2D2D7] dark:border-white/15 px-6 py-20 text-center"
-    >
-      <div className="w-14 h-14 mx-auto mb-4 rounded-[18px] bg-[#F5F5F7] dark:bg-white/[0.06] flex items-center justify-center">
-        <Icon className="w-6 h-6 text-[#AEAEB2] dark:text-[#636366]" strokeWidth={1.6} />
-      </div>
-      <h2 className="text-[17px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-        暂无{label}
-      </h2>
-      <p className="mt-2 text-[13px] text-[#86868B] dark:text-[#A1A1A6]">
-        内容发布后将在这里显示，请稍后再来看看
-      </p>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-5 h-9 px-4 rounded-xl bg-white dark:bg-white/[0.06] border border-[#E5E5EA] dark:border-white/10 text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] inline-flex items-center gap-2 hover:bg-[#F5F5F7] dark:hover:bg-white/[0.1] transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          刷新内容
-        </button>
-      )}
-    </motion.div>
+    <EmptyState
+      icon={Icon}
+      title={`暂无${label}`}
+      description="内容发布后将在这里显示，请稍后再来看看"
+      action={
+        onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="h-9 px-4 rounded-xl bg-white dark:bg-white/[0.06] border border-[#E5E5EA] dark:border-white/10 text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] inline-flex items-center gap-2 hover:bg-[#F5F5F7] dark:hover:bg-white/[0.1] transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            刷新内容
+          </button>
+        ) : undefined
+      }
+    />
   );
 }

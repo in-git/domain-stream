@@ -146,7 +146,7 @@ export function MainHeader({
             whileTap={{ scale: 0.92 }}
             onClick={onToggleTheme}
             aria-label={isDark ? '切换至浅色外观' : '切换至深色外观'}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${iconClass}`}
+            className={`hidden md:flex w-9 h-9 items-center justify-center rounded-full transition-colors ${iconClass}`}
           >
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </motion.button>

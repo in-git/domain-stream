@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, Heart, MessageCircle, Send, X } from 'lucide-react';
+import { EmptyState } from '../../components/PortalStates';
 import type { MessageItem, MessageReply } from '../../data/content.ts';
 import type { ReplyDraft } from '../../lib/api.ts';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -347,14 +348,11 @@ export default function MessagesView({
         </div>
 
         {visibleMessages.length === 0 ? (
-          <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] py-20 text-center space-y-2">
-            <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {searchQuery ? '没有找到匹配的留言' : '还没有留言'}
-            </p>
-            <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-              {searchQuery ? '换个关键词试试' : '来写第一条吧'}
-            </p>
-          </div>
+          <EmptyState
+            icon={MessageCircle}
+            title={searchQuery ? '没有找到匹配的留言' : '还没有留言'}
+            description={searchQuery ? '换个关键词试试' : '来写第一条吧'}
+          />
         ) : (
           /* 与图文笔记一致：CSS columns 瀑布流，列数/间距相同，卡片宽度由列宽决定 */
           <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">

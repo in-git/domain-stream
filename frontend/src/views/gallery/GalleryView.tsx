@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check } from 'lucide-react';
+import { Check, Images } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
 import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
+import { EmptyState } from '../../components/PortalStates';
 import NoteDetail from './NoteDetail';
 
 interface GalleryViewProps {
@@ -258,9 +259,7 @@ export function GalleryView({
 
       {/* 瀑布流：CSS columns，小红书同款自然错落 */}
       {list.length === 0 ? (
-        <div className="py-20 text-center">
-          <p className="text-[13px] text-[#86868B]">还没有笔记。</p>
-        </div>
+        <EmptyState icon={Images} title="还没有笔记" description="内容发布后将在这里显示" />
       ) : (
         /* 小红书桌面端约 5 列，卡片宽 ≈ 350px；列数更多卡片自然更小 */
         <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">

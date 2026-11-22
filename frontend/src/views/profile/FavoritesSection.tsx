@@ -5,6 +5,7 @@ import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoriteDetailModal, type FavoriteTarget } from '../shared/FavoriteDetailModal';
 import { ResilientImage } from '../../components/ResilientImage';
+import { EmptyState } from '../../components/PortalStates';
 
 export type FavoriteKind = 'video' | 'article' | 'graphic';
 type CollectionMode = 'favorite' | 'like';
@@ -241,13 +242,14 @@ export function FavoritesSection({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={SWIFTUI_SMOOTH}
-            className="rounded-none sm:rounded-2xl border border-dashed border-black/[0.08] dark:border-white/[0.12] px-5 py-10 text-center space-y-1.5"
           >
-            <meta.EmptyIcon className="w-5 h-5 mx-auto text-[#86868B]" />
-            <p className="text-[13px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {mode === 'favorite' ? '暂无收藏' : '暂无喜欢'}
-            </p>
-            <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">{emptyHint}</p>
+            <EmptyState
+              icon={meta.EmptyIcon}
+              title={mode === 'favorite' ? '暂无收藏' : '暂无喜欢'}
+              description={emptyHint}
+              compact
+              className="rounded-none sm:rounded-2xl"
+            />
           </motion.div>
         ) : (
           <motion.ul

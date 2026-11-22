@@ -5,6 +5,7 @@ import { A11y, Keyboard, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
 import type { VideoItem } from '../../data/content';
+import { EmptyState } from '../../components/PortalStates';
 import { FeedSlide } from './FeedSlide';
 import { ImmersiveModal } from './ImmersiveModal';
 import {
@@ -324,26 +325,16 @@ export function VideosView({
 
       {!isMini && viewMode === 'feed' && filteredVideos.length === 0 && (
         <div className="flex h-[calc(100dvh-6.5rem)] items-center justify-center">
-          <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] px-10 py-16 text-center space-y-2">
-            <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-              该分类下暂无视频
-            </p>
-            <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-              可通过上方分类切换其他分类
-            </p>
-          </div>
+          <EmptyState
+            className="w-fit px-10 py-16"
+            title="该分类下暂无视频"
+            description="可通过上方分类切换其他分类"
+          />
         </div>
       )}
 
       {!isMini && viewMode === 'grid' && filteredVideos.length === 0 && (
-        <div className="rounded-3xl bg-white dark:bg-[#161618] border border-black/[0.06] dark:border-white/[0.08] py-20 text-center space-y-2">
-          <p className="text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-            该分类下暂无视频
-          </p>
-          <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-            可通过上方分类切换其他分类
-          </p>
-        </div>
+        <EmptyState title="该分类下暂无视频" description="可通过上方分类切换其他分类" />
       )}
 
       {/* 沉浸刷看：始终挂载，网格模式下用 CSS 隐藏，保证 <video> 不被销毁重建 */}
