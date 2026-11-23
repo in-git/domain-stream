@@ -28,7 +28,6 @@ export function PersonalCenterView({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPass, setSavingPass] = useState(false);
-  const [passMessage, setPassMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,7 +70,6 @@ export function PersonalCenterView({
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setPassMessage(null);
     setPasswordModalOpen(true);
   }
 
@@ -82,27 +80,23 @@ export function PersonalCenterView({
 
   async function handleChangePassword(e: FormEvent) {
     e.preventDefault();
-    setPassMessage(null);
     if (newPassword.length < 6) {
-      setPassMessage({ type: 'err', text: '新密码至少需要 6 位字符' });
+      showToast('新密码至少需要 6 位字符', 'danger');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPassMessage({ type: 'err', text: '两次输入的新密码不一致' });
+      showToast('两次输入的新密码不一致', 'danger');
       return;
     }
     setSavingPass(true);
     try {
       await api.updatePassword(currentPassword, newPassword);
-      setPassMessage({ type: 'ok', text: '登录密码已更新，下次登录请使用新密码' });
+      showToast('登录密码已更新，下次登录请使用新密码', 'success');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      setPassMessage({
-        type: 'err',
-        text: err instanceof Error ? err.message : '修改密码失败',
-      });
+      showToast(err instanceof Error ? err.message : '修改密码失败', 'danger');
     } finally {
       setSavingPass(false);
     }
@@ -286,18 +280,6 @@ export function PersonalCenterView({
                   className="w-full h-10 px-3.5 rounded-xl bg-[#F5F5F7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 text-[13px]"
                 />
               </div>
-
-              {passMessage && (
-                <div
-                  className={`rounded-xl px-3 py-2 text-[12px] ${
-                    passMessage.type === 'ok'
-                      ? 'bg-[#34C759]/10 text-[#16A34A]'
-                      : 'bg-[#FF3B30]/8 text-[#D70015]'
-                  }`}
-                >
-                  {passMessage.text}
-                </div>
-              )}
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button

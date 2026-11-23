@@ -3,20 +3,22 @@ import { Bookmark, Heart, LayoutGrid, Rows3 } from 'lucide-react';
 import type { VideoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
-import type { CategoryBarProps, VideoGridProps, ViewMode } from './shared';
+import type { CategoryBarProps, VideoGridProps } from './shared';
 
 /* ------------------------------------------------------------------ *
  * 沉浸刷看模式：悬浮在播放器顶部的分类条（PC 专属）
  * ------------------------------------------------------------------ */
 interface DesktopFeedCategoriesProps extends CategoryBarProps {
-  onToggleViewMode: () => void;
+  onTogglePlaylist: () => void;
+  playlistOpen: boolean;
 }
 
 export function DesktopFeedCategories({
   categories,
   category,
   onChange,
-  onToggleViewMode,
+  onTogglePlaylist,
+  playlistOpen,
 }: DesktopFeedCategoriesProps) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 hidden justify-center sm:flex">
@@ -47,12 +49,17 @@ export function DesktopFeedCategories({
         <span className="mx-1 h-4 w-px shrink-0 bg-white/20" aria-hidden="true" />
         <button
           type="button"
-          onClick={onToggleViewMode}
-          aria-label="切换到网格视图"
-          title="切换到网格视图"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          onClick={onTogglePlaylist}
+          aria-label={playlistOpen ? '收起播放列表' : '展开播放列表'}
+          title={playlistOpen ? '收起播放列表' : '播放列表'}
+          aria-pressed={playlistOpen}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+            playlistOpen
+              ? 'bg-white text-[#1D1D1F]'
+              : 'text-white/70 hover:bg-white/10 hover:text-white'
+          }`}
         >
-          <LayoutGrid className="h-3.5 w-3.5" />
+          <LayoutGrid className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -63,16 +70,14 @@ export function DesktopFeedCategories({
  * 卡片模式：顶部分类与视图切换（PC 专属）
  * ------------------------------------------------------------------ */
 interface DesktopGridCategoriesProps extends CategoryBarProps {
-  viewMode: ViewMode;
-  onSetViewMode: (mode: ViewMode) => void;
+  onBackToFeed: () => void;
 }
 
 export function DesktopGridCategories({
   categories,
   category,
   onChange,
-  viewMode,
-  onSetViewMode,
+  onBackToFeed,
 }: DesktopGridCategoriesProps) {
   return (
     <div className="sticky top-14 z-10 hidden bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:block sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
@@ -103,38 +108,16 @@ export function DesktopGridCategories({
           })}
         </div>
 
-        {/* 视图切换：视频板块特有，样式与 chip 条统一 */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4">
-          <button
-            type="button"
-            onClick={() => onSetViewMode('feed')}
-            aria-label="沉浸刷看"
-            aria-pressed={viewMode === 'feed'}
-            title="沉浸刷看"
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-              viewMode === 'feed'
-                ? 'bg-[#1D1D1F] text-white dark:bg-white dark:text-[#1D1D1F]'
-                : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
-            }`}
-          >
-            <Rows3 className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onSetViewMode('grid')}
-            aria-label="发现网格"
-            aria-pressed={viewMode === 'grid'}
-            title="发现网格"
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-              viewMode === 'grid'
-                ? 'bg-[#1D1D1F] text-white dark:bg-white dark:text-[#1D1D1F]'
-                : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
-            }`}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
-        </div>
+        {/* 切回主视图：卡片模式专用，样式与 chip 条统一 */}
+        <button
+          type="button"
+          onClick={onBackToFeed}
+          aria-label="切回主视图"
+          title="切回主视图"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#6E6E73] transition-colors hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D] dark:hover:bg-white/[0.12]"
+        >
+          <Rows3 className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

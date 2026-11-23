@@ -303,9 +303,17 @@ export function VideoManagerView({
           {filtered.map((item) => (
             <article
               key={item.id}
-              className="bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col"
+              onClick={canDelete ? () => toggleSelect(item.id) : undefined}
+              className={`bg-white rounded-[18px] border overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col transition-colors ${
+                selected.has(item.id)
+                  ? 'border-[#0071E3] ring-1 ring-[#0071E3]/30'
+                  : 'border-[#E5E5EA]'
+              } ${canDelete ? 'cursor-pointer' : ''}`}
             >
-              <div className="relative aspect-[5/2] bg-black overflow-hidden group">
+              <div
+                className="relative aspect-video bg-black overflow-hidden group"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <video
                   src={toPlayableVideoUrl(item.videoUrl)}
                   poster={item.coverUrl || undefined}

@@ -25,6 +25,7 @@ import vip.xiaonuo.dev.api.DevConfigApi;
 import vip.xiaonuo.dev.api.DevFileApi;
 import vip.xiaonuo.dev.modular.file.enums.DevFileEngineTypeEnum;
 import vip.xiaonuo.dev.modular.file.param.DevFileIdParam;
+import vip.xiaonuo.dev.modular.file.param.DevFileListParam;
 import vip.xiaonuo.dev.modular.file.service.DevFileService;
 import vip.xiaonuo.dev.modular.file.util.*;
 
@@ -144,6 +145,13 @@ public class DevFileApiProvider implements DevFileApi {
     }
 
     @Override
+    public JSONArray getAllFiles(String bizType) {
+        DevFileListParam param = new DevFileListParam();
+        param.setBizType(bizType);
+        return JSONUtil.parseArray(devFileService.list(param));
+    }
+
+    @Override
     public String storageFileWithReturnUrlOss(MultipartFile file) {
         // 获取系统配置的默认文件存储引擎
         String defaultEngine = devConfigApi.getValueByKey(SNOWY_SYS_DEFAULT_FILE_ENGINE_KEY);
@@ -220,5 +228,21 @@ public class DevFileApiProvider implements DevFileApi {
         // 目标引擎为空时取系统配置的默认引擎，与流式存储口径一致
         String engine = ObjectUtil.isNotEmpty(targetEngine) ? targetEngine : devConfigApi.getValueByKey(SNOWY_SYS_DEFAULT_FILE_ENGINE_KEY);
         return devFileService.registerSharedFile(sourceFileId, engine, fileName, sizeBytes);
+    }
+
+    @Override
+    public void updateBizType(List<String> ids, String bizType) {
+        devFileService.updateBizType(ids, bizType);
+    }
+
+    @Override
+    public void updateCategoryCode(List<String> ids, String categoryCode) {
+        devFileService.updateCategoryCode(ids, categoryCode);
+    }
+
+    @Override
+    public String uploadAssetReturnId(String engine, MultipartFile file, String bizType, String categoryCode) {
+        String targetEngine = ObjectUtil.isNotEmpty(engine) ? engine : devConfigApi.getValueByKey(SNOWY_SYS_DEFAULT_FILE_ENGINE_KEY);
+        return devFileService.uploadReturnId(targetEngine, file, bizType, categoryCode);
     }
 }

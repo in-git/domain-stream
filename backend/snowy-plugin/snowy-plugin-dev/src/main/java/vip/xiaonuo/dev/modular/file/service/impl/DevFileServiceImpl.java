@@ -117,7 +117,12 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
 
     @Override
     public String uploadReturnId(String engine, MultipartFile file, String bizType) {
-        return this.storageFile(engine, file, true, true, bizType);
+        return this.uploadReturnId(engine, file, bizType, null);
+    }
+
+    @Override
+    public String uploadReturnId(String engine, MultipartFile file, String bizType, String categoryCode) {
+        return this.storageFile(engine, file, true, false, bizType, categoryCode);
     }
 
     @Override
@@ -505,6 +510,18 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         LambdaUpdateWrapper<DevFile> updateWrapper = Wrappers.lambdaUpdate();
         updateWrapper.in(DevFile::getId, ids)
                 .set(DevFile::getBizType, bizType.toUpperCase());
+        this.update(updateWrapper);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void updateCategoryCode(List<String> ids, String categoryCode) {
+        if (CollUtil.isEmpty(ids)) {
+            throw new CommonException("请选择文件");
+        }
+        LambdaUpdateWrapper<DevFile> updateWrapper = Wrappers.lambdaUpdate();
+        updateWrapper.in(DevFile::getId, ids)
+                .set(DevFile::getCategoryCode, categoryCode);
         this.update(updateWrapper);
     }
 

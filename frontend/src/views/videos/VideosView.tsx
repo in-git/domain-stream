@@ -14,6 +14,7 @@ import {
   DesktopVideoGrid,
 } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
+import { PlaylistPanel } from './PlaylistPanel';
 import { DEFAULT_CATEGORIES, VIDEO_PAGE_SIZE, type ViewMode } from './shared';
 
 interface VideosViewProps {
@@ -89,6 +90,8 @@ export function VideosView({
   const [isFullscreen, setIsFullscreen] = useState(false);
   /** 从卡片点选后要直接播放的视频（含 src），为 null 时走沉浸流当前索引 */
   const [pickedVideo, setPickedVideo] = useState<VideoItem | null>(null);
+  /** PC 沉浸模式播放列表侧边栏是否展开 */
+  const [playlistOpen, setPlaylistOpen] = useState(false);
 
   const playersRef = useRef<Map<string, MediaPlayerInstance>>(new Map());
   const swiperRef = useRef<SwiperClass | null>(null);
@@ -211,6 +214,23 @@ export function VideosView({
     }
   };
 
+  /** 播放列表点击：在沉浸流内切到指定视频 */
+  const playVideoAt = useCallback(
+    (video: VideoItem) => {
+      const idx = filteredVideos.findIndex((v) => v.id === video.id);
+      if (idx < 0) return;
+      setPickedVideo(null);
+      setActiveIndex(idx);
+      setCurrentTime(0);
+      const swiper = swiperRef.current;
+      if (swiper) {
+        if (swiper.params.loop) swiper.slideToLoop(idx, 0, false);
+        else swiper.slideTo(idx, 0, false);
+      }
+    },
+    [filteredVideos]
+  );
+
   /** 卡片点击：打开全屏模态框直接播放被点视频（用列表数据里自带的 src） */
   const openVideoAt = useCallback(
     (video: VideoItem) => {
@@ -309,8 +329,7 @@ export function VideosView({
             categories={filterCategories}
             category={category}
             onChange={onCategoryChange}
-            viewMode={viewMode}
-            onSetViewMode={setViewMode}
+            onBackToFeed={() => setViewMode('feed')}
           />
           <MobileGridCategories
             categories={filterCategories}
@@ -326,7 +345,8 @@ export function VideosView({
           categories={filterCategories}
           category={category}
           onChange={onCategoryChange}
-          onToggleViewMode={() => setViewMode('grid')}
+          onTogglePlaylist={() => setPlaylistOpen((v) => !v)}
+          playlistOpen={playlistOpen}
         />
       )}
 
@@ -405,6 +425,19 @@ export function VideosView({
                 </SwiperSlide>
               ))}
             </Swiper>
+
+            {/* PC 播放列表侧边栏：点击分类条右侧列表图标展开 */}
+            {!isMini && viewMode === 'feed' && playlistOpen && (
+              <PlaylistPanel
+                videos={filteredVideos}
+                categories={filterCategories}
+                category={category}
+                onCategoryChange={onCategoryChange}
+                activeIndex={safeIndex}
+                onSelect={playVideoAt}
+                onClose={() => setPlaylistOpen(false)}
+              />
+            )}
           </div>
         </div>
       )}

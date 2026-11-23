@@ -75,10 +75,11 @@ export default function ModuleFlowChart({
   maxZoom = 2.5,
   showToolbar = true,
 }: ModuleFlowChartProps) {
+  const DEFAULT_SCALE = 0.8;
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(DEFAULT_SCALE);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const scaleRef = useRef(1);
+  const scaleRef = useRef(DEFAULT_SCALE);
   const offsetRef = useRef({ x: 0, y: 0 });
   const dragRef = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -366,7 +367,7 @@ export default function ModuleFlowChart({
           <span className="mx-0.5 h-4 w-px bg-[#E5E5EA]" />
           <button
             type="button"
-            onClick={() => apply(1, { x: 0, y: 0 })}
+            onClick={() => apply(DEFAULT_SCALE, { x: 0, y: 0 })}
             aria-label="重置视图"
             title="重置视图"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-[#6E6E73] transition-colors hover:bg-[#F2F2F7] hover:text-[#1D1D1F]"

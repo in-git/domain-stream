@@ -59,12 +59,6 @@ export function PortalShell({
   /** 搜索结果点击文章时，交给文章板块打开同一个阅读器 */
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
-  // 在视频板块搜索时自动切到卡片模式，便于查看多条搜索结果（清空搜索后不强制切回）
-  useEffect(() => {
-    if (activeSection === 'videos' && searchQuery.trim()) {
-      setVideoViewMode('grid');
-    }
-  }, [activeSection, searchQuery]);
   const {
     isDark,
     toggleTheme,
@@ -110,6 +104,16 @@ export function PortalShell({
     saveVideoProgress,
     handlePlayVideo,
   } = player;
+
+  // 视图切换界面保持现状：搜索时切到卡片模式，点卡片条上的按钮或清空搜索后回到主视图
+  useEffect(() => {
+    if (activeSection !== 'videos') return;
+    if (searchQuery.trim()) {
+      setVideoViewMode('grid');
+    } else if (!isMobileViewport) {
+      setVideoViewMode('feed');
+    }
+  }, [isMobileViewport, activeSection, searchQuery]);
 
   /* 当前板块若不在内置列表里（CMS 新增的自定义模块），退化为占位页 */
   const { config } = useSystemInfo();

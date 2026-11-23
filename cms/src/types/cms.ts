@@ -7,6 +7,7 @@ export type ModuleKey =
   | 'messages'
   | 'files'
   | 'materials'
+  | 'assetResource'
   | 'config'
   | 'profile';
 

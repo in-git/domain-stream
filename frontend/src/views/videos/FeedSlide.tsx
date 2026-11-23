@@ -382,7 +382,11 @@ export function FeedSlide({
               </div>
             )}
 
-            <div className={`flex items-center pointer-events-auto ${mini ? 'gap-1.5' : ''}`}>
+            <div
+              className={`flex items-center pointer-events-auto ${
+                mini ? 'gap-1.5' : 'sm:-ml-6 sm:-mr-24'
+              }`}
+            >
               {mini && (
                 <button
                   type="button"

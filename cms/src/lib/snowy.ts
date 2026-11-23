@@ -134,6 +134,50 @@ export async function snowyFetch(
   return fetch(`${SNOWY_BASE}${path}`, { ...init, headers });
 }
 
+/**
+ * 带 token 的二进制下载，并从 Content-Disposition 解析服务端文件名。
+ * 用于数据库备份、文件资源打包等返回附件的接口。
+ */
+export async function snowyDownload(path: string, defaultFilename: string): Promise<void> {
+  const res = await snowyFetch(path);
+  if (!res.ok) {
+    let message = `下载失败 (${res.status})`;
+    try {
+      const payload = (await res.json()) as SnowyResponse<unknown>;
+      if (RELOGIN_CODES.includes(payload.code)) {
+        throw forceRelogin(payload.msg);
+      }
+      message = payload.msg || message;
+    } catch (err) {
+      if (err instanceof SnowyAuthError) throw err;
+    }
+    throw new Error(message);
+  }
+
+  let filename = defaultFilename;
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
+  const matched = utf8Match?.[1] || plainMatch?.[1];
+  if (matched) {
+    try {
+      filename = decodeURIComponent(matched.trim());
+    } catch {
+      filename = matched.trim();
+    }
+  }
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
 /** Snowy 统一请求：自动带 token，解包 {code,msg,data} */
 export async function snowyRequest<T>(
   path: string,

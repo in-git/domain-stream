@@ -54,6 +54,7 @@ import CategoryView from './views/biz/category/index.tsx';
 import MessageView from './views/biz/message/index.tsx';
 import FileCenterView from './views/biz/file/index.tsx';
 import MaterialCenterView from './views/biz/material/index.tsx';
+import AssetResourceView from './views/biz/asset-resource/index.tsx';
 import ConfigView from './views/biz/config/index.tsx';
 
 const MODULE_TITLES: Record<ModuleKey, string> = {
@@ -65,6 +66,7 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   messages: '留言管理',
   files: '文件中心',
   materials: '素材中心',
+  assetResource: '素材资源库',
   config: '页面配置',
   profile: '个人中心',
 };
@@ -563,6 +565,8 @@ export default function App() {
             <FileCenterView />
           ) : route.module === 'materials' ? (
             <MaterialCenterView permissions={permissions} />
+          ) : route.module === 'assetResource' ? (
+            <AssetResourceView permissions={permissions} />
           ) : route.module === 'config' ? (
             <ConfigView />
           ) : (

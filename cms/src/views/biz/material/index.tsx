@@ -48,9 +48,16 @@ import { FileDeleteDialog, FilePreviewDialog } from '../file/dialogs.tsx';
 import { absoluteFileUrl, copyText, MaterialDetailDialog } from './dialogs.tsx';
 import { UploadDialog, type UploadSubmitPayload } from './UploadDialog.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
+import { showToast } from '../../../components/AppToast.tsx';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
 
 const PAGE_SIZE = 24;
+
+/** 图片素材统一灰白底，透明/留白处不再透出其它颜色 */
+const IMAGE_TILE_BG = {
+  backgroundColor: '#F2F2F7',
+  backgroundImage: 'linear-gradient(135deg, #F7F7F9 0%, #EDEDF1 100%)',
+} as const;
 
 type ViewMode = 'grid' | 'list';
 type SortKey = 'newest' | 'size' | 'name';
@@ -67,10 +74,6 @@ type DialogState =
   | { kind: 'delete'; files: DevFile[] }
   | null;
 
-interface Toast {
-  kind: 'success' | 'error';
-  text: string;
-}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败，请稍后重试';
@@ -89,7 +92,7 @@ function coverIcon(file: DevFile) {
 function tileTone(file: DevFile): string {
   if (isVideoFile(file)) return 'bg-gradient-to-br from-[#1C1C1E] via-[#2C2C2E] to-[#48484A] text-white';
   if (isAudioFile(file)) return 'bg-gradient-to-br from-[#FF375F]/14 via-[#FF9F0A]/12 to-[#FFD60A]/14 text-[#FF375F]';
-  if (isImageFile(file)) return 'bg-gradient-to-br from-[#30D158]/14 via-[#0071E3]/10 to-[#5E5CE6]/14 text-[#0071E3]';
+  if (isImageFile(file)) return 'text-[#0071E3]';
   if ((file.category || '') === 'DOC') return 'bg-gradient-to-br from-[#5E5CE6]/14 to-[#0071E3]/10 text-[#5E5CE6]';
   return 'bg-gradient-to-br from-[#F2F2F7] to-[#E5E5EA] text-[#8E8E93]';
 }
@@ -149,8 +152,9 @@ function MaterialCard({
     >
       <div
         className={`relative aspect-[4/3] rounded-[12px] overflow-hidden ${
-          showCover ? 'bg-[#F2F2F7]' : tileTone(file)
+          isImage ? '' : showCover ? 'bg-[#F2F2F7]' : tileTone(file)
         } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
+        style={isImage ? IMAGE_TILE_BG : undefined}
       >
         {showCover ? (
           <img
@@ -278,7 +282,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
+
   const [stats, setStats] = useState<Record<string, number>>({});
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingDropFiles, setPendingDropFiles] = useState<File[] | undefined>(undefined);
@@ -297,15 +301,10 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   const canUpload = !hasConfiguredPerms || perms.includes('bizMaterialAdd');
   const canDelete = !hasConfiguredPerms || perms.includes('bizMaterialDelete');
 
-  const notify = useCallback((kind: Toast['kind'], text: string) => {
-    setToast({ kind, text });
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3600);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const notify = useCallback(
+    (kind: 'success' | 'error', text: string) => showToast(text, kind === 'error' ? 'danger' : 'success'),
+    []
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -954,7 +953,10 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
                   onClick={() => openFile(file)}
                   className="flex items-center gap-2.5 min-w-0 text-left"
                 >
-                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tileTone(file)}`}>
+                  <span
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tileTone(file)}`}
+                    style={isImageFile(file) ? IMAGE_TILE_BG : undefined}
+                  >
                     <Icon className="w-4 h-4" strokeWidth={1.6} />
                   </span>
                   <span className="min-w-0">
@@ -1089,25 +1091,6 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
         initialFiles={pendingDropFiles}
       />
 
-      {/* 轻提示 */}
-      {toast && (
-        <div
-          role="status"
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
-            toast.kind === 'success' ? 'bg-[#1D1D1F] text-white' : 'bg-[#D70015] text-white'
-          }`}
-        >
-          {toast.text}
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            aria-label="关闭提示"
-            className="ml-2 opacity-70 hover:opacity-100"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }

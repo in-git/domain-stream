@@ -36,6 +36,7 @@ import {
   type MessagePermAction,
 } from '../../../lib/message.ts';
 import { formatDateTime } from '../../../lib/format.ts';
+import { showToast } from '../../../components/AppToast.tsx';
 import {
   MessageDeleteDialog,
   MessageDetailDialog,
@@ -116,10 +117,6 @@ type DialogState =
   | { kind: 'delete'; items: BizMessage[] }
   | null;
 
-interface Toast {
-  kind: 'success' | 'error';
-  text: string;
-}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败，请稍后重试';
@@ -140,17 +137,10 @@ export default function MessageView({ permissions }: { permissions?: string[] })
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
-
-  const notify = useCallback((kind: Toast['kind'], text: string) => {
-    setToast({ kind, text });
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3600);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const notify = useCallback(
+    (kind: 'success' | 'error', text: string) => showToast(text, kind === 'error' ? 'danger' : 'success'),
+    []
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -693,25 +683,6 @@ export default function MessageView({ permissions }: { permissions?: string[] })
         />
       )}
 
-      {/* 轻提示 */}
-      {toast && (
-        <div
-          role="status"
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-[360px] px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.14)] text-[13px] font-medium flex items-center gap-2 ${
-            toast.kind === 'success' ? 'bg-[#1D1D1F] text-white' : 'bg-[#D70015] text-white'
-          }`}
-        >
-          {toast.text}
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            aria-label="关闭提示"
-            className="ml-2 opacity-70 hover:opacity-100"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }

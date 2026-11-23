@@ -2,7 +2,7 @@
  * 客户端配置属性定义（schema）
  * ------------------------------------------------------------------
  * 数据库里 CLIENT_CONFIG 存的是一个 JSON 对象，例如：
- *   { "title": "吴文龙的私域" }
+ *   { "title": "私域" }
  *
  * CMS 不直接暴露 JSON 编辑，而是由本文件定义「有哪些属性、怎么预览」。
  * 页面只让用户填值，属性名由 schema 决定。
@@ -41,22 +41,43 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     key: 'title',
     label: '网页标题',
     description: '浏览器标签页与站点顶部显示的名称',
-    defaultValue: '吴文龙的私域',
+    defaultValue: '私域',
     placeholder: '请输入网页标题',
   },
   {
     key: 'faviconUrl',
     label: '网页图标（favicon）',
-    description: '浏览器标签页图标，上传后自动转 WebP 存入文件中心；留空用默认',
+    description: '浏览器标签页图标',
     control: 'upload',
     defaultValue: '',
   },
   {
     key: 'logoUrl',
     label: '网页 Logo',
-    description: '侧边栏与登录页品牌图标，上传后自动转 WebP；留空用默认',
+    description: '侧边栏与登录页品牌图标',
     control: 'upload',
     defaultValue: '',
+  },
+  {
+    key: 'clientUrl',
+    label: '客户端地址',
+    description: '前台客户端站点的访问地址，如：https://www.example.com',
+    defaultValue: '',
+    placeholder: '请输入客户端地址',
+  },
+  {
+    key: 'cmsUrl',
+    label: 'CMS 地址',
+    description: '本内容管理后台的访问地址，如：https://cms.example.com',
+    defaultValue: '',
+    placeholder: '请输入 CMS 地址',
+  },
+  {
+    key: 'adminUrl',
+    label: '开发后台地址',
+    description: '后端服务/开发后台的访问地址，如：https://api.example.com',
+    defaultValue: '',
+    placeholder: '请输入开发后台地址',
   },
   {
     key: 'icpNo',

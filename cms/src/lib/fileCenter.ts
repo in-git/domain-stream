@@ -103,6 +103,10 @@ function normalizeFileUrl(raw?: string): string {
   if (!raw) return '';
   try {
     const u = new URL(raw, window.location.origin);
+    // 远端素材（Iconify/Bing/Picsum 等）直接走原地址，不套本机 /snowy 代理
+    if (u.origin !== window.location.origin && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('/api/')) {
+      return raw;
+    }
     const path = u.pathname.replace(/^\/api/, '');
     return `/snowy${path}${u.search}`;
   } catch {

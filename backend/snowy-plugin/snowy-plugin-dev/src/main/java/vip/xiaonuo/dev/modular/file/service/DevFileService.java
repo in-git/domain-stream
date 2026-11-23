@@ -53,6 +53,14 @@ public interface DevFileService extends IService<DevFile> {
     String uploadReturnId(String engine, MultipartFile file, String bizType);
 
     /**
+     * MultipartFile文件上传，返回文件id，并指定库类型与通用分类编码
+     *
+     * @author domain-stream
+     * @date 2026/11/23
+     **/
+    String uploadReturnId(String engine, MultipartFile file, String bizType, String categoryCode);
+
+    /**
      * MultipartFile文件上传，返回文件id（带后缀校验）
      *
      * @author xuyuxiang
@@ -150,6 +158,14 @@ public interface DevFileService extends IService<DevFile> {
      * @date 2026/11/19 18:00
      **/
     void updateBizType(List<String> ids, String bizType);
+
+    /**
+     * 更新文件通用分类编码
+     *
+     * @author domain-stream
+     * @date 2026/11/23
+     **/
+    void updateCategoryCode(List<String> ids, String categoryCode);
 
     /**
      * 获取文件详情

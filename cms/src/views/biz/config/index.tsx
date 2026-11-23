@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
-  Check,
+  ChevronDown,
   Image as ImageIcon,
   ListOrdered,
   Loader2,
@@ -23,6 +23,7 @@ import {
 import { convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
 import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
+import { showToast } from '../../../components/AppToast.tsx';
 import { pageConfigApi } from '../../../lib/pageConfig.ts';
 import {
   CONFIG_FIELDS,
@@ -33,10 +34,6 @@ import {
 import { PreviewPanel } from './PreviewPanel';
 import { NavItemsEditor } from './NavItemsEditor';
 
-interface Toast {
-  kind: 'success' | 'error';
-  text: string;
-}
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -161,16 +158,41 @@ export default function ConfigView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState<Toast | null>(null);
+
   /** 正在通过文件选择器设置的字段（null 表示未打开） */
   const [pickerField, setPickerField] = useState<string | null>(null);
   /** 当前编辑分组：页面配置 / 侧边栏导航 */
   const [tab, setTab] = useState<'basic' | 'nav'>('basic');
+  /** 底部折叠区：地址与备案信息默认收起，展开才可见 */
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   /** 基础属性字段：排除导航列表，导航用独立 Tab 与拖拽编辑器 */
   const basicFields = useMemo(
     () => CONFIG_FIELDS.filter((field) => field.control !== 'navList'),
     []
+  );
+  /** Logo 与图标同排展示 */
+  const brandFields = useMemo(
+    () => basicFields.filter((field) => field.key === 'logoUrl' || field.key === 'faviconUrl'),
+    [basicFields]
+  );
+  /** 折叠区：地址 + 备案 */
+  const advancedFields = useMemo(
+    () =>
+      basicFields.filter((field) =>
+        ['clientUrl', 'cmsUrl', 'adminUrl', 'icpNo', 'policeNo'].includes(field.key)
+      ),
+    [basicFields]
+  );
+  /** 其余基础字段（如网页标题）正常展示 */
+  const primaryFields = useMemo(
+    () =>
+      basicFields.filter(
+        (field) =>
+          !brandFields.some((f) => f.key === field.key) &&
+          !advancedFields.some((f) => f.key === field.key)
+      ),
+    [basicFields, brandFields, advancedFields]
   );
   /** 参与当前 Tab 的字段，用于判断是否有未保存改动 */
   const tabFields = tab === 'nav' ? CONFIG_FIELDS.filter((f) => f.control === 'navList') : basicFields;
@@ -193,12 +215,6 @@ export default function ConfigView() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
 
   /** 当前 Tab 下发生变化或数据库中尚不存在的属性 */
   const pendingKeys = useMemo(() => {
@@ -238,10 +254,10 @@ export default function ConfigView() {
         value: draft.values[field.key] ?? '',
       }));
       await pageConfigApi.save(items);
-      setToast({ kind: 'success', text: '配置已保存，客户端立即生效' });
+      showToast('配置已保存，客户端立即生效', 'success');
       await load();
     } catch (err) {
-      setToast({ kind: 'error', text: errorMessage(err, '保存失败') });
+      showToast(errorMessage(err, '保存失败'), 'danger');
     } finally {
       setSaving(false);
     }
@@ -249,6 +265,28 @@ export default function ConfigView() {
 
   function handleReset() {
     if (original) setDraft(original);
+  }
+
+  /** 渲染单个配置字段（标题、控件、说明） */
+  function renderField(field: ConfigFieldDef) {
+    return (
+      <div key={field.key} className="min-w-0">
+        <div className="mb-2">
+          <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
+          <span className="ml-2 text-[11px] font-mono text-[#C7C7CC]">{field.key}</span>
+          {field.description && (
+            <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
+          )}
+        </div>
+        <FieldControl
+          field={field}
+          value={draft?.values[field.key] ?? ''}
+          onChange={(value) => setFieldValue(field.key, value)}
+          onError={(message) => showToast(message, 'danger')}
+          onPick={() => setPickerField(field.key)}
+        />
+      </div>
+    );
   }
 
   return (
@@ -355,25 +393,54 @@ export default function ConfigView() {
               ))}
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#F0F0F2]">
-              {basicFields.map((field) => (
-                <div key={field.key} className="px-5 py-4">
-                  <div className="mb-2">
-                    <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
-                    <span className="ml-2 text-[11px] font-mono text-[#C7C7CC]">{field.key}</span>
-                    {field.description && (
-                      <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
-                    )}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {/* 常规字段：网页标题等 */}
+              <div className="divide-y divide-[#F0F0F2]">
+                {primaryFields.map((field) => (
+                  <div key={field.key} className="px-5 py-4">
+                    {renderField(field)}
                   </div>
-                  <FieldControl
-                    field={field}
-                    value={draft.values[field.key] ?? ''}
-                    onChange={(value) => setFieldValue(field.key, value)}
-                    onError={(message) => setToast({ kind: 'error', text: message })}
-                    onPick={() => setPickerField(field.key)}
-                  />
+                ))}
+              </div>
+
+              {/* 网页 Logo 与 favicon 同一排 */}
+              {brandFields.length > 0 && (
+                <div className="px-5 py-4 border-t border-[#F0F0F2]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {brandFields.map((field) => (
+                      <div key={field.key} className="min-w-0 rounded-xl bg-[#FAFAFC] border border-[#E5E5EA] p-3">
+                        {renderField(field)}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* 地址与备案信息：底部折叠，展开才看到 */}
+              {advancedFields.length > 0 && (
+                <div className="border-t border-[#F0F0F2]">
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedOpen((open) => !open)}
+                    aria-expanded={advancedOpen}
+                    className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-[#FAFAFC] transition-colors"
+                  >
+                    <span className="text-[13px] font-medium text-[#1D1D1F]">地址与备案信息</span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-[#86868B] transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {advancedOpen && (
+                    <div className="divide-y divide-[#F0F0F2] border-t border-[#F0F0F2]">
+                      {advancedFields.map((field) => (
+                        <div key={field.key} className="px-5 py-4">
+                          {renderField(field)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -381,17 +448,6 @@ export default function ConfigView() {
         {/* 属性修改预览：栅格项在 items-stretch 下自动等高，flex-1 撑满内部剩余高度 */}
         <PreviewPanel values={draft?.values ?? {}} className="min-h-0" />
       </div>
-
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-[13px] text-white ${
-            toast.kind === 'success' ? 'bg-[#1D1D1F]' : 'bg-[#CF1322]'
-          }`}
-        >
-          {toast.kind === 'success' ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          {toast.text}
-        </div>
-      )}
 
       <FilePicker
         open={pickerField !== null}

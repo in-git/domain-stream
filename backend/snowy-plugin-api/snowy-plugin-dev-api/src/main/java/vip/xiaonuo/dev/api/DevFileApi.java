@@ -188,6 +188,15 @@ public interface DevFileApi {
     JSONArray getFileListByIds(List<String> ids);
 
     /**
+     * 获取指定库类型的底座文件记录，供数据导出等运维功能使用
+     *
+     * @param bizType 库类型：USER 用户文件 / MATERIAL 素材库，传空表示全部
+     * @author domain-stream
+     * @date 2026/11/23
+     */
+    JSONArray getAllFiles(String bizType);
+
+    /**
      * 根据配置的存储类型，返回不同的URL
      *
      * @author yubaoshan
@@ -254,4 +263,28 @@ public interface DevFileApi {
      * @date 2026/10/14 16:00
      */
     String registerSharedFileReturnId(String sourceFileId, String targetEngine, String fileName, Long sizeBytes);
+
+    /**
+     * 调整文件所属库类型（支持 USER / MATERIAL）
+     *
+     * @author domain-stream
+     * @date 2026/11/23
+     */
+    void updateBizType(List<String> ids, String bizType);
+
+    /**
+     * 批量更新文件通用分类编码
+     *
+     * @author domain-stream
+     * @date 2026/11/23
+     */
+    void updateCategoryCode(List<String> ids, String categoryCode);
+
+    /**
+     * 上传素材文件到系统文件库，返回文件id
+     *
+     * @author domain-stream
+     * @date 2026/11/23
+     */
+    String uploadAssetReturnId(String engine, MultipartFile file, String bizType, String categoryCode);
 }

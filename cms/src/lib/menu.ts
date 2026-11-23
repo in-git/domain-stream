@@ -35,6 +35,7 @@ const DEFAULT_PATHS: Record<ModuleKey, string> = {
   messages: '/biz/message',
   files: '/biz/file',
   materials: '/biz/material',
+  assetResource: '/biz-asset-resource',
   config: '/biz/config',
   profile: '/profile',
 };
@@ -65,6 +66,8 @@ const MATCHERS: ModuleMatcher[] = [
   { key: 'files', label: '文件中心', keywords: ['biz/file', 'bizfile'] },
   // 素材中心：菜单 component = biz/material/index，path = /biz/material
   { key: 'materials', label: '素材中心', keywords: ['biz/material', 'bizmaterial'] },
+  // 素材资源库：菜单 component = biz/asset-resource/index，path = /biz-asset-resource
+  { key: 'assetResource', label: '素材资源库', keywords: ['biz/asset-resource', 'bizasset-resource', 'biz-asset-resource'] },
   // 页面配置：菜单 component = biz/config/index，path = /biz/config
   { key: 'config', label: '页面配置', keywords: ['biz/config', 'bizconfig'] },
 ];
@@ -191,6 +194,7 @@ const MODULE_PERM_PREFIX: Record<Exclude<ModuleKey, 'dashboard' | 'profile'>, st
   messages: 'bizMessage',
   files: 'bizFile',
   materials: 'bizMaterial',
+  assetResource: 'bizAssetResource',
   config: 'bizConfig',
 };
 

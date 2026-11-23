@@ -148,36 +148,35 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         className="no-scrollbar relative h-[100dvh] max-h-[100dvh] w-full max-w-[460px] overflow-y-auto rounded-none border border-black/[0.06] bg-white px-6 pb-7 pt-8 shadow-[0_32px_100px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-[#111318] sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px] sm:px-9 sm:pb-9 sm:pt-9"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="关闭登录弹窗"
-          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-[#86868B] transition-colors hover:bg-black/[0.05] hover:text-[#1D1D1F] dark:hover:bg-white/[0.08] dark:hover:text-white"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        <div className="mb-6 text-center sm:pr-9 sm:text-left">
-          <h2 id="login-modal-title" className="text-[24px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-            {mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
-          </h2>
-          {mode === 'password' && (
-            <p className="mt-1.5 text-[13px] text-[#6E6E73] dark:text-[#98989D]">
-              使用账号密码登录你的账号
-            </p>
-          )}
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h2
+              id="login-modal-title"
+              className="text-center text-[24px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-left"
+            >
+              {mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭登录弹窗"
+            className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#86868B] transition-colors hover:bg-black/[0.05] hover:text-[#1D1D1F] dark:hover:bg-white/[0.08] dark:hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {mode === 'wechat' ? (
-          <div className="flex flex-col items-center space-y-4">
+          <div className="flex flex-col space-y-4">
             <div className="py-1 text-center space-y-4">
-              <div className="relative mx-auto h-24 w-24">
+              <div className="relative mx-auto h-40 w-40">
                 <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-[#07C160]/35" />
-                <div className="absolute inset-3 flex items-center justify-center rounded-2xl bg-[#07C160]/10">
-                  <img src={wechatIcon} alt="" className="h-12 w-12" />
+                <div className="absolute inset-4 flex items-center justify-center rounded-2xl bg-[#07C160]/10">
+                  <img src={wechatIcon} alt="" className="h-20 w-20" />
                 </div>
-                <span className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
-                  <QrCode className="h-4 w-4" />
+                <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
+                  <QrCode className="h-5 w-5" />
                 </span>
               </div>
               <div className="space-y-1.5">
@@ -208,7 +207,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
               </div>
             )}
 
-            <div className="space-y-3 pt-1">
+            <div className="w-full space-y-3 pt-1">
               {showQq && (
                 <button type="button" onClick={() => void handleThirdLogin('QQ')} disabled={!!thirdLoading} className={secondaryButtonClass}>
                   <img src={qqIcon} alt="" className="h-5 w-5" />

@@ -27,6 +27,7 @@ const MODULES: ModuleKey[] = [
   'messages',
   'files',
   'materials',
+  'assetResource',
   'config',
   'profile',
 ];

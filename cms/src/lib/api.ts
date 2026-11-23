@@ -16,6 +16,7 @@ import {
   getSnowyToken,
   setSnowyToken,
   snowyBiz,
+  snowyDownload,
   snowyGetLoginUser,
   snowyLogin,
   snowyLoginMenu,
@@ -188,6 +189,12 @@ export const api = {
   },
 
   getDashboard: async (): Promise<DashboardPayload> => snowyVisitorDashboard(),
+
+  // ---- 数据导出 ----
+  exportDatabase: async (): Promise<void> =>
+    snowyDownload('/biz/export/database', 'domain-stream-db.sql'),
+  exportFiles: async (): Promise<void> =>
+    snowyDownload('/biz/export/files', 'domain-stream-files.zip'),
 
   // ---- 视频 ----
   getVideos: async () => ({ items: await snowyBiz.listVideos() }),
