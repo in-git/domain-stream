@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { FolderPlus } from 'lucide-react';
 import {
+  dedupePublishCategoryOptions,
   filterPublishCategories,
   type PublishCategoryModule,
   type PublishCategoryOption,
@@ -65,8 +66,14 @@ export function CategorySelect({
   const baseOptions = externalOptions ?? options;
   const source = useMemo(() => {
     if (!createdOptions.length) return baseOptions;
-    const known = new Set(baseOptions.map((option) => option.id));
-    return [...baseOptions, ...createdOptions.filter((option) => !known.has(option.id))];
+    const knownIds = new Set(baseOptions.map((option) => option.id));
+    const knownCodes = new Set(baseOptions.map((option) => option.code));
+    return [
+      ...baseOptions,
+      ...createdOptions.filter(
+        (option) => !knownIds.has(option.id) && !knownCodes.has(option.code)
+      ),
+    ];
   }, [baseOptions, createdOptions]);
   const isLoading = externalOptions ? false : loading;
 
@@ -77,10 +84,13 @@ export function CategorySelect({
 
   // 历史数据可能绑定了其它模块的分类，保留当前值避免编辑时被清空
   const selectable = useMemo(() => {
-    if (!value || filtered.some((option) => option.code === value)) return filtered;
+    const merged = filtered;
+    if (!value || merged.some((option) => option.code === value)) {
+      return dedupePublishCategoryOptions(merged, module);
+    }
     const current = source.find((option) => option.code === value);
-    return current ? [...filtered, current] : filtered;
-  }, [filtered, source, value]);
+    return dedupePublishCategoryOptions(current ? [...merged, current] : merged, module);
+  }, [filtered, source, value, module]);
 
   return (
     <div>

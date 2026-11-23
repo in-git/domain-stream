@@ -275,6 +275,26 @@ export function imageUrlsInHtml(html?: string | null): string[] {
 }
 
 /**
+ * 提取 HTML 正文中引用的全部本地资源地址。
+ * 覆盖图片、视频 src/source src，以及视频封面 poster。
+ */
+export function resourceUrlsInHtml(html?: string | null): string[] {
+  if (!html) return [];
+  const urls: string[] = [];
+  const tagRe = /<(img|video|source)\b([^>]*)>/gi;
+  const attrRe = /\b(src|poster)\s*=\s*["']([^"']+)["']/gi;
+  let tagMatch: RegExpExecArray | null;
+  while ((tagMatch = tagRe.exec(html)) !== null) {
+    attrRe.lastIndex = 0;
+    let attrMatch: RegExpExecArray | null;
+    while ((attrMatch = attrRe.exec(tagMatch[2])) !== null) {
+      urls.push(attrMatch[2]);
+    }
+  }
+  return Array.from(new Set(urls));
+}
+
+/**
  * 按地址批量彻底删除文件。
  * 只处理能被解析出文件 id 的地址（外链、本地静态资源会被跳过），
  * 删除失败仅告警，不影响业务主流程。

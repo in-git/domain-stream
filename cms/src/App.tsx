@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Menu } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
-import { deleteFilesByUrls } from './lib/fileCenter.ts';
+import { deleteFilesByUrls, resourceUrlsInHtml } from './lib/fileCenter.ts';
 import { getCachedMenu, onAuthExpired, type SnowyMenu } from './lib/snowy.ts';
 import {
   hasModulePerm,
@@ -429,7 +429,9 @@ export default function App() {
         description={
           video
             ? '此操作不可撤销，视频记录、封面图与视频源文件将一并永久删除。'
-            : '此操作不可撤销，内容将从列表中永久移除。'
+            : article
+              ? '此操作不可撤销，文章、封面图以及正文中的图片和视频资源将一并永久删除。'
+              : '此操作不可撤销，内容将从列表中永久移除。'
         }
         onBack={back}
         onConfirm={async () => {
@@ -438,7 +440,11 @@ export default function App() {
             // 视频记录删除成功后，一并清理封面与视频源文件，避免留下孤儿文件
             void deleteFilesByUrls([video.videoUrl, video.coverUrl]);
           } else if (imageText) await api.deleteImageText(imageText.id);
-          else if (article) await api.deleteArticle(article.id);
+          else if (article) {
+            const resourceUrls = [article.coverUrl, ...resourceUrlsInHtml(article.content)];
+            await api.deleteArticle(article.id);
+            void deleteFilesByUrls(resourceUrls);
+          }
           await refresh();
         }}
       />

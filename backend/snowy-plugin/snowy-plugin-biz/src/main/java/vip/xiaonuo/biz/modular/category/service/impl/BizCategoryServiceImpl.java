@@ -27,6 +27,7 @@ import cn.hutool.json.JSONUtil;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.servlet.http.HttpServletResponse;
@@ -89,6 +90,19 @@ public class BizCategoryServiceImpl extends ServiceImpl<BizCategoryMapper, BizCa
         return this.page(CommonPageRequest.defaultPage(), queryWrapper);
     }
 
+    /** 分类编码在业务表和下拉框中作为唯一值使用，因此必须全局唯一 */
+    private void checkCodeUnique(String code, String excludeId) {
+        if (StrUtil.isBlank(code)) return;
+        LambdaQueryWrapper<BizCategory> query = Wrappers.lambdaQuery();
+        query.eq(BizCategory::getCode, code.trim());
+        if (StrUtil.isNotBlank(excludeId)) {
+            query.ne(BizCategory::getId, excludeId);
+        }
+        if (this.exists(query)) {
+            throw new CommonException("分类编码已存在：" + code);
+        }
+    }
+
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void add(BizCategoryAddParam bizCategoryAddParam) {
@@ -104,6 +118,7 @@ public class BizCategoryServiceImpl extends ServiceImpl<BizCategoryMapper, BizCa
             //     throw new CommonException("您没有权限在该机构下增加通用分类（文章/视频/图文）");
             // }
         }
+        checkCodeUnique(bizCategory.getCode(), null);
 
         this.save(bizCategory);
     }
@@ -124,6 +139,7 @@ public class BizCategoryServiceImpl extends ServiceImpl<BizCategoryMapper, BizCa
             //     throw new CommonException("您没有权限编辑该机构下的通用分类（文章/视频/图文）");
             // }
         }
+        checkCodeUnique(bizCategory.getCode(), bizCategory.getId());
 
         this.updateById(bizCategory);
     }

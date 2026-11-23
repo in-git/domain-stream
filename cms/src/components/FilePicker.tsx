@@ -97,11 +97,12 @@ function coverIcon(file: DevFile) {
 }
 
 function tileTone(file: DevFile): string {
-  if (isVideoFile(file)) return 'bg-gradient-to-br from-[#1C1C1E] via-[#2C2C2E] to-[#48484A] text-white';
-  if (isAudioFile(file)) return 'bg-gradient-to-br from-[#FF375F]/14 via-[#FF9F0A]/12 to-[#FFD60A]/14 text-[#FF375F]';
-  if (isImageFile(file)) return 'bg-gradient-to-br from-[#30D158]/14 via-[#0071E3]/10 to-[#5E5CE6]/14 text-[#0071E3]';
-  if ((file.category || '') === 'DOC') return 'bg-gradient-to-br from-[#5E5CE6]/14 to-[#0071E3]/10 text-[#5E5CE6]';
-  return 'bg-gradient-to-br from-[#F2F2F7] to-[#E5E5EA] text-[#8E8E93]';
+  const grayWhite = 'bg-gradient-to-br from-[#F7F7F9] to-[#EDEDF1]';
+  if (isVideoFile(file)) return `${grayWhite} text-[#1D1D1F]`;
+  if (isAudioFile(file)) return `${grayWhite} text-[#FF375F]`;
+  if (isImageFile(file)) return `${grayWhite} text-[#0071E3]`;
+  if ((file.category || '') === 'DOC') return `${grayWhite} text-[#5E5CE6]`;
+  return `${grayWhite} text-[#8E8E93]`;
 }
 
 /** 单个 accept 规则的匹配 */
@@ -192,7 +193,7 @@ function PickerCard({
     >
       <div
         className={`relative aspect-[4/3] rounded-[11px] overflow-hidden ${
-          showCover ? 'bg-[#F2F2F7]' : tileTone(file)
+          showCover ? 'bg-gradient-to-br from-[#F7F7F9] to-[#EDEDF1]' : tileTone(file)
         } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'}`}
       >
         {showCover ? (
@@ -387,8 +388,8 @@ export function FilePicker({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="w-full max-w-4xl min-h-[60vh] max-h-[86vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-[#E5E5EA] overflow-hidden">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4 py-4">
+      <div className="w-full max-w-[min(1440px,96vw)] h-[min(94vh,1000px)] flex flex-col bg-white rounded-2xl shadow-[0_40px_120px_rgba(0,0,0,0.45)] border border-[#E5E5EA] overflow-hidden">
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E5EA]">
           <div>

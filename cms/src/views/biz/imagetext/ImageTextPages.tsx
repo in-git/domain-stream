@@ -14,11 +14,14 @@ import {
 import {
   SortableContext,
   arrayMove,
-  rectSortingStrategy,
+  horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import type { Swiper as SwiperClass } from 'swiper';
+import 'swiper/css';
 import { Switch } from '@heroui/react';
 import {
   ChevronLeft,
@@ -112,7 +115,7 @@ function SortableImageCard({
       }}
       {...attributes}
       {...listeners}
-      className={`relative group aspect-[9/16] rounded-xl overflow-hidden border border-[#E5E5EA] bg-[#F2F2F7] cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/50 ${
+      className={`relative group w-full aspect-[9/16] rounded-xl overflow-hidden border border-[#E5E5EA] bg-[#F2F2F7] cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/50 ${
         isDragging ? 'opacity-30' : ''
       }`}
     >
@@ -210,6 +213,15 @@ function PendingImagesBoard({
   onRemove,
   onMakeCover,
 }: PendingImagesBoardProps) {
+  const carouselRef = useRef<SwiperClass | null>(null);
+
+  const scrollCarousel = (direction: -1 | 1) => {
+    const swiper = carouselRef.current;
+    if (!swiper) return;
+    if (direction < 0) swiper.slidePrev();
+    else swiper.slideNext();
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -217,9 +229,31 @@ function PendingImagesBoard({
           <span className="text-[13px] font-semibold text-[#1D1D1F]">图片</span>
           <span className="text-[11px] text-[#86868B]">已选 {images.length} 张</span>
         </div>
-        {images.length > 1 && (
-          <span className="text-[11px] text-[#86868B] shrink-0">拖拽图片可调整顺序</span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {images.length > 1 && (
+            <span className="text-[11px] text-[#86868B] shrink-0">拖拽图片可调整顺序</span>
+          )}
+          {images.length > 1 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => scrollCarousel(-1)}
+                aria-label="向左查看图片"
+                className="w-7 h-7 rounded-lg border border-[#E5E5EA] bg-white text-[#6E6E73] flex items-center justify-center hover:bg-[#F5F5F7]"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCarousel(1)}
+                aria-label="向右查看图片"
+                className="w-7 h-7 rounded-lg border border-[#E5E5EA] bg-white text-[#6E6E73] flex items-center justify-center hover:bg-[#F5F5F7]"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {images.length === 0 ? (
@@ -234,20 +268,29 @@ function PendingImagesBoard({
           onDragCancel={onDragCancel}
           onDragEnd={onDragEnd}
         >
-          <SortableContext items={images.map((entry) => entry.key)} strategy={rectSortingStrategy}>
-            <div className="grid min-h-[160px] grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2.5">
+          <SortableContext items={images.map((entry) => entry.key)} strategy={horizontalListSortingStrategy}>
+            <Swiper
+              onSwiper={(swiper) => { carouselRef.current = swiper; }}
+              slidesPerView={5}
+              spaceBetween={10}
+              speed={300}
+              allowTouchMove={false}
+              simulateTouch={false}
+              className="min-h-[160px] rounded-xl px-0.5 pb-2"
+            >
               {images.map((entry, idx) => (
-                <SortableImageCard
-                  key={entry.key}
-                  entry={entry}
-                  index={idx}
-                  total={images.length}
-                  onMove={(delta) => onMove(idx, delta)}
-                  onRemove={() => onRemove(idx)}
-                  onMakeCover={() => onMakeCover(idx)}
-                />
+                <SwiperSlide key={entry.key}>
+                  <SortableImageCard
+                    entry={entry}
+                    index={idx}
+                    total={images.length}
+                    onMove={(delta) => onMove(idx, delta)}
+                    onRemove={() => onRemove(idx)}
+                    onMakeCover={() => onMakeCover(idx)}
+                  />
+                </SwiperSlide>
               ))}
-            </div>
+            </Swiper>
           </SortableContext>
 
           {/* 拖拽中的浮层卡片：跟随指针并带落位回弹动画 */}
@@ -308,8 +351,8 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
   );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  /** 图片添加方式：上传图片 / 文本转图文 */
-  const [imageMode, setImageMode] = useState<'upload' | 'text'>('upload');
+  /** 文本转图文模态框开关 */
+  const [textToImageOpen, setTextToImageOpen] = useState(false);
 
   /**
    * 把「文本转图文」生成的图片追加到图片列表（排在最前，方便设为封面）。
@@ -629,42 +672,18 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
           onMakeCover={(index) => moveImage(index, -index)}
         />
 
-        {/* 图片添加方式切换：两种模式互斥，避免同屏两套入口 */}
-        <div
-          role="tablist"
-          aria-label="图片添加方式"
-          className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA]"
-        >
-          {(
-            [
-              { key: 'upload', label: '上传图片', icon: ImagePlus },
-              { key: 'text', label: '文本转图文', icon: Sparkles },
-            ] as const
-          ).map((tab) => {
-            const active = imageMode === tab.key;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setImageMode(tab.key)}
-                className={`h-9 px-3.5 rounded-lg text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
-                  active
-                    ? 'bg-white text-[#1D1D1F] shadow-xs'
-                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between">
+          <span className="text-[13px] font-medium text-[#1D1D1F]">图片添加方式</span>
+          <button
+            type="button"
+            onClick={() => setTextToImageOpen(true)}
+            className="h-9 px-3.5 rounded-xl bg-[#1D1D1F] text-white text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-black transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            文本转图片
+          </button>
         </div>
 
-        {imageMode === 'upload' ? (
-        <>
         <Switch
           isSelected={needCrop}
           onChange={setNeedCrop}
@@ -719,10 +738,14 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
               : '仅支持图片（JPG / PNG / WebP），未勾选裁剪将上传原图 · 保存时才上传'}
           </div>
         </div>
-        </>
-        ) : (
-          <TextToImagePanel cardTitle={title} onApply={handleApplyGenerated} />
-        )}
+
+        <TextToImagePanel
+          open={textToImageOpen}
+          onClose={() => setTextToImageOpen(false)}
+          cardTitle={title}
+          initialContent={body}
+          onApply={handleApplyGenerated}
+        />
 
         </div>
       }

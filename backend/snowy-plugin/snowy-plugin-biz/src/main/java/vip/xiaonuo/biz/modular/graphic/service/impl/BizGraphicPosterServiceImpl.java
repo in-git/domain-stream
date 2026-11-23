@@ -58,11 +58,14 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
     /** 画布高度 */
     private static final int HEIGHT = 1440;
 
-    /** 上下保留边距 */
-    private static final int PADDING = 96;
+    /** 统一安全边距：上下左右一致，尽可能让文本占满画布 */
+    private static final int PADDING = 72;
 
-    /** 左右安全边距：给文字留出呼吸空间，避免贴边被裁切 */
-    private static final int PADDING_X = 88;
+    /** 左右安全边距，与上下保持一致 */
+    private static final int PADDING_X = 72;
+
+    /** 字符间距：比默认字距放宽 1px */
+    private static final int LETTER_SPACING = 1;
 
     /** 折行时额外预留的余量，抵消字体度量与实际字形宽度的误差 */
     private static final int WRAP_TOLERANCE = 8;
@@ -83,7 +86,13 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
     private static final float LINE_HEIGHT_RATIO = 1.58f;
 
     /** 标题区高度估算（含与正文的间距），封面页使用 */
-    private static final int TITLE_BLOCK_HEIGHT = 260;
+    private static final int TITLE_BLOCK_HEIGHT = 210;
+
+    /** 内页正文额外顶部留白 */
+    private static final int INNER_TOP_EXTRA = 28;
+
+    /** 页脚保留高度 */
+    private static final int FOOTER_AREA = 64;
 
     /** 可选主题：背景渐变 + 文字色 + 强调色，风格参考小红书卡片 */
     private static final Map<String, Theme> THEMES = new LinkedHashMap<>();
@@ -115,7 +124,7 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
         int lineHeight = Math.round(BODY_SIZE * LINE_HEIGHT_RATIO);
         // 正文可用高度：顶部留白 + 标题区 + 底部页脚区
         int bodyTop = PADDING + TITLE_BLOCK_HEIGHT;
-        int bodyBottom = HEIGHT - PADDING - 90;
+        int bodyBottom = HEIGHT - PADDING - FOOTER_AREA;
         // 每页能容纳的正文行数（字号变大后行数减少，靠分页保证不溢出）
         int linesPerPage = Math.max(1, (bodyBottom - bodyTop) / lineHeight);
 
@@ -130,7 +139,7 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
             // 封面页显示标题，内页不重复大标题，保持卡片简洁
             String pageTitle = pageIndex == 0 ? title : "";
             // 封面预留标题高度，内页从顶部留白开始排正文
-            int textTop = pageIndex == 0 ? bodyTop : PADDING + 90;
+            int textTop = pageIndex == 0 ? bodyTop : PADDING + INNER_TOP_EXTRA;
             BufferedImage image = drawPage(theme, pageTitle, pageLines, nickname,
                     pageIndex + 1, pageCount, textTop, titleFont, bodyFont, footerFont);
             urls.add(toDataUri(image));
@@ -159,11 +168,11 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
             g.setColor(theme.text);
             if (StrUtil.isNotBlank(title)) {
                 // 标题最多两行，避免吃掉正文空间
-                int cursorY = PADDING + 110;
+                int cursorY = PADDING + 92;
                 g.setFont(titleFont);
                 for (String line : wrap(title, titleFont, WIDTH - PADDING_X * 2 - WRAP_TOLERANCE)) {
-                    if (cursorY > PADDING + TITLE_BLOCK_HEIGHT - 60) break;
-                    g.drawString(line, PADDING_X, cursorY);
+                    if (cursorY > PADDING + TITLE_BLOCK_HEIGHT - 40) break;
+                    drawTracked(g, line, PADDING_X, cursorY);
                     cursorY += Math.round(TITLE_SIZE * 1.28f);
                 }
             }
@@ -173,17 +182,18 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
             int lineHeight = Math.round(BODY_SIZE * LINE_HEIGHT_RATIO);
             int y = textTop;
             for (String line : lines) {
-                g.drawString(line, PADDING_X, y);
+                drawTracked(g, line, PADDING_X, y);
                 y += lineHeight;
             }
 
             // 页脚：署名 + 页码
             g.setFont(footerFont);
             g.setColor(theme.footer);
-            g.drawString(StrUtil.isBlank(nickname) ? "" : StrUtil.sub(nickname, 0, 20), PADDING_X, HEIGHT - PADDING);
+            String authorText = StrUtil.isBlank(nickname) ? "" : StrUtil.sub(nickname, 0, 20);
+            drawTracked(g, authorText, PADDING_X, HEIGHT - PADDING);
             String pageText = pageCount > 1 ? pageNo + " / " + pageCount : dateText();
-            int pageWidth = g.getFontMetrics().stringWidth(pageText);
-            g.drawString(pageText, WIDTH - PADDING_X - pageWidth, HEIGHT - PADDING);
+            int pageWidth = trackedWidth(g, pageText);
+            drawTracked(g, pageText, WIDTH - PADDING_X - pageWidth, HEIGHT - PADDING);
 
             // 页码指示条
             if (pageCount > 1) {
@@ -232,7 +242,8 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
                 for (char ch : paragraph.toCharArray()) {
                     // 用「当前行 + 新字符」的宽度判断，而不是先加后减，
                     // 避免单个宽字符被推到新行后仍然越界
-                    int width = metrics.stringWidth(current.toString() + ch);
+                    int width = metrics.stringWidth(current.toString() + ch)
+                            + current.length() * LETTER_SPACING;
                     if (width > maxWidth && current.length() > 0) {
                         lines.add(current.toString());
                         current.setLength(0);
@@ -249,6 +260,28 @@ public class BizGraphicPosterServiceImpl implements BizGraphicPosterService {
             lines.remove(lines.size() - 1);
         }
         return lines.isEmpty() ? java.util.Collections.singletonList("") : lines;
+    }
+
+    /** 按 1px 字距逐字绘制 */
+    private void drawTracked(Graphics2D g, String text, int x, int y) {
+        if (StrUtil.isBlank(text)) return;
+        java.awt.FontMetrics metrics = g.getFontMetrics();
+        int cursor = x;
+        for (char ch : text.toCharArray()) {
+            g.drawString(String.valueOf(ch), cursor, y);
+            cursor += metrics.charWidth(ch) + LETTER_SPACING;
+        }
+    }
+
+    /** 计算按 1px 字距绘制后的总宽度，用于右对齐 */
+    private int trackedWidth(Graphics2D g, String text) {
+        if (StrUtil.isBlank(text)) return 0;
+        java.awt.FontMetrics metrics = g.getFontMetrics();
+        int width = 0;
+        for (char ch : text.toCharArray()) {
+            width += metrics.charWidth(ch) + LETTER_SPACING;
+        }
+        return Math.max(0, width - LETTER_SPACING);
     }
 
     /** 取首个非空行作为标题，超长时截断 */

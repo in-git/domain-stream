@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Images } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Images } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
 import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -106,7 +106,7 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
       {/* 图片：竖版 3:4，小红书图文的标准比例；卡片大小由列宽控制 */}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-md bg-[#F2F2F7] dark:bg-[#1C1C1E]"
+        className="group relative w-full overflow-hidden rounded-md bg-[#F2F2F7] dark:bg-[#1C1C1E]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -151,6 +151,38 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
           <span className="absolute right-2 top-2 rounded-full bg-black/40 px-2 py-0.5 text-[12px] font-medium text-white backdrop-blur-sm tabular-nums">
             {active + 1}/{total}
           </span>
+        )}
+
+        {/* 桌面端左右箭头：悬停时出现，移动端仍用滑动切换 */}
+        {total > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="上一张"
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                goTo(active - 1);
+              }}
+              className="absolute left-2 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-0 shadow-md backdrop-blur-sm transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus:outline-none md:flex group-hover:opacity-100"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="下一张"
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                goTo(active + 1);
+              }}
+              className="absolute right-2 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-0 shadow-md backdrop-blur-sm transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus:outline-none md:flex group-hover:opacity-100"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </>
         )}
 
         {/* 图片底部压暗：桌面端叠加文字才需要 */}

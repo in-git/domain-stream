@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
+import { deleteFilesByUrls, resourceUrlsInHtml } from '../../../lib/fileCenter.ts';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
@@ -106,7 +107,12 @@ export function ArticleManagerView({
 
   /** 确认删除 */
   async function handleConfirmDelete() {
+    const resourceUrls = pendingDelete.flatMap((a) => [
+      a.coverUrl,
+      ...resourceUrlsInHtml(a.content),
+    ]);
     await api.deleteArticles(pendingDelete.map((a) => a.id));
+    void deleteFilesByUrls(resourceUrls);
     setSelected(new Set());
     await onRefresh();
   }
@@ -379,7 +385,7 @@ export function ArticleManagerView({
       <DeleteConfirmModal
         title={pendingDelete.length === 1 ? '确认删除该文章？' : `确认删除 ${pendingDelete.length} 篇文章？`}
         itemTitles={pendingDelete.map((a) => a.title)}
-        description="此操作不可撤销，文章将从列表中永久移除。"
+        description="此操作不可撤销，文章、封面图以及正文中的图片和视频资源将一并永久删除。"
         onConfirm={handleConfirmDelete}
         onClose={() => setPendingDelete([])}
       />

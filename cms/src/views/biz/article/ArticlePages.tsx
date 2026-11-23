@@ -1,7 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { api, uploadFileWithProgress } from '../../../lib/api.ts';
-import { deleteFilesByUrls, imageUrlsInHtml, removedUrls } from '../../../lib/fileCenter.ts';
+import { api, convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
+import {
+  deleteFilesByUrls,
+  removedUrls,
+  resourceUrlsInHtml,
+  toOpenUrl,
+  type DevFile,
+} from '../../../lib/fileCenter.ts';
 import { createBlobUploadQueue, type BlobUploadQueue } from '../../../lib/pendingUpload.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import { plainText, renderRichContent } from '../../../lib/richtext.tsx';
@@ -10,7 +16,7 @@ import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { CategorySelect } from '../../../components/CategorySelect.tsx';
-import { CoverCropper } from '../../../components/CoverCropper.tsx';
+import { FilePicker } from '../../../components/FilePicker.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
 import {
   EditorWorkspace,
@@ -102,30 +108,18 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const [content, setContent] = useState(item?.content ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
   const [coverUrl, setCoverUrl] = useState(item?.coverUrl ?? '');
-  // 封面裁剪结果先暂存在本地，点击保存时才上传
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState(item?.coverUrl ?? '');
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
-  // 选中的原始文件，等裁剪确认后再本地暂存
-  const [coverDraft, setCoverDraft] = useState<File | null>(null);
   const [saveProgress, setSaveProgress] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const coverPreviewRef = useRef('');
   // 正文图片延迟上传队列：编辑时用 blob 预览，保存时统一上传并替换地址
   const bodyQueueRef = useRef<BlobUploadQueue | null>(null);
   if (!bodyQueueRef.current) bodyQueueRef.current = createBlobUploadQueue();
 
-  // 离开页面时释放本地封面与正文图片的预览地址
-  useEffect(
-    () => () => {
-      if (coverPreviewRef.current) URL.revokeObjectURL(coverPreviewRef.current);
-      bodyQueueRef.current?.reset();
-    },
-    []
-  );
+  // 离开页面时释放正文图片的预览地址
+  useEffect(() => () => bodyQueueRef.current?.reset(), []);
 
   const {
     options: categoryOptions,
@@ -147,28 +141,12 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
   const liveWordCount = useMemo(() => plainText(content).length, [content]);
   const liveReadMin = Math.max(1, Math.ceil(liveWordCount / 300));
 
-  /** 选择原始图片 → 进入裁剪弹窗（默认 16:9），确认后只在本地暂存 */
-  function handleCoverPick(file: File) {
-    if (!file.type.startsWith('image/')) {
-      setFormError('封面图片仅支持 JPG / PNG / WebP');
-      return;
-    }
+  /** 从全局文件选择器选取封面，文件已在文件中心落库 */
+  function handleCoverSelect(files: DevFile[]) {
+    const file = files[0];
+    if (!file) return;
+    setCoverUrl(toOpenUrl(file));
     setFormError('');
-    setCoverDraft(file);
-  }
-
-  /** 裁剪完成后暂存到本地，点击保存时才上传 */
-  function handleCoverUpload(cropped: File) {
-    setFormError('');
-    if (coverPreviewRef.current) {
-      URL.revokeObjectURL(coverPreviewRef.current);
-      coverPreviewRef.current = '';
-    }
-    const previewUrl = URL.createObjectURL(cropped);
-    coverPreviewRef.current = previewUrl;
-    setCoverFile(cropped);
-    setCoverPreviewUrl(previewUrl);
-    setCoverDraft(null);
   }
 
   async function handleSave() {
@@ -190,25 +168,18 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
       setFormError(categoryError || '请选择文章分类');
       return;
     }
+    if (!coverUrl.trim()) {
+      setFormError('请选择文章封面');
+      return;
+    }
     setSaving(true);
     setFormError('');
     // 队列在组件挂载时即创建，这里断言非空便于后续使用
     const bodyQueue = bodyQueueRef.current!;
-    setSaveProgress(coverFile || bodyQueue.size() ? 0 : null);
+    setSaveProgress(bodyQueue.size() ? 0 : null);
     try {
-      // 保存时才上传：先封面，再正文里暂存的图片
-      let uploadedCoverUrl = '';
-      if (coverFile) {
-        const uploaded = await uploadFileWithProgress(coverFile, (pct) => setSaveProgress(pct));
-        uploadedCoverUrl = uploaded.url;
-        setCoverUrl(uploaded.url);
-        // 已上传成功则置空，保存失败重试时不会再重复上传
-        setCoverFile(null);
-      }
-      const finalCoverUrl =
-        uploadedCoverUrl ||
-        coverUrl ||
-        '/src/assets/images/article_cover_typography_1795026087411.jpg';
+      // 封面已由文件选择器上传落库，这里只需等待正文里暂存的资源上传完成
+      const finalCoverUrl = coverUrl.trim();
       const finalContent = await bodyQueue.flush(content, (pct) => setSaveProgress(pct));
       if (finalContent !== content) setContent(finalContent);
 
@@ -222,11 +193,11 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
       };
       if (item) {
         await api.updateArticle(item.id, payload);
-        // 保存成功后彻底删除被替换的封面，以及正文中被移除的图片，避免留下孤儿文件
+        // 保存成功后彻底删除被替换的封面、正文图片/视频等不再引用的资源
         void deleteFilesByUrls(
           removedUrls(
-            [item.coverUrl, ...imageUrlsInHtml(item.content)],
-            [finalCoverUrl, ...imageUrlsInHtml(finalContent)]
+            [item.coverUrl, ...resourceUrlsInHtml(item.content)],
+            [finalCoverUrl, ...resourceUrlsInHtml(finalContent)]
           )
         );
       } else {
@@ -276,37 +247,27 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
         info={
           <div className="space-y-5">
             <div>
+              <label className="block text-[13px] font-medium text-[#1D1D1F] mb-1.5">
+                文章封面 <span className="text-[#FF3B30]">*</span>
+              </label>
               <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#E5E5EA]">
                 <MediaImage
-                  src={coverPreviewUrl}
+                  src={coverUrl}
                   alt="文章封面"
-                  fallbackLabel="文章封面"
+                  fallbackLabel="请选择文章封面"
                   className="w-full h-full object-cover"
                 />
               </div>
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (f) handleCoverPick(f);
-                }}
-              />
               <button
                 type="button"
-                onClick={() => coverInputRef.current?.click()}
+                onClick={() => setCoverPickerOpen(true)}
                 className="mt-2.5 w-full px-3 py-2 rounded-lg bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#1D1D1F] hover:bg-[#FAFAFA] inline-flex items-center justify-center gap-1.5"
               >
                 <ImagePlus className="w-3.5 h-3.5" />
-                <span>
-                  {coverPreviewUrl ? '重新选择并裁剪' : '选择文章封面'}
-                </span>
+                <span>{coverUrl ? '重新选择文章封面' : '从文件中心选择封面'}</span>
               </button>
               <p className="text-[11px] text-[#86868B] mt-1.5">
-                选图后可拖动框选裁剪区域，保存文章时才会上传
+                封面必填，可直接从全局文件中心选取或上传新图片
               </p>
             </div>
 
@@ -387,12 +348,11 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
                 onChange={setContent}
                 className="article-ai-editor absolute inset-0"
                 style={{ height: '100%' }}
-                // 正文图片先插入本地 blob 地址，保存文章时统一上传并替换
-                uploadImage={(file) =>
-                  Promise.resolve(
-                    bodyQueueRef.current?.register(file) ?? URL.createObjectURL(file)
-                  )
-                }
+                // AIEditor 里点击图片/视频上传后立即存入文件中心，正文直接保存真实地址
+                uploadMedia={async (file, _type, onProgress) => {
+                  const uploaded = await uploadFileWithProgress(file, onProgress);
+                  return uploaded.url;
+                }}
               />
             </Suspense>
           </div>
@@ -404,20 +364,20 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
             summary={summary}
             content={content}
             category={categoryLabel}
-            coverUrl={coverPreviewUrl}
+            coverUrl={coverUrl}
             status={status}
             wordCount={liveWordCount}
             readMin={liveReadMin}
           />
         )}
         />
-      <CoverCropper
-        file={coverDraft}
-        aspect={16 / 9}
-        outputWidth={1440}
-        heading="裁剪文章封面"
-        onCancel={() => setCoverDraft(null)}
-        onComplete={handleCoverUpload}
+      <FilePicker
+        open={coverPickerOpen}
+        onClose={() => setCoverPickerOpen(false)}
+        accept="image"
+        title="选择文章封面"
+        beforeUpload={convertToWebp}
+        onSelect={handleCoverSelect}
       />
     </>
   );

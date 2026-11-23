@@ -5,6 +5,7 @@ import {
   Film,
   LayoutGrid,
   List,
+  Play,
   Plus,
   Search,
   Square,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
+import { MediaImage } from '../../../components/MediaImage.tsx';
 import { deleteFilesByUrls } from '../../../lib/fileCenter.ts';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import {
@@ -470,15 +472,17 @@ export function VideoManagerView({
                     )}
                     <td className="py-3 px-5">
                       <div className="flex items-center gap-3 min-w-[240px]">
-                        <video
-                          src={toPlayableVideoUrl(item.videoUrl)}
-                          poster={item.coverUrl || undefined}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          className="w-20 h-11 rounded-lg shrink-0 bg-black object-contain"
-                          aria-label={`播放 ${item.title}`}
-                        />
+                        <div className="relative w-20 h-11 rounded-lg overflow-hidden bg-[#F2F2F7] shrink-0">
+                          <MediaImage
+                            src={item.coverUrl}
+                            alt={`${item.title} 封面`}
+                            fallbackLabel={item.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <Play className="w-4 h-4 text-white fill-white/90" strokeWidth={1.6} />
+                          </span>
+                        </div>
                         <div className="min-w-0">
                           <div className="font-medium text-[#1D1D1F] truncate max-w-[280px]">
                             {item.title}

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { A11y } from 'swiper/modules';
+import { A11y, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
-import { ChevronLeft, ChevronRight, Heart, Share2, Star, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Heart, Share2, Star, X } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -26,11 +26,21 @@ interface NoteDetailProps {
 export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onClose }: NoteDetailProps) {
   const [index, setIndex] = useState(0);
   const swiperRef = useRef<SwiperClass | null>(null);
+  const thumbRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // 切换笔记时重置到第一张
   useEffect(() => {
     setIndex(0);
   }, [note?.id]);
+
+  // 底部缩略图跟随当前图片滚动，图片多时也不会挤在一起
+  useEffect(() => {
+    thumbRefs.current[index]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    });
+  }, [index]);
 
   const goRelative = useCallback(
     (step: number) => {
@@ -63,8 +73,8 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
     <div
       className={
         mobile
-          ? 'absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-4 bg-black/35 px-5 text-white backdrop-blur-sm md:hidden'
-          : 'hidden h-14 shrink-0 items-center justify-between gap-4 px-5 md:flex'
+          ? 'absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-4 bg-transparent px-5 text-white md:hidden'
+          : 'hidden h-16 shrink-0 items-center justify-between gap-4 border-b border-black/[0.06] px-7 md:flex dark:border-white/[0.08]'
       }
     >
       <h2
@@ -95,7 +105,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 h-screen flex items-center justify-center bg-black/60 backdrop-blur-md p-0 sm:p-6"
+          className="fixed inset-0 z-50 h-screen flex items-center justify-center bg-black/75 backdrop-blur-2xl p-0 sm:p-4"
           onClick={onClose}
           role="dialog"
           aria-modal="true"
@@ -107,30 +117,31 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
             exit={{ opacity: 0, scale: 0.99 }}
             transition={SWIFTUI_SMOOTH}
             onClick={(event) => event.stopPropagation()}
-            className="relative h-[100dvh] w-screen max-w-none rounded-none bg-black sm:h-[min(88vh,760px)] sm:w-full sm:max-w-4xl sm:rounded-3xl sm:bg-white sm:dark:bg-[#161618] overflow-hidden flex flex-col md:flex-row shadow-2xl will-change-transform"
+            className="relative h-[100dvh] w-screen max-w-none rounded-none bg-black sm:h-[min(97vh,1120px)] sm:w-full sm:max-w-[min(1680px,98vw)] sm:rounded-[36px] sm:bg-white sm:ring-1 sm:ring-white/10 sm:dark:bg-[#161618] overflow-hidden flex flex-col md:flex-row shadow-[0_48px_160px_rgba(0,0,0,0.65)] will-change-transform"
           >
             {renderHeader(true)}
 
             {/* 左：Swiper 图片轮播
                 图片完整自适应显示在容器内，宽高都不超出容器；移动端容器全屏 */}
-            <div className="relative h-full w-full md:w-[54%] md:h-full shrink-0 bg-black overflow-hidden">
-              <Swiper
-                key={note.id}
-                modules={[A11y]}
-                loop={note.images.length > 1}
-                speed={300}
-                threshold={10}
-                touchStartPreventDefault={false}
-                onSwiper={(swiper) => {
-                  swiperRef.current = swiper;
-                  setIndex(swiper.realIndex);
-                }}
-                onSlideChange={(swiper) => setIndex(swiper.realIndex)}
-                className="h-full w-full"
-              >
-                {note.images.map((src, i) => (
-                  <SwiperSlide key={`${src}-${i}`} className="h-full w-full bg-black">
-                    <div className="h-full w-full">
+            <div className="relative flex h-full w-full shrink-0 flex-col overflow-hidden bg-black md:h-full md:w-[68%]">
+              <div className="relative min-h-0 flex-1">
+                <Swiper
+                  key={note.id}
+                  modules={[A11y, Mousewheel]}
+                  loop={note.images.length > 1}
+                  speed={300}
+                  threshold={10}
+                  mousewheel={{ forceToAxis: false, releaseOnEdges: true, thresholdDelta: 12 }}
+                  touchStartPreventDefault={false}
+                  onSwiper={(swiper) => {
+                    swiperRef.current = swiper;
+                    setIndex(swiper.realIndex);
+                  }}
+                  onSlideChange={(swiper) => setIndex(swiper.realIndex)}
+                  className="h-full w-full"
+                >
+                  {note.images.map((src, i) => (
+                    <SwiperSlide key={`${src}-${i}`} className="flex h-full w-full items-center justify-center bg-black">
                       <ResilientImage
                         src={src}
                         alt={note.title}
@@ -139,41 +150,83 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                         interactive={false}
                         className="h-full w-full"
                       />
-                    </div>
-                  </SwiperSlide>
-                ))}
-              </Swiper>
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
 
+                {note.images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => goRelative(-1)}
+                      aria-label="上一张"
+                      className="absolute left-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/70 md:h-14 md:w-14"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => goRelative(1)}
+                      aria-label="下一张"
+                      className="absolute right-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/70 md:h-14 md:w-14"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* 底部缩略图轮播：独立占一行，不再遮挡主图 */}
               {note.images.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => goRelative(-1)}
-                    aria-label="上一张"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 hover:bg-black/65 text-white flex items-center justify-center backdrop-blur-sm transition-colors z-10"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => goRelative(1)}
-                    aria-label="下一张"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 hover:bg-black/65 text-white flex items-center justify-center backdrop-blur-sm transition-colors z-10"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                  {/* 页码圆点 */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
-                    {note.images.map((_, i) => (
-                      <span
-                        key={i}
-                        className={`h-1.5 rounded-full transition-all ${
-                          i === index ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
-                        }`}
-                      />
-                    ))}
+                <div className="hidden shrink-0 border-t border-white/10 bg-black/80 px-4 py-3 backdrop-blur-md md:block">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="min-w-0 flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                      style={{ scrollbarWidth: 'none' }}
+                    >
+                      <div className="mx-auto flex w-max items-center justify-center gap-2">
+                        {note.images.map((url, i) => (
+                          <button
+                            key={i}
+                            ref={(node) => { thumbRefs.current[i] = node; }}
+                            type="button"
+                            onClick={() => {
+                              setIndex(i);
+                              swiperRef.current?.slideToLoop(i);
+                            }}
+                            aria-label={`查看第 ${i + 1} 张图片`}
+                            aria-current={i === index}
+                            className={`relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 transition-all ${
+                              i === index ? 'opacity-100' : 'opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <ResilientImage
+                              src={url}
+                              alt=""
+                              interactive={false}
+                              fit="contain"
+                              className="h-full w-full"
+                            />
+                            {i === index && (
+                              <>
+                                <span className="absolute inset-0 bg-[#0071E3]/25" />
+                                <span className="absolute inset-0 flex items-center justify-center">
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0071E3] text-white shadow-[0_4px_12px_rgba(0,0,0,0.4)] ring-2 ring-white/80">
+                                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                                  </span>
+                                </span>
+
+                              </>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[11px] tabular-nums text-white/90 ring-1 ring-white/10">
+                      {index + 1}/{note.images.length}
+                    </span>
                   </div>
-                </>
+                </div>
               )}
             </div>
 
@@ -181,8 +234,8 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
             <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col md:static md:z-auto md:min-w-0 md:flex-1">
               {renderHeader(false)}
 
-              <div className="hidden md:block md:flex-1 md:min-h-0 md:overflow-y-auto md:px-5 md:py-4">
-                <h2 className="text-[16px] font-semibold leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <div className="hidden md:block md:flex-1 md:min-h-0 md:overflow-y-auto md:px-8 md:py-7">
+                <h2 className="text-[22px] font-semibold leading-[1.35] tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {note.title}
                 </h2>
                 {note.content &&
@@ -190,7 +243,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                     <p
                       key={i}
                       // break-words + anywhere：长串英文 / 链接也不会横向溢出
-                      className="mt-2 text-[13px] leading-[1.85] whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[#3A3A3C] dark:text-[#D1D1D6]"
+                      className="mt-3 text-[14px] leading-[1.9] whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[#3A3A3C] dark:text-[#D1D1D6]"
                     >
                       {line}
                     </p>
@@ -201,7 +254,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                 </p>
               </div>
 
-              <div className="shrink-0 flex h-14 items-center justify-around border-t border-white/15 bg-black/45 px-4 text-white backdrop-blur-sm dark:border-white/[0.08] md:border-black/[0.06] md:bg-transparent md:text-[#1D1D1F] md:dark:text-[#F5F5F7]">
+              <div className="shrink-0 flex h-14 items-center justify-around border-t border-transparent bg-transparent px-4 text-white md:h-16 md:justify-start md:gap-2 md:border-black/[0.06] md:bg-transparent md:px-7 md:text-[#1D1D1F] md:dark:border-white/[0.08] md:dark:text-[#F5F5F7]">
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.88 }}

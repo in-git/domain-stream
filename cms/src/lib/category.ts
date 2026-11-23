@@ -98,7 +98,41 @@ export interface CategoryImportResult {
  * 业务表以该编码关联分类，因此不能留空。
  */
 export function generateCategoryCode(): string {
-  return `cat_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const random =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  return `cat_${random}`;
+}
+
+/**
+ * 按分类编码去重。
+ * 业务表以 code 关联分类，下拉框也以 code 作为唯一值，
+ * 因此同 code 跨模块（尤其 COMMON）同时出现时必须只保留一个。
+ */
+export function dedupePublishCategoryOptions(
+  options: PublishCategoryOption[],
+  module: PublishCategoryModule
+): PublishCategoryOption[] {
+  const current = module.toUpperCase();
+  const byCode = new Map<string, PublishCategoryOption>();
+  for (const option of options) {
+    const code = (option.code || '').trim();
+    if (!code) continue;
+    const existing = byCode.get(code);
+    if (!existing) {
+      byCode.set(code, option);
+      continue;
+    }
+    const priority = (item: PublishCategoryOption) => {
+      const itemModule = (item.module || '').toUpperCase();
+      if (itemModule === current) return 2;
+      if (itemModule === 'COMMON' || !itemModule) return 1;
+      return 0;
+    };
+    if (priority(option) > priority(existing)) byCode.set(code, option);
+  }
+  return Array.from(byCode.values());
 }
 
 function qs(params: Record<string, unknown> = {}): string {
@@ -363,10 +397,12 @@ export async function fetchPublishCategories(
     }
   }
 
-  // 本模块 / COMMON / 未设置模块的分类优先，其余模块靠后但仍可选
+  // 本模块优先，其次 COMMON / 未设置模块，其余模块靠后但仍可选
   const moduleRank = (item: (typeof usable)[number]) => {
     const m = (item.module || '').toUpperCase();
-    return !m || m === 'COMMON' || m === module ? 0 : 1;
+    if (m === module) return 0;
+    if (!m || m === 'COMMON') return 1;
+    return 2;
   };
   const compare = (a: (typeof usable)[number], b: (typeof usable)[number]) =>
     moduleRank(a) - moduleRank(b) ||
@@ -400,7 +436,7 @@ export async function fetchPublishCategories(
   // 防御环形父子关系：未遍历到的节点补到末尾
   usable.forEach((item) => append(item, 0));
 
-  return result;
+  return dedupePublishCategoryOptions(result, module);
 }
 
 /**
@@ -413,10 +449,13 @@ export function filterPublishCategories(
   module: PublishCategoryModule,
   includeCommon = true
 ): PublishCategoryOption[] {
-  const matched = options.filter((option) => {
-    const current = (option.module || '').toUpperCase();
-    return current === module || (includeCommon && current === 'COMMON');
-  });
+  const matched = dedupePublishCategoryOptions(
+    options.filter((option) => {
+      const current = (option.module || '').toUpperCase();
+      return current === module || (includeCommon && current === 'COMMON');
+    }),
+    module
+  );
   if (!matched.length) return matched;
 
   const byId = new Map(matched.map((option) => [option.id, option]));

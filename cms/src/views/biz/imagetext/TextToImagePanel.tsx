@@ -1,11 +1,10 @@
 /**
- * 文本转图文（面板 + 结果弹窗）
+ * 文本转图文（模态框）
  * ------------------------------------------------------------------
- * 面板内直接输入正文并点击「预览生成」，脚本意义上的输入区留在页面上；
- * 生成完成后弹出模态框展示图片，可逐张勾选后应用回图文编辑器。
+ * 正文与主题都在弹窗内维护，生成结果也在同一弹窗内勾选并应用。
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
+import { Check, Loader2, Sparkles, X } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
 
 /** 与后端 BizGraphicPosterService 主题一一对应 */
@@ -21,47 +20,56 @@ const THEMES = [
 const MAX_CONTENT = 1000;
 
 interface TextToImagePanelProps {
-  /** 写入卡片页脚的作者昵称 */
-  authorName?: string;
-  /** 卡片标题：直接取自左侧「图文标题」，不再由正文截取 */
+  open: boolean;
+  onClose: () => void;
+  /** 卡片标题：取自左侧「图文标题」 */
   cardTitle: string;
-  /** 应用勾选的图片 */
+  /** 用左侧「图文配文」预填弹窗正文 */
+  initialContent?: string;
+  /** 应用勾选的图片（后端返回的 data URI） */
   onApply: (urls: string[]) => void;
 }
 
-export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImagePanelProps) {
-  const [content, setContent] = useState('');
+export function TextToImagePanel({
+  open,
+  onClose,
+  cardTitle,
+  initialContent = '',
+  onApply,
+}: TextToImagePanelProps) {
+  const [content, setContent] = useState(initialContent);
   const [theme, setTheme] = useState('warm');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
-  /** 结果弹窗开关 */
-  const [resultOpen, setResultOpen] = useState(false);
-  /** 生成结果（后端原始地址） */
   const [results, setResults] = useState<string[]>([]);
-  /** 勾选的图片下标 */
   const [picked, setPicked] = useState<Set<number>>(new Set());
 
-  /** 标题来自左侧「图文标题」，为空时不允许生成 */
+  /** 标题优先取左侧「图文标题」，为空时由后端自动取正文首行 */
   const trimmedTitle = cardTitle.trim();
 
   const canGenerate = useMemo(
-    () =>
-      trimmedTitle.length > 0 &&
-      content.trim().length > 0 &&
-      content.length <= MAX_CONTENT &&
-      !generating,
-    [trimmedTitle, content, generating]
+    () => content.trim().length > 0 && content.length <= MAX_CONTENT && !generating,
+    [content, generating]
   );
 
-  // Esc 关闭结果弹窗；生成中不响应，避免状态错乱
   useEffect(() => {
-    if (!resultOpen) return;
+    if (!open) return;
+    setContent(initialContent);
+    setError('');
+    setResults([]);
+    setPicked(new Set());
+  }, [open, initialContent]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !generating) setResultOpen(false);
+      if (event.key === 'Escape' && !generating) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [resultOpen, generating]);
+  }, [open, generating, onClose]);
+
+  if (!open) return null;
 
   async function handleGenerate() {
     if (!canGenerate) return;
@@ -70,16 +78,13 @@ export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImage
     try {
       const urls = await api.renderGraphicPoster({
         content: content.trim(),
-        // 卡片标题固定使用左侧配好的标题
         title: trimmedTitle,
-        nickname: authorName,
+        nickname: undefined,
         theme,
       });
       if (!urls.length) throw new Error('未生成任何图片，请调整内容后重试');
       setResults(urls);
-      // 默认全选，运营按需取消
       setPicked(new Set(urls.map((_, index) => index)));
-      setResultOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败，请稍后重试');
     } finally {
@@ -97,121 +102,115 @@ export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImage
   }
 
   return (
-    <div className="rounded-2xl border border-[#E5E5EA] bg-white p-4 space-y-3.5">
-      <div className="flex items-center gap-1.5">
-        <Sparkles className="w-3.5 h-3.5 text-[#FF2E4D]" />
-        <span className="text-[13px] font-medium text-[#1D1D1F]">文本转图文</span>
-        <span className="text-[11px] text-[#86868B]">输入文字自动排版成 9:16 图片</span>
-      </div>
-
-      {/* 卡片标题复用左侧基础信息，避免两处维护 */
-      /* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-      {trimmedTitle && (
-        <div className="rounded-xl bg-[#F5F5F7] px-3 py-2 text-[12px] text-[#6E6E73]">
-          卡片标题：<span className="font-medium text-[#1D1D1F]">{trimmedTitle}</span>
-          <span className="text-[#86868B]">（取自左侧「图文标题」）</span>
-        </div>
-      )}
-
-      <div>
-        <span className="block mb-1.5 text-[12px] font-medium text-[#1D1D1F]">卡片主题</span>
-        <div className="flex flex-wrap gap-1.5">
-          {THEMES.map((item) => {
-            const active = item.value === theme;
-            return (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setTheme(item.value)}
-                className={`h-8 px-2.5 rounded-lg text-[12px] inline-flex items-center gap-1.5 transition-colors ${
-                  active ? 'bg-[#1D1D1F] text-white' : 'bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#EBEBF0]'
-                }`}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full"
-                  style={{ background: item.accent }}
-                  aria-hidden="true"
-                />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <label className="block">
-        <span className="flex items-center justify-between mb-1.5">
-          <span className="text-[12px] font-medium text-[#1D1D1F]">正文</span>
-          <span
-            className={`text-[11px] tabular-nums ${
-              content.length > MAX_CONTENT ? 'text-[#CF1322]' : 'text-[#86868B]'
-            }`}
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4">
+      <div className="w-full max-w-5xl max-h-[92vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-[#E5E5EA] overflow-hidden">
+        <div className="shrink-0 flex items-center justify-between px-6 h-16 border-b border-[#E5E5EA]">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-[#FF2E4D]" />
+            <span className="text-[16px] font-semibold text-[#1D1D1F]">文本转图文</span>
+            <span className="text-[11px] text-[#86868B]">输入正文自动排版成 9:16 图片</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[#86868B] hover:bg-[#F5F5F7]"
+            title="关闭"
           >
-            {content.length}/{MAX_CONTENT}
-          </span>
-        </span>
-        <textarea
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          rows={6}
-          maxLength={MAX_CONTENT}
-          placeholder="粘贴或输入正文，点击「预览生成」后由服务端排版成图片"
-          className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-[13px] leading-relaxed outline-none focus:border-[#0071E3] resize-none"
-        />
-      </label>
-
-      {error && (
-        <div className="px-3 py-2 rounded-xl bg-[#FFF1F0] border border-[#FFCCC7] text-[12px] text-[#CF1322]">
-          {error}
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      )}
 
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={!canGenerate}
-          className="h-9 px-4 rounded-xl bg-[#0071E3] text-white text-[12px] font-medium hover:bg-[#0077ED] disabled:opacity-50 inline-flex items-center gap-1.5"
-        >
-          {generating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              生成中…
-            </>
-          ) : (
-            <>
-              <ImagePlus className="w-4 h-4" />
-              预览生成
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* 结果弹窗：生成完毕后才出现 */}
-      {resultOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4">
-          <div className="w-full max-w-3xl max-h-[88vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-[#E5E5EA] overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between px-5 h-14 border-b border-[#E5E5EA]">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#FF2E4D]" />
-                <span className="text-[15px] font-semibold text-[#1D1D1F]">生成结果</span>
-                <span className="text-[11px] text-[#86868B]">共 {results.length} 张</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setResultOpen(false)}
-                className="p-1.5 rounded-lg text-[#86868B] hover:bg-[#F5F5F7]"
-                title="关闭"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+          <div className="w-full lg:w-[38%] shrink-0 overflow-y-auto border-b lg:border-b-0 lg:border-r border-[#E5E5EA] p-6 space-y-4">
+            <div className="rounded-xl bg-[#F5F5F7] px-3 py-2 text-[12px] text-[#6E6E73]">
+              卡片标题：
+              <span className={trimmedTitle ? 'font-medium text-[#1D1D1F]' : ''}>
+                {trimmedTitle || '未填写，将自动取正文首行'}
+              </span>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-5">
-              <p className="mb-3 text-[12px] text-[#86868B]">
-                点击图片可取消勾选；应用后加入图片列表，可继续调整顺序或移除。
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div>
+              <span className="block mb-2 text-[12px] font-medium text-[#1D1D1F]">卡片主题</span>
+              <div className="flex flex-wrap gap-2">
+                {THEMES.map((item) => {
+                  const active = item.value === theme;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setTheme(item.value)}
+                      className={`h-9 px-3 rounded-xl text-[12px] inline-flex items-center gap-1.5 transition-colors ${
+                        active
+                          ? 'bg-[#1D1D1F] text-white'
+                          : 'bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#EBEBF0]'
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ background: item.accent }}
+                        aria-hidden="true"
+                      />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <label className="block">
+              <span className="flex items-center justify-between mb-2">
+                <span className="text-[12px] font-medium text-[#1D1D1F]">正文</span>
+                <span
+                  className={`text-[11px] tabular-nums ${
+                    content.length > MAX_CONTENT ? 'text-[#CF1322]' : 'text-[#86868B]'
+                  }`}
+                >
+                  {content.length}/{MAX_CONTENT}
+                </span>
+              </span>
+              <textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                rows={10}
+                maxLength={MAX_CONTENT}
+                placeholder="粘贴或输入正文，点击「预览生成」后由服务端排版成图片"
+                className="w-full px-3 py-2.5 rounded-xl border border-[#D2D2D7] bg-white text-[13px] leading-relaxed outline-none focus:border-[#0071E3] resize-none"
+              />
+            </label>
+
+            {error && (
+              <div className="px-3 py-2 rounded-xl bg-[#FFF1F0] border border-[#FFCCC7] text-[12px] text-[#CF1322]">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={!canGenerate}
+              className="h-10 w-full rounded-xl bg-[#0071E3] text-white text-[13px] font-medium hover:bg-[#0077ED] disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  生成中…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  预览生成
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
+            {results.length === 0 ? (
+              <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#E5E5EA] bg-[#FAFAFC] text-[13px] text-[#8E8E93]">
+                在左侧输入正文并生成，结果会显示在这里
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
                 {results.map((url, index) => {
                   const active = picked.has(index);
                   return (
@@ -220,7 +219,7 @@ export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImage
                       type="button"
                       onClick={() => togglePick(index)}
                       aria-pressed={active}
-                      className={`relative rounded-xl overflow-hidden border-2 transition-colors ${
+                      className={`relative overflow-hidden rounded-xl bg-[#F2F2F7] border-2 transition-colors ${
                         active ? 'border-[#0071E3]' : 'border-transparent hover:border-[#D2D2D7]'
                       }`}
                     >
@@ -228,50 +227,50 @@ export function TextToImagePanel({ authorName, cardTitle, onApply }: TextToImage
                         src={url}
                         alt={`生成结果第 ${index + 1} 张`}
                         loading="lazy"
-                        className="w-full aspect-[3/4] object-cover bg-[#F5F5F7]"
+                        className="w-full aspect-[3/4] object-cover"
                       />
-                      <span className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded-md bg-black/50 text-[10px] text-white tabular-nums">
+                      <span className="absolute left-2 top-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white tabular-nums">
                         {index + 1}
                       </span>
                       {active && (
-                        <span className="absolute right-1.5 top-1.5 w-5 h-5 rounded-full bg-[#0071E3] text-white flex items-center justify-center">
-                          <Check className="w-3 h-3" />
+                        <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#0071E3] text-white">
+                          <Check className="h-3 w-3" />
                         </span>
                       )}
                     </button>
                   );
                 })}
               </div>
-            </div>
-
-            <div className="shrink-0 flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#E5E5EA] bg-[#FAFAFC]">
-              <span className="mr-auto text-[11px] text-[#86868B] tabular-nums">
-                已选 {picked.size}/{results.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => setResultOpen(false)}
-                className="h-9 px-4 rounded-xl border border-[#D2D2D7] text-[13px] text-[#1D1D1F] hover:bg-white"
-              >
-                放弃
-              </button>
-              <button
-                type="button"
-                disabled={!picked.size}
-                onClick={() => {
-                  const urls = results.filter((_, index) => picked.has(index));
-                  if (!urls.length) return;
-                  onApply(urls);
-                  setResultOpen(false);
-                }}
-                className="h-9 px-4 rounded-xl bg-[#0071E3] text-white text-[13px] font-medium hover:bg-[#0077ED] disabled:opacity-50"
-              >
-                应用选中（{picked.size}）
-              </button>
-            </div>
+            )}
           </div>
         </div>
-      )}
+
+        <div className="shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E5EA] bg-[#FAFAFC]">
+          <span className="mr-auto text-[12px] text-[#86868B] tabular-nums">
+            已选 {picked.size}/{results.length}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 px-4 rounded-xl border border-[#D2D2D7] text-[13px] text-[#1D1D1F] hover:bg-white"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            disabled={!picked.size}
+            onClick={() => {
+              const urls = results.filter((_, index) => picked.has(index));
+              if (!urls.length) return;
+              onApply(urls);
+              onClose();
+            }}
+            className="h-9 px-4 rounded-xl bg-[#0071E3] text-white text-[13px] font-medium hover:bg-[#0077ED] disabled:opacity-50"
+          >
+            应用选中（{picked.size}）
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

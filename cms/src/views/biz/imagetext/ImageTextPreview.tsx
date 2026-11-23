@@ -2,11 +2,11 @@
  * 图文实时预览
  * ------------------------------------------------------------------
  * 按客户端「图文笔记」详情页的形式还原：顶部导航、作者行、
- * 3:4 竖图轮播、标题 / 正文、底部互动栏。
+ * 3:4 图片横向轮播、标题 / 正文、底部互动栏。
  * 桌面预览时图片与内容左右分栏（与前端 NoteDetail 一致），
  * 平板 / 手机预览时上下堆叠。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import type { PreviewDevice } from '../../../components/EditorWorkspace.tsx';
-import type { ContentStatus } from './ImageTextPages.tsx';
+import type { ContentStatus } from '../../../types/cms.ts';
 
 interface ImageTextPreviewProps {
   device: PreviewDevice;
@@ -42,6 +42,7 @@ export function ImageTextPreview({
 }: ImageTextPreviewProps) {
   const total = images.length;
   const [active, setActive] = useState(0);
+  const thumbRefs = useRef<Array<HTMLButtonElement | null>>([]);
   // 桌面预览才使用左右分栏，平板/手机保持上下堆叠
   const sideBySide = device === 'desktop';
 
@@ -50,7 +51,15 @@ export function ImageTextPreview({
     if (active > total - 1) setActive(0);
   }, [active, total]);
 
-  const current = images[Math.min(active, Math.max(total - 1, 0))];
+  // 缩略图轨道跟随当前图片横向滚动，图片再多也不会挤在一起
+  useEffect(() => {
+    thumbRefs.current[active]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    });
+  }, [active]);
+
   const goPrev = () => setActive((i) => (total ? (i - 1 + total) % total : 0));
   const goNext = () => setActive((i) => (total ? (i + 1) % total : 0));
 
@@ -105,12 +114,23 @@ export function ImageTextPreview({
             }`}
             style={sideBySide ? { width: 'auto', height: '100%' } : undefined}
           >
-            <MediaImage
-              src={current}
-              alt="图文预览"
-              fallbackLabel="暂无图片"
-              className="absolute inset-0 w-full h-full object-contain bg-[#F2F2F7]"
-            />
+            {total > 0 && (
+              <div
+                className="absolute inset-0 flex transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(-${active * 100}%)` }}
+              >
+                {images.map((url, idx) => (
+                  <div key={`${url}-slide-${idx}`} className="w-full shrink-0 relative">
+                    <MediaImage
+                      src={url}
+                      alt={`图文预览第 ${idx + 1} 张`}
+                      fallbackLabel="暂无图片"
+                      className="absolute inset-0 w-full h-full object-contain bg-[#F2F2F7]"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {total > 1 && (
               <>
@@ -133,19 +153,34 @@ export function ImageTextPreview({
                 <div className="absolute right-2.5 top-2.5 px-2 py-0.5 rounded-full bg-black/45 backdrop-blur-md text-[10px] font-medium text-white tabular-nums">
                   {active + 1}/{total}
                 </div>
-                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
-                  {images.map((url, idx) => (
-                    <button
-                      key={`${url}-dot-${idx}`}
-                      type="button"
-                      onClick={() => setActive(idx)}
-                      aria-label={`第 ${idx + 1} 张图片`}
-                      aria-current={idx === active}
-                      className={`h-1.5 rounded-full transition-all ${
-                        idx === active ? 'w-4 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'
-                      }`}
-                    />
-                  ))}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/65 via-black/25 to-transparent px-2 pb-2 pt-6">
+                  <div
+                    className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollbarWidth: 'none' }}
+                  >
+                    {images.map((url, idx) => (
+                      <button
+                        key={`${url}-thumb-${idx}`}
+                        ref={(node) => { thumbRefs.current[idx] = node; }}
+                        type="button"
+                        onClick={() => setActive(idx)}
+                        aria-label={`第 ${idx + 1} 张图片`}
+                        aria-current={idx === active}
+                        className={`relative h-10 w-8 shrink-0 overflow-hidden rounded-md ring-2 transition-all ${
+                          idx === active
+                            ? 'ring-white opacity-100'
+                            : 'ring-transparent opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <MediaImage
+                          src={url}
+                          alt=""
+                          fallbackLabel=""
+                          className="w-full h-full object-cover bg-[#F2F2F7]"
+                        />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </>
             )}

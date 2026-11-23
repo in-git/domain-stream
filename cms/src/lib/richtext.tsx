@@ -107,15 +107,17 @@ const ALLOWED_TAGS = new Set([
   'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'strong', 'b', 'em', 'i', 'u', 's', 'del', 'strike', 'mark', 'sub', 'sup',
   'blockquote', 'ul', 'ol', 'li', 'code', 'pre', 'a', 'img',
+  'video', 'source',
   'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'span', 'div',
 ]);
 const ALLOWED_ATTRS = new Set([
   'href', 'src', 'alt', 'title', 'width', 'height', 'colspan', 'rowspan',
   'target', 'rel', 'class', 'style', 'id',
+  'controls', 'poster', 'preload', 'playsinline', 'muted', 'loop', 'autoplay',
 ]);
 const DROP_TAGS = new Set([
   'script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button',
-  'svg', 'math', 'link', 'meta', 'video', 'audio', 'source',
+  'svg', 'math', 'link', 'meta', 'audio',
 ]);
 
 function cleanNode(node: Element) {

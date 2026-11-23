@@ -24,6 +24,7 @@ const STATUS_ICON: Record<UploadTask['status'], React.ReactNode> = {
 export function UploadQueuePanel() {
   const [tasks, setTasks] = useState<UploadTask[]>([]);
   const [open, setOpen] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => uploadTaskQueue.subscribe(setTasks), []);
 
@@ -34,35 +35,63 @@ export function UploadQueuePanel() {
   ).length;
   const done = tasks.filter((t) => t.status === 'success' || t.status === 'error' || t.status === 'canceled');
 
-  return (
-    <div className="fixed bottom-5 right-5 z-50 w-[340px] max-w-[calc(100vw-2.5rem)] rounded-2xl bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl overflow-hidden">
+  if (dismissed) {
+    return (
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+        onClick={() => setDismissed(false)}
+        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full border border-black/[0.08] bg-white/95 px-3.5 py-2.5 text-[12px] font-medium text-[#1D1D1F] shadow-xl backdrop-blur-xl transition-colors hover:bg-white dark:border-white/[0.1] dark:bg-[#1C1C1E]/95 dark:text-[#F5F5F7] dark:hover:bg-[#1C1C1E]"
       >
-        <span className="w-9 h-9 rounded-xl bg-[#0071E3]/10 flex items-center justify-center shrink-0">
-          <UploadCloud className="w-5 h-5 text-[#0071E3]" />
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-[13px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-            后台上传
-          </span>
-          <span className="block text-[11px] text-[#8E8E93]">
-            {active > 0 ? `${active} 个任务进行中` : '全部任务已完成'}
-          </span>
-        </span>
+        <UploadCloud className="w-4 h-4 text-[#0071E3]" />
+        后台上传
         {active > 0 && (
-          <span className="px-2 py-0.5 rounded-full bg-[#0071E3] text-white text-[10px] font-medium">
+          <span className="rounded-full bg-[#0071E3] px-1.5 py-0.5 text-[10px] leading-none text-white">
             {active}
           </span>
         )}
-        {open ? (
-          <ChevronDown className="w-4 h-4 text-[#8E8E93]" />
-        ) : (
-          <ChevronUp className="w-4 h-4 text-[#8E8E93]" />
-        )}
       </button>
+    );
+  }
+
+  return (
+    <div className="fixed bottom-5 right-5 z-50 w-[340px] max-w-[calc(100vw-2.5rem)] rounded-2xl bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl overflow-hidden">
+      <div className="flex items-center gap-1 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <span className="w-9 h-9 rounded-xl bg-[#0071E3]/10 flex items-center justify-center shrink-0">
+            <UploadCloud className="w-5 h-5 text-[#0071E3]" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[13px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+              后台上传
+            </span>
+            <span className="block text-[11px] text-[#8E8E93]">
+              {active > 0 ? `${active} 个任务进行中` : '全部任务已完成'}
+            </span>
+          </span>
+          {active > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-[#0071E3] text-white text-[10px] font-medium">
+              {active}
+            </span>
+          )}
+          {open ? (
+            <ChevronDown className="w-4 h-4 text-[#8E8E93]" />
+          ) : (
+            <ChevronUp className="w-4 h-4 text-[#8E8E93]" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          aria-label="关闭后台上传面板"
+          className="ml-1 shrink-0 rounded-lg p-1.5 text-[#8E8E93] transition-colors hover:bg-black/[0.05] hover:text-[#1D1D1F] dark:hover:bg-white/[0.08] dark:hover:text-[#F5F5F7]"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
       {open && (
         <>
