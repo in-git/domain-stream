@@ -21,6 +21,8 @@ export interface VideoItem {
   likeCount?: number;
   /** 播放量（后端统计） */
   viewCount?: number;
+  /** 评论数（后端统计） */
+  commentCount?: number;
   width: number;
   height: number;
   accentTint: string;
@@ -38,6 +40,8 @@ export interface ArticleItem {
   date: string;
   readMinutes: number;
   likes: number;
+  /** 评论数（后端统计） */
+  commentCount?: number;
   cover: string;
   quote: string;
   paragraphs: string[];
@@ -67,6 +71,8 @@ export interface PhotoItem {
   likeCount?: number;
   /** 收藏数（后端计数） */
   favoriteCount?: number;
+  /** 评论数（后端统计） */
+  commentCount?: number;
 }
 
 export interface UserProfile {

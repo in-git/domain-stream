@@ -4,10 +4,12 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { A11y, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
-import { Check, ChevronLeft, ChevronRight, Heart, Share2, Star, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Heart, MessageCircle, Star, X } from 'lucide-react';
 import type { PhotoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
+import { CommentPanel } from '../../components/CommentPanel.tsx';
+import { useCommentEnabled } from '../../lib/systemInfo.ts';
 
 interface NoteDetailProps {
   note: PhotoItem | null;
@@ -24,13 +26,16 @@ interface NoteDetailProps {
  * 窄屏自动切换为上下堆叠。
  */
 export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onClose }: NoteDetailProps) {
+  const commentsEnabled = useCommentEnabled();
   const [index, setIndex] = useState(0);
+  const [commentOpen, setCommentOpen] = useState(false);
   const swiperRef = useRef<SwiperClass | null>(null);
   const thumbRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // 切换笔记时重置到第一张
   useEffect(() => {
     setIndex(0);
+    setCommentOpen(false);
   }, [note?.id]);
 
   // 底部缩略图跟随当前图片滚动，图片多时也不会挤在一起
@@ -98,7 +103,8 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
   );
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       {note && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -234,7 +240,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
             <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col md:static md:z-auto md:min-w-0 md:flex-1">
               {renderHeader(false)}
 
-              <div className="hidden md:block md:flex-1 md:min-h-0 md:overflow-y-auto md:px-8 md:py-7">
+              <div className={`hidden md:block md:min-h-0 md:overflow-y-auto md:px-8 md:py-7 ${commentsEnabled ? 'md:max-h-[42%]' : 'md:flex-1'}`}>
                 <h2 className="text-[22px] font-semibold leading-[1.35] tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {note.title}
                 </h2>
@@ -253,6 +259,19 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   {note.location ? ` · ${note.location}` : ''}
                 </p>
               </div>
+
+              {/* PC 端图文右侧评论栏 */}
+              {commentsEnabled && (
+                <div className="hidden md:flex md:min-h-0 md:flex-1 md:border-t md:border-black/[0.06] md:dark:border-white/[0.08]">
+                  <CommentPanel
+                    embedded
+                    open={!!note}
+                    targetType="IMAGE_TEXT"
+                    targetId={note?.id || ''}
+                    onClose={() => {}}
+                  />
+                </div>
+              )}
 
               <div className="shrink-0 flex h-14 items-center justify-around border-t border-transparent bg-transparent px-4 text-white md:h-16 md:justify-start md:gap-2 md:border-black/[0.06] md:bg-transparent md:px-7 md:text-[#1D1D1F] md:dark:border-white/[0.08] md:dark:text-[#F5F5F7]">
                 <motion.button
@@ -285,20 +304,33 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   {note.favoriteCount ?? 0}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => void navigator.clipboard?.writeText(`${note.title}\n${note.content || ''}`)}
-                  className="flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] text-white/85 hover:bg-white/10 transition-colors md:text-[#6E6E73] md:hover:bg-black/[0.04] md:dark:text-[#98989D]"
-                >
-                  <Share2 className="w-4 h-4" />
-                  分享
-                </button>
+                {commentsEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setCommentOpen(true)}
+                    aria-label="查看评论"
+                    className="flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] text-white/85 hover:bg-white/10 transition-colors md:hidden"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    {note.commentCount ?? 0}
+                  </button>
+                )}
+
               </div>
             </div>
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+      </AnimatePresence>
+
+      <CommentPanel
+        sheet
+        open={commentOpen && !!note}
+        targetType="IMAGE_TEXT"
+        targetId={note?.id || ''}
+        onClose={() => setCommentOpen(false)}
+      />
+    </>
   );
 }
 

@@ -30,6 +30,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,7 @@ import vip.xiaonuo.biz.modular.video.param.BizVideoEditParam;
 import vip.xiaonuo.biz.modular.video.param.BizVideoIdParam;
 import vip.xiaonuo.biz.modular.video.param.BizVideoPageParam;
 import vip.xiaonuo.biz.modular.video.service.BizVideoService;
+import vip.xiaonuo.biz.modular.comment.service.BizCommentService;
 
 import vip.xiaonuo.common.util.CommonDownloadUtil;
 import vip.xiaonuo.common.util.CommonResponseUtil;
@@ -67,6 +69,9 @@ import java.util.List;
  **/
 @Service
 public class BizVideoServiceImpl extends ServiceImpl<BizVideoMapper, BizVideo> implements BizVideoService {
+
+    @Resource
+    private BizCommentService bizCommentService;
 
     @Override
     public Page<BizVideo> page(BizVideoPageParam bizVideoPageParam) {
@@ -145,8 +150,10 @@ public class BizVideoServiceImpl extends ServiceImpl<BizVideoMapper, BizVideo> i
             //     throw new CommonException("您没有权限删除这些机构下的视频");
             // }
         }
+        List<String> ids = CollStreamUtil.toList(bizVideoIdParamList, BizVideoIdParam::getId);
+        bizCommentService.deleteByTarget("VIDEO", ids);
         // 执行删除
-        this.removeByIds(CollStreamUtil.toList(bizVideoIdParamList, BizVideoIdParam::getId));
+        this.removeByIds(ids);
     }
 
     @Override

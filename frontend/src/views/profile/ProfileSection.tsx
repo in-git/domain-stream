@@ -6,8 +6,6 @@ interface ProfileSectionProps {
   accountEmail: string;
   profile: UserProfile;
   userInfo: UserBasicInfo;
-  isDark: boolean;
-  onToggleTheme: () => void;
   onLogout: () => void;
   onGoLogin: () => void;
   onGoRegister: () => void;
@@ -26,8 +24,6 @@ export function ProfileSection({
   accountEmail,
   profile,
   userInfo,
-  isDark,
-  onToggleTheme,
   onLogout,
   onGoLogin,
   onGoRegister,
@@ -50,8 +46,6 @@ export function ProfileSection({
       onGoRegister={onGoRegister}
       onLogout={onLogout}
       onUpdateProfile={onUpdateProfile}
-      isDark={isDark}
-      onToggleTheme={onToggleTheme}
       videos={videos}
       articles={articles}
       photos={photos}

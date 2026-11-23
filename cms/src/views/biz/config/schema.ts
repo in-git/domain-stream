@@ -15,9 +15,10 @@ import type { PageConfigItem } from '../../../lib/pageConfig.ts';
  * 编辑控件类型：
  * - text    文本框
  * - upload  图片上传（前端转 WebP 后走文件中心上传）
+ * - switch  布尔开关（值存 YES / NO）
  * - navList 侧边栏导航列表（值是 JSON 数组字符串，由专用编辑器维护）
  */
-export type ConfigControl = 'text' | 'upload' | 'navList';
+export type ConfigControl = 'text' | 'upload' | 'switch' | 'navList';
 
 export interface ConfigFieldDef {
   /** JSON 中的属性名（回写数据库时使用） */
@@ -94,6 +95,14 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     defaultValue: '',
     placeholder: '请输入公安备案号，留空则不显示',
     aliases: ['公安备案信息', '公安备案号'],
+  },
+  {
+    key: 'allowComment',
+    label: '是否允许评论',
+    description: '关闭后客户端隐藏文章、视频、图文的评论入口，且后端拒绝发表新评论；已有评论仍会保留',
+    control: 'switch',
+    defaultValue: 'YES',
+    aliases: ['enableComment', 'commentEnabled'],
   },
   {
     key: 'navItems',
@@ -213,6 +222,13 @@ export function draftFromItems(items: PageConfigItem[]): ConfigDraft {
   }
 
   return { values, storedKeys };
+}
+
+/** 兼容 YES/NO、true/false、1/0 的布尔值解析 */
+export function configSwitchOn(value?: string): boolean {
+  const normalized = (value ?? '').trim().toUpperCase();
+  if (!normalized) return true;
+  return normalized !== 'NO' && normalized !== 'FALSE' && normalized !== '0';
 }
 
 /** 草稿生成将要写入数据库的 JSON（只包含 schema 中定义的属性） */

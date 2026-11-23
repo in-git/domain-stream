@@ -46,6 +46,20 @@
   }
 }
 
+/* 移动端评论：从底部划出半屏 */
+@keyframes comment-sheet-up {
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-comment-sheet-up {
+  animation: comment-sheet-up 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
 /* Safe area support for modern mobile devices */
 .pb-safe {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));

@@ -23,10 +23,12 @@ import {
 import { convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
 import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
+import { SwitchField } from '../../../components/SwitchField.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { pageConfigApi } from '../../../lib/pageConfig.ts';
 import {
   CONFIG_FIELDS,
+  configSwitchOn,
   draftFromItems,
   type ConfigDraft,
   type ConfigFieldDef,
@@ -81,6 +83,18 @@ function FieldControl({
     } finally {
       setUploading(false);
     }
+  }
+
+  if (field.control === 'switch') {
+    return (
+      <SwitchField
+        checked={configSwitchOn(value)}
+        onChange={(checked) => onChange(checked ? 'YES' : 'NO')}
+        onLabel="允许"
+        offLabel="禁止"
+        ariaLabel={field.label}
+      />
+    );
   }
 
   if (field.control === 'upload') {

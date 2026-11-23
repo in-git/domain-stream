@@ -209,6 +209,14 @@ export const authApi = {
     return get<SnowyClientUser>('/auth/c/getLoginUser', target ? { token: target } : undefined);
   },
 
+  /** C 端通过旧密码修改登录密码 */
+  updatePasswordByOld(oldPassword: string, newPassword: string): Promise<void> {
+    return post<void>('/client/userCenter/updatePasswordByOld', {
+      password: sm2Encrypt(oldPassword),
+      newPassword: sm2Encrypt(newPassword),
+    });
+  },
+
   /** 退出登录 */
   async logout(): Promise<void> {
     try {

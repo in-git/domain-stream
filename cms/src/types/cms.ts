@@ -5,6 +5,7 @@ export type ModuleKey =
   | 'articles'
   | 'category'
   | 'messages'
+  | 'comments'
   | 'files'
   | 'materials'
   | 'assetResource'

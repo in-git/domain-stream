@@ -20,7 +20,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +33,9 @@ import vip.xiaonuo.biz.modular.article.entity.BizArticle;
 import vip.xiaonuo.biz.modular.article.mapper.BizArticleMapper;
 import vip.xiaonuo.biz.modular.category.entity.BizCategory;
 import vip.xiaonuo.biz.modular.category.mapper.BizCategoryMapper;
+import vip.xiaonuo.biz.modular.comment.entity.BizComment;
+import vip.xiaonuo.biz.modular.comment.param.BizCommentSubmitParam;
+import vip.xiaonuo.biz.modular.comment.service.BizCommentService;
 import vip.xiaonuo.biz.modular.graphic.entity.BizGraphic;
 import vip.xiaonuo.biz.modular.graphic.mapper.BizGraphicMapper;
 import vip.xiaonuo.biz.modular.graphic.param.BizGraphicPosterApplyParam;
@@ -84,6 +89,9 @@ public class BizPortalController {
 
     @Resource
     private BizMessageMapper bizMessageMapper;
+
+    @Resource
+    private BizCommentService bizCommentService;
 
     @Resource
     private BizCategoryMapper bizCategoryMapper;
@@ -389,6 +397,36 @@ public class BizPortalController {
         bizMessageMapper.insert(bizMessage);
         // 返回新生成的主键，用于前端回填真实ID（否则前端临时ID无法作为后续回复的parentId）
         return CommonResult.data(bizMessage.getId());
+    }
+
+    /**
+     * 按内容查询已通过评论，返回扁平列表，由前端按 parentId 组装无限层级。
+     */
+    @Operation(summary = "获取内容评论列表")
+    @GetMapping("/public/comments")
+    public CommonResult<List<BizComment>> comments(@RequestParam String targetType,
+                                                    @RequestParam String targetId) {
+        return CommonResult.data(bizCommentService.publicList(targetType, targetId));
+    }
+
+    /**
+     * 提交评论或回复；parentId 不为空时挂到任意一层评论下，形成无限层级回复。
+     */
+    @Operation(summary = "提交内容评论")
+    @PostMapping("/public/comments")
+    public CommonResult<String> addComment(@RequestBody @Valid BizCommentSubmitParam param,
+                                           HttpServletRequest request) {
+        return CommonResult.data(bizCommentService.publicAdd(param, request));
+    }
+
+    /**
+     * 用户删除自己的评论及其全部子孙回复。
+     */
+    @Operation(summary = "删除自己的评论")
+    @DeleteMapping("/public/comments/{id}")
+    public CommonResult<String> deleteComment(@PathVariable String id) {
+        bizCommentService.publicDelete(id);
+        return CommonResult.ok();
     }
 
 }

@@ -55,6 +55,7 @@ export interface PortalVideo {
   publishTime?: string;
   viewCount?: number;
   likeCount?: number;
+  commentCount?: number;
   extJson?: string;
   createTime?: string;
   createUser?: string;
@@ -74,6 +75,7 @@ export interface PortalArticle {
   publishTime?: string;
   viewCount?: number;
   likeCount?: number;
+  commentCount?: number;
   extJson?: string;
   createTime?: string;
   createUser?: string;
@@ -92,6 +94,7 @@ export interface PortalGraphic {
   publishTime?: string;
   viewCount?: number;
   likeCount?: number;
+  commentCount?: number;
   extJson?: string;
   createTime?: string;
 }
@@ -313,6 +316,7 @@ export function videoFromPortal(
     cover: row.cover || str(ext.cover),
     src: toPlayableUrl(row.videoUrl) || toPlayableUrl(str(ext.src)),
     likeCount: row.likeCount || 0,
+    commentCount: row.commentCount || 0,
     viewCount: num(row.viewCount, 0),
     width: num(ext.width, 1280),
     height: num(ext.height, 720),
@@ -357,6 +361,7 @@ export function articleFromPortal(
     date: formatFullDate(row.publishTime || row.createTime),
     readMinutes: Math.max(1, Math.ceil(plain.length / 400)),
     likes: row.likeCount || 0,
+    commentCount: row.commentCount || 0,
     cover: row.cover || str(ext.cover),
     quote: str(ext.quote, paragraphs[0] || plain.slice(0, 80) || row.summary || ''),
     paragraphs: paragraphs.length ? paragraphs : [plain || row.summary || row.title || ''],
@@ -403,6 +408,7 @@ export function graphicsToPhotos(
       content: row.content || '',
       author: str(ext.author),
       likeCount: row.likeCount || 0,
+      commentCount: row.commentCount || 0,
       favoriteCount: favoriteCounts?.[String(row.id)] ?? 0,
       aspectRatio: (ASPECT_RATIOS.includes(ext.aspectRatio as PhotoItem['aspectRatio'])
         ? ext.aspectRatio
@@ -452,6 +458,45 @@ export function replyFromPortal(row: PortalMessage, rootMessageId: string): Mess
 /* ------------------------------------------------------------------ */
 /* 接口                                                                */
 /* ------------------------------------------------------------------ */
+
+/** 内容评论（文章/视频/图文共用，支持无限层级回复） */
+export interface PortalComment {
+  id: string;
+  targetType: string;
+  targetId: string;
+  userId?: string;
+  nickname?: string;
+  content: string;
+  rootId?: string;
+  parentId?: string;
+  replyToNickname?: string;
+  status?: string;
+  isOfficial?: string;
+  likeCount?: number;
+  createTime?: string;
+}
+
+export interface CommentDraft {
+  targetType: string;
+  targetId: string;
+  parentId?: string;
+  replyToNickname?: string;
+  content: string;
+}
+
+export const commentApi = {
+  list: (targetType: string, targetId: string) =>
+    request<PortalComment[]>(
+      `/public/comments?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(targetId)}`
+    ),
+  add: (draft: CommentDraft) =>
+    request<string>('/public/comments', {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    }),
+  remove: (id: string) =>
+    request<string>(`/public/comments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+};
 
 export interface MessageDraft {
   userId?: string;

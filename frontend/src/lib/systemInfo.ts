@@ -86,3 +86,15 @@ export async function loadSystemInfo(): Promise<void> {
 export function useSystemInfo(): PublicSystemInfo {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
+
+/** CLIENT_CONFIG.allowComment 为 NO/FALSE/0 时关闭评论；缺失时默认允许 */
+export function commentEnabled(config?: Record<string, string>): boolean {
+  const value = (config?.allowComment ?? 'YES').trim().toUpperCase();
+  return value !== 'NO' && value !== 'FALSE' && value !== '0';
+}
+
+/** 组件中直接订阅评论开关 */
+export function useCommentEnabled(): boolean {
+  const { config } = useSystemInfo();
+  return commentEnabled(config);
+}

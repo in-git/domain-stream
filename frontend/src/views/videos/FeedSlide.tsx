@@ -6,6 +6,7 @@ import {
   Heart,
   Maximize,
   Maximize2,
+  MessageCircle,
   Minimize,
   Pause,
   Play,
@@ -16,6 +17,8 @@ import {
 import type { VideoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY } from '../../lib/motion';
 import { Tooltip } from '../../components/Tooltip';
+import { CommentPanel } from '../../components/CommentPanel.tsx';
+import { useCommentEnabled } from '../../lib/systemInfo.ts';
 import { countVideoViewOnce, formatTime } from './shared';
 
 interface FeedSlideProps {
@@ -80,11 +83,13 @@ export function FeedSlide({
   onMiniExpand,
   showFullscreen = true,
 }: FeedSlideProps) {
+  const commentsEnabled = useCommentEnabled();
   const playerRef = useRef<MediaPlayerInstance | null>(null);
   const restoredRef = useRef<boolean>(false);
   const lastSaveRef = useRef<number>(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [commentOpen, setCommentOpen] = useState(false);
 
   const setPlayerRef = useCallback(
     (player: MediaPlayerInstance | null) => {
@@ -321,6 +326,25 @@ export function FeedSlide({
                 </motion.button>
               </Tooltip>
 
+              {commentsEnabled && (
+                <Tooltip label="评论" side="left">
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.84 }}
+                    onClick={() => setCommentOpen(true)}
+                    aria-label="查看评论"
+                    className="relative w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    {!!video.commentCount && (
+                      <span className="absolute -top-1 -right-1 rounded-full bg-[#0071E3] px-1.5 text-[10px] font-medium tabular-nums">
+                        {video.commentCount}
+                      </span>
+                    )}
+                  </motion.button>
+                </Tooltip>
+              )}
+
               {showFullscreen && (
                 <Tooltip label={isFullscreen ? '退出全屏' : '全屏'} side="left">
                   <motion.button
@@ -433,6 +457,14 @@ export function FeedSlide({
           </div>
         </>
       )}
+
+      <CommentPanel
+        drawer
+        open={commentOpen && !mini}
+        targetType="VIDEO"
+        targetId={video.id}
+        onClose={() => setCommentOpen(false)}
+      />
     </div>
   );
 }

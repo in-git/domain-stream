@@ -52,6 +52,7 @@ import {
 } from './views/biz/article/ArticlePages.tsx';
 import CategoryView from './views/biz/category/index.tsx';
 import MessageView from './views/biz/message/index.tsx';
+import CommentView from './views/biz/comment/index.tsx';
 import FileCenterView from './views/biz/file/index.tsx';
 import MaterialCenterView from './views/biz/material/index.tsx';
 import AssetResourceView from './views/biz/asset-resource/index.tsx';
@@ -64,6 +65,7 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   articles: '文章管理',
   category: '通用分类',
   messages: '留言管理',
+  comments: '评论管理',
   files: '文件中心',
   materials: '素材中心',
   assetResource: '素材资源库',
@@ -567,6 +569,8 @@ export default function App() {
             <CategoryView permissions={permissions} />
           ) : route.module === 'messages' ? (
             <MessageView permissions={permissions} />
+          ) : route.module === 'comments' ? (
+            <CommentView permissions={permissions} onBack={() => goModule('dashboard')} />
           ) : route.module === 'files' ? (
             <FileCenterView />
           ) : route.module === 'materials' ? (

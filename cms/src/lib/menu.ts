@@ -33,6 +33,7 @@ const DEFAULT_PATHS: Record<ModuleKey, string> = {
   articles: '/biz/article',
   category: '/biz/category',
   messages: '/biz/message',
+  comments: '/biz-comment',
   files: '/biz/file',
   materials: '/biz/material',
   assetResource: '/biz-asset-resource',
@@ -62,6 +63,8 @@ const MATCHERS: ModuleMatcher[] = [
   { key: 'category', label: '通用分类', keywords: ['biz/category', 'bizcategory'] },
   // 留言管理：菜单 component = biz/message/index，path = /biz/message
   { key: 'messages', label: '留言管理', keywords: ['biz/message', 'bizmessage'] },
+  // 评论管理：菜单 component = biz/comment/index，path = /biz-comment
+  { key: 'comments', label: '评论管理', keywords: ['biz/comment', 'bizcomment', 'biz-comment'] },
   // 文件中心（素材库）：菜单 component = biz/file/index，path = /biz/file
   { key: 'files', label: '文件中心', keywords: ['biz/file', 'bizfile'] },
   // 素材中心：菜单 component = biz/material/index，path = /biz/material
@@ -192,6 +195,7 @@ const MODULE_PERM_PREFIX: Record<Exclude<ModuleKey, 'dashboard' | 'profile'>, st
   articles: 'bizArticle',
   category: 'bizCategory',
   messages: 'bizMessage',
+  comments: 'bizComment',
   files: 'bizFile',
   materials: 'bizMaterial',
   assetResource: 'bizAssetResource',

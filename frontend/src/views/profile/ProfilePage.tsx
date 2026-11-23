@@ -84,8 +84,6 @@ export function ProfilePage({
           onGoRegister={onGoRegister}
           onLogout={onLogout}
           onUpdateProfile={onUpdateProfile}
-          isDark={isDark}
-          onToggleTheme={onToggleTheme}
           videos={videos}
           articles={articles}
           photos={photos}

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bookmark, Heart, Type, X } from 'lucide-react';
+import { Bookmark, Heart, MessageCircle, Type, X } from 'lucide-react';
 import type { ArticleItem } from '../../data/content';
 import { sanitizeRichHtml } from '../../lib/richtext';
 import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import { Tooltip } from '../../components/Tooltip';
+import { CommentPanel } from '../../components/CommentPanel.tsx';
+import { useCommentEnabled } from '../../lib/systemInfo.ts';
 
 interface ArticlesViewProps {
   articles: ArticleItem[];
@@ -39,11 +41,13 @@ export function ArticlesView({
   externalSelectedId,
   onClearExternalSelection,
 }: ArticlesViewProps) {
+  const commentsEnabled = useCommentEnabled();
   const filterCategories = categories && categories.length ? categories : DEFAULT_ARTICLE_CATEGORIES;
   const [category, setCategory] = useState<ArticleCategory>('全部');
   const [localActiveId, setLocalActiveId] = useState<string | null>(null);
   const [largeFont, setLargeFont] = useState(false);
   const [serifMode, setSerifMode] = useState(false);
+  const [commentOpen, setCommentOpen] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const readerRef = useRef<HTMLDivElement | null>(null);
 
@@ -174,6 +178,14 @@ export function ArticlesView({
           <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
             {bannerArticle.category}
           </span>
+          {commentsEnabled && (
+            <span className="pointer-events-none absolute right-3 top-3 flex h-7 items-center gap-1 rounded-full bg-black/45 px-2.5 text-white backdrop-blur-sm">
+              <MessageCircle className="h-3.5 w-3.5" />
+              <span className="text-[11px] font-medium tabular-nums">
+                {bannerArticle.commentCount || 0}
+              </span>
+            </span>
+          )}
           <div className="pointer-events-none absolute inset-x-3 bottom-3 sm:inset-x-5 sm:bottom-5">
             <h2 className="text-xl sm:text-3xl font-semibold leading-tight text-white line-clamp-2">
               {bannerArticle.title}
@@ -251,6 +263,14 @@ export function ArticlesView({
                   <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
                     {article.category}
                   </span>
+                  {commentsEnabled && (
+                    <span className="pointer-events-none absolute right-2 top-2 flex h-7 items-center gap-1 rounded-full bg-black/45 px-2 text-white backdrop-blur-sm">
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-medium tabular-nums">
+                        {article.commentCount || 0}
+                      </span>
+                    </span>
+                  )}
 
                   {/* 底部渐变：标题与简介在左下、收藏在右下 */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
@@ -337,7 +357,7 @@ export function ArticlesView({
               exit={{ opacity: 0, y: 36, scale: 0.97 }}
               transition={SWIFTUI_SHEET}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-3xl h-[92vh] sm:h-[88vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-[#FBFBFD] dark:bg-[#141416] text-[#1D1D1F] dark:text-[#F5F5F7] border border-black/[0.08] dark:border-white/[0.1] shadow-2xl overflow-hidden"
+              className="relative w-full max-w-[min(1280px,96vw)] h-[92vh] sm:h-[min(92vh,900px)] flex flex-col rounded-t-3xl sm:rounded-3xl bg-[#FBFBFD] dark:bg-[#141416] text-[#1D1D1F] dark:text-[#F5F5F7] border border-black/[0.08] dark:border-white/[0.1] shadow-2xl overflow-hidden"
               role="dialog"
               aria-modal="true"
               aria-label={activeArticle.title}
@@ -398,11 +418,24 @@ export function ArticlesView({
                 </div>
               </div>
 
+              {/* PC 端文章右侧评论栏 */}
+              {commentsEnabled && (
+                <aside className="absolute right-0 top-14 bottom-0 z-10 hidden w-[360px] border-l border-black/[0.08] bg-[#111114] md:block dark:border-white/[0.08]">
+                  <CommentPanel
+                    embedded
+                    open={!!activeArticle}
+                    targetType="ARTICLE"
+                    targetId={activeArticle?.id || ''}
+                    onClose={() => {}}
+                  />
+                </aside>
+              )}
+
               {/* Scrollable Manuscript Body */}
               <div
                 ref={readerRef}
                 onScroll={handleReaderScroll}
-                className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 sm:py-10"
+                className={`flex-1 overflow-y-auto px-6 sm:px-12 py-8 sm:py-10 ${commentsEnabled ? 'md:pr-[calc(360px+2rem)]' : ''}`}
               >
                 <div className="max-w-[65ch] mx-auto space-y-7">
                   <header className="space-y-4">
@@ -456,7 +489,7 @@ export function ArticlesView({
               </div>
 
               {/* Fixed Modal Footer：点赞/收藏 + 关闭，固定在最底部 */}
-              <div className="shrink-0 border-t border-black/[0.08] dark:border-white/[0.08] bg-[#FBFBFD]/95 dark:bg-[#141416]/95 backdrop-blur-xl px-4 sm:px-8 py-1.5 sm:py-3 flex items-center justify-between">
+              <div className={`shrink-0 border-t border-black/[0.08] dark:border-white/[0.08] bg-[#FBFBFD]/95 dark:bg-[#141416]/95 backdrop-blur-xl px-4 sm:px-8 py-1.5 sm:py-3 flex items-center justify-between ${commentsEnabled ? 'md:pr-[calc(360px+2rem)]' : ''}`}>
                 <div className="flex items-center gap-1.5 sm:gap-2.5">
                   <Tooltip label={likedIds.includes(activeArticle.id) ? '取消喜欢' : '喜欢'}>
                     <motion.button
@@ -497,6 +530,20 @@ export function ArticlesView({
                       />
                     </motion.button>
                   </Tooltip>
+
+                  {commentsEnabled && (
+                    <Tooltip label="评论">
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.92 }}
+                        onClick={() => setCommentOpen(true)}
+                        aria-label="查看评论"
+                        className="w-9 h-9 sm:w-11 sm:h-11 inline-flex items-center justify-center rounded-lg sm:rounded-xl border border-black/[0.08] dark:border-white/[0.1] text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] md:hidden"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </motion.button>
+                    </Tooltip>
+                  )}
                 </div>
 
                 <button
@@ -511,6 +558,13 @@ export function ArticlesView({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <CommentPanel
+        open={commentOpen}
+        targetType="ARTICLE"
+        targetId={activeArticle?.id || ''}
+        onClose={() => setCommentOpen(false)}
+      />
     </section>
   );
 }

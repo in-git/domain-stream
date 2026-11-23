@@ -3,11 +3,11 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   Bookmark,
   Check,
+  ChevronRight,
   Edit3,
   Heart,
+  KeyRound,
   LogOut,
-  Moon,
-  Sun,
   UserRound,
   X,
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoritesSection } from './FavoritesSection';
 import { ResilientImage } from '../../components/ResilientImage';
+import { authApi } from '../../lib/snowyAuth.ts';
 
 export interface UserBasicInfo {
   email?: string;
@@ -47,8 +48,6 @@ interface ProfileViewProps {
   onGoRegister: () => void;
   onLogout: () => void;
   onUpdateProfile: (next: UserProfile) => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
   videos?: VideoItem[];
   articles?: ArticleItem[];
   photos?: PhotoItem[];
@@ -138,8 +137,6 @@ export function ProfileView({
   onGoRegister,
   onLogout,
   onUpdateProfile,
-  isDark,
-  onToggleTheme,
   videos = [],
   articles = [],
   photos = [],
@@ -151,12 +148,17 @@ export function ProfileView({
   const [activePane, setActivePane] = useState<ProfilePane>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
-  const [draftLocation, setDraftLocation] = useState(profile.location);
   const [draftBio, setDraftBio] = useState(profile.bio);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const openEditModal = () => {
     setDraftName(profile.name);
-    setDraftLocation(profile.location);
     setDraftBio(profile.bio);
     setIsEditing(true);
   };
@@ -166,10 +168,49 @@ export function ProfileView({
     onUpdateProfile({
       ...profile,
       name: draftName.trim() || profile.name,
-      location: draftLocation.trim() || profile.location,
+      location: '',
       bio: draftBio.trim() || profile.bio,
     });
     setIsEditing(false);
+  };
+
+  const openPasswordModal = () => {
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setPasswordSuccess('');
+    setPasswordOpen(true);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+    if (!oldPassword) {
+      setPasswordError('请输入当前密码');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('新密码至少 6 位');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('两次输入的新密码不一致');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await authApi.updatePasswordByOld(oldPassword, newPassword);
+      setPasswordSuccess('密码修改成功');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : '修改密码失败');
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   return (
@@ -344,24 +385,15 @@ export function ProfileView({
                 </div>
               )}
 
-              {profile.location && (
-                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">常驻地区</span>
-                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    {profile.location}
-                  </span>
-                </div>
-              )}
-
               <button
                 type="button"
-                onClick={onToggleTheme}
+                onClick={openPasswordModal}
                 className="w-full px-6 py-4 flex items-center justify-between text-sm hover:bg-black/[0.02] dark:hover:bg-white/[0.03] transition-colors"
               >
-                <span className="text-[#6E6E73] dark:text-[#98989D]">外观模式</span>
+                <span className="text-[#6E6E73] dark:text-[#98989D]">修改密码</span>
                 <span className="inline-flex items-center gap-1.5 font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                  <span>{isDark ? '深色外观' : '浅色外观'}</span>
+                  <KeyRound className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4 text-[#AEAEB2]" />
                 </span>
               </button>
             </div>
@@ -460,23 +492,6 @@ export function ProfileView({
 
                 <div>
                   <label
-                    htmlFor="edit-location"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
-                  >
-                    常驻城市
-                  </label>
-                  <input
-                    id="edit-location"
-                    type="text"
-                    value={draftLocation}
-                    onChange={(e) => setDraftLocation(e.target.value)}
-                    maxLength={32}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
-                  />
-                </div>
-
-                <div>
-                  <label
                     htmlFor="edit-bio"
                     className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
                   >
@@ -508,6 +523,130 @@ export function ProfileView({
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>保存更改</span>
+                </motion.button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Change Password Sheet */}
+      <AnimatePresence>
+        {passwordOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6 bg-black/50 backdrop-blur-md"
+            onClick={() => setPasswordOpen(false)}
+          >
+            <motion.form
+              initial={{ opacity: 0, y: 40, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.96 }}
+              transition={SWIFTUI_SHEET}
+              onClick={(event) => event.stopPropagation()}
+              onSubmit={(event) => void handleChangePassword(event)}
+              className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] p-6 space-y-5 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="修改登录密码"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    修改登录密码
+                  </h3>
+                  <p className="mt-1 text-xs text-[#8E8E93]">通过当前密码验证后设置新密码</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPasswordOpen(false)}
+                  aria-label="关闭修改密码"
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="current-password"
+                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                  >
+                    当前密码
+                  </label>
+                  <input
+                    id="current-password"
+                    type="password"
+                    value={oldPassword}
+                    onChange={(event) => setOldPassword(event.target.value)}
+                    autoComplete="current-password"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="new-password"
+                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                  >
+                    新密码
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                  >
+                    确认新密码
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    autoComplete="new-password"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                  />
+                </div>
+              </div>
+
+              {passwordError && (
+                <p className="rounded-xl bg-[#FF3B30]/10 px-3 py-2 text-xs text-[#D70015] dark:text-[#FF6B6B]">
+                  {passwordError}
+                </p>
+              )}
+              {passwordSuccess && (
+                <p className="rounded-xl bg-[#34C759]/10 px-3 py-2 text-xs text-[#248A3D] dark:text-[#30D158]">
+                  {passwordSuccess}
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPasswordOpen(false)}
+                  className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
+                >
+                  关闭
+                </button>
+                <motion.button
+                  type="submit"
+                  whileTap={{ scale: 0.96 }}
+                  disabled={savingPassword}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-xs font-medium disabled:opacity-50"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{savingPassword ? '提交中…' : '确认修改'}</span>
                 </motion.button>
               </div>
             </motion.form>

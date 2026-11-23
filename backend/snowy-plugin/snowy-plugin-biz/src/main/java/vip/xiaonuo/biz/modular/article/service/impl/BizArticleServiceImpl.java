@@ -29,6 +29,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,7 @@ import vip.xiaonuo.biz.modular.article.param.BizArticleEditParam;
 import vip.xiaonuo.biz.modular.article.param.BizArticleIdParam;
 import vip.xiaonuo.biz.modular.article.param.BizArticlePageParam;
 import vip.xiaonuo.biz.modular.article.service.BizArticleService;
+import vip.xiaonuo.biz.modular.comment.service.BizCommentService;
 
 import vip.xiaonuo.common.util.CommonDownloadUtil;
 import vip.xiaonuo.common.util.CommonResponseUtil;
@@ -66,6 +68,9 @@ import java.util.List;
  **/
 @Service
 public class BizArticleServiceImpl extends ServiceImpl<BizArticleMapper, BizArticle> implements BizArticleService {
+
+    @Resource
+    private BizCommentService bizCommentService;
 
     @Override
     public Page<BizArticle> page(BizArticlePageParam bizArticlePageParam) {
@@ -144,8 +149,10 @@ public class BizArticleServiceImpl extends ServiceImpl<BizArticleMapper, BizArti
             //     throw new CommonException("您没有权限删除这些机构下的文章");
             // }
         }
+        List<String> ids = CollStreamUtil.toList(bizArticleIdParamList, BizArticleIdParam::getId);
+        bizCommentService.deleteByTarget("ARTICLE", ids);
         // 执行删除
-        this.removeByIds(CollStreamUtil.toList(bizArticleIdParamList, BizArticleIdParam::getId));
+        this.removeByIds(ids);
     }
 
     @Override

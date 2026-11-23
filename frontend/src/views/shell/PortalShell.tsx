@@ -1,6 +1,7 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
+import { registerCommentLogin } from '../../lib/commentLogin.ts';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
 import { BUILTIN_SECTIONS, LeftSidebar } from './LeftSidebar';
@@ -104,6 +105,11 @@ export function PortalShell({
     saveVideoProgress,
     handlePlayVideo,
   } = player;
+
+  // 评论区统一复用外壳的登录弹窗，避免各内容组件层层透传 goLogin
+  useEffect(() => {
+    registerCommentLogin(goLogin);
+  }, [goLogin]);
 
   // 视图切换界面保持现状：搜索时切到卡片模式，点卡片条上的按钮或清空搜索后回到主视图
   useEffect(() => {
@@ -304,8 +310,6 @@ export function PortalShell({
                     accountEmail={accountEmail}
                     profile={profile}
                     userInfo={userInfo}
-                    isDark={isDark}
-                    onToggleTheme={toggleTheme}
                     onLogout={handleLogout}
                     onGoLogin={goLogin}
                     onGoRegister={goRegister}

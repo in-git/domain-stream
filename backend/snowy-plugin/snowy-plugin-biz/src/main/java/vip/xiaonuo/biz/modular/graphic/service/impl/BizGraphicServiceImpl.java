@@ -29,6 +29,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,7 @@ import vip.xiaonuo.biz.modular.graphic.param.BizGraphicEditParam;
 import vip.xiaonuo.biz.modular.graphic.param.BizGraphicIdParam;
 import vip.xiaonuo.biz.modular.graphic.param.BizGraphicPageParam;
 import vip.xiaonuo.biz.modular.graphic.service.BizGraphicService;
+import vip.xiaonuo.biz.modular.comment.service.BizCommentService;
 
 import vip.xiaonuo.common.util.CommonDownloadUtil;
 import vip.xiaonuo.common.util.CommonResponseUtil;
@@ -66,6 +68,9 @@ import java.util.List;
  **/
 @Service
 public class BizGraphicServiceImpl extends ServiceImpl<BizGraphicMapper, BizGraphic> implements BizGraphicService {
+
+    @Resource
+    private BizCommentService bizCommentService;
 
     @Override
     public Page<BizGraphic> page(BizGraphicPageParam bizGraphicPageParam) {
@@ -144,8 +149,10 @@ public class BizGraphicServiceImpl extends ServiceImpl<BizGraphicMapper, BizGrap
             //     throw new CommonException("您没有权限删除这些机构下的图文");
             // }
         }
+        List<String> ids = CollStreamUtil.toList(bizGraphicIdParamList, BizGraphicIdParam::getId);
+        bizCommentService.deleteByTarget("IMAGE_TEXT", ids);
         // 执行删除
-        this.removeByIds(CollStreamUtil.toList(bizGraphicIdParamList, BizGraphicIdParam::getId));
+        this.removeByIds(ids);
     }
 
     @Override
