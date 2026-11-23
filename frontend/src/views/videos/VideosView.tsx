@@ -480,6 +480,39 @@ export function VideosView({
       )}
     </section>
 
+    {/* 移动端沉浸播放：进度条固定在底部导航栏正上方 2px */}
+    {!isMini && viewMode === 'feed' && currentVideo && !isFullscreen && (
+      <div
+        className="pointer-events-none fixed bottom-[calc(3rem+2px)] left-0 right-0 z-40 px-4 md:hidden"
+      >
+        <div className="pointer-events-auto relative flex h-4 items-end">
+          <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-white/25">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-white/90"
+              style={{
+                width: `${Math.min(
+                  100,
+                  ((duration || currentVideo.durationSeconds
+                    ? currentTime / (duration || currentVideo.durationSeconds || 1)
+                    : 0) * 100)
+                )}%`,
+              }}
+            />
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={duration || currentVideo.durationSeconds || 0}
+            step={0.05}
+            value={currentTime}
+            onChange={(event) => seekTo(Number(event.target.value))}
+            aria-label="播放进度"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+        </div>
+      </div>
+    )}
+
     {/* 卡片点击：复用主页播放器的全屏模态框，播放当前页搜索结果 */}
     {pickedVideo && (
       <ImmersiveModal

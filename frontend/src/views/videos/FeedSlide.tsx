@@ -407,8 +407,8 @@ export function FeedSlide({
             )}
 
             <div
-              className={`flex items-center pointer-events-auto ${
-                mini ? 'gap-1.5' : 'sm:-ml-6 sm:-mr-24'
+              className={`pointer-events-auto ${
+                mini ? 'flex items-center gap-1.5' : 'hidden items-center md:flex sm:-ml-6 sm:-mr-24'
               }`}
             >
               {mini && (
@@ -455,6 +455,7 @@ export function FeedSlide({
               )}
             </div>
           </div>
+
         </>
       )}
 

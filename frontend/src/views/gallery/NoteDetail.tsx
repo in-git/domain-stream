@@ -324,7 +324,6 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
       </AnimatePresence>
 
       <CommentPanel
-        sheet
         open={commentOpen && !!note}
         targetType="IMAGE_TEXT"
         targetId={note?.id || ''}

@@ -12,10 +12,8 @@ interface CommentPanelProps {
   onClose: () => void;
   /** 嵌入模式：用于 PC 端文章/图文右侧栏，不再显示遮罩弹窗 */
   embedded?: boolean;
-  /** 侧边抽屉模式：视频评论使用，与播放列表侧边栏一致的形态 */
+  /** PC 侧边抽屉模式：视频评论使用，与播放列表侧边栏一致；移动端自动改为底部弹层 */
   drawer?: boolean;
-  /** 底部半屏弹层：移动端图文评论使用 */
-  sheet?: boolean;
 }
 
 interface ReplyTarget {
@@ -48,9 +46,11 @@ export function CommentPanel({
   onClose,
   embedded = false,
   drawer = false,
-  sheet = false,
 }: CommentPanelProps) {
   const commentsEnabled = useCommentEnabled();
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+  );
   const [comments, setComments] = useState<PortalComment[]>([]);
   const [content, setContent] = useState('');
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
@@ -59,6 +59,15 @@ export function CommentPanel({
   const [error, setError] = useState('');
   const [currentUserId, setCurrentUserId] = useState(() => getCachedClientUser()?.id || '');
   const [userName, setUserName] = useState(() => displayName(getCachedClientUser()));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   const load = useCallback(async () => {
     if (!commentsEnabled || !open || !targetId) return;
@@ -224,17 +233,19 @@ export function CommentPanel({
 
   if (!commentsEnabled || !open) return null;
 
+  const isSheet = isMobile;
+
   const panel = (
     <div
       className={`flex min-h-0 flex-col overflow-hidden ${tone.panel} ${
-        embedded || drawer
+        embedded || (drawer && !isMobile)
           ? 'h-full w-full'
-          : sheet
-            ? 'h-[50dvh] w-full rounded-t-3xl shadow-2xl ring-1'
+          : isSheet
+            ? 'h-[66dvh] w-full rounded-t-3xl shadow-2xl ring-1'
             : 'h-[82vh] w-full max-w-2xl rounded-t-3xl shadow-2xl ring-1 sm:h-[min(86vh,820px)] sm:rounded-3xl'
-      } ${embedded || drawer ? '' : tone.panelRing}`}
+      } ${embedded || (drawer && !isMobile) ? '' : tone.panelRing}`}
     >
-      {sheet && (
+      {isSheet && (
         <div className="flex h-4 shrink-0 items-center justify-center" aria-hidden="true">
           <span className="h-1 w-9 rounded-full bg-current opacity-25" />
         </div>
@@ -314,7 +325,7 @@ export function CommentPanel({
 
   if (embedded) return panel;
 
-  if (drawer) {
+  if (drawer && !isMobile) {
     return (
       <aside className="absolute inset-y-0 right-0 z-40 flex w-[320px] max-w-[85vw] flex-col border-l border-white/15 bg-[#1C1C1E]/95 shadow-[-12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
         <div
@@ -326,10 +337,10 @@ export function CommentPanel({
     );
   }
 
-  if (sheet) {
+  if (isSheet) {
     return (
       <div
-        className={`fixed inset-0 z-[80] flex items-end justify-center sm:hidden ${tone.overlay}`}
+        className={`fixed inset-0 z-[80] flex items-end justify-center ${tone.overlay}`}
         onClick={onClose}
       >
         <div
