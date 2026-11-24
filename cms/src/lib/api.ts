@@ -191,10 +191,9 @@ export const api = {
   getDashboard: async (): Promise<DashboardPayload> => snowyVisitorDashboard(),
 
   // ---- 数据导出 ----
-  exportDatabase: async (): Promise<void> =>
-    snowyDownload('/biz/export/database', 'domain-stream-db.sql'),
-  exportFiles: async (): Promise<void> =>
-    snowyDownload('/biz/export/files', 'domain-stream-files.zip'),
+  exportDatabase: async (): Promise<void> => snowyDownload('/biz/export/database'),
+  exportFiles: async (): Promise<void> => snowyDownload('/biz/export/files'),
+  exportUserFiles: async (): Promise<void> => snowyDownload('/biz/export/user-files'),
 
   // ---- 视频 ----
   getVideos: async () => ({ items: await snowyBiz.listVideos() }),

@@ -17,4 +17,7 @@ public interface BizDataExportService {
 
     /** 导出全部底座文件，按图片/视频/音频/文档等分类打包为 ZIP */
     void exportFiles(HttpServletResponse response) throws IOException;
+
+    /** 导出用户上传的全部文件，按原始文件名平铺打包为 ZIP，不分类、不生成清单 */
+    void exportUserFiles(HttpServletResponse response) throws IOException;
 }

@@ -76,12 +76,7 @@ public class BizDataExportServiceImpl implements BizDataExportService {
         Path sqlFile = Files.createTempFile("domain-stream-db-", ".sql");
         try {
             writeDatabaseDump(sqlFile);
-            setDownloadHeaders(response, "domain-stream-db-" + LocalDateTime.now().format(FILE_TIME) + ".sql", "application/sql; charset=UTF-8");
-            response.setContentLengthLong(Files.size(sqlFile));
-            try (InputStream in = Files.newInputStream(sqlFile); OutputStream out = response.getOutputStream()) {
-                IoUtil.copy(in, out);
-            }
-            response.flushBuffer();
+            streamTempFile(response, sqlFile, "domain-stream-db-" + LocalDateTime.now().format(FILE_TIME) + ".sql", "application/sql; charset=UTF-8");
         } finally {
             Files.deleteIfExists(sqlFile);
         }
@@ -103,29 +98,77 @@ public class BizDataExportServiceImpl implements BizDataExportService {
         }
 
         List<String> failures = new ArrayList<>();
-        setDownloadHeaders(response, "domain-stream-files-" + LocalDateTime.now().format(FILE_TIME) + ".zip", "application/zip");
-        try (ZipOutputStream zip = new ZipOutputStream(response.getOutputStream(), StandardCharsets.UTF_8)) {
-            for (String folder : CATEGORY_FOLDERS) {
-                Set<String> usedNames = new HashSet<>();
-                for (JSONObject file : grouped.get(folder)) {
-                    String entryName = folder + "/" + uniqueName(file, usedNames);
-                    zip.putNextEntry(new ZipEntry(entryName));
-                    try {
-                        devFileApi.writeFileToStream(
-                                file.getStr("engine"),
-                                file.getStr("bucket"),
-                                file.getStr("fileKey"),
-                                zip
-                        );
-                    } catch (Exception e) {
-                        log.warn("导出文件失败：{}，原因：{}", entryName, e.getMessage());
-                        failures.add(entryName + "（" + StrUtil.blankToDefault(e.getMessage(), "读取失败") + "）");
-                    } finally {
-                        zip.closeEntry();
+        Path zipFile = Files.createTempFile("domain-stream-files-", ".zip");
+        try {
+            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipFile), StandardCharsets.UTF_8)) {
+                for (String folder : CATEGORY_FOLDERS) {
+                    Set<String> usedNames = new HashSet<>();
+                    for (JSONObject file : grouped.get(folder)) {
+                        String entryName = folder + "/" + uniqueName(file, usedNames);
+                        zip.putNextEntry(new ZipEntry(entryName));
+                        try {
+                            devFileApi.writeFileToStream(
+                                    file.getStr("engine"),
+                                    file.getStr("bucket"),
+                                    file.getStr("fileKey"),
+                                    zip
+                            );
+                        } catch (Exception e) {
+                            log.warn("导出文件失败：{}，原因：{}", entryName, e.getMessage());
+                            failures.add(entryName + "（" + StrUtil.blankToDefault(e.getMessage(), "读取失败") + "）");
+                        } finally {
+                            zip.closeEntry();
+                        }
+                    }
+                }
+                writeManifest(zip, grouped, failures);
+            }
+            streamTempFile(response, zipFile, "domain-stream-files-" + LocalDateTime.now().format(FILE_TIME) + ".zip", "application/zip");
+        } finally {
+            Files.deleteIfExists(zipFile);
+        }
+    }
+
+    @Override
+    public void exportUserFiles(HttpServletResponse response) throws IOException {
+        JSONArray files = devFileApi.getAllFiles("USER");
+        Path zipFile = Files.createTempFile("domain-stream-user-files-", ".zip");
+        try {
+            Set<String> usedNames = new HashSet<>();
+            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipFile), StandardCharsets.UTF_8)) {
+                if (files != null) {
+                    for (int i = 0; i < files.size(); i++) {
+                        JSONObject file = files.getJSONObject(i);
+                        if (file == null) continue;
+                        String entryName = uniqueName(file, usedNames);
+                        zip.putNextEntry(new ZipEntry(entryName));
+                        try {
+                            devFileApi.writeFileToStream(
+                                    file.getStr("engine"),
+                                    file.getStr("bucket"),
+                                    file.getStr("fileKey"),
+                                    zip
+                            );
+                        } catch (Exception e) {
+                            log.warn("导出用户文件失败：{}，原因：{}", entryName, e.getMessage());
+                        } finally {
+                            zip.closeEntry();
+                        }
                     }
                 }
             }
-            writeManifest(zip, grouped, failures);
+            streamTempFile(response, zipFile, "domain-stream-user-files-" + LocalDateTime.now().format(FILE_TIME) + ".zip", "application/zip");
+        } finally {
+            Files.deleteIfExists(zipFile);
+        }
+    }
+
+    /** 流式输出已生成的文件，并带上 Content-Length，浏览器才能显示真实下载进度 */
+    private void streamTempFile(HttpServletResponse response, Path file, String filename, String contentType) throws IOException {
+        setDownloadHeaders(response, filename, contentType);
+        response.setContentLengthLong(Files.size(file));
+        try (InputStream in = Files.newInputStream(file); OutputStream out = response.getOutputStream()) {
+            IoUtil.copy(in, out);
         }
         response.flushBuffer();
     }

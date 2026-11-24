@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, FileArchive, Loader2 } from 'lucide-react';
+import { Database, FileArchive, Files, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api.ts';
 import { showToast } from '../../components/AppToast.tsx';
 import type { ModuleKey } from '../../types/cms.ts';
@@ -17,7 +17,7 @@ interface DashboardViewProps {
   myCounts: { videos: number; imagetexts: number; articles: number };
 }
 
-type ExportKind = 'database' | 'files';
+type ExportKind = 'database' | 'files' | 'user-files';
 
 /** 首页仪表盘：数据导出、我发布的内容、模块导航、访客统计与最近访问记录 */
 export function DashboardView({ onNavigate, permissions, myCounts }: DashboardViewProps) {
@@ -38,10 +38,13 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
     try {
       if (kind === 'database') {
         await api.exportDatabase();
-        showToast('数据库备份已开始下载', 'success');
-      } else {
+        showToast('数据库备份已导出，浏览器开始下载', 'success');
+      } else if (kind === 'files') {
         await api.exportFiles();
-        showToast('文件资源包已开始下载', 'success');
+        showToast('文件资源包已导出，浏览器开始下载', 'success');
+      } else {
+        await api.exportUserFiles();
+        showToast('用户文件包已导出，浏览器开始下载', 'success');
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : '导出失败', 'danger');
@@ -57,7 +60,7 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
           <div className="min-w-0">
             <h2 className="text-[15px] font-semibold text-[#1D1D1F]">数据导出</h2>
             <p className="mt-1 text-[12px] leading-5 text-[#86868B]">
-              备份数据库 SQL，或将系统文件中心「用户文件」按图片、视频、音频、文档、压缩包、字体、其他分类打包下载
+              备份数据库 SQL；将系统文件中心「用户文件」按图片、视频、音频、文档、压缩包、字体、其他分类打包下载；或直接导出全部用户上传文件（保留原始文件名，不分类、不生成清单）
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -73,6 +76,19 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
                 <Database className="w-4 h-4" strokeWidth={1.8} />
               )}
               导出数据库
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExport('user-files')}
+              disabled={!!exporting}
+              className="h-9 px-4 rounded-xl border border-[#D2D2D7] bg-white text-[#1D1D1F] text-[13px] font-medium inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {exporting === 'user-files' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Files className="w-4 h-4" strokeWidth={1.8} />
+              )}
+              导出用户文件
             </button>
             <button
               type="button"

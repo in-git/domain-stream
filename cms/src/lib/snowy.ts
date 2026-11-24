@@ -134,48 +134,47 @@ export async function snowyFetch(
   return fetch(`${SNOWY_BASE}${path}`, { ...init, headers });
 }
 
+const DOWNLOAD_COOKIE_PATH = '/snowy';
+
+/** 直链下载走 sa-token 的 Cookie 读取，避免把长期 token 暴露在 URL 中 */
+function setDownloadTokenCookie(token: string): void {
+  document.cookie = `token=${encodeURIComponent(token)}; path=${DOWNLOAD_COOKIE_PATH}; SameSite=Lax`;
+}
+
 /**
- * 带 token 的二进制下载，并从 Content-Disposition 解析服务端文件名。
- * 用于数据库备份、文件资源打包等返回附件的接口。
+ * 触发浏览器原生下载：隐藏 iframe 请求附件地址，由浏览器直接边收边写盘并显示下载进度条。
+ * 不再用 fetch + blob 在内存里攒完整文件；文件名以服务端 Content-Disposition 为准。
+ * Promise 在服务端确认文件完整输出后才 resolve，调用方的 loading 会一直保持到下载结束。
  */
-export async function snowyDownload(path: string, defaultFilename: string): Promise<void> {
-  const res = await snowyFetch(path);
-  if (!res.ok) {
-    let message = `下载失败 (${res.status})`;
-    try {
-      const payload = (await res.json()) as SnowyResponse<unknown>;
-      if (RELOGIN_CODES.includes(payload.code)) {
-        throw forceRelogin(payload.msg);
-      }
-      message = payload.msg || message;
-    } catch (err) {
-      if (err instanceof SnowyAuthError) throw err;
-    }
-    throw new Error(message);
-  }
+export async function snowyDownload(path: string): Promise<void> {
+  // 先走一次带 token 的普通请求，登录态失效时能复用统一重登逻辑，避免把 401 JSON 当成文件下载
+  await snowyGetLoginUser();
+  const token = getSnowyToken();
+  if (!token) throw new SnowyAuthError('登录已失效，请重新登录');
+  setDownloadTokenCookie(token);
 
-  let filename = defaultFilename;
-  const disposition = res.headers.get('Content-Disposition') || '';
-  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
-  const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
-  const matched = utf8Match?.[1] || plainMatch?.[1];
-  if (matched) {
-    try {
-      filename = decodeURIComponent(matched.trim());
-    } catch {
-      filename = matched.trim();
-    }
-  }
+  const ticket =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const frame = document.createElement('iframe');
+  frame.hidden = true;
+  frame.style.display = 'none';
+  document.body.appendChild(frame);
+  const separator = path.includes('?') ? '&' : '?';
+  frame.src = `${SNOWY_BASE}${path}${separator}ticket=${encodeURIComponent(ticket)}&_dl=${Date.now()}`;
+  // 每次下载用独立 iframe，避免并发导出时互相中断；延迟清理防止影响进行中的下载
+  window.setTimeout(() => frame.remove(), 10 * 60 * 1000);
 
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  const deadline = Date.now() + 30 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 600));
+    const done = await snowyRequest<boolean>(
+      `/biz/export/status?ticket=${encodeURIComponent(ticket)}`
+    );
+    if (done) return;
+  }
+  throw new Error('导出超时，请稍后查看浏览器下载记录');
 }
 
 /** Snowy 统一请求：自动带 token，解包 {code,msg,data} */
@@ -423,6 +422,7 @@ export function clearSnowyLoginCache(): void {
     [TOKEN_KEY, USER_INFO_KEY, MENU_KEY, 'SNOWY_ACCOUNT', 'PERMISSIONS', 'ACTIVE_MODULE'].forEach(
       (key) => localStorage.removeItem(key)
     );
+    document.cookie = `token=; path=${DOWNLOAD_COOKIE_PATH}; Max-Age=0; SameSite=Lax`;
   } catch {
     // ignore
   }
