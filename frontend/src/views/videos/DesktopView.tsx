@@ -1,70 +1,9 @@
 import { motion } from 'motion/react';
-import { Bookmark, Heart, LayoutGrid, Rows3 } from 'lucide-react';
+import { Bookmark, Heart, Rows3 } from 'lucide-react';
 import type { VideoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import type { CategoryBarProps, VideoGridProps } from './shared';
-
-/* ------------------------------------------------------------------ *
- * 沉浸刷看模式：悬浮在播放器顶部的分类条（PC 专属）
- * ------------------------------------------------------------------ */
-interface DesktopFeedCategoriesProps extends CategoryBarProps {
-  onTogglePlaylist: () => void;
-  playlistOpen: boolean;
-}
-
-export function DesktopFeedCategories({
-  categories,
-  category,
-  onChange,
-  onTogglePlaylist,
-  playlistOpen,
-}: DesktopFeedCategoriesProps) {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 hidden justify-center sm:flex">
-      <div
-        role="tablist"
-        aria-label="视频分类"
-        className="pointer-events-auto mt-4 inline-flex max-w-[calc(100%-2rem)] items-center gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-black/45 p-1.5 backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {(['全部', ...categories] as const).map((item) => {
-          const active = category === item;
-          return (
-            <button
-              key={item}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => onChange(item)}
-              className={`shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                active
-                  ? 'bg-white text-[#1D1D1F]'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              {item}
-            </button>
-          );
-        })}
-        <span className="mx-1 h-4 w-px shrink-0 bg-white/20" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={onTogglePlaylist}
-          aria-label={playlistOpen ? '收起播放列表' : '展开播放列表'}
-          title={playlistOpen ? '收起播放列表' : '播放列表'}
-          aria-pressed={playlistOpen}
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-            playlistOpen
-              ? 'bg-white text-[#1D1D1F]'
-              : 'text-white/70 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <LayoutGrid className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ *
  * 卡片模式：顶部分类与视图切换（PC 专属）

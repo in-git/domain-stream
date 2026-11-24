@@ -19,8 +19,16 @@ interface MainHeaderProps {
   solidBlack?: boolean;
   /** 移动端首页：顶栏搜索旁显示视图切换按钮 */
   showViewToggle?: boolean;
+  /** PC 沉浸模式：顶栏悬浮在视频上方，不占文档流位置 */
+  pcImmersive?: boolean;
   viewMode?: 'feed' | 'grid';
   onToggleViewMode?: () => void;
+  /** PC 沉浸模式分类条：放顶栏左侧，与搜索框同排 */
+  feedCategories?: string[];
+  feedCategory?: string;
+  onFeedCategoryChange?: (category: string) => void;
+  playlistOpen?: boolean;
+  onTogglePlaylist?: () => void;
 }
 
 export function MainHeader({
@@ -33,8 +41,14 @@ export function MainHeader({
   overlay = false,
   solidBlack = false,
   showViewToggle = false,
+  pcImmersive = false,
   viewMode = 'feed',
   onToggleViewMode,
+  feedCategories = [],
+  feedCategory = '全部',
+  onFeedCategoryChange,
+  playlistOpen = false,
+  onTogglePlaylist,
 }: MainHeaderProps) {
   const { title } = useSystemInfo();
   // 搜索框草稿：输入只改 draft，点搜索按钮 / Enter 才提交为真正的查询
@@ -47,13 +61,15 @@ export function MainHeader({
     onChangeSearch('');
   };
 
-  const shellClass = solidBlack
-    ? 'sticky top-0 z-30 border-b border-white/10 bg-black'
-    : overlay
-      ? 'fixed inset-x-0 top-0 z-30 bg-black md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
-      : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
+  const shellClass = pcImmersive
+    ? 'fixed top-0 right-0 md:left-20 lg:left-60 z-40 bg-gradient-to-b from-black/65 via-black/25 to-transparent'
+    : solidBlack
+      ? 'sticky top-0 z-30 border-b border-white/10 bg-black'
+      : overlay
+        ? 'fixed inset-x-0 top-0 z-30 bg-black md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
+        : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
 
-  const iconClass = solidBlack || overlay
+  const iconClass = pcImmersive || solidBlack || overlay
     ? 'text-white hover:bg-white/15'
     : 'text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]';
 
@@ -61,15 +77,56 @@ export function MainHeader({
     <header
       className={`h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 transition-colors duration-300 ease-out ${shellClass}`}
     >
-      {/* Left: Mobile Brand */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      {/* Left: 移动端品牌 / PC 沉浸模式分类条（与搜索框同排） */}
+      <div className="flex items-center gap-2.5 min-w-0">
         <span
           className={`md:hidden text-base font-semibold tracking-tight ${
-            overlay || solidBlack ? 'text-white drop-shadow' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+            pcImmersive || overlay || solidBlack ? 'text-white drop-shadow' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
           }`}
         >
           {title}
         </span>
+        {pcImmersive && (
+          <div className="hidden md:flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div role="tablist" aria-label="视频分类" className="flex items-center gap-1">
+              {(['全部', ...feedCategories] as const).map((item) => {
+                const active = feedCategory === item;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => onFeedCategoryChange?.(item)}
+                    className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-white text-[#1D1D1F]'
+                        : 'text-white/75 hover:bg-white/15 hover:text-white'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+            {onTogglePlaylist && (
+              <button
+                type="button"
+                onClick={onTogglePlaylist}
+                aria-label={playlistOpen ? '收起播放列表' : '展开播放列表'}
+                title={playlistOpen ? '收起播放列表' : '播放列表'}
+                aria-pressed={playlistOpen}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                  playlistOpen
+                    ? 'bg-white text-[#1D1D1F]'
+                    : 'text-white/75 hover:bg-white/15 hover:text-white'
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Center: 桌面端内联搜索框（移动端改为图标入口） */}
@@ -88,7 +145,11 @@ export function MainHeader({
             }}
             placeholder="搜索视频、文章、作品或留言"
             aria-label="搜索内容"
-            className="w-full h-9 pl-9 pr-[4.5rem] rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] border border-transparent focus:border-[#0071E3]/40 dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-xs sm:text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none transition-colors"
+            className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border border-transparent focus:border-[#0071E3]/40 focus:outline-none transition-colors text-xs sm:text-sm ${
+              pcImmersive
+                ? 'bg-white/15 text-white placeholder:text-white/60 focus:bg-white/25'
+                : 'bg-[#EEEEF0] dark:bg-[#1C1C1E] dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B]'
+            }`}
           />
           {draft && (
             <button
@@ -151,7 +212,7 @@ export function MainHeader({
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </motion.button>
         </Tooltip>
-        <AccountMenu {...account} overlay={overlay || solidBlack} />
+        <AccountMenu {...account} overlay={pcImmersive || overlay || solidBlack} />
       </div>
     </header>
   );

@@ -55,6 +55,8 @@ export function PortalShell({
   const searchSection = isSectionId(activeSection) ? activeSection : 'profile';
   /** 视频首页的视图模式，由顶栏按钮与视频页内部共用 */
   const [videoViewMode, setVideoViewMode] = useState<'feed' | 'grid'>('feed');
+  /** PC 沉浸播放列表侧栏开关：分类条在顶栏，侧栏在视频区，状态需提升到共同父级 */
+  const [videoPlaylistOpen, setVideoPlaylistOpen] = useState(false);
   /** 搜索结果点击文章时，交给文章板块打开同一个阅读器 */
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
@@ -167,10 +169,16 @@ export function PortalShell({
             overlay={activeSection === 'videos' && isMobileViewport && videoViewMode === 'feed'}
             solidBlack={activeSection === 'videos' && isMobileViewport && videoViewMode === 'grid'}
             showViewToggle={activeSection === 'videos' && isMobileViewport}
+            pcImmersive={activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
             viewMode={videoViewMode}
             onToggleViewMode={() =>
               setVideoViewMode((mode) => (mode === 'feed' ? 'grid' : 'feed'))
             }
+            feedCategories={videoCategories}
+            feedCategory={videoCategory}
+            onFeedCategoryChange={(c) => void loadVideosByCategory(c)}
+            playlistOpen={videoPlaylistOpen}
+            onTogglePlaylist={() => setVideoPlaylistOpen((v) => !v)}
             account={{
               isLoggedIn,
               displayName: profile.name,
@@ -214,6 +222,11 @@ export function PortalShell({
               onMiniExpand={() => onSelectSection('videos')}
               viewMode={videoViewMode}
               onViewModeChange={setVideoViewMode}
+              headerFloating={
+                activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'
+              }
+              playlistOpen={videoPlaylistOpen}
+              onClosePlaylist={() => setVideoPlaylistOpen(false)}
             />
 
             <AnimatePresence mode="wait">

@@ -293,11 +293,6 @@ export function CommentPanel({
           onPointerUp: clearLongPress,
           onPointerCancel: clearLongPress,
           onPointerLeave: clearLongPress,
-          onContextMenu: (event: React.MouseEvent) => {
-            event.preventDefault();
-            longPressFired.current = true;
-            setActionMenu({ comment, x: event.clientX, y: event.clientY });
-          },
           onClick: () => onCommentClick(comment),
         }
       : {};

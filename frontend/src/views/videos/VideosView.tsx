@@ -8,11 +8,7 @@ import type { VideoItem } from '../../data/content';
 import { EmptyState } from '../../components/PortalStates';
 import { FeedSlide } from './FeedSlide';
 import { ImmersiveModal } from './ImmersiveModal';
-import {
-  DesktopFeedCategories,
-  DesktopGridCategories,
-  DesktopVideoGrid,
-} from './DesktopView';
+import { DesktopGridCategories, DesktopVideoGrid } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
 import { DEFAULT_CATEGORIES, VIDEO_PAGE_SIZE, type ViewMode } from './shared';
@@ -62,6 +58,11 @@ interface VideosViewProps {
   /** 视图模式由外壳控制，便于顶部搜索框旁的单一切换按钮复用 */
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
+  /** PC 沉浸模式顶栏悬浮：视频区占满视口 */
+  headerFloating?: boolean;
+  /** 播放列表侧栏开关由顶栏分类条控制，状态在 PortalShell 提升 */
+  playlistOpen?: boolean;
+  onClosePlaylist?: () => void;
 }
 
 export function VideosView({
@@ -85,6 +86,9 @@ export function VideosView({
   onMiniExpand,
   viewMode = 'feed',
   onViewModeChange,
+  headerFloating = false,
+  playlistOpen = false,
+  onClosePlaylist,
 }: VideosViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
   const isMini = mode === 'mini';
@@ -108,8 +112,6 @@ export function VideosView({
   const [isFullscreen, setIsFullscreen] = useState(false);
   /** 从卡片点选后要直接播放的视频（含 src），为 null 时走沉浸流当前索引 */
   const [pickedVideo, setPickedVideo] = useState<VideoItem | null>(null);
-  /** PC 沉浸模式播放列表侧边栏是否展开 */
-  const [playlistOpen, setPlaylistOpen] = useState(false);
   /** PC 迷你播放器位置（可拖拽），null 表示使用默认右下角 */
   const [miniPos, setMiniPos] = useState<{ x: number; y: number } | null>(null);
   const miniDragRef = useRef<{
@@ -275,6 +277,16 @@ export function VideosView({
   const getActivePlayer = () =>
     currentVideo ? playersRef.current.get(currentVideo.id) ?? null : null;
 
+  /** 安全暂停：已销毁的 MediaPlayer 实例访问内部属性会抛 null 引用异常，统一吞掉 */
+  const safePause = (player: MediaPlayerInstance | null | undefined) => {
+    if (!player) return;
+    try {
+      void player.pause?.();
+    } catch {
+      // 播放器已卸载，忽略
+    }
+  };
+
   /** 用户点击静音/取消静音：记录是否为用户主动静音，后续滑动据此决定是否自动解除 */
   const handleToggleMute = () => {
     setIsMuted((prev) => {
@@ -288,19 +300,23 @@ export function VideosView({
   const togglePlayback = () => {
     const player = getActivePlayer();
     if (!player) return;
-    if (isMuted) {
-      setIsMuted(false);
-      userMutedManuallyRef.current = false;
-      player.muted = false;
-      setHasPlayed(true);
-      if (player.paused) void player.play().catch(() => {});
-      return;
-    }
-    if (player.paused) {
-      setHasPlayed(true);
-      void player.play().catch(() => {});
-    } else {
-      player.pause();
+    try {
+      if (isMuted) {
+        setIsMuted(false);
+        userMutedManuallyRef.current = false;
+        player.muted = false;
+        setHasPlayed(true);
+        if (player.paused) void player.play().catch(() => {});
+        return;
+      }
+      if (player.paused) {
+        setHasPlayed(true);
+        void player.play().catch(() => {});
+      } else {
+        player.pause();
+      }
+    } catch {
+      // 播放器实例已销毁，忽略本次播放控制
     }
   };
 
@@ -340,11 +356,12 @@ export function VideosView({
   /** 卡片点击：打开全屏模态框直接播放被点视频（用列表数据里自带的 src） */
   const openVideoAt = useCallback(
     (video: VideoItem) => {
-      if (!video?.src) return;
-      // 打开模态框前暂停主页常驻的播放器，避免两套播放器同时请求同一视频流
-      playersRef.current.forEach((player) => {
-        if (player && !player.paused) player.pause();
-      });
+      if (!video) return;
+      // 打开模态框前暂停主页常驻的播放器，避免两套播放器同时请求同一视频流。
+      // 注意：切到卡片模式后，feed 的 MediaPlayer 已卸载，Map 中可能残留已销毁的实例，
+      // 读取其 paused 会抛 "Cannot read properties of null"。直接调用 pause 并捕获异常，
+      // 且无论暂停是否成功都必须打开模态框，避免异常中断该函数。
+      playersRef.current.forEach(safePause);
       setPickedVideo(video);
     },
     []
@@ -380,14 +397,12 @@ export function VideosView({
 
   useEffect(() => {
     if (viewMode !== 'grid') return;
-    const player = getActivePlayer();
-    if (player && !player.paused) player.pause();
+    safePause(getActivePlayer());
   }, [viewMode, currentVideo?.id]);
 
   useEffect(() => {
     if (mode !== 'hidden') return;
-    const player = getActivePlayer();
-    if (player && !player.paused) player.pause();
+    safePause(getActivePlayer());
   }, [mode, currentVideo?.id]);
 
   /** 从其他模块切回视频：容器重新可见后恢复当前播放器并刷新 Swiper 尺寸 */
@@ -396,7 +411,12 @@ export function VideosView({
     const frame = requestAnimationFrame(() => {
       swiperRef.current?.update?.();
       const player = playersRef.current.get(currentVideo.id);
-      if (player && player.paused) void player.play().catch(() => {});
+      if (!player) return;
+      try {
+        if (player.paused) void player.play().catch(() => {});
+      } catch {
+        // 播放器已销毁，忽略
+      }
     });
     return () => cancelAnimationFrame(frame);
   }, [mode, viewMode, currentVideo?.id]);
@@ -466,19 +486,10 @@ export function VideosView({
         </>
       )}
 
-      {/* 沉浸模式悬浮分类：独立于视频数据渲染，空分类时仍可见，用户可切回其他分类 */}
-      {!isMini && viewMode === 'feed' && (
-        <DesktopFeedCategories
-          categories={filterCategories}
-          category={category}
-          onChange={onCategoryChange}
-          onTogglePlaylist={() => setPlaylistOpen((v) => !v)}
-          playlistOpen={playlistOpen}
-        />
-      )}
+      {/* PC 沉浸模式的分类条已移至顶栏（见 MainHeader），与搜索框同排；此处不再渲染 */}
 
       {!isMini && viewMode === 'feed' && filteredVideos.length === 0 && (
-        <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center bg-[#0A0A0C]">
+        <div className={`flex items-center justify-center bg-[#0A0A0C] ${headerFloating ? 'h-[100dvh]' : 'h-[calc(100dvh-3.5rem)]'}`}>
           <EmptyState className="w-fit px-10 py-16" title="暂无数据" bare onDark />
         </div>
       )}
@@ -499,7 +510,9 @@ export function VideosView({
             className={
               isMini
                 ? 'relative w-full h-full overflow-hidden'
-                : 'relative w-full h-[calc(100dvh-3.5rem)] rounded-none overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                : headerFloating
+                  ? 'relative w-full h-[100dvh] rounded-none overflow-hidden bg-[#0A0A0C] border-0 shadow-none select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                  : 'relative w-full h-[calc(100dvh-3.5rem)] rounded-none overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
             <Swiper
@@ -565,7 +578,8 @@ export function VideosView({
                 onCategoryChange={onCategoryChange}
                 activeIndex={safeIndex}
                 onSelect={playVideoAt}
-                onClose={() => setPlaylistOpen(false)}
+                onClose={onClosePlaylist ?? (() => {})}
+                headerFloating={headerFloating}
               />
             )}
           </div>

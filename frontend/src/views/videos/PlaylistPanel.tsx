@@ -12,6 +12,8 @@ interface PlaylistPanelProps {
   activeIndex: number;
   onSelect: (video: VideoItem) => void;
   onClose: () => void;
+  /** 顶栏悬浮时侧栏下移，避免顶部被悬浮顶栏遮挡 */
+  headerFloating?: boolean;
 }
 
 /** PC 沉浸模式播放列表侧边栏：顶部分类 + 分批加载更多 + 上下结构视频项 */
@@ -23,6 +25,7 @@ export function PlaylistPanel({
   activeIndex,
   onSelect,
   onClose,
+  headerFloating = false,
 }: PlaylistPanelProps) {
   const [visibleCount, setVisibleCount] = useState(VIDEO_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -58,9 +61,9 @@ export function PlaylistPanel({
   }, [hasMore, videos.length]);
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-30 flex w-[320px] max-w-[85vw] flex-col border-l border-white/15 bg-[#1C1C1E]/95 shadow-[-12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+    <aside className={`absolute bottom-0 left-0 z-30 flex w-[320px] max-w-[85vw] flex-col border-r border-white/15 bg-[#1C1C1E]/95 shadow-[12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl ${headerFloating ? 'top-14' : 'top-0'}`}>
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-white/25 to-transparent"
+        className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-white/25 to-transparent"
         aria-hidden="true"
       />
 

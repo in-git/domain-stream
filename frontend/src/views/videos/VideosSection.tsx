@@ -27,6 +27,11 @@ interface VideosSectionProps {
   onMiniExpand: () => void;
   viewMode?: 'feed' | 'grid';
   onViewModeChange?: (mode: 'feed' | 'grid') => void;
+  /** PC 沉浸模式顶栏悬浮：视频区占满视口 */
+  headerFloating?: boolean;
+  /** 播放列表开关由顶栏分类条控制，状态在 PortalShell 提升 */
+  playlistOpen?: boolean;
+  onClosePlaylist?: () => void;
 }
 
 /**
@@ -58,6 +63,9 @@ export function VideosSection({
   onMiniExpand,
   viewMode,
   onViewModeChange,
+  headerFloating = false,
+  playlistOpen,
+  onClosePlaylist,
 }: VideosSectionProps) {
   const mode = !active ? (isMini ? 'mini' : 'hidden') : 'immersive';
 
@@ -84,6 +92,9 @@ export function VideosSection({
         onMiniExpand={onMiniExpand}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
+        headerFloating={headerFloating}
+        playlistOpen={playlistOpen}
+        onClosePlaylist={onClosePlaylist}
       />
 
       {active && loading && videos.length === 0 && (

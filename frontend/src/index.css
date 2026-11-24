@@ -87,10 +87,16 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-/* 容器内部滚动仍保留 Apple 风格的细滚动条 */
+/* 容器内部滚动条：抖音风格——纤细、半透明、圆角、低干扰 */
+/* Firefox：使用 thin + 半透明 thumb（排除 html/body，它们已完全隐藏滚动条） */
+*:not(html):not(body) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 *::-webkit-scrollbar-track {
@@ -98,12 +104,38 @@ body::-webkit-scrollbar {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(120, 120, 128, 0.28);
+  background: rgba(0, 0, 0, 0.18);
   border-radius: 9999px;
+  transition: background 160ms ease;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(120, 120, 128, 0.45);
+  background: rgba(0, 0, 0, 0.32);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 暗色模式：抖音深色滚动条，浅色半透明 thumb */
+.dark *:not(html):not(body) {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.dark *::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.48);
 }
 
 /* Vidstack: 视频横向铺满容器宽度，纵向高度按自身比例自适应；容器始终宽高铺满 */

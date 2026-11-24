@@ -109,6 +109,9 @@ export function FeedSlide({
     [onRegisterPlayer, video.id],
   );
 
+  // 组件卸载时显式注销，避免 playersRef 中残留已销毁实例（其 paused getter 会抛 null 异常）
+  useEffect(() => () => onRegisterPlayer(video.id, null), [onRegisterPlayer, video.id]);
+
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -155,7 +158,15 @@ export function FeedSlide({
     // src 是 active 后才挂载的，源就绪需要一点时间；补一次延迟 play 兜底，
     // 配合 onCanPlay 里的主动播放，确保首次进入也能正常起播。
     const retry = window.setTimeout(() => {
-      if (player.paused) void player.play().catch(() => {});
+      // 用实时 ref 并做双重校验：120ms 内播放器可能已被卸载（如切到卡片模式），
+      // 此时读取旧实例的 paused 会抛 null 引用异常。
+      const current = playerRef.current;
+      if (!current) return;
+      try {
+        if (current.paused) void current.play().catch(() => {});
+      } catch {
+        // 忽略已销毁播放器的异常
+      }
     }, 120);
     return () => window.clearTimeout(retry);
   }, [active, video.id, isMuted, playbackRate]);
@@ -307,7 +318,12 @@ export function FeedSlide({
   );
 
   return (
-    <div data-video-stage className="relative w-full h-full bg-black overflow-hidden">
+    <div
+      data-video-stage
+      className="relative w-full h-full bg-black overflow-hidden"
+      // 视频区域统一屏蔽右键菜单（含浏览器默认菜单与播放器右键），PC 视频首页不弹出
+      onContextMenu={(event) => event.preventDefault()}
+    >
       {active ? (
         <MediaPlayer
           ref={setPlayerRef}
