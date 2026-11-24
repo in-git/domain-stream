@@ -17,6 +17,7 @@ export function DataImportModal({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<ImportMode>('APPEND');
   const [busy, setBusy] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
 
@@ -33,8 +34,22 @@ export function DataImportModal({ onClose }: { onClose: () => void }) {
   }, [onClose, busy]);
 
   function pickFile(next: File | null) {
+    if (next) {
+      const name = next.name.toLowerCase();
+      if (!name.endsWith('.zip') && !name.endsWith('.sql')) {
+        setFile(null);
+        setError('仅支持 .sql 数据库备份或 .zip 文件资源包');
+        return;
+      }
+      if (next.size === 0) {
+        setFile(null);
+        setError('导入文件不能为空');
+        return;
+      }
+    }
     setFile(next);
     setMode('APPEND');
+    setUploadProgress(0);
     setResult(null);
     setError(null);
   }
@@ -51,10 +66,9 @@ export function DataImportModal({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     setResult(null);
+    setUploadProgress(0);
     try {
-      const ticket = isSql
-        ? await api.restoreDatabase(file)
-        : await api.importFiles(file, mode);
+      const ticket = await api.uploadImportFile(file, isSql ? 'APPEND' : mode, setUploadProgress);
       const deadline = Date.now() + 30 * 60 * 1000;
       let pollFailures = 0;
       while (Date.now() < deadline) {
@@ -143,6 +157,9 @@ export function DataImportModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => pickFile(e.target.files?.[0] || null)}
               className="w-full text-[13px] text-[#3A3A3C] file:mr-3 file:h-9 file:px-3 file:rounded-xl file:border-0 file:bg-[#F2F2F7] file:text-[12px] file:font-medium file:text-[#3A3A3C] hover:file:bg-[#E5E5EA]"
             />
+            <p className="mt-2 text-[11px] text-[#86868B]">
+              仅支持 .sql 数据库备份或 .zip 文件资源包，按 8MB 分片上传，不会写入文件中心。
+            </p>
             {file && (
               <p className="mt-2 text-[12px] text-[#86868B] truncate">
                 已选择：{file.name}（{(file.size / 1024 / 1024).toFixed(2)} MB）
@@ -200,9 +217,21 @@ export function DataImportModal({ onClose }: { onClose: () => void }) {
           )}
 
           {busy && (
-            <div className="flex items-center gap-2 rounded-xl bg-[#F5F5F7] px-3.5 py-3 text-[12px] text-[#3A3A3C]">
-              <Loader2 className="w-4 h-4 animate-spin text-[#0071E3]" />
-              导入执行中，完成后会自动提示，请勿关闭页面
+            <div className="rounded-xl bg-[#F5F5F7] px-3.5 py-3">
+              <div className="flex items-center gap-2 text-[12px] text-[#3A3A3C]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#0071E3]" />
+                {uploadProgress < 100
+                  ? `分片上传中 ${uploadProgress}%，请勿关闭页面`
+                  : '文件已上传，导入执行中，完成后会自动提示'}
+              </div>
+              {uploadProgress < 100 && (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#E5E5EA]">
+                  <div
+                    className="h-full rounded-full bg-[#0071E3] transition-[width] duration-200"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

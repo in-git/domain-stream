@@ -213,7 +213,7 @@ export function PortalShell({
               resumeMuted={persistentMuted}
               resumePlaybackRate={persistentRate}
               isMini={!!persistentVideo && !isMobileViewport}
-              onRetry={() => void loadSection('videos')}
+              onRetry={() => void loadSection('videos', true)}
               onToggleSave={toggleFavorite}
               onToggleLike={toggleLike}
               onPlayVideo={handlePlayVideo}
@@ -246,7 +246,7 @@ export function PortalShell({
                     searchQuery={searchQuery}
                     loading={!!loadingMap.articles}
                     error={errors.articles}
-                    onRetry={() => void loadSection('articles')}
+                    onRetry={() => void loadSection('articles', true)}
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
                     externalSelectedId={selectedArticleId}
@@ -271,7 +271,7 @@ export function PortalShell({
                     searchQuery={searchQuery}
                     loading={!!loadingMap.gallery}
                     error={errors.gallery}
-                    onRetry={() => void loadSection('gallery')}
+                    onRetry={() => void loadSection('gallery', true)}
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
                   />
@@ -300,7 +300,7 @@ export function PortalShell({
                     }}
                     loading={!!loadingMap.messages}
                     error={errors.messages}
-                    onRetry={() => void loadSection('messages')}
+                    onRetry={() => void loadSection('messages', true)}
                     onRequireLogin={goLogin}
                     onToggleLike={toggleLike}
                     onAddMessage={(message) => void addMessage(message)}

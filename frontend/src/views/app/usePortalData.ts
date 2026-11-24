@@ -77,8 +77,9 @@ export function usePortalData(
     );
   }, [likeCounts]);
 
-  /** 分类接口全站只请求一次，失败时允许下次重试 */
-  const getCategories = useCallback(() => {
+  /** 分类接口默认复用缓存；force 时重新请求（手动刷新需要拿到最新分类） */
+  const getCategories = useCallback((force = false) => {
+    if (force) categoriesPromiseRef.current = null;
     if (!categoriesPromiseRef.current) {
       categoriesPromiseRef.current = portalApi.categories().catch((error: unknown) => {
         categoriesPromiseRef.current = null;
@@ -88,15 +89,16 @@ export function usePortalData(
     return categoriesPromiseRef.current;
   }, []);
 
-  /** 分类失败降级为空（内容自身分类兜底），内容失败记录到该板块错误 */
+  /** 分类失败降级为空（内容自身分类兜底），内容失败返回 false 让调用方不要标记已加载 */
   const loadWithCategories = useCallback(
     async <T,>(
       section: ContentSection,
       fetchContent: () => Promise<T>,
-      apply: (rows: Awaited<T>, names: Map<string, string>, categories: PortalCategory[]) => void
-    ) => {
+      apply: (rows: Awaited<T>, names: Map<string, string>, categories: PortalCategory[]) => void,
+      force = false
+    ): Promise<boolean> => {
       const [categoryResult, contentResult] = await Promise.allSettled([
-        getCategories(),
+        getCategories(force),
         fetchContent(),
       ]);
       if (contentResult.status === 'rejected') {
@@ -104,10 +106,11 @@ export function usePortalData(
           ...prev,
           [section]: contentResult.reason?.message || '内容服务暂不可用',
         }));
-        return;
+        return false;
       }
       const categories = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
       apply(contentResult.value, categoryNameMap(categories), categories);
+      return true;
     },
     [getCategories]
   );
@@ -120,20 +123,21 @@ export function usePortalData(
     []
   );
 
-  /** 切换进入某板块时加载该板块数据；正在加载中的板块不会重复请求 */
+  /** 进入板块时加载数据；force=true 供「重新加载 / 刷新内容」强制重新请求 */
   const loadSection = useCallback(
-    async (rawSection: string) => {
+    async (rawSection: string, force = false) => {
       // 自定义模块没有数据源，直接忽略
       if (!isSectionId(rawSection)) return;
       const section = rawSection;
       if (section === 'profile') return;
       // 已成功加载过的板块不再重复请求，避免切回视频时把常驻播放器卸载重建
-      if (loadedSectionsRef.current[section]) return;
+      if (!force && loadedSectionsRef.current[section]) return;
       // 防重入：同一板块正在请求时直接返回，避免并发重复拉取
       if (loadingMapRef.current[section]) return;
       loadingMapRef.current[section] = true;
       setLoadingMap((prev) => ({ ...prev, [section]: true }));
       setErrors((prev) => ({ ...prev, [section]: undefined }));
+      if (force) loadedSectionsRef.current[section] = false;
       let loaded = false;
 
       try {
@@ -159,33 +163,48 @@ export function usePortalData(
               .map((row) => replyFromPortal(row, rootIdOf(row)))
           );
         } else if (section === 'videos') {
-          await loadWithCategories(section, () => portalApi.videos(videoCategory), (rows, names, categories) => {
-            const items = rows.map((row, i) => videoFromPortal(row, i, names));
-            setVideos(items);
-            setVideoCategories(
-              pickCategories(categoriesForModule(categories, 'VIDEO'), items.map((item) => item.category))
-            );
-          });
+          loaded = await loadWithCategories(
+            section,
+            () => portalApi.videos(videoCategory),
+            (rows, names, categories) => {
+              const items = rows.map((row, i) => videoFromPortal(row, i, names));
+              setVideos(items);
+              setVideoCategories(
+                pickCategories(categoriesForModule(categories, 'VIDEO'), items.map((item) => item.category))
+              );
+            },
+            force
+          );
         } else if (section === 'articles') {
-          await loadWithCategories(section, portalApi.articles, (rows, names, categories) => {
-            const items = rows.map((row, i) => articleFromPortal(row, i, names));
-            setArticles(items);
-            setArticleCategories(
-              pickCategories(categoriesForModule(categories, 'ARTICLE'), items.map((item) => item.category))
-            );
-          });
+          loaded = await loadWithCategories(
+            section,
+            portalApi.articles,
+            (rows, names, categories) => {
+              const items = rows.map((row, i) => articleFromPortal(row, i, names));
+              setArticles(items);
+              setArticleCategories(
+                pickCategories(categoriesForModule(categories, 'ARTICLE'), items.map((item) => item.category))
+              );
+            },
+            force
+          );
         } else if (section === 'gallery') {
           const [graphics, favoriteCounts] = await Promise.all([
             portalApi.graphics(),
             favoriteApi.counts('IMAGE_TEXT').catch(() => ({})),
           ]);
-          await loadWithCategories(section, () => Promise.resolve(graphics), (rows, names, categories) => {
-            const items = graphicsToPhotos(rows, names, favoriteCounts);
-            setPhotos(items);
-            setGraphicCategories(
-              pickCategories(categoriesForModule(categories, 'GRAPHIC'), items.map((item) => item.album))
-            );
-          });
+          loaded = await loadWithCategories(
+            section,
+            () => Promise.resolve(graphics),
+            (rows, names, categories) => {
+              const items = graphicsToPhotos(rows, names, favoriteCounts);
+              setPhotos(items);
+              setGraphicCategories(
+                pickCategories(categoriesForModule(categories, 'GRAPHIC'), items.map((item) => item.album))
+              );
+            },
+            force
+          );
         }
         loaded = true;
       } catch (error) {

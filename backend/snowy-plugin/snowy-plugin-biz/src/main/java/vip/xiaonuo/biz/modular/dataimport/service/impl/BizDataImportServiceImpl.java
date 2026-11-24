@@ -83,12 +83,8 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         if (!name.toLowerCase(Locale.ROOT).endsWith(".zip")) {
             throw new CommonException("请上传 .zip 格式的文件资源包");
         }
-        String overwrite = mode == null ? "" : mode.toUpperCase(Locale.ROOT);
-        if (!"OVERWRITE".equals(overwrite) && !"APPEND".equals(overwrite)) {
-            throw new CommonException("导入模式只能是 OVERWRITE 或 APPEND");
-        }
         Path temp = copyToTemp(file, "biz-import-files-", ".zip");
-        return start(ticket -> importFilesAsync(temp, "OVERWRITE".equals(overwrite), ticket), temp);
+        return importFilesFromPath(temp, mode);
     }
 
     @Override
@@ -98,7 +94,44 @@ public class BizDataImportServiceImpl implements BizDataImportService {
             throw new CommonException("请上传 .sql 格式的数据库备份文件");
         }
         Path temp = copyToTemp(file, "biz-import-db-", ".sql");
-        return start(ticket -> restoreDatabaseAsync(temp, ticket), temp);
+        return restoreDatabaseFromPath(temp);
+    }
+
+    @Override
+    public String importFilesFromPath(Path file, String mode) {
+        String normalizedMode = normalizeMode(mode);
+        if (!file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip")) {
+            deleteQuietly(file);
+            throw new CommonException("请上传 .zip 格式的文件资源包");
+        }
+        try {
+            return start(ticket -> importFilesAsync(file, "OVERWRITE".equals(normalizedMode), ticket), file);
+        } catch (RuntimeException e) {
+            deleteQuietly(file);
+            throw e;
+        }
+    }
+
+    @Override
+    public String restoreDatabaseFromPath(Path file) {
+        if (!file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".sql")) {
+            deleteQuietly(file);
+            throw new CommonException("请上传 .sql 格式的数据库备份文件");
+        }
+        try {
+            return start(ticket -> restoreDatabaseAsync(file, ticket), file);
+        } catch (RuntimeException e) {
+            deleteQuietly(file);
+            throw e;
+        }
+    }
+
+    private String normalizeMode(String mode) {
+        String value = StrUtil.blankToDefault(mode, "APPEND").toUpperCase(Locale.ROOT);
+        if (!"OVERWRITE".equals(value) && !"APPEND".equals(value)) {
+            throw new CommonException("导入模式只能是 OVERWRITE 或 APPEND");
+        }
+        return value;
     }
 
     @Override

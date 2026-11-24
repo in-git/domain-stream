@@ -47,8 +47,8 @@ export default function App() {
       );
       return;
     }
-    if (!isSectionId(activeSection)) return;
-    void data.loadSection(activeSection);
+    // 自定义模块没有数据源，但整页刷新时仍要保证有内容板块被加载，否则页面空白
+    void data.loadSection(isSectionId(activeSection) ? activeSection : 'videos');
     // loadSection 内部有 loading 防重入，依赖只随 activeSection / isProfileView 变化
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, isProfileView]);
