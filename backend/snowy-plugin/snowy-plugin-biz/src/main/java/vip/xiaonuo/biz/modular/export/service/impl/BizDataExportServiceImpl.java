@@ -34,10 +34,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -56,14 +54,6 @@ import java.util.zip.ZipOutputStream;
 public class BizDataExportServiceImpl implements BizDataExportService {
 
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
-
-    /** ZIP 顶层目录，顺序即导出顺序 */
-    private static final String[] CATEGORY_FOLDERS = {
-            "图片", "视频", "音频", "文档", "压缩包", "字体", "其他"
-    };
-
-    /** 扩展名到分类的映射 */
-    private static final Map<String, String> EXTENSION_CATEGORY = buildExtensionCategory();
 
     @Resource
     private DataSource dataSource;
@@ -85,26 +75,19 @@ public class BizDataExportServiceImpl implements BizDataExportService {
     @Override
     public void exportFiles(HttpServletResponse response) throws IOException {
         JSONArray files = devFileApi.getAllFiles("USER");
-        Map<String, List<JSONObject>> grouped = new LinkedHashMap<>();
-        for (String folder : CATEGORY_FOLDERS) {
-            grouped.put(folder, new ArrayList<>());
-        }
-        if (files != null) {
-            for (int i = 0; i < files.size(); i++) {
-                JSONObject file = files.getJSONObject(i);
-                if (file == null) continue;
-                grouped.get(categoryOf(file)).add(file);
-            }
-        }
-
-        List<String> failures = new ArrayList<>();
-        Path zipFile = Files.createTempFile("domain-stream-files-", ".zip");
+        Path zipFile = Files.createTempFile("domain-stream-full-directory-", ".zip");
         try {
+            Set<String> usedEntries = new HashSet<>();
+            Set<String> writtenDirs = new HashSet<>();
+            List<String> failures = new ArrayList<>();
             try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipFile), StandardCharsets.UTF_8)) {
-                for (String folder : CATEGORY_FOLDERS) {
-                    Set<String> usedNames = new HashSet<>();
-                    for (JSONObject file : grouped.get(folder)) {
-                        String entryName = folder + "/" + uniqueName(file, usedNames);
+                if (files != null) {
+                    for (int i = 0; i < files.size(); i++) {
+                        JSONObject file = files.getJSONObject(i);
+                        if (file == null) continue;
+                        String directory = directoryOf(file);
+                        writeDirectoryEntries(zip, directory, writtenDirs);
+                        String entryName = uniquePathName(file, directory, usedEntries);
                         zip.putNextEntry(new ZipEntry(entryName));
                         try {
                             devFileApi.writeFileToStream(
@@ -114,16 +97,18 @@ public class BizDataExportServiceImpl implements BizDataExportService {
                                     zip
                             );
                         } catch (Exception e) {
-                            log.warn("导出文件失败：{}，原因：{}", entryName, e.getMessage());
+                            log.warn("导出完整目录失败：{}，原因：{}", entryName, e.getMessage());
                             failures.add(entryName + "（" + StrUtil.blankToDefault(e.getMessage(), "读取失败") + "）");
                         } finally {
                             zip.closeEntry();
                         }
                     }
                 }
-                writeManifest(zip, grouped, failures);
+                writeFailureManifest(zip, failures);
             }
-            streamTempFile(response, zipFile, "domain-stream-files-" + LocalDateTime.now().format(FILE_TIME) + ".zip", "application/zip");
+            streamTempFile(response, zipFile,
+                    "domain-stream-full-directory-" + LocalDateTime.now().format(FILE_TIME) + ".zip",
+                    "application/zip");
         } finally {
             Files.deleteIfExists(zipFile);
         }
@@ -383,34 +368,54 @@ public class BizDataExportServiceImpl implements BizDataExportService {
         return "`" + StrUtil.blankToDefault(name, "").replace("`", "``") + "`";
     }
 
-    /** 根据后缀归类，未知后缀回退到 DevFile.category */
-    private String categoryOf(JSONObject file) {
-        String suffix = lower(file.getStr("suffix"));
-        if (StrUtil.isBlank(suffix)) {
-            String name = StrUtil.blankToDefault(file.getStr("objName"),
-                    StrUtil.blankToDefault(file.getStr("name"), ""));
-            int dot = name.lastIndexOf('.');
-            if (dot >= 0 && dot < name.length() - 1) suffix = name.substring(dot + 1).toLowerCase(Locale.ROOT);
+    private String uniqueName(JSONObject file, Set<String> used) {
+        String base = sanitizeSegment(file.getStr("name"));
+        if (StrUtil.isBlank(base)) base = sanitizeSegment(file.getStr("objName"));
+        if (StrUtil.isBlank(base)) {
+            base = "file_" + file.getStr("id") + "." + StrUtil.blankToDefault(file.getStr("suffix"), "bin");
         }
-        String category = EXTENSION_CATEGORY.get(suffix);
-        if (StrUtil.isNotBlank(category)) return category;
-        String dbCategory = StrUtil.blankToDefault(file.getStr("category"), "").toUpperCase(Locale.ROOT);
-        switch (dbCategory) {
-            case "IMAGE": return "图片";
-            case "VIDEO": return "视频";
-            case "AUDIO": return "音频";
-            case "DOC": return "文档";
-            default: return "其他";
+        return uniqueWithSuffix(base, used);
+    }
+
+    /** 按文件存储键还原目录，例如 2026/11/24/xxx.jpg */
+    private String directoryOf(JSONObject file) {
+        String fileKey = StrUtil.blankToDefault(file.getStr("fileKey"), "");
+        StringBuilder result = new StringBuilder();
+        for (String segment : fileKey.split("[\\\\/]+")) {
+            String clean = sanitizeSegment(segment);
+            if (StrUtil.isBlank(clean)) continue;
+            if (result.length() > 0) result.append('/');
+            result.append(clean);
+        }
+        return result.toString();
+    }
+
+    /** 显式写出目录条目，让解压工具能直接看到完整文件夹 */
+    private void writeDirectoryEntries(ZipOutputStream zip, String directory, Set<String> written) throws IOException {
+        if (StrUtil.isBlank(directory)) return;
+        StringBuilder current = new StringBuilder();
+        for (String segment : directory.split("/")) {
+            if (current.length() > 0) current.append('/');
+            current.append(segment);
+            String path = current + "/";
+            if (written.add(path.toLowerCase(Locale.ROOT))) {
+                zip.putNextEntry(new ZipEntry(path));
+                zip.closeEntry();
+            }
         }
     }
 
-    private String uniqueName(JSONObject file, Set<String> used) {
-        String raw = StrUtil.blankToDefault(file.getStr("objName"),
-                StrUtil.blankToDefault(file.getStr("name"), file.getStr("id") + "." + StrUtil.blankToDefault(file.getStr("suffix"), "bin")));
-        String base = raw.replaceAll("[\\\\/:*?\"<>|\\u0000-\\u001F]", "_");
-        if (StrUtil.isBlank(base) || ".".equals(base) || "..".equals(base)) {
-            base = "file_" + file.getStr("id") + ".bin";
+    private String uniquePathName(JSONObject file, String directory, Set<String> used) {
+        String base = sanitizeSegment(file.getStr("name"));
+        if (StrUtil.isBlank(base)) base = sanitizeSegment(file.getStr("objName"));
+        if (StrUtil.isBlank(base)) {
+            base = "file_" + file.getStr("id") + "." + StrUtil.blankToDefault(file.getStr("suffix"), "bin");
         }
+        String unique = uniqueWithSuffix(base, used);
+        return StrUtil.isBlank(directory) ? unique : directory + "/" + unique;
+    }
+
+    private String uniqueWithSuffix(String base, Set<String> used) {
         int dot = base.lastIndexOf('.');
         String stem = dot > 0 ? base.substring(0, dot) : base;
         String ext = dot > 0 ? base.substring(dot) : "";
@@ -422,23 +427,19 @@ public class BizDataExportServiceImpl implements BizDataExportService {
         return candidate;
     }
 
-    private void writeManifest(ZipOutputStream zip, Map<String, List<JSONObject>> grouped, List<String> failures)
-            throws IOException {
-        StringBuilder builder = new StringBuilder("域流文件资源导出清单\n");
-        builder.append("导出时间：").append(LocalDateTime.now()).append('\n');
-        builder.append("分类规则：按文件后缀归类，未知后缀回退到文件记录的 category 字段\n\n");
-        int total = 0;
-        for (String folder : CATEGORY_FOLDERS) {
-            int count = grouped.get(folder).size();
-            total += count;
-            builder.append(folder).append("：").append(count).append(" 个\n");
-        }
-        builder.append("合计：").append(total).append(" 个\n");
-        if (!failures.isEmpty()) {
-            builder.append("\n读取失败 ").append(failures.size()).append(" 个：\n");
-            for (String failure : failures) builder.append("- ").append(failure).append('\n');
-        }
-        zip.putNextEntry(new ZipEntry("导出清单.txt"));
+    private String sanitizeSegment(String value) {
+        String clean = StrUtil.blankToDefault(value, "")
+                .replaceAll("[\\\\/:*?\"<>|\\u0000-\\u001F]", "_")
+                .trim();
+        return ".".equals(clean) || "..".equals(clean) ? "" : clean;
+    }
+
+    /** 仅在部分文件读取失败时写入清单，不污染原样目录 */
+    private void writeFailureManifest(ZipOutputStream zip, List<String> failures) throws IOException {
+        if (failures.isEmpty()) return;
+        StringBuilder builder = new StringBuilder("以下文件读取失败，未写入完整目录包：\n");
+        for (String failure : failures) builder.append("- ").append(failure).append('\n');
+        zip.putNextEntry(new ZipEntry("导出失败清单.txt"));
         zip.write(builder.toString().getBytes(StandardCharsets.UTF_8));
         zip.closeEntry();
     }
@@ -449,24 +450,5 @@ public class BizDataExportServiceImpl implements BizDataExportService {
         response.setContentType(contentType);
         String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
-    }
-
-    private String lower(String value) {
-        return StrUtil.blankToDefault(value, "").toLowerCase(Locale.ROOT);
-    }
-
-    private static Map<String, String> buildExtensionCategory() {
-        Map<String, String> map = new LinkedHashMap<>();
-        putAll(map, "图片", "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico", "avif", "heic", "tif", "tiff");
-        putAll(map, "视频", "mp4", "webm", "mov", "avi", "mkv", "flv", "wmv", "m4v", "3gp", "mpg", "mpeg", "ts");
-        putAll(map, "音频", "mp3", "wav", "ogg", "flac", "aac", "m4a", "wma", "aiff");
-        putAll(map, "文档", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "csv", "rtf", "epub");
-        putAll(map, "压缩包", "zip", "rar", "7z", "tar", "gz", "bz2", "xz");
-        putAll(map, "字体", "ttf", "otf", "woff", "woff2", "eot");
-        return map;
-    }
-
-    private static void putAll(Map<String, String> map, String category, String... extensions) {
-        for (String extension : extensions) map.put(extension, category);
     }
 }

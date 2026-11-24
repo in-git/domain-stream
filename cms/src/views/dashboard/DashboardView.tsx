@@ -43,7 +43,7 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
         showToast('数据库备份已导出，浏览器开始下载', 'success');
       } else if (kind === 'files') {
         await api.exportFiles();
-        showToast('文件资源包已导出，浏览器开始下载', 'success');
+        showToast('完整目录包已导出，浏览器开始下载', 'success');
       } else {
         await api.exportUserFiles();
         showToast('用户文件包已导出，浏览器开始下载', 'success');
@@ -109,7 +109,7 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
               ) : (
                 <FileArchive className="w-4 h-4" strokeWidth={1.8} />
               )}
-              导出文件资源
+              导出完整目录
             </button>
           </div>
         </div>

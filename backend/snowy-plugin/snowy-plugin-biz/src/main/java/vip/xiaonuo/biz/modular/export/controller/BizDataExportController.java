@@ -63,8 +63,8 @@ public class BizDataExportController {
         }
     }
 
-    @Operation(summary = "导出文件资源")
-    @CommonLog("导出文件资源")
+    @Operation(summary = "导出完整目录")
+    @CommonLog("导出完整目录")
     @GetMapping(value = "/files", produces = "application/zip")
     public void exportFiles(@RequestParam(required = false) String ticket, HttpServletResponse response) throws IOException {
         try {
