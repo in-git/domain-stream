@@ -377,17 +377,17 @@ public class BizDataExportServiceImpl implements BizDataExportService {
         return uniqueWithSuffix(base, used);
     }
 
-    /** 按文件存储键还原目录，例如 2026/11/24/xxx.jpg */
+    /** 按文件存储键的父级路径还原目录，例如 2026/11/24/xxx.jpg -> 2026/11/24 */
     private String directoryOf(JSONObject file) {
         String fileKey = StrUtil.blankToDefault(file.getStr("fileKey"), "");
-        StringBuilder result = new StringBuilder();
+        List<String> segments = new ArrayList<>();
         for (String segment : fileKey.split("[\\\\/]+")) {
             String clean = sanitizeSegment(segment);
-            if (StrUtil.isBlank(clean)) continue;
-            if (result.length() > 0) result.append('/');
-            result.append(clean);
+            if (StrUtil.isNotBlank(clean)) segments.add(clean);
         }
-        return result.toString();
+        // 最后一段是存储系统里的对象文件名，不是目录，必须排除
+        if (segments.size() <= 1) return "";
+        return String.join("/", segments.subList(0, segments.size() - 1));
     }
 
     /** 显式写出目录条目，让解压工具能直接看到完整文件夹 */
