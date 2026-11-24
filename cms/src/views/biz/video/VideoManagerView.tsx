@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   Edit3,
@@ -36,6 +36,69 @@ interface VideoManagerViewProps {
   permissions?: string[];
 }
 
+/**
+ * 视频卡片预览区：默认只显示封面，鼠标移入才挂载 <video> 并自动播放，
+ * 移出即卸载，避免打开列表时一次性为所有卡片加载视频流。
+ */
+function VideoCardPreview({
+  videoUrl,
+  coverUrl,
+  title,
+  hovered,
+}: {
+  videoUrl: string;
+  coverUrl?: string;
+  title: string;
+  hovered: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!hovered) {
+      const video = videoRef.current;
+      if (video) {
+        video.pause();
+        video.currentTime = 0;
+      }
+      return;
+    }
+    const video = videoRef.current;
+    if (video) void video.play().catch(() => {});
+  }, [hovered]);
+
+  return (
+    <div className="relative aspect-video bg-black overflow-hidden">
+      <MediaImage
+        src={coverUrl}
+        alt={`${title} 封面`}
+        fallbackLabel={title}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
+          hovered ? 'opacity-0' : 'opacity-100'
+        }`}
+      />
+      {hovered && (
+        <video
+          ref={videoRef}
+          src={toPlayableVideoUrl(videoUrl)}
+          muted
+          loop
+          playsInline
+          controls
+          autoPlay
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-contain"
+          aria-label={`播放 ${title}`}
+        />
+      )}
+      {!hovered && (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+          <Play className="w-9 h-9 text-white fill-white/90" strokeWidth={1.4} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function VideoManagerView({
   videos,
   onRefresh,
@@ -53,6 +116,8 @@ export function VideoManagerView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** 待删除的视频（单条或批量），非空时打开通用删除确认模态框 */
   const [pendingDelete, setPendingDelete] = useState<VideoItem[]>([]);
+  /** 当前悬停预览的视频 ID，同一时刻只有一个卡片加载并播放视频 */
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const { options: categoryOptions } = usePublishCategories('VIDEO');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
@@ -315,15 +380,14 @@ export function VideoManagerView({
               <div
                 className="relative aspect-video bg-black overflow-hidden group"
                 onClick={(event) => event.stopPropagation()}
+                onMouseEnter={() => setHoveredId(item.id)}
+                onMouseLeave={() => setHoveredId((id) => (id === item.id ? null : id))}
               >
-                <video
-                  src={toPlayableVideoUrl(item.videoUrl)}
-                  poster={item.coverUrl || undefined}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="w-full h-full object-contain"
-                  aria-label={`播放 ${item.title}`}
+                <VideoCardPreview
+                  videoUrl={item.videoUrl}
+                  coverUrl={item.coverUrl}
+                  title={item.title}
+                  hovered={hoveredId === item.id}
                 />
                 {canDelete && (
                   <button

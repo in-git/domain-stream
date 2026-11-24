@@ -186,12 +186,13 @@ export const authApi = {
   },
 
   /** C 端注册 */
-  register(account: string, password: string, validCode: string, validCodeReqNo: string): Promise<void> {
+  register(account: string, password: string, validCode: string, validCodeReqNo: string, nickname?: string): Promise<void> {
     return post<void>('/auth/c/register', {
       account,
       password: sm2Encrypt(password),
       validCode,
       validCodeReqNo,
+      nickname: nickname || '',
     });
   },
 
@@ -207,6 +208,21 @@ export const authApi = {
   getLoginUser(token?: string): Promise<SnowyClientUser> {
     const target = token || getSnowyToken() || undefined;
     return get<SnowyClientUser>('/auth/c/getLoginUser', target ? { token: target } : undefined);
+  },
+
+  /** 获取当前登录用户资料（biz profile 模块） */
+  getProfile(): Promise<{
+    id?: string;
+    name?: string;
+    nickname?: string;
+    signature?: string;
+  }> {
+    return get('/client/c/profile/get');
+  },
+
+  /** 更新当前登录用户资料（昵称、简介，biz profile 模块） */
+  updateProfile(nickname: string, bio: string): Promise<void> {
+    return post<void>('/client/c/profile/update', { nickname, bio });
   },
 
   /** C 端通过旧密码修改登录密码 */

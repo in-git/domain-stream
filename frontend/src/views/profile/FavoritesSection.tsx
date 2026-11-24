@@ -182,7 +182,7 @@ export function FavoritesSection({
     <>
     <section
       aria-labelledby={`${mode}-heading`}
-      className="rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 space-y-5"
+      className="space-y-5 rounded-none bg-white p-5 sm:rounded-3xl sm:border sm:border-black/[0.06] sm:p-7 dark:bg-[#161618] sm:dark:border-white/[0.08]"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
@@ -211,17 +211,17 @@ export function FavoritesSection({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setTab(item.id)}
-                className={`relative px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-xs ${
+                className={`relative px-2.5 py-1 text-[11px] font-medium transition-colors sm:px-3 sm:py-1.5 sm:text-xs ${
                   isActive
                     ? 'text-[#1D1D1F] dark:text-[#F5F5F7]'
-                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
+                    : 'text-[#8E8E93] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
                 }`}
               >
                 {isActive && (
                   <motion.span
                     layoutId={meta.indicator}
                     transition={SWIFTUI_SMOOTH}
-                    className="absolute inset-0 rounded-full bg-white dark:bg-[#3A3A3C] shadow-xs"
+                    className="absolute inset-x-1 -bottom-1 h-0.5 rounded-full bg-[#1D1D1F] dark:bg-[#F5F5F7]"
                   />
                 )}
                 <span className="relative">
@@ -258,14 +258,14 @@ export function FavoritesSection({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={SWIFTUI_SMOOTH}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5"
           >
             {visibleEntries.map((entry) => {
               const { label, Icon } = KIND_META[entry.kind];
               return (
                 <li
                   key={`${entry.kind}-${entry.id}`}
-                  className="group relative rounded-none sm:rounded-2xl overflow-hidden bg-[#FBFBFD] dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] transition-colors hover:border-black/[0.12] dark:hover:border-white/[0.16]"
+                  className="group relative overflow-hidden rounded-xl bg-[#111111] shadow-sm ring-1 ring-black/[0.06] transition duration-300 hover:-translate-y-0.5 hover:shadow-xl sm:rounded-2xl dark:ring-white/[0.08]"
                 >
                   <button
                     type="button"
@@ -277,20 +277,21 @@ export function FavoritesSection({
                       src={entry.cover}
                       alt={entry.title}
                       fallbackTitle={entry.title}
-                      className="w-full aspect-[16/10]"
+                      className="aspect-[3/4] w-full transition-transform duration-500 group-hover:scale-[1.04]"
                     />
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
                     <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-md">
-                      <Icon className="w-3 h-3" />
+                      <Icon className="h-3 w-3" />
                       {label}
                     </span>
-                    <div className="p-3 space-y-1">
-                      <p className="text-[13px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
+                    <span className="absolute inset-x-0 bottom-0 block p-3">
+                      <span className="block text-[13px] font-medium leading-snug text-white line-clamp-2">
                         {entry.title}
-                      </p>
-                      <p className="text-[11px] text-[#6E6E73] dark:text-[#98989D] truncate">
+                      </span>
+                      <span className="mt-1 block truncate text-[11px] text-white/60">
                         {entry.meta}
-                      </p>
-                    </div>
+                      </span>
+                    </span>
                   </button>
 
                   <button

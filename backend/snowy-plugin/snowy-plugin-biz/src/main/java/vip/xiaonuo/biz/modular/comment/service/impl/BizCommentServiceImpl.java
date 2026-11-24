@@ -364,8 +364,7 @@ public class BizCommentServiceImpl extends ServiceImpl<BizCommentMapper, BizComm
 
     private String displayNameOf(SaBaseClientLoginUser user) {
         if (user == null) return null;
-        if (StrUtil.isNotBlank(user.getNickname())) return user.getNickname();
-        if (StrUtil.isNotBlank(user.getName())) return user.getName();
-        return StrUtil.isBlank(user.getAccount()) ? null : user.getAccount();
+        // 对外只展示昵称，绝不回退到姓名、账号或邮箱，避免暴露账户信息
+        return StrUtil.isBlank(user.getNickname()) ? null : user.getNickname();
     }
 }

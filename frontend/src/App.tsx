@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { startVisitorTracking, trackPageView } from './lib/visitor';
 import { loadSystemInfo } from './lib/systemInfo';
 import { LoginView } from './views/auth/LoginView';
 import { RegisterView } from './views/auth/RegisterView';
 import { CallbackView } from './views/auth/CallbackView';
 import { ProfilePage } from './views/profile/ProfilePage';
-import { isAnySectionId, isSectionId, LAST_SECTION_KEY } from './views/constants';
-import { usePersistentState } from './views/usePersistentState';
-import { useUserSession } from './views/useUserSession';
-import { usePortalData } from './views/usePortalData';
-import { usePersistentPlayer } from './views/usePersistentPlayer';
+import {
+  isAnySectionId,
+  isSectionId,
+  LAST_SECTION_KEY,
+  usePersistentState,
+  useUserSession,
+  usePortalData,
+  usePersistentPlayer,
+} from './views/app';
 import { PortalShell } from './views/shell/PortalShell';
 
 /** 应用入口：只负责组合 hooks、路由分发与懒加载触发，视图细节在 views/ 下 */
@@ -128,6 +133,44 @@ export default function App() {
       {session.route.kind === 'login' && (
         <LoginView onSuccess={session.handleAuthSuccess} onClose={session.closeLogin} />
       )}
+
+      {/* 退出登录二次确认弹窗，挂到 body 顶层确保盖过所有页面与浮层 */}
+      {session.logoutConfirmOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-6 backdrop-blur-sm"
+            onClick={session.closeLogoutConfirm}
+          >
+            <div
+              className="w-full max-w-[320px] rounded-2xl bg-white p-5 text-center shadow-2xl dark:bg-[#1C1C1E]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2 className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                退出登录
+              </h2>
+              <p className="mt-2 text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+                确定要退出当前账号吗？
+              </p>
+              <div className="mt-5 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={session.closeLogoutConfirm}
+                  className="flex-1 rounded-xl bg-[#F2F2F7] py-2.5 text-[13px] font-medium text-[#1D1D1F] dark:bg-[#2C2C2E] dark:text-[#F5F5F7]"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={session.doLogout}
+                  className="flex-1 rounded-xl bg-[#FF3B30] py-2.5 text-[13px] font-medium text-white"
+                >
+                  退出
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

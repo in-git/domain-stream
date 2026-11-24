@@ -234,6 +234,25 @@ export function categoryNameMap(categories: PortalCategory[]): Map<string, strin
 }
 
 /**
+ * 分类筛选标签 -> 真实分类编码。
+ * 前端展示的是分类名称，内容表存的是编码，查询前必须转换。
+ */
+export function resolveCategoryCode(
+  categories: PortalCategory[],
+  value: string,
+  module?: CategoryModule
+): string {
+  const target = (value || '').trim();
+  if (!target || target === '全部') return target;
+  const matched = categories.find((item) => {
+    const itemModule = (item.module || '').toUpperCase();
+    const moduleOk = !module || itemModule === module || itemModule === 'COMMON';
+    return moduleOk && (item.code === target || item.name === target);
+  });
+  return matched?.code || target;
+}
+
+/**
  * 分类一律以「分类表」为准（categoryNameMap），这里不再维护静态映射：
  * 曾经写死的 VIDEO_CATEGORY_MAP 会把接口新增的分类强行改成旧的三个名字，
  * 导致客户端分类标签与实际配置不一致。

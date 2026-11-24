@@ -517,7 +517,7 @@ export default function MessagesView({
                       {currentUser.name}
                     </div>
                     <div className="text-[12px] text-[#86868B] truncate">
-                      {currentUser.email || '以登录身份发布'}
+                      以 {currentUser.name || '登录用户'} 的身份发布
                     </div>
                   </div>
                 </div>

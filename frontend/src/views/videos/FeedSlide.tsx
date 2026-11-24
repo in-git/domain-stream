@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react';
 import {
@@ -17,6 +18,7 @@ import {
 import type { VideoItem } from '../../data/content';
 import { SWIFTUI_BOUNCY } from '../../lib/motion';
 import { Tooltip } from '../../components/Tooltip';
+import { ResilientImage } from '../../components/ResilientImage';
 import { CommentPanel } from '../../components/CommentPanel.tsx';
 import { useCommentEnabled } from '../../lib/systemInfo.ts';
 import { countVideoViewOnce, formatTime } from './shared';
@@ -51,6 +53,13 @@ interface FeedSlideProps {
   onMiniExpand?: () => void;
   /** 是否显示全屏按钮（模态框本身已占满全屏时可隐藏） */
   showFullscreen?: boolean;
+  /**
+   * 是否把标题浮层渲染到 body 顶层。
+   * 主页沉浸流所在的 Swiper slide 带 transform，会劫持内部 fixed 的包含块，
+   * 导致标题无法与视口固定的进度条对齐；移到 body 可脱离该包含块。
+   * 由外层根据模式/视图控制，避免切模块或打开模态框后残留。
+   */
+  captionToBody?: boolean;
 }
 
 /** 沉浸刷看的单屏播放器；PC 与移动端共用同一播放器实例，避免重建造成卡顿。 */
@@ -82,6 +91,7 @@ export function FeedSlide({
   onMiniClose,
   onMiniExpand,
   showFullscreen = true,
+  captionToBody = false,
 }: FeedSlideProps) {
   const commentsEnabled = useCommentEnabled();
   const playerRef = useRef<MediaPlayerInstance | null>(null);
@@ -129,7 +139,8 @@ export function FeedSlide({
       if (timer) window.clearTimeout(timer);
       window.clearTimeout(giveUp);
     };
-  }, [video.id, savedTime]);
+    // active 加入依赖：播放器现在仅在 active 时挂载，切到该卡片时需重新尝试恢复进度
+  }, [video.id, savedTime, active]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -181,49 +192,170 @@ export function FeedSlide({
     [video.src],
   );
 
+  const captionInner = (
+    <>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
+        <span>{video.category}</span>
+        <span aria-hidden="true">·</span>
+        <span>{video.date}</span>
+        {Number(video.viewCount) > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{video.viewCount} 次播放</span>
+          </>
+        )}
+      </div>
+      <h2 className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug">
+        {video.title}
+      </h2>
+      <p className="text-xs sm:text-sm text-white/75 line-clamp-2 leading-relaxed">
+        {video.subtitle}
+      </p>
+    </>
+  );
+
+  const actionRailInner = (
+    <>
+      <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
+        <div className="flex flex-col items-center">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.84 }}
+            transition={SWIFTUI_BOUNCY}
+            onClick={onToggleLike}
+            aria-label={liked ? '取消喜欢' : '喜欢'}
+            className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
+              liked
+                ? 'bg-[#FF2C55]/25 border-[#FF2C55]/60 text-[#FF2C55]'
+                : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
+            }`}
+          >
+            <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
+          </motion.button>
+          <span className="mt-0.5 text-[11px] font-medium tabular-nums">
+            {video.likeCount || 0}
+          </span>
+        </div>
+      </Tooltip>
+
+      <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.84 }}
+          transition={SWIFTUI_BOUNCY}
+          onClick={onToggleSave}
+          aria-label={saved ? '取消收藏' : '收藏'}
+          className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
+            saved
+              ? 'bg-[#FFB800]/25 border-[#FFB800]/60 text-[#FFD60A]'
+              : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
+          }`}
+        >
+          <Bookmark className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
+        </motion.button>
+      </Tooltip>
+
+      {commentsEnabled && (
+        <Tooltip label="评论" side="left">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.84 }}
+            onClick={() => setCommentOpen(true)}
+            aria-label="查看评论"
+            className="relative w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
+          >
+            <MessageCircle className="w-5 h-5" />
+            {!!video.commentCount && (
+              <span className="absolute -top-1 -right-1 rounded-full bg-[#0071E3] px-1.5 text-[10px] font-medium tabular-nums">
+                {video.commentCount}
+              </span>
+            )}
+          </motion.button>
+        </Tooltip>
+      )}
+
+      {showFullscreen && (
+        <Tooltip label={isFullscreen ? '退出全屏' : '全屏'} side="left">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.88 }}
+            onClick={onToggleFullscreen}
+            aria-label={isFullscreen ? '退出全屏' : '全屏播放'}
+            className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
+          >
+            {isFullscreen ? (
+              <Minimize className="w-5 h-5" />
+            ) : (
+              <Maximize className="w-5 h-5" />
+            )}
+          </motion.button>
+        </Tooltip>
+      )}
+
+      <Tooltip label={isMuted ? '取消静音' : '静音'} side="left">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.88 }}
+          onClick={onToggleMute}
+          aria-label={isMuted ? '取消静音' : '静音'}
+          className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
+        >
+          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        </motion.button>
+      </Tooltip>
+    </>
+  );
+
   return (
     <div data-video-stage className="relative w-full h-full bg-black overflow-hidden">
-      <MediaPlayer
-        ref={setPlayerRef}
-        poster={video.cover}
-        title={video.title}
-        playsInline
-        loop
-        // 只给 active 项挂载 src：非 active 的 slide（含 loop 副本）不设置源，
-        // 从根本上避免十几个播放器同时预加载同一个 /public/file/stream。
-        // 不设 load/preload，保持默认加载策略，保证 active 项能正常播放。
-        src={active ? source : undefined}
-        posterLoad="eager"
-        muted={isMuted}
-        playbackRate={playbackRate}
-        className="absolute inset-0 w-full h-full"
-        onClick={active ? onTogglePlay : undefined}
-        onPlay={() => {
-          setPlaying(true);
-          setLoading(false);
-          countVideoViewOnce(video.id);
-        }}
-        onPause={() => setPlaying(false)}
-        onCanPlay={() => {
-          setLoading(false);
-          // 视频源就绪后立即播放当前 active 项：点选卡片时 src 可能刚挂载，
-          // 依赖 onCanPlay 主动 play 比 effect 里的 play 更可靠。
-          const player = playerRef.current;
-          if (active && player && player.paused) {
-            player.muted = isMuted;
-            void player.play().catch(() => {});
-          }
-        }}
-        onWaiting={() => setLoading(true)}
-        onPlaying={() => setLoading(false)}
-        onError={() => setLoading(false)}
-        onTimeUpdate={(detail) => handleTimeUpdate(detail.currentTime)}
-        onDurationChange={(value) => {
-          if (active) onDurationChange(value);
-        }}
-      >
-        <MediaProvider className="w-full h-full" />
-      </MediaPlayer>
+      {active ? (
+        <MediaPlayer
+          ref={setPlayerRef}
+          poster={video.cover}
+          title={video.title}
+          playsInline
+          loop
+          src={source}
+          posterLoad="eager"
+          muted={isMuted}
+          playbackRate={playbackRate}
+          className="absolute inset-0 w-full h-full"
+          // 迷你窗双击用于还原播放器，禁用播放器自身的点击切换以免冲突；播放用左下角按钮
+          onClick={mini ? undefined : onTogglePlay}
+          onPlay={() => {
+            setPlaying(true);
+            setLoading(false);
+            countVideoViewOnce(video.id);
+          }}
+          onPause={() => setPlaying(false)}
+          onCanPlay={() => {
+            setLoading(false);
+            // 视频源就绪后立即播放当前 active 项：点选卡片时播放器可能刚挂载，
+            // 依赖 onCanPlay 主动 play 比 effect 里的 play 更可靠。
+            const player = playerRef.current;
+            if (player && player.paused) {
+              player.muted = isMuted;
+              void player.play().catch(() => {});
+            }
+          }}
+          onWaiting={() => setLoading(true)}
+          onPlaying={() => setLoading(false)}
+          onError={() => setLoading(false)}
+          onTimeUpdate={(detail) => handleTimeUpdate(detail.currentTime)}
+          onDurationChange={onDurationChange}
+        >
+          <MediaProvider className="w-full h-full" />
+        </MediaPlayer>
+      ) : (
+        /* 未播放卡片只显示封面，不挂载 <video>，避免页面预加载几十个视频流 */
+        <ResilientImage
+          src={video.cover}
+          alt={video.title}
+          fallbackTitle={video.title}
+          priority
+          className="absolute inset-0 w-full h-full"
+        />
+      )}
 
       {active && (
         <>
@@ -266,6 +398,8 @@ export function FeedSlide({
             <>
               <button
                 type="button"
+                data-no-drag
+                onDoubleClick={(event) => event.stopPropagation()}
                 onClick={onMiniExpand}
                 aria-label="回到视频"
                 title="回到视频"
@@ -275,6 +409,8 @@ export function FeedSlide({
               </button>
               <button
                 type="button"
+                data-no-drag
+                onDoubleClick={(event) => event.stopPropagation()}
                 onClick={onMiniClose}
                 aria-label="关闭迷你播放器"
                 title="关闭"
@@ -285,124 +421,63 @@ export function FeedSlide({
             </>
           )}
 
-          {!mini && (
+          {/* 右侧操作栏：移动端由下方 portal 渲染（脱离 Swiper transform）；桌面端留在 slide 内 */}
+          {!mini && captionToBody && (
+            <div className="absolute right-5 bottom-[110px] hidden md:flex flex-col items-center gap-4 z-20 text-white">
+              {actionRailInner}
+            </div>
+          )}
+          {!mini && !captionToBody && (
             <div className="absolute right-3 sm:right-5 bottom-[110px] flex flex-col items-center gap-4 z-20 text-white">
-              <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
-                <div className="flex flex-col items-center">
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.84 }}
-                    transition={SWIFTUI_BOUNCY}
-                    onClick={onToggleLike}
-                    aria-label={liked ? '取消喜欢' : '喜欢'}
-                    className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
-                      liked
-                        ? 'bg-[#FF2C55]/25 border-[#FF2C55]/60 text-[#FF2C55]'
-                        : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
-                    }`}
-                  >
-                    <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
-                  </motion.button>
-                  <span className="mt-0.5 text-[11px] font-medium tabular-nums">
-                    {video.likeCount || 0}
-                  </span>
-                </div>
-              </Tooltip>
-
-              <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.84 }}
-                  transition={SWIFTUI_BOUNCY}
-                  onClick={onToggleSave}
-                  aria-label={saved ? '取消收藏' : '收藏'}
-                  className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
-                    saved
-                      ? 'bg-[#FFB800]/25 border-[#FFB800]/60 text-[#FFD60A]'
-                      : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
-                  }`}
-                >
-                  <Bookmark className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
-                </motion.button>
-              </Tooltip>
-
-              {commentsEnabled && (
-                <Tooltip label="评论" side="left">
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.84 }}
-                    onClick={() => setCommentOpen(true)}
-                    aria-label="查看评论"
-                    className="relative w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
-                  >
-                    <MessageCircle className="w-5 h-5" />
-                    {!!video.commentCount && (
-                      <span className="absolute -top-1 -right-1 rounded-full bg-[#0071E3] px-1.5 text-[10px] font-medium tabular-nums">
-                        {video.commentCount}
-                      </span>
-                    )}
-                  </motion.button>
-                </Tooltip>
-              )}
-
-              {showFullscreen && (
-                <Tooltip label={isFullscreen ? '退出全屏' : '全屏'} side="left">
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.88 }}
-                    onClick={onToggleFullscreen}
-                    aria-label={isFullscreen ? '退出全屏' : '全屏播放'}
-                    className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
-                  >
-                    {isFullscreen ? (
-                      <Minimize className="w-5 h-5" />
-                    ) : (
-                      <Maximize className="w-5 h-5" />
-                    )}
-                  </motion.button>
-                </Tooltip>
-              )}
-
-              <Tooltip label={isMuted ? '取消静音' : '静音'} side="left">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.88 }}
-                  onClick={onToggleMute}
-                  aria-label={isMuted ? '取消静音' : '静音'}
-                  className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
-                >
-                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                </motion.button>
-              </Tooltip>
+              {actionRailInner}
             </div>
           )}
 
+          {/*
+            标题浮层：
+            - captionToBody（主页沉浸流）：标题通过 portal 渲染到 body，脱离 Swiper 的
+              transform 包含块，才能与视口固定的进度条对齐。位置 fixed 到底部导航上方。
+            - 否则（迷你窗 / 全屏模态框）：留在 slide 内 absolute 定位。
+          */}
+          {captionToBody && !mini && active &&
+            createPortal(
+              <div className="fixed bottom-[calc(3rem+14px)] left-0 right-0 z-30 text-white pointer-events-none px-4 md:hidden">
+                <div className="space-y-1.5 max-w-2xl pr-16">{captionInner}</div>
+              </div>,
+              document.body,
+            )}
+
+          {/*
+            右侧操作栏同样 portal 到 body，与标题/进度条共用视口参考系。
+            bottom-[110px] 保持与原 slide 内 absolute 定位一致的视觉位置。
+          */}
+          {captionToBody && !mini && active &&
+            createPortal(
+              <div className="fixed bottom-[110px] right-3 z-30 text-white pointer-events-none md:hidden">
+                <div className="flex flex-col items-center gap-4 pointer-events-auto">
+                  {actionRailInner}
+                </div>
+              </div>,
+              document.body,
+            )}
+
           <div
-            className={`absolute bottom-0 left-0 right-0 text-white z-10 pointer-events-none ${
+            className={`left-0 right-0 text-white z-10 pointer-events-none ${
               mini
-                ? 'p-2'
-                : 'space-y-3 pt-4 pb-[calc(3rem_+_max(0.5rem,env(safe-area-inset-bottom)))] sm:pl-6 sm:pr-24 sm:pt-6 md:pb-6'
+                ? 'absolute bottom-0 p-2'
+                : captionToBody
+                  ? 'space-y-3 pt-4 sm:pl-6 sm:pr-24 sm:pt-6'
+                  : 'absolute bottom-0 space-y-3 pt-4 pb-[calc(3rem+14px)] sm:pl-6 sm:pr-24 sm:pt-6 md:pb-6'
             }`}
           >
-            {!mini && (
+            {!mini && captionToBody && (
+              <div className="hidden md:block space-y-1.5 max-w-2xl pl-4 pr-20 sm:pl-0 sm:pr-0">
+                {captionInner}
+              </div>
+            )}
+            {!mini && !captionToBody && (
               <div className="space-y-1.5 max-w-2xl pl-4 pr-20 sm:pl-0 sm:pr-0">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-white/80">
-                  <span>{video.category}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{video.date}</span>
-                  {Number(video.viewCount) > 0 && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>{video.viewCount} 次播放</span>
-                    </>
-                  )}
-                </div>
-                <h2 className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug">
-                  {video.title}
-                </h2>
-                <p className="text-xs sm:text-sm text-white/75 line-clamp-2 leading-relaxed">
-                  {video.subtitle}
-                </p>
+                {captionInner}
               </div>
             )}
 
@@ -461,6 +536,7 @@ export function FeedSlide({
 
       <CommentPanel
         drawer
+        portalToBody
         open={commentOpen && !mini}
         targetType="VIDEO"
         targetId={video.id}

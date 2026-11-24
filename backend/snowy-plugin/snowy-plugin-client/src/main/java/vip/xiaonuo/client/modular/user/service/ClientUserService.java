@@ -328,6 +328,14 @@ public interface ClientUserService extends IService<ClientUser> {
     ClientUser createUserWithAccount(String account, String password, String name);
 
     /**
+     * 根据账号、密码、姓名和昵称创建用户
+     *
+     * @author domain-stream
+     * @date 2026/11/24
+     **/
+    ClientUser createUserWithAccount(String account, String password, String name, String nickname);
+
+    /**
      * 判断当前用户密码是否过期
      *
      * @author xuyuxiang
@@ -366,6 +374,14 @@ public interface ClientUserService extends IService<ClientUser> {
      * @date 2022/8/25 15:16
      **/
     void doRegister(String account, String password);
+
+    /**
+     * 执行注册（携带昵称）
+     *
+     * @author domain-stream
+     * @date 2026/11/24
+     **/
+    void doRegister(String account, String password, String nickname);
 
     /**
      * 获取用户扩展信息，没有则创建

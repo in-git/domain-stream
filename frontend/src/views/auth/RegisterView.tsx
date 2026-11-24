@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowRight, Check, Eye, EyeOff, Loader2, Lock, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight, AtSign, Check, Eye, EyeOff, Loader2, Lock, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AuthLayout } from './AuthLayout';
 import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
@@ -11,6 +11,7 @@ const labelClass = 'block text-[13px] font-medium text-[#6E6E73] dark:text-[#989
 
 export function RegisterView() {
   const [account, setAccount] = useState('');
+  const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validCode, setValidCode] = useState('');
@@ -37,6 +38,10 @@ export function RegisterView() {
       setError('请输入账号');
       return;
     }
+    if (!nickname.trim()) {
+      setError('请输入昵称');
+      return;
+    }
     if (!password) {
       setError('请输入密码');
       return;
@@ -48,7 +53,7 @@ export function RegisterView() {
     setError('');
     setSubmitting(true);
     try {
-      await authApi.register(account.trim(), password, validCode.trim(), captcha?.validCodeReqNo || '');
+      await authApi.register(account.trim(), password, validCode.trim(), captcha?.validCodeReqNo || '', nickname.trim());
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败，请稍后重试');
@@ -79,7 +84,7 @@ export function RegisterView() {
             <Check className="w-10 h-10" />
           </div>
           <div>
-            <p className="text-[18px] font-medium">欢迎加入，{account.trim()}</p>
+            <p className="text-[18px] font-medium">欢迎加入，{nickname.trim()}</p>
             <p className="mt-2 text-[13px] text-[#86868B]">你的账号已创建完成，请使用账号密码登录。</p>
           </div>
           <motion.button
@@ -126,6 +131,24 @@ export function RegisterView() {
               value={account}
               onChange={(event) => setAccount(event.target.value)}
               placeholder="请输入账号"
+              className={`${fieldClass} pl-12 pr-5`}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="register-nickname" className={labelClass}>
+            昵称
+          </label>
+          <div className="relative">
+            <AtSign className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="register-nickname"
+              type="text"
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              placeholder="请输入昵称（评论与互动中展示）"
+              maxLength={24}
               className={`${fieldClass} pl-12 pr-5`}
             />
           </div>

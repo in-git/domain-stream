@@ -570,7 +570,7 @@ export default function App() {
           ) : route.module === 'messages' ? (
             <MessageView permissions={permissions} />
           ) : route.module === 'comments' ? (
-            <CommentView permissions={permissions} onBack={() => goModule('dashboard')} />
+            <CommentView permissions={permissions} />
           ) : route.module === 'files' ? (
             <FileCenterView />
           ) : route.module === 'materials' ? (

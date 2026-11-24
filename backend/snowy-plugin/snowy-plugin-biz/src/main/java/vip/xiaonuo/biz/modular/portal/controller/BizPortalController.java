@@ -59,6 +59,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 前台门户接口控制器
@@ -128,9 +129,27 @@ public class BizPortalController {
     @GetMapping("/public/videos")
     public CommonResult<List<BizVideo>> videos(@RequestParam(value = "category", required = false) String category) {
         LambdaQueryWrapper<BizVideo> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(BizVideo::getStatus, "PUBLISHED")
-                .eq(StrUtil.isNotBlank(category) && !"全部".equals(category), BizVideo::getCategory, category)
-                .last("ORDER BY RAND()");
+        queryWrapper.eq(BizVideo::getStatus, "PUBLISHED");
+
+        String categoryFilter = StrUtil.blankToDefault(category, "").trim();
+        if (StrUtil.isNotBlank(categoryFilter) && !"全部".equals(categoryFilter)) {
+            // 内容表存分类编码；前台分类标签是名称，这里同时兼容编码或名称查询
+            LambdaQueryWrapper<BizCategory> categoryQuery = new LambdaQueryWrapper<>();
+            categoryQuery.eq(BizCategory::getStatus, "ENABLE")
+                    .and(wrapper -> wrapper.eq(BizCategory::getCode, categoryFilter)
+                            .or().eq(BizCategory::getName, categoryFilter));
+            Set<String> categoryCodes = bizCategoryMapper.selectList(categoryQuery).stream()
+                    .map(BizCategory::getCode)
+                    .filter(StrUtil::isNotBlank)
+                    .collect(Collectors.toSet());
+            if (!categoryCodes.isEmpty()) {
+                queryWrapper.in(BizVideo::getCategory, categoryCodes);
+            } else {
+                // 兼容历史数据直接存分类名称的情况
+                queryWrapper.eq(BizVideo::getCategory, categoryFilter);
+            }
+        }
+        queryWrapper.last("ORDER BY RAND()");
         return CommonResult.data(bizVideoMapper.selectList(queryWrapper));
     }
 

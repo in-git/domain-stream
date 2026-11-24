@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { INITIAL_PROFILE, type UserProfile } from '../data/content';
-import type { UserBasicInfo } from './profile/ProfileView';
+import { INITIAL_PROFILE, type UserProfile } from '../../data/content';
+import type { UserBasicInfo } from '../profile/ProfileView';
 import {
   authApi,
   cacheClientUser,
@@ -8,9 +8,9 @@ import {
   getSnowyToken,
   setSnowyToken,
   type SnowyClientUser,
-} from '../lib/snowyAuth';
-import { currentRoute, navigate, subscribeRoute, type RouteInfo } from '../lib/router';
-import { likeApi } from '../lib/api';
+} from '../../lib/snowyAuth';
+import { currentRoute, navigate, subscribeRoute, type RouteInfo } from '../../lib/router';
+import { likeApi } from '../../lib/api';
 import {
   FAVORITES_KEY,
   LEGACY_FAVORITES_KEY,
@@ -26,10 +26,12 @@ export function useUserSession() {
   const [loginReturnPath, setLoginReturnPath] = useState('/');
   const [isDark, setIsDark] = usePersistentState<boolean>('lumina:dark', false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getSnowyToken());
+  /** 退出登录二次确认弹窗开关 */
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(() => getCachedClientUser()?.id || '');
   const [accountEmail, setAccountEmail] = useState(() => {
     const cached = getCachedClientUser();
-    return cached?.account || cached?.email || '';
+    return cached?.account || '';
   });
   const [userInfo, setUserInfo] = useState<UserBasicInfo>(() => {
     const cached = getCachedClientUser();
@@ -129,7 +131,7 @@ export function useUserSession() {
   const applyUser = useCallback(
     (user: SnowyClientUser) => {
       setCurrentUserId(user.id || '');
-      setAccountEmail(user.account || user.email || '');
+      setAccountEmail(user.account || '');
       setUserInfo({
         email: user.email || '',
         phone: user.phone || '',
@@ -139,10 +141,12 @@ export function useUserSession() {
         latestLoginAddress: user.latestLoginAddress || '',
       });
       cacheClientUser(user);
+      // 昵称是唯一对外展示名：不再回退到姓名或账号，避免把账户名当成昵称
+      const displayNickname = user.nickname || user.name || '用户';
       setProfile((prev) => ({
         ...prev,
-        name: user.nickname || user.name || user.account,
-        handle: user.account ? `@${user.account}` : '',
+        name: displayNickname,
+        handle: `@${displayNickname}`,
         bio: user.signature || '',
         avatar: user.avatar || prev.avatar,
       }));
@@ -235,7 +239,8 @@ export function useUserSession() {
     }
   }, [setFavoriteBuckets]);
 
-  const handleLogout = useCallback(() => {
+  /** 真正执行退出（供二次确认弹窗确认后调用） */
+  const doLogout = useCallback(() => {
     void authApi.logout().finally(() => {
       setIsLoggedIn(false);
       setCurrentUserId('');
@@ -243,9 +248,13 @@ export function useUserSession() {
       setUserInfo({});
       setProfile(INITIAL_PROFILE);
       setLikeCounts({});
+      setLogoutConfirmOpen(false);
       navigate('/', true);
     });
   }, [setProfile]);
+
+  /** 点击退出先弹出二次确认，不直接退出 */
+  const handleLogout = useCallback(() => setLogoutConfirmOpen(true), []);
 
   const goRegister = useCallback(() => navigate('/register'), []);
   const goProfile = useCallback(() => {
@@ -273,6 +282,9 @@ export function useUserSession() {
     toggleLike,
     handleAuthSuccess,
     handleLogout,
+    doLogout,
+    logoutConfirmOpen,
+    closeLogoutConfirm: () => setLogoutConfirmOpen(false),
     goLogin,
     goRegister,
     goProfile,

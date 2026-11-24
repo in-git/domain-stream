@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { MessageCircle, Send, Trash2, X } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
+import { Copy, MessageCircle, Send, Trash2, X } from 'lucide-react';
 import { commentApi, type PortalComment } from '../lib/api.ts';
 import { requireCommentLogin } from '../lib/commentLogin.ts';
 import { useCommentEnabled } from '../lib/systemInfo.ts';
@@ -14,11 +22,15 @@ interface CommentPanelProps {
   embedded?: boolean;
   /** PC 侧边抽屉模式：视频评论使用，与播放列表侧边栏一致；移动端自动改为底部弹层 */
   drawer?: boolean;
+  /** 是否把弹层渲染到 document.body 顶层。视频沉浸流需开启，避免被 Swiper slide 的低层级父容器及标题浮层遮挡 */
+  portalToBody?: boolean;
 }
 
 interface ReplyTarget {
   id: string;
   nickname: string;
+  /** 被回复评论的内容，用于输入框提示文本 */
+  content: string;
 }
 
 function commentTime(value?: string): string {
@@ -35,10 +47,25 @@ function commentTime(value?: string): string {
 
 function displayName(user: SnowyClientUser | null): string {
   if (!user) return '';
-  return user.nickname || user.name || user.account || user.email || '';
+  // 评论对外只展示昵称，绝不回退到姓名、账号或邮箱
+  return user.nickname || user.name || '';
 }
 
-/** 内容评论区：扁平数据按 parentId 组装无限层级，支持逐层回复与自删。 */
+/** 把正文里的 @提及渲染成蓝色，其余文字保持原色（抖音风格） */
+function renderMentions(content: string): ReactNode {
+  const parts = content.split(/(@[^\s@]+)/g);
+  return parts.map((part, index) =>
+    part.startsWith('@') ? (
+      <span key={index} className="text-[#0071E3] dark:text-[#7DB7FF]">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
+/** 内容评论区：按抖音式扁平列表展示，回复通过正文开头的 @ 指明对象。 */
 export function CommentPanel({
   open,
   targetType,
@@ -46,6 +73,7 @@ export function CommentPanel({
   onClose,
   embedded = false,
   drawer = false,
+  portalToBody = false,
 }: CommentPanelProps) {
   const commentsEnabled = useCommentEnabled();
   const [isMobile, setIsMobile] = useState(() =>
@@ -59,6 +87,15 @@ export function CommentPanel({
   const [error, setError] = useState('');
   const [currentUserId, setCurrentUserId] = useState(() => getCachedClientUser()?.id || '');
   const [userName, setUserName] = useState(() => displayName(getCachedClientUser()));
+  /** 长按弹出的操作菜单：记录目标评论与点击位置 */
+  const [actionMenu, setActionMenu] = useState<{
+    comment: PortalComment;
+    x: number;
+    y: number;
+  } | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+  const longPressPoint = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -93,21 +130,14 @@ export function CommentPanel({
     setCurrentUserId(user?.id || '');
     setUserName(displayName(user));
     setReplyTo(null);
+    setActionMenu(null);
     setContent('');
   }, [open, targetId]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, PortalComment[]>();
-    for (const comment of comments) {
-      const key = comment.parentId || '';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(comment);
-    }
-    map.forEach((list) =>
-      list.sort((a, b) => (a.createTime || '').localeCompare(b.createTime || ''))
-    );
-    return map;
-  }, [comments]);
+  const orderedComments = [...comments].sort((a, b) => {
+    const timeDiff = (a.createTime || '').localeCompare(b.createTime || '');
+    return timeDiff || a.id.localeCompare(b.id);
+  });
 
   // 视频评论区用暗色贴合播放器；文章和图文评论区用亮色贴合内容页。
   const dark = targetType === 'VIDEO';
@@ -119,7 +149,8 @@ export function CommentPanel({
     footerBg: dark ? 'bg-black/30' : 'bg-[#F5F5F7]',
     muted: dark ? 'text-white/45' : 'text-[#8E8E93]',
     soft: dark ? 'text-white/55' : 'text-[#6E6E73]',
-    name: dark ? 'text-white/90' : 'text-[#1D1D1F]',
+    // 抖音风格：评论者昵称为灰色、不突出；蓝色只用于 @提及
+    name: dark ? 'text-white/60' : 'text-[#6E6E73]',
     body: dark ? 'text-white/90' : 'text-[#3A3A3C]',
     childBorder: dark ? 'border-white/10' : 'border-black/[0.06]',
     close: dark
@@ -170,48 +201,132 @@ export function CommentPanel({
     }
     try {
       await commentApi.remove(id);
+      setActionMenu(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
     }
   }
 
-  const renderNode = (comment: PortalComment, depth: number): ReactNode => {
-    const children = grouped.get(comment.id) || [];
+  function clearLongPress() {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function startReply(comment: PortalComment) {
+    if (!getSnowyToken()) {
+      requireCommentLogin();
+      return;
+    }
+    const nickname = comment.nickname || '用户';
+    setReplyTo({ id: comment.id, nickname, content: comment.content || '' });
+    setContent((previous) => {
+      const withoutMention = previous.replace(/^@\S+\s*/, '');
+      return `@${nickname} ${withoutMention}`.slice(0, 500);
+    });
+  }
+
+  async function copyComment(comment: PortalComment) {
+    const text = comment.content || '';
+    try {
+      await navigator.clipboard.writeText(text);
+      setError('');
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        setError('复制失败');
+      }
+      document.body.removeChild(textarea);
+    }
+    setActionMenu(null);
+  }
+
+  function onCommentPointerDown(comment: PortalComment, event: ReactPointerEvent<HTMLDivElement>) {
+    longPressFired.current = false;
+    longPressPoint.current = { x: event.clientX, y: event.clientY };
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      setActionMenu({ comment, x: event.clientX, y: event.clientY });
+    }, 500);
+  }
+
+  function onCommentPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const start = longPressPoint.current;
+    if (!start) return;
+    if (Math.abs(event.clientX - start.x) > 10 || Math.abs(event.clientY - start.y) > 10) {
+      clearLongPress();
+    }
+  }
+
+  function onCommentClick(comment: PortalComment) {
+    // 长按触发后不再执行点击回复
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
     const mine = !!currentUserId && currentUserId === comment.userId;
+    // 点击别人的评论即可回复；自己的评论不触发回复
+    if (!mine) startReply(comment);
+  }
+
+  useEffect(() => () => clearLongPress(), []);
+
+  const renderComment = (comment: PortalComment): ReactNode => {
+    const mine = !!currentUserId && currentUserId === comment.userId;
+    const hasInlineMention = comment.content.trimStart().startsWith('@');
+    // 移动端：长按复制/删除、点击别人评论回复；PC 端保留逐条按钮，不启用长按
+    const pressHandlers = isMobile
+      ? {
+          onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) =>
+            onCommentPointerDown(comment, event),
+          onPointerMove: onCommentPointerMove,
+          onPointerUp: clearLongPress,
+          onPointerCancel: clearLongPress,
+          onPointerLeave: clearLongPress,
+          onContextMenu: (event: React.MouseEvent) => {
+            event.preventDefault();
+            longPressFired.current = true;
+            setActionMenu({ comment, x: event.clientX, y: event.clientY });
+          },
+          onClick: () => onCommentClick(comment),
+        }
+      : {};
     return (
       <div
         key={comment.id}
-        className={depth > 0 ? `ml-4 border-l pl-3 sm:ml-6 ${tone.childBorder}` : ''}
+        {...pressHandlers}
+        className={`border-b py-3 last:border-b-0 ${tone.childBorder} ${
+          isMobile && !mine ? 'cursor-pointer' : ''
+        }`}
       >
-        <div className="py-3">
-          <div className={`flex items-center gap-2 text-[12px] ${tone.soft}`}>
-            <span className={`font-medium ${tone.name}`}>{comment.nickname || '用户'}</span>
-            {comment.isOfficial === 'YES' && (
-              <span className="rounded-full bg-[#0071E3]/20 px-1.5 py-0.5 text-[10px] text-[#337BC8] dark:text-[#7DB7FF]">
-                官方
-              </span>
-            )}
-            <span>{commentTime(comment.createTime)}</span>
-          </div>
-          <p className={`mt-1.5 text-[13px] leading-6 ${tone.body}`}>
-            {comment.replyToNickname && (
-              <span className="text-[#0071E3] dark:text-[#7DB7FF]">回复 @{comment.replyToNickname}：</span>
-            )}
-            {comment.content}
-          </p>
+        <div className={`flex items-center gap-2 text-[12px] ${tone.soft}`}>
+          <span className={`font-medium ${tone.name}`}>{comment.nickname || '用户'}</span>
+          {comment.isOfficial === 'YES' && (
+            <span className="rounded-full bg-[#0071E3]/20 px-1.5 py-0.5 text-[10px] text-[#337BC8] dark:text-[#7DB7FF]">
+              官方
+            </span>
+          )}
+          <span>{commentTime(comment.createTime)}</span>
+        </div>
+        <p className={`mt-1.5 text-[13px] leading-6 ${tone.body}`}>
+          {!hasInlineMention && comment.replyToNickname && (
+            <span className="text-[#0071E3] dark:text-[#7DB7FF]">回复 @{comment.replyToNickname}：</span>
+          )}
+          {renderMentions(comment.content)}
+        </p>
+        {!isMobile && (
           <div className={`mt-1.5 flex items-center gap-3 text-[11px] ${tone.muted}`}>
-            <button
-              type="button"
-              onClick={() => {
-                if (!getSnowyToken()) {
-                  requireCommentLogin();
-                  return;
-                }
-                setReplyTo({ id: comment.id, nickname: comment.nickname || '用户' });
-              }}
-              className={tone.action}
-            >
+            <button type="button" onClick={() => startReply(comment)} className={tone.action}>
               回复
             </button>
             {mine && (
@@ -225,8 +340,7 @@ export function CommentPanel({
               </button>
             )}
           </div>
-        </div>
-        {children.map((child) => renderNode(child, depth + 1))}
+        )}
       </div>
     );
   };
@@ -279,7 +393,7 @@ export function CommentPanel({
             <span className="text-[13px]">还没有评论，来说第一句吧</span>
           </div>
         ) : (
-          (grouped.get('') || []).map((comment) => renderNode(comment, 0))
+          orderedComments.map(renderComment)
         )}
       </div>
 
@@ -290,7 +404,10 @@ export function CommentPanel({
             正在回复 @{replyTo.nickname}
             <button
               type="button"
-              onClick={() => setReplyTo(null)}
+              onClick={() => {
+                setReplyTo(null);
+                setContent((previous) => previous.replace(/^@\S+\s*/, ''));
+              }}
               className="text-[#0071E3] dark:text-[#7DB7FF]"
             >
               取消
@@ -306,7 +423,15 @@ export function CommentPanel({
             onKeyDown={(event) => {
               if (event.key === 'Enter') void submit();
             }}
-            placeholder={getSnowyToken() ? (userName ? `以 ${userName} 的身份评论…` : '写下你的评论…') : '登录后参与评论'}
+            placeholder={
+              !getSnowyToken()
+                ? '登录后参与评论'
+                : replyTo
+                  ? `回复：${replyTo.content.length > 60 ? `${replyTo.content.slice(0, 60)}…` : replyTo.content}`
+                  : userName
+                    ? `以 ${userName} 的身份评论…`
+                    : '写下你的评论…'
+            }
             className={`h-11 flex-1 rounded-full border px-4 text-[13px] outline-none ${tone.textarea}`}
           />
           <button
@@ -323,42 +448,112 @@ export function CommentPanel({
     </div>
   );
 
-  if (embedded) return panel;
+  // 长按操作菜单：复制 + （自己的评论）删除，挂到 body 顶层避免被任何父级遮挡
+  // 长按菜单统一挂到 body 顶层，避免嵌在侧栏/动效容器内时被 transform 或层级遮挡
+  const actionMenuNode =
+    isMobile && actionMenu && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[120]"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              clearLongPress();
+              setActionMenu(null);
+            }}
+          >
+            <div
+              className="absolute w-36 overflow-hidden rounded-xl border border-white/10 bg-[#2C2C2E]/98 p-1 shadow-2xl backdrop-blur-xl"
+              style={{
+                left: Math.min(actionMenu.x, window.innerWidth - 152),
+                top: Math.min(actionMenu.y, window.innerHeight - 96),
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => void copyComment(actionMenu.comment)}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-white hover:bg-white/10"
+              >
+                <Copy className="h-4 w-4" />
+                复制
+              </button>
+              {currentUserId && currentUserId === actionMenu.comment.userId && (
+                <button
+                  type="button"
+                  onClick={() => void removeComment(actionMenu.comment.id)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-[#FF6B6B] hover:bg-white/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  删除
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  if (embedded) {
+    return (
+      <>
+        {panel}
+        {actionMenuNode}
+      </>
+    );
+  }
+
+  // 视频沉浸流中 Swiper slide 带 transform，会创建低层级 stacking context 劫持 fixed，
+  // 因此弹层需挂到 body 顶层才能盖过同样 portal 到 body 的标题/操作浮层。
+  const inPortal = portalToBody && typeof document !== 'undefined';
+  const withPortal = (node: ReactNode) => (inPortal ? createPortal(node, document.body) : node);
 
   if (drawer && !isMobile) {
-    return (
-      <aside className="absolute inset-y-0 right-0 z-40 flex w-[320px] max-w-[85vw] flex-col border-l border-white/15 bg-[#1C1C1E]/95 shadow-[-12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        <div
-          className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-white/25 to-transparent"
-          aria-hidden="true"
-        />
-        {panel}
-      </aside>
+    return withPortal(
+      <>
+        <aside
+          className={`${
+            inPortal ? 'fixed' : 'absolute'
+          } inset-y-0 right-0 z-[80] flex w-[320px] max-w-[85vw] flex-col border-l border-white/15 bg-[#1C1C1E]/95 shadow-[-12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl`}
+        >
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-white/25 to-transparent"
+            aria-hidden="true"
+          />
+          {panel}
+        </aside>
+        {actionMenuNode}
+      </>,
     );
   }
 
   if (isSheet) {
-    return (
-      <div
-        className={`fixed inset-0 z-[80] flex items-end justify-center ${tone.overlay}`}
-        onClick={onClose}
-      >
+    return withPortal(
+      <>
         <div
-          className="animate-comment-sheet-up w-full"
-          onClick={(event) => event.stopPropagation()}
+          className={`fixed inset-0 z-[90] flex items-end justify-center ${tone.overlay}`}
+          onClick={onClose}
         >
-          {panel}
+          <div
+            className="animate-comment-sheet-up w-full"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {panel}
+          </div>
         </div>
-      </div>
+        {actionMenuNode}
+      </>,
     );
   }
 
-  return (
-    <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6 ${tone.overlay}`}
-      onClick={onClose}
-    >
-      <div onClick={(event) => event.stopPropagation()}>{panel}</div>
-    </div>
+  return withPortal(
+    <>
+      <div
+        className={`fixed inset-0 z-[90] flex items-end justify-center sm:items-center sm:p-6 ${tone.overlay}`}
+        onClick={onClose}
+      >
+        <div onClick={(event) => event.stopPropagation()}>{panel}</div>
+      </div>
+      {actionMenuNode}
+    </>,
   );
 }

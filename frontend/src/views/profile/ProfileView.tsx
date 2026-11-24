@@ -5,8 +5,10 @@ import {
   Check,
   ChevronRight,
   Edit3,
+  ExternalLink,
   Heart,
   KeyRound,
+  Loader2,
   LogOut,
   UserRound,
   X,
@@ -15,7 +17,7 @@ import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoritesSection } from './FavoritesSection';
 import { ResilientImage } from '../../components/ResilientImage';
-import { authApi } from '../../lib/snowyAuth.ts';
+import { authApi, cacheClientUser, getCachedClientUser } from '../../lib/snowyAuth.ts';
 
 export interface UserBasicInfo {
   email?: string;
@@ -26,17 +28,33 @@ export interface UserBasicInfo {
   latestLoginAddress?: string;
 }
 
-const GENDER_LABELS: Record<string, string> = {
-  '0': '未知',
-  '1': '男',
-  '2': '女',
-};
-
 function formatLoginTime(value?: string): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('zh-CN', { hour12: false });
+}
+
+const BILIBILI_HOME_PAGE = 'https://space.bilibili.com/3706965849016893?spm_id_from=333.1007.0.0';
+
+function ContactSupportNote() {
+  return (
+    <div className="rounded-2xl border border-black/[0.06] bg-[#F5F5F7] px-4 py-3 text-xs leading-relaxed text-[#6E6E73] dark:border-white/[0.08] dark:bg-[#242426] dark:text-[#98989D]">
+      <p className="break-all">
+        我的个人主页：
+        <a
+          href={BILIBILI_HOME_PAGE}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="inline-flex items-center gap-1 font-medium text-[#1D1D1F] underline decoration-black/25 underline-offset-2 hover:decoration-black dark:text-[#F5F5F7] dark:decoration-white/30 dark:hover:decoration-white"
+        >
+          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+          {BILIBILI_HOME_PAGE}
+        </a>
+      </p>
+      <p className="mt-1">有需求或者问题请在 B 站私信我。</p>
+    </div>
+  );
 }
 
 interface ProfileViewProps {
@@ -77,17 +95,13 @@ function ProfileNav({
     { id: 'likes', label: '喜欢', Icon: Heart, count: likedCount },
     { id: 'favorites', label: '收藏', Icon: Bookmark, count: savedCount },
   ] as const;
-  const activeClass = 'bg-white text-[#1D1D1F] shadow-xs dark:bg-[#242426] dark:text-[#F5F5F7]';
-  const idleClass =
-    'text-[#6E6E73] hover:bg-black/[0.04] dark:text-[#98989D] dark:hover:bg-white/[0.06]';
-
   return (
     <nav
       aria-label="个人中心导航"
       className={
         mobile
           ? 'fixed inset-x-0 bottom-0 z-40 flex justify-around gap-1 border-t border-black/[0.06] bg-white/95 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0C0C0E]/95 md:hidden'
-          : 'hidden md:sticky md:top-20 md:flex md:w-44 md:shrink-0 md:flex-col md:gap-1.5'
+          : 'hidden md:relative md:z-10 md:flex md:items-center md:gap-2 md:border-b md:border-black/[0.06] md:dark:border-white/[0.08]'
       }
     >
       {items.map(({ id, label, Icon, count }) => {
@@ -101,10 +115,14 @@ function ProfileNav({
             className={
               mobile
                 ? `relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-medium transition-colors ${
-                    isActive ? activeClass : idleClass
+                    isActive
+                      ? 'bg-[#1D1D1F] text-white shadow-xs dark:bg-[#F5F5F7] dark:text-[#1D1D1F]'
+                      : 'text-[#6E6E73] hover:bg-black/[0.04] dark:text-[#98989D] dark:hover:bg-white/[0.06]'
                   }`
-                : `inline-flex min-h-11 w-full items-center gap-2 rounded-xl px-3.5 text-[13px] font-medium transition-colors ${
-                    isActive ? activeClass : idleClass
+                : `relative flex min-h-13 items-center gap-2 px-5 text-[15px] font-medium transition-colors ${
+                    isActive
+                      ? 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+                      : 'text-[#8E8E93] hover:text-[#1D1D1F] dark:text-[#98989D] dark:hover:text-[#F5F5F7]'
                   }`
             }
           >
@@ -115,11 +133,18 @@ function ProfileNav({
                 className={
                   mobile
                     ? 'absolute right-2 top-1 text-[10px] tabular-nums opacity-60'
-                    : 'ml-auto text-[11px] tabular-nums opacity-60'
+                    : 'rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6E6E73] dark:bg-white/[0.08] dark:text-[#98989D]'
                 }
               >
                 {count}
               </span>
+            )}
+            {!mobile && isActive && (
+              <motion.span
+                layoutId="profile-tab-indicator"
+                transition={SWIFTUI_SMOOTH}
+                className="absolute inset-x-4 -bottom-px h-0.5 rounded-full bg-[#1D1D1F] dark:bg-[#F5F5F7]"
+              />
             )}
           </button>
         );
@@ -130,7 +155,6 @@ function ProfileNav({
 
 export function ProfileView({
   isLoggedIn,
-  accountEmail,
   profile,
   userInfo = {},
   onGoLogin,
@@ -149,6 +173,8 @@ export function ProfileView({
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
   const [draftBio, setDraftBio] = useState(profile.bio);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -160,18 +186,37 @@ export function ProfileView({
   const openEditModal = () => {
     setDraftName(profile.name);
     setDraftBio(profile.bio);
+    setProfileError('');
     setIsEditing(true);
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile({
-      ...profile,
-      name: draftName.trim() || profile.name,
-      location: '',
-      bio: draftBio.trim() || profile.bio,
-    });
-    setIsEditing(false);
+    const nextName = draftName.trim() || profile.name;
+    const nextBio = draftBio.trim();
+    setSavingProfile(true);
+    setProfileError('');
+    try {
+      // 调用新增的 biz profile 模块接口，持久化昵称与简介
+      await authApi.updateProfile(nextName, nextBio);
+      // 同步本地缓存，保证评论、个人中心等处立即读到最新昵称与简介
+      const cached = getCachedClientUser();
+      if (cached) {
+        cacheClientUser({ ...cached, name: nextName, nickname: nextName, signature: nextBio });
+      }
+      onUpdateProfile({
+        ...profile,
+        name: nextName,
+        handle: `@${nextName}`,
+        location: '',
+        bio: nextBio,
+      });
+      setIsEditing(false);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : '保存失败，请稍后重试');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const openPasswordModal = () => {
@@ -224,10 +269,10 @@ export function ProfileView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={SWIFTUI_SMOOTH}
-            className="max-w-md mx-auto mt-0 sm:mt-4 rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-none sm:shadow-sm space-y-6"
+            className="w-full mt-0 sm:mt-4 p-6 sm:p-8 space-y-6 flex flex-col items-center"
           >
-            <div className="mx-auto max-w-sm py-10 text-center space-y-6">
-              <div className="w-16 h-16 rounded-[20px] bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] flex items-center justify-center mx-auto">
+            <div className="w-full max-w-sm py-10 text-center space-y-6">
+              <div className="w-16 h-16 rounded-[20px] bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-[#F5F5F7] flex items-center justify-center mx-auto">
                 <UserRound className="w-7 h-7" />
               </div>
               <div className="space-y-2">
@@ -242,7 +287,7 @@ export function ProfileView({
                 <button
                   type="button"
                   onClick={onGoLogin}
-                  className="h-11 px-6 rounded-xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[14px] font-medium hover:brightness-110 transition-all"
+                  className="h-11 px-6 rounded-xl bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] text-[14px] font-medium hover:brightness-110 transition-all"
                 >
                   立即登录
                 </button>
@@ -264,7 +309,7 @@ export function ProfileView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={SWIFTUI_SMOOTH}
-            className="mx-auto flex w-full max-w-5xl flex-col gap-0 pb-24 sm:gap-5 md:flex-row md:items-start md:pb-0"
+            className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-24 md:pb-0"
           >
             <ProfileNav
               activePane={activePane}
@@ -276,126 +321,153 @@ export function ProfileView({
             <div className="min-w-0 flex-1 space-y-6">
               {activePane === 'profile' && (
                 <>
-            {/* Basic Account Header Card */}
-            <div className="rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 shadow-none sm:shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                <div className="flex items-center gap-4">
-                  <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 border border-black/[0.08] dark:border-white/[0.12]">
-                    <ResilientImage
-                      src={profile.avatar}
-                      alt={profile.name}
-                      priority
-                      fallbackTitle={profile.name}
-                      className="w-full h-full"
-                    />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {profile.name || accountEmail}
-                      </h1>
-                      {profile.handle && (
-                        <span className="text-xs text-[#6E6E73] dark:text-[#98989D]">
-                          {profile.handle}
-                        </span>
-                      )}
+            {/* Light Profile Hero */}
+            <div className="relative overflow-hidden bg-white text-[#1D1D1F] sm:rounded-[32px] sm:border sm:border-black/[0.06]">
+              <div className="relative h-36 sm:h-52 lg:h-60">
+                <div className="absolute inset-0 bg-[linear-gradient(120deg,#F5F5F7_0%,#FFFFFF_45%,#EBEBEF_100%)]" />
+                <div className="absolute right-5 top-5 hidden items-center gap-2 rounded-full border border-black/[0.06] bg-white/75 px-3 py-1.5 text-[11px] font-medium tracking-wide text-[#8E8E93] shadow-sm backdrop-blur-xl sm:flex">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#1D1D1F]" />
+                  PERSONAL SPACE
+                </div>
+              </div>
+
+              <div className="relative -mt-14 px-5 pb-7 sm:-mt-16 sm:px-9 lg:px-12">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex items-end gap-4">
+                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full ring-4 ring-white shadow-xl sm:h-28 sm:w-28">
+                      <ResilientImage
+                        src={profile.avatar}
+                        alt={profile.name}
+                        priority
+                        fallbackTitle={profile.name}
+                        className="h-full w-full"
+                      />
                     </div>
-                    {profile.bio && (
-                      <p className="text-sm text-[#515154] dark:text-[#A1A1A6] leading-relaxed">
-                        {profile.bio}
+                    <div className="min-w-0 pb-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h1 className="text-2xl font-semibold tracking-tight text-[#1D1D1F] sm:text-3xl">
+                          {profile.name || '用户'}
+                        </h1>
+                        {profile.handle && (
+                          <span className="rounded-full bg-black/[0.05] px-2.5 py-1 text-[11px] text-[#6E6E73]">
+                            {profile.handle}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#6E6E73]">
+                        {profile.bio || '这个人很神秘，还没有填写简介'}
                       </p>
-                    )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={openEditModal}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#1D1D1F] px-5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors hover:bg-black"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      <span>编辑资料</span>
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={onLogout}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-black/[0.08] bg-white/80 px-5 text-xs font-medium text-[#1D1D1F] transition-colors hover:bg-white"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span>退出登录</span>
+                    </motion.button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.96 }}
-                    onClick={openEditModal}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C] transition-colors"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>编辑资料</span>
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.96 }}
-                    onClick={onLogout}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl bg-[#FF3B30]/[0.08] dark:bg-[#FF453A]/[0.14] text-xs font-medium text-[#FF3B30] dark:text-[#FF453A] hover:bg-[#FF3B30]/[0.14] dark:hover:bg-[#FF453A]/[0.22] transition-colors"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>退出登录</span>
-                  </motion.button>
+                <div className="mt-7 grid grid-cols-2 gap-3 border-t border-black/[0.06] pt-6 sm:flex sm:gap-10">
+                  {[
+                    { label: '喜欢', value: likedIds.length },
+                    { label: '收藏', value: savedIds.length },
+                  ].map((stat) => (
+                    <div key={stat.label} className="space-y-1">
+                      <div className="text-xl font-semibold tabular-nums text-[#1D1D1F] sm:text-2xl">{stat.value}</div>
+                      <div className="text-[11px] text-[#8E8E93] sm:text-xs">{stat.label}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Clean Apple Grouped Account Details */}
-            <div className="rounded-none sm:rounded-3xl bg-white dark:bg-[#161618] border-0 sm:border border-black/[0.06] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
-              <div className="px-6 py-4 flex items-center justify-between text-sm">
-                <span className="text-[#6E6E73] dark:text-[#98989D]">账号状态</span>
-                <span className="font-medium text-[#34C759]">已登录</span>
+            {/* Account Details */}
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="rounded-none bg-white sm:rounded-3xl sm:border sm:border-black/[0.06] dark:bg-[#161618] sm:dark:border-white/[0.08] sm:p-8 p-6">
+                <div className="mb-7 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      账号信息
+                    </h2>
+                    <p className="mt-1 text-xs text-[#8E8E93] dark:text-[#8E8E93]">
+                      基本资料与登录状态
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-black/[0.06] px-3 py-1 text-xs font-medium text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                    已登录
+                  </span>
+                </div>
+                <dl className="grid gap-x-10 gap-y-6 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-[#8E8E93]">昵称</dt>
+                    <dd className="mt-1.5 truncate text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      {profile.name || '用户'}
+                    </dd>
+                  </div>
+                  {userInfo.phone && (
+                    <div>
+                      <dt className="text-xs text-[#8E8E93]">手机号</dt>
+                      <dd className="mt-1.5 text-sm font-medium tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {userInfo.phone}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
               </div>
 
-              <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">登录账号</span>
-                <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
-                  {accountEmail}
-                </span>
+              <div className="space-y-5 rounded-none bg-white sm:rounded-3xl sm:border sm:border-black/[0.06] dark:bg-[#161618] sm:dark:border-white/[0.08] p-6">
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    安全设置
+                  </h2>
+                  <p className="mt-1 text-xs text-[#8E8E93]">保护账号，定期更新登录密码。</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openPasswordModal}
+                  className="group flex w-full items-center justify-between rounded-2xl border border-black/[0.06] bg-[#FBFBFD] px-4 py-4 text-left transition-colors hover:border-black/20 hover:bg-black/[0.03] dark:border-white/[0.08] dark:bg-[#1C1C1E] dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/[0.06] text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                      <KeyRound className="h-4 w-4" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        修改登录密码
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-[#8E8E93]">
+                        建议每 3 个月更新一次
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-[#AEAEB2] transition-transform group-hover:translate-x-0.5" />
+                </button>
+                {userInfo.latestLoginTime && (
+                  <div className="rounded-2xl bg-[#F5F5F7] p-4 dark:bg-[#1C1C1E]">
+                    <p className="text-[11px] text-[#8E8E93]">最近登录</p>
+                    <p className="mt-1.5 text-xs font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      {[formatLoginTime(userInfo.latestLoginTime), userInfo.latestLoginAddress]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                )}
               </div>
-
-              {userInfo.email && userInfo.email !== accountEmail && (
-                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">邮箱</span>
-                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
-                    {userInfo.email}
-                  </span>
-                </div>
-              )}
-
-              {userInfo.phone && (
-                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">手机号</span>
-                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                    {userInfo.phone}
-                  </span>
-                </div>
-              )}
-
-              {(userInfo.gender || userInfo.birthday) && (
-                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">性别 / 生日</span>
-                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
-                    {[GENDER_LABELS[userInfo.gender || ''] || userInfo.gender, userInfo.birthday?.slice(0, 10)]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </div>
-              )}
-
-              {userInfo.latestLoginTime && (
-                <div className="px-6 py-4 flex items-center justify-between text-sm gap-4">
-                  <span className="text-[#6E6E73] dark:text-[#98989D] shrink-0">最近登录</span>
-                  <span className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate text-right">
-                    {[formatLoginTime(userInfo.latestLoginTime), userInfo.latestLoginAddress]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={openPasswordModal}
-                className="w-full px-6 py-4 flex items-center justify-between text-sm hover:bg-black/[0.02] dark:hover:bg-white/[0.03] transition-colors"
-              >
-                <span className="text-[#6E6E73] dark:text-[#98989D]">修改密码</span>
-                <span className="inline-flex items-center gap-1.5 font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  <KeyRound className="w-4 h-4" />
-                  <ChevronRight className="w-4 h-4 text-[#AEAEB2]" />
-                </span>
-              </button>
             </div>
 
                 </>
@@ -486,7 +558,7 @@ export function ProfileView({
                     value={draftName}
                     onChange={(e) => setDraftName(e.target.value)}
                     maxLength={24}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
                   />
                 </div>
 
@@ -503,26 +575,38 @@ export function ProfileView({
                     value={draftBio}
                     onChange={(e) => setDraftBio(e.target.value)}
                     maxLength={120}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3] resize-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7] resize-none"
                   />
                 </div>
               </div>
+
+              {profileError && (
+                <p className="text-xs text-[#1D1D1F] dark:text-[#F5F5F7]">{profileError}</p>
+              )}
+
+              <ContactSupportNote />
 
               <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
+                  disabled={savingProfile}
+                  className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] disabled:opacity-50"
                 >
                   取消
                 </button>
                 <motion.button
                   type="submit"
                   whileTap={{ scale: 0.96 }}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-xs font-medium"
+                  disabled={savingProfile}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] text-xs font-medium disabled:opacity-60"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>保存更改</span>
+                  {savingProfile ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>{savingProfile ? '保存中…' : '保存更改'}</span>
                 </motion.button>
               </div>
             </motion.form>
@@ -583,7 +667,7 @@ export function ProfileView({
                     value={oldPassword}
                     onChange={(event) => setOldPassword(event.target.value)}
                     autoComplete="current-password"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
                   />
                 </div>
                 <div>
@@ -599,7 +683,7 @@ export function ProfileView({
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     autoComplete="new-password"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
                   />
                 </div>
                 <div>
@@ -615,21 +699,23 @@ export function ProfileView({
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
                   />
                 </div>
               </div>
 
               {passwordError && (
-                <p className="rounded-xl bg-[#FF3B30]/10 px-3 py-2 text-xs text-[#D70015] dark:text-[#FF6B6B]">
+                <p className="rounded-xl bg-black/[0.06] px-3 py-2 text-xs dark:bg-white/[0.10] text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {passwordError}
                 </p>
               )}
               {passwordSuccess && (
-                <p className="rounded-xl bg-[#34C759]/10 px-3 py-2 text-xs text-[#248A3D] dark:text-[#30D158]">
+                <p className="rounded-xl bg-black/[0.06] px-3 py-2 text-xs text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
                   {passwordSuccess}
                 </p>
               )}
+
+              <ContactSupportNote />
 
               <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
@@ -643,7 +729,7 @@ export function ProfileView({
                   type="submit"
                   whileTap={{ scale: 0.96 }}
                   disabled={savingPassword}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-xs font-medium disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] text-xs font-medium disabled:opacity-50"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>{savingPassword ? '提交中…' : '确认修改'}</span>

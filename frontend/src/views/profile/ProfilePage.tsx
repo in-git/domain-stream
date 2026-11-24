@@ -46,9 +46,17 @@ export function ProfilePage({
   onToggleLike,
 }: ProfilePageProps) {
   return (
-    <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] dark:bg-[#000000] dark:text-[#F5F5F7]">
-      <header className="sticky top-0 z-30 border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-black/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
+    <div className="relative min-h-screen overflow-hidden bg-[#F8F8FA] text-[#1D1D1F] dark:bg-[#08080A] dark:text-[#F5F5F7]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-70 dark:opacity-90"
+        style={{
+          backgroundImage:
+            'radial-gradient(900px 320px at 12% -10%, rgba(0,0,0,0.08), transparent 65%), radial-gradient(760px 300px at 88% 0%, rgba(0,0,0,0.05), transparent 62%)',
+        }}
+      />
+      <header className="sticky top-0 z-30 border-b border-black/[0.05] bg-white/70 dark:border-white/[0.08] dark:bg-[#08080A]/75 backdrop-blur-2xl">
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-10">
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -57,8 +65,6 @@ export function ProfilePage({
             <ArrowLeft className="h-4 w-4" />
             返回首页
           </button>
-
-          <h1 className="text-[15px] font-semibold tracking-tight">个人中心</h1>
 
           <Tooltip label={isDark ? '浅色外观' : '深色外观'} side="bottom">
             <motion.button
@@ -74,7 +80,7 @@ export function ProfilePage({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl px-0 sm:px-6 sm:py-6">
+      <main className="relative mx-auto w-full max-w-7xl px-0 pb-10 sm:px-6 sm:py-8 lg:px-10">
         <ProfileView
           isLoggedIn={isLoggedIn}
           accountEmail={accountEmail}

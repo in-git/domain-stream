@@ -37,6 +37,10 @@ public class AuthRegisterParam {
     @NotBlank(message = "password不能为空")
     private String password;
 
+    /** 昵称 */
+    @Schema(description = "昵称")
+    private String nickname;
+
     /** 验证码 */
     @Schema(description = "验证码")
     private String validCode;

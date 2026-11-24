@@ -195,6 +195,17 @@ public interface SaBaseLoginUserApi {
     void doRegister(String account, String password);
 
     /**
+     * 执行注册（携带昵称，供C端使用）
+     * 默认委托旧方法，B端实现无需变更；C端 provider 覆盖此方法以写入昵称。
+     *
+     * @author domain-stream
+     * @date 2026/11/24
+     **/
+    default void doRegister(String account, String password, String nickname) {
+        this.doRegister(account, password);
+    }
+
+    /**
      * 刷新用户数据范围预计算表
      *
      * @param userId 用户ID

@@ -16,6 +16,21 @@ import {
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
 import { DEFAULT_CATEGORIES, VIDEO_PAGE_SIZE, type ViewMode } from './shared';
+import { useSystemInfo } from '../../lib/systemInfo';
+
+/** 迷你播放器尺寸（与下方 sm 断点样式一致），用于拖拽边界计算 */
+const MINI_SIZE = { width: 240, height: 135 };
+const MINI_MARGIN = 12;
+
+/** 把坐标限制在视口内，避免拖出屏幕 */
+function clampMiniPos(x: number, y: number): { x: number; y: number } {
+  const maxX = Math.max(MINI_MARGIN, window.innerWidth - MINI_SIZE.width - MINI_MARGIN);
+  const maxY = Math.max(MINI_MARGIN, window.innerHeight - MINI_SIZE.height - MINI_MARGIN);
+  return {
+    x: Math.min(Math.max(MINI_MARGIN, x), maxX),
+    y: Math.min(Math.max(MINI_MARGIN, y), maxY),
+  };
+}
 
 interface VideosViewProps {
   videos: VideoItem[];
@@ -74,10 +89,13 @@ export function VideosView({
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
   const isMini = mode === 'mini';
   const isHidden = mode === 'hidden';
+  const { title: siteTitle } = useSystemInfo();
 
   const initialIndex = videos.findIndex((v) => v.id === resumeVideoId);
   const setViewMode = onViewModeChange ?? (() => {});
   const [activeIndex, setActiveIndex] = useState(Math.max(0, initialIndex));
+  /** 首次挂载时保留 resumeVideoId 定位，只有后续分类/搜索变化才重置到第一张 */
+  const skipInitialResetRef = useRef(true);
   const [hasPlayed, setHasPlayed] = useState(false);
   const [isMuted, setIsMuted] = useState(typeof resumeMuted === 'boolean' ? resumeMuted : true);
   /** 用户是否主动点过静音；为 true 时滑动不再自动解除静音（尊重用户选择） */
@@ -92,6 +110,17 @@ export function VideosView({
   const [pickedVideo, setPickedVideo] = useState<VideoItem | null>(null);
   /** PC 沉浸模式播放列表侧边栏是否展开 */
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  /** PC 迷你播放器位置（可拖拽），null 表示使用默认右下角 */
+  const [miniPos, setMiniPos] = useState<{ x: number; y: number } | null>(null);
+  const miniDragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+  } | null>(null);
+  /** 拖拽结束后吞掉随之产生的 click，避免误触播放器 */
+  const suppressMiniClickRef = useRef(false);
 
   const playersRef = useRef<Map<string, MediaPlayerInstance>>(new Map());
   const swiperRef = useRef<SwiperClass | null>(null);
@@ -113,6 +142,10 @@ export function VideosView({
   );
 
   useEffect(() => {
+    if (skipInitialResetRef.current) {
+      skipInitialResetRef.current = false;
+      return;
+    }
     setPickedVideo(null);
     setActiveIndex(0);
     setCurrentTime(0);
@@ -147,6 +180,15 @@ export function VideosView({
     filteredVideos.length > 0 ? Math.min(activeIndex, filteredVideos.length - 1) : 0;
   const currentVideo = filteredVideos[safeIndex] ?? null;
 
+  /** 视频模块激活时以当前视频标题作为页面标题，离开时恢复站点标题 */
+  useEffect(() => {
+    const active = mode === 'immersive' && !isMini && !isHidden && viewMode === 'feed';
+    document.title = active && currentVideo?.title ? currentVideo.title : siteTitle;
+    return () => {
+      document.title = siteTitle;
+    };
+  }, [mode, isMini, isHidden, viewMode, currentVideo?.title, siteTitle]);
+
   useEffect(() => {
     setCurrentTime(0);
     setDuration(currentVideo?.durationSeconds ?? 0);
@@ -160,6 +202,70 @@ export function VideosView({
       onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
     }
   }, [isMuted, playbackRate, hasPlayed]);
+
+  /** 进入迷你态时初始化默认位置（右下角），离开不改，便于下次沿用它 */
+  useEffect(() => {
+    if (!isMini) return;
+    setMiniPos((prev) => prev ?? clampMiniPos(window.innerWidth, window.innerHeight));
+  }, [isMini]);
+
+  /** 迷你窗跟随窗口尺寸变化保持在视口内 */
+  useEffect(() => {
+    if (!isMini) return;
+    const onResize = () => setMiniPos((prev) => (prev ? clampMiniPos(prev.x, prev.y) : prev));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [isMini]);
+
+  const onMiniPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (!isMini || event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    // 按钮、进度条等交互元素不触发拖拽
+    if (target.closest('button, input, [role="slider"], [data-no-drag]')) return;
+    const pos = miniPos ?? clampMiniPos(window.innerWidth, window.innerHeight);
+    miniDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: pos.x,
+      originY: pos.y,
+      moved: false,
+    };
+  };
+
+  const onMiniPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = miniDragRef.current;
+    if (!drag) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    setMiniPos(clampMiniPos(drag.originX + dx, drag.originY + dy));
+  };
+
+  const onMiniPointerUp = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = miniDragRef.current;
+    miniDragRef.current = null;
+    if (!drag?.moved) return;
+    suppressMiniClickRef.current = true;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const onMiniClickCapture = (event: React.MouseEvent<HTMLElement>) => {
+    if (!suppressMiniClickRef.current) return;
+    suppressMiniClickRef.current = false;
+    event.stopPropagation();
+    event.preventDefault();
+  };
+
+  const onMiniDoubleClick = () => {
+    if (miniDragRef.current?.moved) return;
+    onMiniExpand?.();
+  };
 
   const registerPlayer = useCallback((id: string, player: MediaPlayerInstance | null) => {
     if (player) playersRef.current.set(id, player);
@@ -284,6 +390,17 @@ export function VideosView({
     if (player && !player.paused) player.pause();
   }, [mode, currentVideo?.id]);
 
+  /** 从其他模块切回视频：容器重新可见后恢复当前播放器并刷新 Swiper 尺寸 */
+  useEffect(() => {
+    if (mode !== 'immersive' || viewMode !== 'feed' || !currentVideo) return;
+    const frame = requestAnimationFrame(() => {
+      swiperRef.current?.update?.();
+      const player = playersRef.current.get(currentVideo.id);
+      if (player && player.paused) void player.play().catch(() => {});
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mode, viewMode, currentVideo?.id]);
+
   useEffect(() => {
     const swiper = swiperRef.current;
     if (!swiper) return;
@@ -318,9 +435,19 @@ export function VideosView({
         isHidden
           ? 'hidden'
           : isMini
-            ? 'fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10'
+            ? `fixed z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10 select-none ${
+                miniPos ? 'cursor-grab active:cursor-grabbing' : 'bottom-3 right-3 sm:bottom-6 sm:right-6'
+              }`
             : 'relative space-y-0 h-full'
       }
+      style={isMini && miniPos ? { left: miniPos.x, top: miniPos.y } : undefined}
+      title={isMini ? '双击还原播放器 · 拖拽可移动' : undefined}
+      onPointerDown={isMini ? onMiniPointerDown : undefined}
+      onPointerMove={isMini ? onMiniPointerMove : undefined}
+      onPointerUp={isMini ? onMiniPointerUp : undefined}
+      onPointerCancel={isMini ? onMiniPointerUp : undefined}
+      onClickCapture={isMini ? onMiniClickCapture : undefined}
+      onDoubleClick={isMini ? onMiniDoubleClick : undefined}
     >
       {/* 卡片模式分类：PC / 移动端各自模块，内部用 CSS 断点决定挂载形态 */}
       {!isMini && viewMode === 'grid' && (
@@ -421,6 +548,9 @@ export function VideosView({
                     mini={isMini}
                     onMiniClose={onMiniClose}
                     onMiniExpand={onMiniExpand}
+                    captionToBody={
+                      !isMini && !isHidden && viewMode === 'feed' && !isFullscreen
+                    }
                   />
                 </SwiperSlide>
               ))}

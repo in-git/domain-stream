@@ -5,14 +5,12 @@ import { registerCommentLogin } from '../../lib/commentLogin.ts';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
 import { BUILTIN_SECTIONS, LeftSidebar } from './LeftSidebar';
-import { isSectionId } from '../constants';
+import { isSectionId } from '../app';
 import { SectionPlaceholder } from './SectionPlaceholder';
 import { MainHeader } from './MainHeader';
 import { MobileTabBar } from './MobileTabBar';
 import { SearchOverlay } from '../search/SearchOverlay';
-import type { useUserSession } from '../useUserSession';
-import type { usePortalData } from '../usePortalData';
-import type { usePersistentPlayer } from '../usePersistentPlayer';
+import type { useUserSession, usePortalData, usePersistentPlayer } from '../app';
 import { VideosSection } from '../videos/VideosSection';
 import { ArticlesSection } from '../articles/ArticlesSection';
 import { GallerySection } from '../gallery/GallerySection';
@@ -90,6 +88,7 @@ export function PortalShell({
     articleCategories,
     graphicCategories,
     loadingMap,
+    loadedSections,
     errors,
     loadSection,
     addMessage,
@@ -192,7 +191,7 @@ export function PortalShell({
           >
             <VideosSection
               active={activeSection === 'videos'}
-              loading={!!loadingMap.videos}
+              loading={!loadedSections.videos && !!loadingMap.videos}
               error={errors.videos}
               videos={videos}
               categories={videoCategories}

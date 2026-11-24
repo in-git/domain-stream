@@ -231,6 +231,11 @@ public class ClientLoginUserApiProvider implements SaBaseLoginUserApi {
         clientUserService.doRegister(account, password);
     }
 
+    @Override
+    public void doRegister(String account, String password, String nickname) {
+        clientUserService.doRegister(account, password, nickname);
+    }
+
     /**
      * C端用户无数据范围，不实现
      *

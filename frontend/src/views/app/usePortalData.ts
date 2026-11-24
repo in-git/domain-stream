@@ -6,7 +6,7 @@ import type {
   PhotoItem,
   SectionId,
   VideoItem,
-} from '../data/content';
+} from '../../data/content';
 import {
   articleFromPortal,
   categoriesForModule,
@@ -15,12 +15,13 @@ import {
   messageFromPortal,
   portalApi,
   favoriteApi,
+  resolveCategoryCode,
   replyFromPortal,
   videoFromPortal,
   type PortalCategory,
   type PortalMessage,
   type ReplyDraft,
-} from '../lib/api';
+} from '../../lib/api';
 import { isSectionId, type ContentSection } from './constants';
 
 /**
@@ -43,12 +44,16 @@ export function usePortalData(
   const [articles, setArticles] = useState<ArticleItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loadedSections, setLoadedSections] = useState<Partial<Record<SectionId, boolean>>>({});
+  /** 同步已加载状态，避免切回板块时重新拉取并触发骨架屏卸载播放器 */
+  const loadedSectionsRef = useRef<Partial<Record<SectionId, boolean>>>({});
   const [loadingMap, setLoadingMap] = useState<Partial<Record<SectionId, boolean>>>(() => ({
     // 仅为内置板块初始化 loading：自定义模块没有数据源，不应进入加载态
     ...(isSectionId(initialSection) ? { [initialSection]: true } : {}),
   }));
   const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
+  /** 分类快速切换时只应用最后一次请求结果 */
+  const videoCategoryRequestRef = useRef(0);
   /** 与 loadingMap 同步的 ref，供 loadSection 内同步判断防重入 */
   const loadingMapRef = useRef<Partial<Record<SectionId, boolean>>>({});
 
@@ -122,11 +127,14 @@ export function usePortalData(
       if (!isSectionId(rawSection)) return;
       const section = rawSection;
       if (section === 'profile') return;
+      // 已成功加载过的板块不再重复请求，避免切回视频时把常驻播放器卸载重建
+      if (loadedSectionsRef.current[section]) return;
       // 防重入：同一板块正在请求时直接返回，避免并发重复拉取
       if (loadingMapRef.current[section]) return;
       loadingMapRef.current[section] = true;
       setLoadingMap((prev) => ({ ...prev, [section]: true }));
       setErrors((prev) => ({ ...prev, [section]: undefined }));
+      let loaded = false;
 
       try {
         if (section === 'messages') {
@@ -179,6 +187,7 @@ export function usePortalData(
             );
           });
         }
+        loaded = true;
       } catch (error) {
         setErrors((prev) => ({
           ...prev,
@@ -187,7 +196,10 @@ export function usePortalData(
       } finally {
         loadingMapRef.current[section] = false;
         setLoadingMap((prev) => ({ ...prev, [section]: false }));
-        setLoadedSections((prev) => ({ ...prev, [section]: true }));
+        if (loaded) {
+          loadedSectionsRef.current[section] = true;
+          setLoadedSections((prev) => ({ ...prev, [section]: true }));
+        }
       }
     },
     [loadWithCategories, pickCategories, videoCategory]
@@ -196,15 +208,20 @@ export function usePortalData(
   /** 切换视频分类：按分类重新请求后端，只替换视频列表，不重拉分类字典、不触发全屏骨架屏 */
   const loadVideosByCategory = useCallback(
     async (category: string) => {
+      const requestId = ++videoCategoryRequestRef.current;
       setVideoCategory(category);
       setErrors((prev) => ({ ...prev, videos: undefined }));
       try {
-        const rows = await portalApi.videos(category);
-        const names = categoryNameMap(
-          categoriesPromiseRef.current ? await categoriesPromiseRef.current : []
-        );
+        const categories = categoriesPromiseRef.current
+          ? await categoriesPromiseRef.current
+          : [];
+        const categoryCode = resolveCategoryCode(categories, category, 'VIDEO');
+        const rows = await portalApi.videos(categoryCode);
+        if (requestId !== videoCategoryRequestRef.current) return;
+        const names = categoryNameMap(categories);
         setVideos(rows.map((row, i) => videoFromPortal(row, i, names)));
       } catch (error) {
+        if (requestId !== videoCategoryRequestRef.current) return;
         setErrors((prev) => ({
           ...prev,
           videos: error instanceof Error ? error.message : '分类加载失败',

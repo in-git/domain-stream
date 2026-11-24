@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { VideoItem } from '../data/content';
+import type { VideoItem } from '../../data/content';
 import { usePersistentState } from './usePersistentState';
 
 /** 悬浮迷你播放器：离开视频板块后继续播放，按视频ID记录进度 */

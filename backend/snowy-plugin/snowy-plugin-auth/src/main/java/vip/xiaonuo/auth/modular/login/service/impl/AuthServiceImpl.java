@@ -1080,6 +1080,8 @@ public class AuthServiceImpl implements AuthService {
         String account = authRegisterParam.getAccount();
         // 获取密码
         String password = authRegisterParam.getPassword();
+        // 获取昵称
+        String nickname = authRegisterParam.getNickname();
         // 校验验证码
         boolean defaultCaptchaOpen;
         if(SaClientTypeEnum.B.getValue().equals(type)) {
@@ -1109,7 +1111,8 @@ public class AuthServiceImpl implements AuthService {
         if(SaClientTypeEnum.B.getValue().equals(type)) {
             loginUserApi.doRegister(account, passwordDecrypt);
         } else {
-            clientLoginUserApi.doRegister(account, passwordDecrypt);
+            // C端注册写入昵称，确保评论、个人中心等对外展示使用昵称而非账号
+            clientLoginUserApi.doRegister(account, passwordDecrypt, nickname);
         }
     }
 

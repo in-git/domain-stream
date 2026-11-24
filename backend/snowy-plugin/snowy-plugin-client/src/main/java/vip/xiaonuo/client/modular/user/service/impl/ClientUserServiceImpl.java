@@ -1133,9 +1133,17 @@ public class ClientUserServiceImpl extends ServiceImpl<ClientUserMapper, ClientU
     @Transactional(rollbackFor = Exception.class)
     @Override
     public ClientUser createUserWithAccount(String account, String password, String name) {
+        return this.createUserWithAccount(account, password, name, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public ClientUser createUserWithAccount(String account, String password, String name, String nickname) {
         ClientUserAddParam clientUserAddParam = new ClientUserAddParam();
         clientUserAddParam.setAccount(account);
         clientUserAddParam.setName(StrUtil.isBlank(name) ? account : name);
+        // 昵称：显式传入则写入；否则回退到 name，保证前端有昵称可展示
+        clientUserAddParam.setNickname(StrUtil.isBlank(nickname) ? clientUserAddParam.getName() : nickname);
         clientUserAddParam.setPassword(password);
         clientUserAddParam.setGender(CommonGenderEnum.UNKNOWN.getValue());
         // 保存用户
@@ -1234,6 +1242,12 @@ public class ClientUserServiceImpl extends ServiceImpl<ClientUserMapper, ClientU
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void doRegister(String account, String password) {
+        this.doRegister(account, password, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void doRegister(String account, String password, String nickname) {
         // 校验账号
         ClientLoginUser clientLoginUser = this.getUserByAccount(account);
         if(ObjectUtil.isNotEmpty(clientLoginUser)) {
@@ -1241,8 +1255,8 @@ public class ClientUserServiceImpl extends ServiceImpl<ClientUserMapper, ClientU
         }
         // 校验密码
         ClientPasswordUtl.validNewPassword(password);
-        // 根据账号密码创建用户
-        this.createUserWithAccount(account, password, null);
+        // 根据账号密码昵称创建用户，昵称同时作为姓名，避免对外展示账号
+        this.createUserWithAccount(account, password, nickname, nickname);
     }
 
     @Override
