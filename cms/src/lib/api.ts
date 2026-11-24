@@ -17,10 +17,12 @@ import {
   setSnowyToken,
   snowyBiz,
   snowyDownload,
+  snowyFetch,
   snowyGetLoginUser,
   snowyLogin,
   snowyLoginMenu,
   snowyLogout,
+  snowyRequest,
   snowyUpload,
   snowyUpdateUserInfo,
   snowyVisitorDashboard,
@@ -36,6 +38,40 @@ export function getStoredToken(): string | null {
 }
 export function setStoredToken(token: string | null) {
   setSnowyToken(token);
+}
+
+/** 数据导入任务状态 */
+export interface DataImportStatus {
+  done: boolean;
+  success: boolean;
+  message: string;
+  count: number;
+}
+
+/** multipart 导入接口返回 CommonResult 包装，这里解包出 data */
+async function readImportJson<T>(res: Response): Promise<T> {
+  const payload = (await res.json().catch(() => null)) as {
+    code: number;
+    msg: string;
+    data: T;
+  } | null;
+  if (!payload) throw new Error(`请求失败 (${res.status})：响应格式异常`);
+  if (payload.code === 401) throw new SnowyAuthError(payload.msg || '登录已失效，请重新登录');
+  if (payload.code !== 200) throw new Error(payload.msg || `请求失败 (${res.status})`);
+  return payload.data;
+}
+
+/** 上传导入文件并拿到后台任务票据 */
+async function uploadImportTicket(
+  path: string,
+  file: File,
+  extra: Record<string, string> = {}
+): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  Object.entries(extra).forEach(([key, value]) => form.append(key, value));
+  const res = await snowyFetch(path, { method: 'POST', body: form });
+  return readImportJson<string>(res);
 }
 
 /** 上传文件到小诺文件服务（复用小诺上传接口），带进度回调 */
@@ -194,6 +230,14 @@ export const api = {
   exportDatabase: async (): Promise<void> => snowyDownload('/biz/export/database'),
   exportFiles: async (): Promise<void> => snowyDownload('/biz/export/files'),
   exportUserFiles: async (): Promise<void> => snowyDownload('/biz/export/user-files'),
+
+  // ---- 数据导入 ----
+  importFiles: (file: File, mode: 'OVERWRITE' | 'APPEND'): Promise<string> =>
+    uploadImportTicket('/biz/import/files', file, { mode }),
+  restoreDatabase: (file: File): Promise<string> =>
+    uploadImportTicket('/biz/import/database', file),
+  getImportStatus: (ticket: string): Promise<DataImportStatus> =>
+    snowyRequest<DataImportStatus>(`/biz/import/status?ticket=${encodeURIComponent(ticket)}`),
 
   // ---- 视频 ----
   getVideos: async () => ({ items: await snowyBiz.listVideos() }),

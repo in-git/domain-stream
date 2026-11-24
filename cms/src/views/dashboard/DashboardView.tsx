@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, FileArchive, Files, Loader2 } from 'lucide-react';
+import { Database, FileArchive, Files, Loader2, Upload } from 'lucide-react';
 import { api } from '../../lib/api.ts';
 import { showToast } from '../../components/AppToast.tsx';
 import type { ModuleKey } from '../../types/cms.ts';
@@ -10,6 +10,7 @@ import { ModuleFlowPanel } from './ModuleFlowPanel';
 import { DistributionPanel } from './DistributionPanel';
 import { DashboardSkeleton } from './DashboardSkeleton';
 import { useDashboardData } from './useDashboardData';
+import { DataImportModal } from './DataImportModal';
 
 interface DashboardViewProps {
   onNavigate: (module: ModuleKey) => void;
@@ -25,6 +26,7 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
     null
   );
   const [exporting, setExporting] = useState<ExportKind | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, loading, moduleBreakdown } = useDashboardData();
 
@@ -59,11 +61,17 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-[15px] font-semibold text-[#1D1D1F]">数据导出</h2>
-            <p className="mt-1 text-[12px] leading-5 text-[#86868B]">
-              备份数据库 SQL；将系统文件中心「用户文件」按图片、视频、音频、文档、压缩包、字体、其他分类打包下载；或直接导出全部用户上传文件（保留原始文件名，不分类、不生成清单）
-            </p>
+           
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Upload className="w-4 h-4" strokeWidth={1.8} />
+              导入数据
+            </button>
             <button
               type="button"
               onClick={() => void handleExport('database')}
@@ -124,6 +132,8 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
         <VisitorStatsTable snapshot={data.snapshot} periodStats={data.periodStats} />
         <RecentVisits visits={data.latestVisits ?? []} />
       </section>
+
+      {importOpen && <DataImportModal onClose={() => setImportOpen(false)} />}
     </div>
   );
 }
