@@ -595,7 +595,12 @@ export const portalApi = {
   recordVideoView: (id: string) =>
     request<boolean>(`/public/videos/${encodeURIComponent(id)}/view`, { method: 'POST' }),
   articles: () => request<PortalArticle[]>('/public/articles'),
-  graphics: () => request<PortalGraphic[]>('/public/graphics'),
+  graphics: (category?: string) =>
+    request<PortalGraphic[]>(
+      category && category !== '全部'
+        ? `/public/graphics?category=${encodeURIComponent(category)}`
+        : '/public/graphics'
+    ),
   /** 顶级留言与回复同在一张表，一次拉取后由调用方按 parentId 组装 */
   messages: () => request<PortalMessage[]>('/public/messages'),
   addMessage: (draft: MessageDraft) =>

@@ -93,7 +93,7 @@ export function PortalError({
 
 /**
  * 通用空白占位：图标 + 标题 + 描述 + 可选操作按钮。
- * 统一的实线描边（无虚线），供各模块空状态复用。
+ * 统一无背景、无边框、无阴影，保持页面扁平，供各模块空状态复用。
  */
 export function EmptyState({
   icon: Icon,
@@ -102,7 +102,6 @@ export function EmptyState({
   action,
   className = '',
   compact = false,
-  bare = false,
   onDark = false,
 }: {
   icon?: typeof Film;
@@ -112,8 +111,6 @@ export function EmptyState({
   className?: string;
   /** 紧凑模式：更小的内边距与图标，适合列表内联空态 */
   compact?: boolean;
-  /** 无背景：移除卡片背景色，仅保留文字 */
-  bare?: boolean;
   /** 深色背景上使用：标题改为白色 */
   onDark?: boolean;
 }) {
@@ -122,11 +119,7 @@ export function EmptyState({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: APPLE_EASE }}
-      className={`rounded-3xl border-0 ${
-        bare
-          ? 'bg-transparent'
-          : 'bg-transparent sm:bg-white sm:border sm:border-black/[0.06] dark:bg-transparent dark:sm:bg-[#161618] dark:sm:border-white/[0.08]'
-      } shadow-none text-center ${compact ? 'px-5 py-10' : 'px-6 py-20'} ${className}`}
+      className={`bg-transparent border-0 shadow-none text-center ${compact ? 'px-5 py-10' : 'px-6 py-20'} ${className}`}
     >
       {Icon && (
         <div

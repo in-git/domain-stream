@@ -489,13 +489,13 @@ export function VideosView({
       {/* PC 沉浸模式的分类条已移至顶栏（见 MainHeader），与搜索框同排；此处不再渲染 */}
 
       {!isMini && viewMode === 'feed' && filteredVideos.length === 0 && (
-        <div className={`flex items-center justify-center bg-[#0A0A0C] ${headerFloating ? 'h-[100dvh]' : 'h-[calc(100dvh-3.5rem)]'}`}>
-          <EmptyState className="w-fit px-10 py-16" title="暂无数据" bare onDark />
+        <div className={`flex items-center justify-center bg-black ${headerFloating ? 'h-[100dvh]' : 'h-[calc(100dvh-3.5rem)]'}`}>
+          <EmptyState className="w-fit px-10 py-16" title="暂无数据" onDark />
         </div>
       )}
 
       {!isMini && viewMode === 'grid' && filteredVideos.length === 0 && (
-        <EmptyState title="暂无数据" bare />
+        <EmptyState title="暂无数据" />
       )}
 
       {/* 沉浸刷看：始终挂载，网格模式下用 CSS 隐藏，保证 <video> 不被销毁重建 */}
@@ -511,8 +511,8 @@ export function VideosView({
               isMini
                 ? 'relative w-full h-full overflow-hidden'
                 : headerFloating
-                  ? 'relative w-full h-[100dvh] rounded-none overflow-hidden bg-[#0A0A0C] border-0 shadow-none select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
-                  : 'relative w-full h-[calc(100dvh-3.5rem)] rounded-none overflow-hidden bg-[#0A0A0C] border-0 md:border border-black/[0.08] dark:border-white/[0.1] shadow-none md:shadow-lg select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                  ? 'relative w-full h-[100dvh] rounded-none overflow-hidden bg-black border-0 shadow-none select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
+                  : 'relative w-full h-[calc(100dvh-3.5rem)] rounded-none overflow-hidden bg-black border-0 select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
             <Swiper

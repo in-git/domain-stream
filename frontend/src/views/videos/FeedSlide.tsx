@@ -481,9 +481,7 @@ export function FeedSlide({
             className={`left-0 right-0 text-white z-10 pointer-events-none ${
               mini
                 ? 'absolute bottom-0 p-2'
-                : captionToBody
-                  ? 'space-y-3 pt-4 sm:pl-6 sm:pr-24 sm:pt-6'
-                  : 'absolute bottom-0 space-y-3 pt-4 pb-[calc(3rem+14px)] sm:pl-6 sm:pr-24 sm:pt-6 md:pb-6'
+                : 'absolute bottom-0 space-y-3 pt-4 pb-[calc(3rem+14px)] sm:pl-6 sm:pr-24 sm:pt-6 md:pb-6'
             }`}
           >
             {!mini && captionToBody && (

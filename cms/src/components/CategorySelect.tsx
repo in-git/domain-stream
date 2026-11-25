@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FolderPlus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   dedupePublishCategoryOptions,
   filterPublishCategories,
@@ -117,7 +117,7 @@ export function CategorySelect({
             aria-label="新建分类"
             className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl border border-[#D2D2D7] bg-white text-[#0071E3] hover:bg-[#F5F5F7] hover:border-[#0071E3]/40 transition-colors"
           >
-            <FolderPlus className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
           </button>
         )}
       </div>

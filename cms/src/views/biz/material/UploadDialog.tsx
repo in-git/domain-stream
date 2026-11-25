@@ -8,11 +8,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   File as FileIcon,
   Film,
-  FolderPlus,
   Image as ImageIcon,
   ImagePlus,
   Loader2,
   Music,
+  Plus,
   Trash2,
   UploadCloud,
   X,
@@ -297,7 +297,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
                     onClick={() => setQuickCreateOpen(true)}
                     className="shrink-0 h-7 px-2.5 rounded-lg bg-[#AD6800] text-white text-[12px] hover:bg-[#955800] inline-flex items-center gap-1"
                   >
-                    <FolderPlus className="w-3.5 h-3.5" />
+                    <Plus className="w-3.5 h-3.5" />
                     新建分类
                   </button>
                 </div>
@@ -326,7 +326,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
                   onClick={() => setQuickCreateOpen(true)}
                   className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-[#0071E3] hover:underline"
                 >
-                  <FolderPlus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" />
                   新建分类
                 </button>
               </div>

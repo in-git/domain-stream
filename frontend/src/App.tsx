@@ -32,6 +32,7 @@ export default function App() {
 
   const session = useUserSession();
   const data = usePortalData(session.profile.name, activeSection, session.likeCounts);
+  const { loadSection } = data;
   const player = usePersistentPlayer();
 
   const isProfileBehindLogin =
@@ -68,7 +69,11 @@ export default function App() {
   }, [session.isDark]);
 
   const handleSelectSection = useCallback(
-    (section: string) => {
+    (section: string, force = false) => {
+      // 侧栏点击强制刷新对应板块；个人中心与自定义模块没有独立内容接口
+      if (force && isSectionId(section)) {
+        void loadSection(section, true);
+      }
       setActiveSection(section);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       // 自定义模块没有专属埋点类型，跳过上报
@@ -81,7 +86,7 @@ export default function App() {
                   : null;
       if (pageType) trackPageView(pageType);
     },
-    [setActiveSection]
+    [loadSection, setActiveSection]
   );
 
   const handleSplashComplete = useCallback(() => setShowSplash(false), []);

@@ -5,6 +5,8 @@ import { PortalEmpty, PortalError, SectionSkeleton } from '../../components/Port
 interface GallerySectionProps {
   photos: PhotoItem[];
   categories: string[];
+  category: string;
+  onCategoryChange: (category: string) => void;
   savedIds: string[];
   likedIds: string[];
   searchQuery: string;
@@ -18,6 +20,8 @@ interface GallerySectionProps {
 export function GallerySection({
   photos,
   categories,
+  category,
+  onCategoryChange,
   savedIds,
   likedIds,
   searchQuery,
@@ -33,12 +37,14 @@ export function GallerySection({
         <SectionSkeleton section="gallery" />
       ) : error ? (
         <PortalError section="gallery" message={error} onRetry={onRetry} />
-      ) : photos.length === 0 ? (
+      ) : photos.length === 0 && categories.length === 0 ? (
         <PortalEmpty section="gallery" onRetry={onRetry} />
       ) : (
         <GalleryView
           photos={photos}
           categories={categories}
+          category={category}
+          onCategoryChange={onCategoryChange}
           savedIds={savedIds}
           likedIds={likedIds}
           searchQuery={searchQuery}

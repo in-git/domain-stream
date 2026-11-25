@@ -5,7 +5,7 @@ import { navIconComponent, navIconUrl, parseNav } from './navConfig';
 
 interface MobileTabBarProps {
   activeSection: string;
-  onSelectSection: (section: string) => void;
+  onSelectSection: (section: string, force?: boolean) => void;
   /** 首页（视频板块）使用透明紧凑样式，让视频铺满全屏 */
   transparent?: boolean;
 }
@@ -38,7 +38,7 @@ export function MobileTabBar({
               type="button"
               whileTap={{ scale: 0.9 }}
               transition={SWIFTUI_SNAPPY}
-              onClick={() => onSelectSection(id)}
+              onClick={() => onSelectSection(id, true)}
               className={`relative flex items-center justify-center gap-1.5 h-12 min-w-0 select-none [-webkit-tap-highlight-color:transparent] transition-colors focus-visible:outline-none ${
                 transparent
                   ? isActive

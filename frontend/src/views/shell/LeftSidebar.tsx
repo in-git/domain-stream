@@ -7,7 +7,7 @@ import { navIconComponent, navIconUrl, parseNav, type SidebarNavItem } from './n
 
 interface LeftSidebarProps {
   activeSection: string;
-  onSelectSection: (section: string) => void;
+  onSelectSection: (section: string, force?: boolean) => void;
 }
 
 /**
@@ -33,7 +33,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         {/* Brand Emblem & Wordmark */}
         <button
           type="button"
-          onClick={() => onSelectSection('videos')}
+          onClick={() => onSelectSection('videos', true)}
           className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
         >
           <span className="flex items-center justify-center w-9 h-9 shrink-0">
@@ -66,7 +66,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
                 key={id}
                 type="button"
                 whileTap={{ scale: 0.97 }}
-                onClick={() => onSelectSection(id)}
+                onClick={() => onSelectSection(id, true)}
                 title={label}
                 aria-current={isActive ? 'page' : undefined}
                 className={`relative w-full flex items-center justify-center lg:justify-start gap-3.5 px-3 lg:px-3.5 py-3 min-h-[46px] rounded-2xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${

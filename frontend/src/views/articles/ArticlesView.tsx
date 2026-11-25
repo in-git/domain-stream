@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bookmark, Heart, MessageCircle, Type, X } from 'lucide-react';
+import { Bookmark, Heart, MessageCircle, Newspaper, Type, X } from 'lucide-react';
 import type { ArticleItem } from '../../data/content';
 import { sanitizeRichHtml } from '../../lib/richtext';
 import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
+import { EmptyState } from '../../components/PortalStates';
 import { ResilientImage } from '../../components/ResilientImage';
 import { Tooltip } from '../../components/Tooltip';
 import { CommentPanel } from '../../components/CommentPanel.tsx';
@@ -325,8 +326,15 @@ export function ArticlesView({
         })}
       </div>
 
-      {/* 触底加载：还有更多时显示哨兵，全部加载完显示提示 */}
-      {hasMore ? (
+      {/* 筛选无结果复用公共空态；有结果时保留触底加载提示 */}
+      {filteredArticles.length === 0 ? (
+        <EmptyState
+          icon={Newspaper}
+          title="暂无文章"
+          description="换个分类或搜索词试试"
+          compact
+        />
+      ) : hasMore ? (
         <div ref={loadMoreRef} className="flex justify-center py-6">
           <button
             type="button"

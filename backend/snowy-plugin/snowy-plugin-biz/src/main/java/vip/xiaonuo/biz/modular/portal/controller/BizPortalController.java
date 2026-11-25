@@ -189,12 +189,31 @@ public class BizPortalController {
      * @author wuwenlong
      * @date  2026/11/19
      */
-    @Operation(summary = "获取已发布图文列表")
+    @Operation(summary = "获取已发布图文列表（可按分类筛选）")
     @GetMapping("/public/graphics")
-    public CommonResult<List<BizGraphic>> graphics() {
+    public CommonResult<List<BizGraphic>> graphics(@RequestParam(value = "category", required = false) String category) {
         LambdaQueryWrapper<BizGraphic> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(BizGraphic::getStatus, "PUBLISHED")
-                .orderByDesc(BizGraphic::getIsTop)
+        queryWrapper.eq(BizGraphic::getStatus, "PUBLISHED");
+
+        String categoryFilter = StrUtil.blankToDefault(category, "").trim();
+        if (StrUtil.isNotBlank(categoryFilter) && !"全部".equals(categoryFilter)) {
+            // 内容表存分类编码；前台分类标签是名称，这里同时兼容编码或名称查询
+            LambdaQueryWrapper<BizCategory> categoryQuery = new LambdaQueryWrapper<>();
+            categoryQuery.eq(BizCategory::getStatus, "ENABLE")
+                    .and(wrapper -> wrapper.eq(BizCategory::getCode, categoryFilter)
+                            .or().eq(BizCategory::getName, categoryFilter));
+            Set<String> categoryCodes = bizCategoryMapper.selectList(categoryQuery).stream()
+                    .map(BizCategory::getCode)
+                    .filter(StrUtil::isNotBlank)
+                    .collect(Collectors.toSet());
+            if (!categoryCodes.isEmpty()) {
+                queryWrapper.in(BizGraphic::getCategory, categoryCodes);
+            } else {
+                // 兼容历史数据直接存分类名称的情况
+                queryWrapper.eq(BizGraphic::getCategory, categoryFilter);
+            }
+        }
+        queryWrapper.orderByDesc(BizGraphic::getIsTop)
                 .orderByAsc(BizGraphic::getSortCode)
                 .orderByDesc(BizGraphic::getPublishTime);
         return CommonResult.data(bizGraphicMapper.selectList(queryWrapper));

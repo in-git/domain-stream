@@ -99,7 +99,7 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'allowComment',
     label: '是否允许评论',
-    description: '关闭后客户端隐藏文章、视频、图文的评论入口，且后端拒绝发表新评论；已有评论仍会保留',
+    description: '各个模块的评论总开关',
     control: 'switch',
     defaultValue: 'YES',
     aliases: ['enableComment', 'commentEnabled'],

@@ -93,6 +93,7 @@ function FieldControl({
         onLabel="允许"
         offLabel="禁止"
         ariaLabel={field.label}
+        className="ml-auto"
       />
     );
   }
@@ -283,22 +284,34 @@ export default function ConfigView() {
 
   /** 渲染单个配置字段（标题、控件、说明） */
   function renderField(field: ConfigFieldDef) {
+    const isSwitch = field.control === 'switch';
     return (
       <div key={field.key} className="min-w-0">
-        <div className="mb-2">
-          <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
-          <span className="ml-2 text-[11px] font-mono text-[#C7C7CC]">{field.key}</span>
-          {field.description && (
-            <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
-          )}
+        <div className={isSwitch ? 'mb-2 flex items-center justify-between gap-3' : 'mb-2'}>
+          <div className="min-w-0">
+            <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
+            <span className="ml-2 text-[11px] font-mono text-[#C7C7CC]">{field.key}</span>
+            {field.description && (
+              <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
+            )}
+          </div>
+          {isSwitch && <FieldControl
+            field={field}
+            value={draft?.values[field.key] ?? ''}
+            onChange={(value) => setFieldValue(field.key, value)}
+            onError={(message) => showToast(message, 'danger')}
+            onPick={() => setPickerField(field.key)}
+          />}
         </div>
-        <FieldControl
-          field={field}
-          value={draft?.values[field.key] ?? ''}
-          onChange={(value) => setFieldValue(field.key, value)}
-          onError={(message) => showToast(message, 'danger')}
-          onPick={() => setPickerField(field.key)}
-        />
+        {!isSwitch && (
+          <FieldControl
+            field={field}
+            value={draft?.values[field.key] ?? ''}
+            onChange={(value) => setFieldValue(field.key, value)}
+            onError={(message) => showToast(message, 'danger')}
+            onPick={() => setPickerField(field.key)}
+          />
+        )}
       </div>
     );
   }

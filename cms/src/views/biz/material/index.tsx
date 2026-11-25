@@ -26,11 +26,11 @@ import {
   List,
   Loader2,
   Music,
+  Plus,
   RefreshCw,
   Search,
   Trash2,
   UploadCloud,
-  X,
 } from 'lucide-react';
 import {
   categoryLabel,
@@ -50,6 +50,7 @@ import { UploadDialog, type UploadSubmitPayload } from './UploadDialog.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
+import { QuickCreateCategory } from '../../../components/QuickCreateCategory.tsx';
 
 const PAGE_SIZE = 24;
 
@@ -277,6 +278,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   /** 素材分类（通用分类 MATERIAL 模块的编码），空表示不限 */
   const [categoryCode, setCategoryCode] = useState('');
   const [materialCategories, setMaterialCategories] = useState<BizCategory[]>([]);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('newest');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -783,9 +785,18 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
             ))}
             {materialCategories.length === 0 && (
               <span className="text-[11px] text-[#AEAEB2]">
-                暂无素材分类，可在「通用分类」中创建素材模块的分类
+                暂无素材分类
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setQuickCreateOpen(true)}
+              title="快速新建分类"
+              aria-label="快速新建分类"
+              className="h-8 w-8 rounded-[10px] inline-flex items-center justify-center text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#0071E3] transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-1 pt-2 ml-auto">
@@ -1091,6 +1102,20 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
         initialFiles={pendingDropFiles}
       />
 
+      <QuickCreateCategory
+        open={quickCreateOpen}
+        module="MATERIAL"
+        title="新建素材分类"
+        onClose={() => setQuickCreateOpen(false)}
+        onCreated={(category) => {
+          void loadMaterialCategories();
+          if (category.code) {
+            setCategoryCode(category.code);
+            setPage(1);
+          }
+          showToast('分类创建成功', 'success');
+        }}
+      />
     </div>
   );
 }

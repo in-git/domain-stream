@@ -61,9 +61,9 @@ export function PlaylistPanel({
   }, [hasMore, videos.length]);
 
   return (
-    <aside className={`absolute bottom-0 left-0 z-30 flex w-[320px] max-w-[85vw] flex-col border-r border-white/15 bg-[#1C1C1E]/95 shadow-[12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl ${headerFloating ? 'top-14' : 'top-0'}`}>
+    <aside className={`absolute bottom-0 right-0 z-30 flex w-[320px] max-w-[85vw] flex-col border-l border-white/15 bg-[#1C1C1E]/95 shadow-[-12px_0_32px_rgba(0,0,0,0.55)] backdrop-blur-xl ${headerFloating ? 'top-14' : 'top-0'}`}>
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-white/25 to-transparent"
+        className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-white/25 to-transparent"
         aria-hidden="true"
       />
 

@@ -17,7 +17,7 @@
  *   />
  */
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Check, FolderPlus, Loader2, X } from 'lucide-react';
+import { AlertCircle, Check, Loader2, Plus, X } from 'lucide-react';
 import {
   categoryApi,
   categoryModuleLabel,
@@ -134,7 +134,7 @@ export function QuickCreateCategory({
         <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-[#F2F2F7]">
           <div className="min-w-0">
             <h3 className="text-[15px] font-semibold text-[#1D1D1F] flex items-center gap-1.5">
-              <FolderPlus className="w-4 h-4 text-[#0071E3]" />
+              <Plus className="w-4 h-4 text-[#0071E3]" />
               {title}
             </h3>
             <p className="mt-0.5 text-[11px] text-[#86868B]">

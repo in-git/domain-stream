@@ -25,7 +25,7 @@ interface PortalShellProps {
   showSplash: boolean;
   onSplashComplete: () => void;
   activeSection: string;
-  onSelectSection: (section: string) => void;
+  onSelectSection: (section: string, force?: boolean) => void;
   searchQuery: string;
   onChangeSearch: (query: string) => void;
   isSearchOpen: boolean;
@@ -89,6 +89,8 @@ export function PortalShell({
     loadVideosByCategory,
     articleCategories,
     graphicCategories,
+    graphicCategory,
+    loadGraphicsByCategory,
     loadingMap,
     loadedSections,
     errors,
@@ -266,6 +268,8 @@ export function PortalShell({
                   <GallerySection
                     photos={photos}
                     categories={graphicCategories}
+                    category={graphicCategory}
+                    onCategoryChange={(c) => void loadGraphicsByCategory(c)}
                     savedIds={savedIds}
                     likedIds={likedIds}
                     searchQuery={searchQuery}

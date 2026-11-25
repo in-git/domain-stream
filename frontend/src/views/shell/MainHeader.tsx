@@ -109,22 +109,6 @@ export function MainHeader({
                 );
               })}
             </div>
-            {onTogglePlaylist && (
-              <button
-                type="button"
-                onClick={onTogglePlaylist}
-                aria-label={playlistOpen ? '收起播放列表' : '展开播放列表'}
-                title={playlistOpen ? '收起播放列表' : '播放列表'}
-                aria-pressed={playlistOpen}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                  playlistOpen
-                    ? 'bg-white text-[#1D1D1F]'
-                    : 'text-white/75 hover:bg-white/15 hover:text-white'
-                }`}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -147,7 +131,7 @@ export function MainHeader({
             aria-label="搜索内容"
             className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border border-transparent focus:border-[#0071E3]/40 focus:outline-none transition-colors text-xs sm:text-sm ${
               pcImmersive
-                ? 'bg-white/15 text-white placeholder:text-white/60 focus:bg-white/25'
+                ? 'bg-white/15 backdrop-blur-md text-white placeholder:text-white/60 focus:bg-white/25'
                 : 'bg-[#EEEEF0] dark:bg-[#1C1C1E] dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B]'
             }`}
           />
@@ -173,8 +157,24 @@ export function MainHeader({
         </div>
       </div>
 
-      {/* Right: Mobile Search Entry + View Toggle (仅首页) + Theme Toggle + Account */}
+      {/* Right: Playlist Toggle + Mobile Search Entry + View Toggle + Theme Toggle + Account */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {pcImmersive && onTogglePlaylist && (
+          <button
+            type="button"
+            onClick={onTogglePlaylist}
+            aria-label={playlistOpen ? '收起播放列表' : '展开播放列表'}
+            title={playlistOpen ? '收起播放列表' : '播放列表'}
+            aria-pressed={playlistOpen}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+              playlistOpen
+                ? 'bg-white text-[#1D1D1F]'
+                : iconClass
+            }`}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        )}
         {showViewToggle && (
           <motion.button
             type="button"

@@ -40,6 +40,8 @@ export function usePortalData(
   const [videoCategory, setVideoCategory] = useState<string>('全部');
   const [articleCategories, setArticleCategories] = useState<string[]>([]);
   const [graphicCategories, setGraphicCategories] = useState<string[]>([]);
+  /** 当前图文分类（提升到数据层，切换时按分类请求后端；侧栏刷新时沿用） */
+  const [graphicCategory, setGraphicCategory] = useState<string>('全部');
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
@@ -54,6 +56,7 @@ export function usePortalData(
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
   /** 分类快速切换时只应用最后一次请求结果 */
   const videoCategoryRequestRef = useRef(0);
+  const graphicCategoryRequestRef = useRef(0);
   /** 与 loadingMap 同步的 ref，供 loadSection 内同步判断防重入 */
   const loadingMapRef = useRef<Partial<Record<SectionId, boolean>>>({});
 
@@ -190,7 +193,7 @@ export function usePortalData(
           );
         } else if (section === 'gallery') {
           const [graphics, favoriteCounts] = await Promise.all([
-            portalApi.graphics(),
+            portalApi.graphics(graphicCategory),
             favoriteApi.counts('IMAGE_TEXT').catch(() => ({})),
           ]);
           loaded = await loadWithCategories(
@@ -221,7 +224,7 @@ export function usePortalData(
         }
       }
     },
-    [loadWithCategories, pickCategories, videoCategory]
+    [loadWithCategories, pickCategories, videoCategory, graphicCategory]
   );
 
   /** 切换视频分类：按分类重新请求后端，只替换视频列表，不重拉分类字典、不触发全屏骨架屏 */
@@ -244,6 +247,35 @@ export function usePortalData(
         setErrors((prev) => ({
           ...prev,
           videos: error instanceof Error ? error.message : '分类加载失败',
+        }));
+      }
+    },
+    []
+  );
+
+  /** 切换图文分类：按分类重新请求后端，只替换图文列表，不重拉分类字典、不触发全屏骨架屏 */
+  const loadGraphicsByCategory = useCallback(
+    async (category: string) => {
+      const requestId = ++graphicCategoryRequestRef.current;
+      setGraphicCategory(category);
+      setErrors((prev) => ({ ...prev, gallery: undefined }));
+      try {
+        const categories = categoriesPromiseRef.current
+          ? await categoriesPromiseRef.current
+          : [];
+        const categoryCode = resolveCategoryCode(categories, category, 'GRAPHIC');
+        const [rows, favoriteCounts] = await Promise.all([
+          portalApi.graphics(categoryCode),
+          favoriteApi.counts('IMAGE_TEXT').catch(() => ({})),
+        ]);
+        if (requestId !== graphicCategoryRequestRef.current) return;
+        const names = categoryNameMap(categories);
+        setPhotos(graphicsToPhotos(rows, names, favoriteCounts));
+      } catch (error) {
+        if (requestId !== graphicCategoryRequestRef.current) return;
+        setErrors((prev) => ({
+          ...prev,
+          gallery: error instanceof Error ? error.message : '分类加载失败',
         }));
       }
     },
@@ -299,6 +331,8 @@ export function usePortalData(
     loadVideosByCategory,
     articleCategories,
     graphicCategories,
+    graphicCategory,
+    loadGraphicsByCategory,
     loadedSections,
     loadingMap,
     errors,

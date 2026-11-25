@@ -10,6 +10,8 @@ import NoteDetail from './NoteDetail';
 interface GalleryViewProps {
   photos: PhotoItem[];
   categories?: string[];
+  category: string;
+  onCategoryChange: (category: string) => void;
   savedIds: string[];
   likedIds: string[];
   searchQuery?: string;
@@ -212,6 +214,8 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
 export function GalleryView({
   photos,
   categories,
+  category,
+  onCategoryChange,
   savedIds,
   likedIds,
   searchQuery = '',
@@ -220,7 +224,7 @@ export function GalleryView({
   externalSelectedId,
   onClearExternalSelection,
 }: GalleryViewProps) {
-  const [album, setAlbum] = useState<string>(ALL);
+  const album = category || ALL;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
@@ -245,17 +249,15 @@ export function GalleryView({
   }, [categories, photos]);
 
   const query = searchQuery.trim().toLowerCase();
+  // 分类已由后端筛选，这里只处理搜索关键词
   const list = useMemo(
     () =>
-      photos.filter((note) => {
-        const okAlbum = album === ALL || note.album === album;
-        const okQuery =
-          !query ||
-          note.title.toLowerCase().includes(query) ||
-          (note.content ?? '').toLowerCase().includes(query);
-        return okAlbum && okQuery;
-      }),
-    [photos, album, query]
+      photos.filter((note) =>
+        !query ||
+        note.title.toLowerCase().includes(query) ||
+        (note.content ?? '').toLowerCase().includes(query)
+      ),
+    [photos, query]
   );
 
   const activeNote = useMemo(() => {
@@ -274,7 +276,7 @@ export function GalleryView({
               <button
                 key={item}
                 type="button"
-                onClick={() => setAlbum(item)}
+                onClick={() => onCategoryChange(item)}
                 aria-pressed={active}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   active
@@ -291,7 +293,11 @@ export function GalleryView({
 
       {/* 瀑布流：CSS columns，小红书同款自然错落 */}
       {list.length === 0 ? (
-        <EmptyState icon={Images} title="还没有笔记" description="内容发布后将在这里显示" />
+        <EmptyState
+          icon={Images}
+          title="还没有笔记"
+          description={album === ALL && !query ? '内容发布后将在这里显示' : '换个分类或关键词试试'}
+        />
       ) : (
         /* 小红书桌面端约 5 列，卡片宽 ≈ 350px；列数更多卡片自然更小 */
         <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">
