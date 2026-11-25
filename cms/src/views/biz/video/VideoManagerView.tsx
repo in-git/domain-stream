@@ -427,7 +427,7 @@ export function VideoManagerView({
 
       {/* Empty State */}
       {videos.length === 0 ? (
-        <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
+          <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
           <Film className="w-10 h-10 text-[#C7C7CC] mx-auto mb-3" strokeWidth={1.5} />
           <h3 className="text-[16px] font-semibold text-[#1D1D1F]">暂无匹配的视频内容</h3>
           <p className="text-[13px] text-[#6E6E73] mt-1">

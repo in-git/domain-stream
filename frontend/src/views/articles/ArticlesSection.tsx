@@ -11,6 +11,7 @@ interface ArticlesSectionProps {
   loading: boolean;
   error?: string;
   onRetry: () => void;
+  onRefresh?: () => void;
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
   externalSelectedId?: string | null;
@@ -26,6 +27,7 @@ export function ArticlesSection({
   loading,
   error,
   onRetry,
+  onRefresh,
   onToggleSave,
   onToggleLike,
   externalSelectedId,
@@ -49,6 +51,7 @@ export function ArticlesSection({
           onToggleSave={onToggleSave}
           onToggleLike={onToggleLike}
           onReadArticle={() => {}}
+          onRefresh={onRefresh}
           externalSelectedId={externalSelectedId}
           onClearExternalSelection={onClearExternalSelection}
         />

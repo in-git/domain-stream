@@ -64,9 +64,9 @@ export function MainHeader({
   const shellClass = pcImmersive
     ? 'fixed top-0 right-0 md:left-20 lg:left-60 z-40 bg-gradient-to-b from-black/65 via-black/25 to-transparent'
     : solidBlack
-      ? 'sticky top-0 z-30 border-b border-white/10 bg-black'
+      ? 'sticky top-0 z-30 border-b border-white/10 bg-black/55 backdrop-blur-xl'
       : overlay
-        ? 'fixed inset-x-0 top-0 z-30 bg-black md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
+        ? 'fixed inset-x-0 top-0 z-30 bg-black/55 backdrop-blur-xl md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
         : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
 
   const iconClass = pcImmersive || solidBlack || overlay

@@ -194,6 +194,8 @@ export const fileCenterApi = {
     categoryCode?: string;
     bizType?: 'USER' | 'MATERIAL';
     searchKey?: string;
+    sortField?: string;
+    sortOrder?: string;
   } = {}): Promise<DevFilePage> {
     return snowyRequest<DevFilePage>(`${BASE}/page${qs(params)}`);
   },

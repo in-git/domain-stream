@@ -42,6 +42,8 @@ export interface ArticleItem {
   likes: number;
   /** 评论数（后端统计） */
   commentCount?: number;
+  /** 排序用时间戳（publishTime / createTime），不展示 */
+  sortTime?: number;
   cover: string;
   quote: string;
   paragraphs: string[];
@@ -73,6 +75,8 @@ export interface PhotoItem {
   favoriteCount?: number;
   /** 评论数（后端统计） */
   commentCount?: number;
+  /** 排序用时间戳（publishTime / createTime），不展示 */
+  sortTime?: number;
 }
 
 export interface UserProfile {

@@ -6,8 +6,8 @@
  *       POST add / edit / delete / importData / exportData）
  * 前端统一经 /snowy 代理访问，与登录态 token 保持一致。
  *
- * 说明：后端 page() 为代码生成器默认实现，不使用 searchKey/模块等条件，
- * 因此列表接口负责分页拉取全量数据，搜索/筛选/树形组装都在组件内完成。
+ * 说明：搜索 / 模块 / 状态筛选均通过 page 接口在服务端完成；
+ * 列表接口只负责按条件逐页拉取，树形组装仍在组件内完成。
  */
 import { SnowyAuthError, snowyFetch, snowyRequest } from './snowy.ts';
 
@@ -58,6 +58,13 @@ export interface BizCategory {
   createUser?: string;
   updateTime?: string;
   updateUser?: string;
+}
+
+/** 分类列表服务端查询条件 */
+export interface CategoryPageQuery {
+  searchKey?: string;
+  module?: string;
+  status?: string;
 }
 
 /** add / edit 允许提交的业务字段（不含审计字段） */
@@ -248,8 +255,11 @@ export const categoryApi = {
     sortField?: string;
     sortOrder?: string;
     searchKey?: string;
+    module?: string;
+    status?: string;
   } = {}): Promise<CategoryPage> {
-    return snowyRequest<CategoryPage>(`${BASE}/page${qs(params)}`);
+    const sortOrder = params.sortOrder?.toLowerCase();
+    return snowyRequest<CategoryPage>(`${BASE}/page${qs({ ...params, sortOrder })}`);
   },
 
   /** 详情 */
@@ -309,12 +319,12 @@ export const categoryApi = {
   },
 };
 
-/** 循环分页拉取全部分类（后端 page 不支持条件查询，列表页在前端过滤） */
-export async function listAllCategories(): Promise<BizCategory[]> {
+/** 按服务端条件循环分页拉取分类 */
+export async function listAllCategories(query: CategoryPageQuery = {}): Promise<BizCategory[]> {
   const all: BizCategory[] = [];
   const size = 20;
-  for (let current = 1; current <= 500; current++) {
-    const page = await categoryApi.page({ current, size });
+  for (let current = 1; ; current++) {
+    const page = await categoryApi.page({ current, size, ...query });
     const records = page?.records || [];
     if (!records.length) break;
     // 后端可能限制每页条数或忽略 current：按 id 去重，避免重复累加或死循环

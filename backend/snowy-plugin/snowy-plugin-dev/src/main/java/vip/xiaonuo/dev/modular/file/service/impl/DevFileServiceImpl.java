@@ -156,6 +156,16 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
     @Override
     public Page<DevFile> page(DevFilePageParam devFilePageParam) {
         QueryWrapper<DevFile> queryWrapper = new QueryWrapper<DevFile>().checkSqlInjection();
+        boolean asc = "ASCEND".equals(devFilePageParam.getSortOrder());
+        String sortField = devFilePageParam.getSortField();
+        if ("name".equals(sortField)) {
+            queryWrapper.orderBy(true, asc, "name");
+        } else if ("sizeKb".equals(sortField)) {
+            queryWrapper.orderBy(true, asc, "CAST(size_kb AS DECIMAL(18,2))");
+        } else {
+            queryWrapper.orderByDesc("create_time");
+        }
+        queryWrapper.orderByDesc("id");
         if(ObjectUtil.isNotEmpty(devFilePageParam.getEngine())) {
             queryWrapper.lambda().eq(DevFile::getEngine, devFilePageParam.getEngine());
         }

@@ -319,6 +319,8 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
         categoryCode: categoryCode || undefined,
         bizType: 'MATERIAL',
         searchKey: search.trim() || undefined,
+        sortField: sort === 'size' ? 'sizeKb' : sort === 'name' ? 'name' : 'createTime',
+        sortOrder: sort === 'name' ? 'ASCEND' : 'DESCEND',
       });
       setRecords(data.records || []);
       setTotal(Number(data.total || 0));
@@ -327,7 +329,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
     } finally {
       setLoading(false);
     }
-  }, [page, category, categoryCode, search]);
+  }, [page, category, categoryCode, search, sort]);
 
   /** 分类统计：素材库固定 bizType=MATERIAL，各分类取 size=1 的 total */
   const loadStats = useCallback(async () => {
@@ -351,17 +353,17 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
     try {
       const all: BizCategory[] = [];
       for (let current = 1; ; current++) {
-        const result = await categoryApi.page({ current, size: 20 });
+        const result = await categoryApi.page({
+          current,
+          size: 20,
+          module: 'MATERIAL',
+          status: 'ENABLE',
+        });
         const records = result?.records || [];
         all.push(...records);
         if (records.length < 20 || all.length >= (result?.total ?? all.length)) break;
-        if (current >= 500) break;
       }
-      setMaterialCategories(
-        all
-          .filter((item) => item.module === 'MATERIAL' && (item.status || 'ENABLE') === 'ENABLE')
-          .sort((a, b) => (a.sortCode ?? 0) - (b.sortCode ?? 0))
-      );
+      setMaterialCategories(all);
     } catch {
       setMaterialCategories([]);
     }
@@ -400,16 +402,8 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
     setPage(1);
   }, []);
 
-  /** 当前页展示顺序：最新上传沿用后端顺序，其余本地排序 */
-  const visibleRecords = useMemo(() => {
-    const list = [...records];
-    if (sort === 'size') {
-      list.sort((a, b) => Number(b.sizeKb || 0) - Number(a.sizeKb || 0));
-    } else if (sort === 'name') {
-      list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-CN'));
-    }
-    return list;
-  }, [records, sort]);
+  /** 排序已由服务端处理，当前页直接展示后端返回顺序 */
+  const visibleRecords = records;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -608,13 +602,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
       }}
     >
       {dragging && (
-        <div className="fixed inset-0 z-40 bg-[#0071E3]/8 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-          <div className="px-8 py-6 rounded-2xl bg-white/95 border-2 border-dashed border-[#0071E3]/40 shadow-[0_18px_50px_rgba(0,0,0,0.12)] text-center">
-            <UploadCloud className="w-8 h-8 text-[#0071E3] mx-auto mb-2" strokeWidth={1.6} />
-            <div className="text-[14px] font-semibold text-[#1D1D1F]">松开即可上传素材</div>
-            <div className="text-[12px] text-[#86868B] mt-1">支持图片、视频、音频与文档</div>
-          </div>
-        </div>
+        <div className="fixed inset-0 z-40 bg-[#0071E3]/8 backdrop-blur-[1px] pointer-events-none" />
       )}
 
       {/* 概览 */}

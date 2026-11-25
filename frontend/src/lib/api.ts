@@ -204,6 +204,13 @@ function formatFullDate(raw?: string): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+/** 列表时间排序用：展示日期是本地化字符串，排序仍按后端原始时间戳 */
+function sortTimestamp(raw?: string): number {
+  if (!raw) return 0;
+  const time = new Date(raw).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
 /**
  * 按模块取分类名称：通用分类（COMMON）会同时并入各模块。
  * 返回可直接作为筛选标签使用的中文名称数组，已去重并排序。
@@ -381,6 +388,7 @@ export function articleFromPortal(
     readMinutes: Math.max(1, Math.ceil(plain.length / 400)),
     likes: row.likeCount || 0,
     commentCount: row.commentCount || 0,
+    sortTime: sortTimestamp(row.publishTime || row.createTime),
     cover: row.cover || str(ext.cover),
     quote: str(ext.quote, paragraphs[0] || plain.slice(0, 80) || row.summary || ''),
     paragraphs: paragraphs.length ? paragraphs : [plain || row.summary || row.title || ''],
@@ -429,6 +437,7 @@ export function graphicsToPhotos(
       likeCount: row.likeCount || 0,
       commentCount: row.commentCount || 0,
       favoriteCount: favoriteCounts?.[String(row.id)] ?? 0,
+      sortTime: sortTimestamp(row.publishTime || row.createTime),
       aspectRatio: (ASPECT_RATIOS.includes(ext.aspectRatio as PhotoItem['aspectRatio'])
         ? ext.aspectRatio
         : ASPECT_RATIOS[index % ASPECT_RATIOS.length]) as PhotoItem['aspectRatio'],

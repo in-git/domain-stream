@@ -117,8 +117,21 @@ public class BizMessageServiceImpl extends ServiceImpl<BizMessageMapper, BizMess
             CommonSortOrderEnum.validate(bizMessagePageParam.getSortOrder());
             queryWrapper.orderBy(true, bizMessagePageParam.getSortOrder().equals(CommonSortOrderEnum.ASC.getValue()),
                     StrUtil.toUnderlineCase(bizMessagePageParam.getSortField()));
+            queryWrapper.lambda().orderByDesc(BizMessage::getId);
         } else {
-            queryWrapper.lambda().orderByAsc(BizMessage::getSortCode);
+            queryWrapper.lambda().orderByAsc(BizMessage::getSortCode).orderByDesc(BizMessage::getId);
+        }
+        // 服务端筛选
+        if (StrUtil.isNotBlank(bizMessagePageParam.getStatus())) {
+            queryWrapper.eq("status", bizMessagePageParam.getStatus());
+        }
+        if (StrUtil.isNotBlank(bizMessagePageParam.getSearchKey())) {
+            String keyword = bizMessagePageParam.getSearchKey().trim();
+            queryWrapper.and(wrapper -> wrapper
+                    .like("content", keyword)
+                    .or().like("user_id", keyword)
+                    .or().like("reply_to_nickname", keyword)
+                    .or().like("reply", keyword));
         }
         // 校验数据范围
         List<String> loginUserDataScope = StpLoginUserUtil.getLoginUserDataScope();

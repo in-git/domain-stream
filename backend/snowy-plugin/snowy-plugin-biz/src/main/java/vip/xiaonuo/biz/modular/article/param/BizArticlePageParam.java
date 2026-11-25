@@ -48,4 +48,16 @@ public class BizArticlePageParam {
     @Schema(description = "关键词")
     private String searchKey;
 
+    /** 状态：PUBLISHED已发布/DRAFT草稿/OFFLINE已下架 */
+    @Schema(description = "状态：PUBLISHED已发布/DRAFT草稿/OFFLINE已下架")
+    private String status;
+
+    /** 分类编码 */
+    @Schema(description = "分类编码")
+    private String category;
+
+    /** 创建用户 */
+    @Schema(description = "创建用户")
+    private String createUser;
+
 }

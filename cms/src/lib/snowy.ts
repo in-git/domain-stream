@@ -649,16 +649,25 @@ function graphicFromSnowy(g: SnowyGraphic): ImageTextItem {
 /** 单页请求条数：统一使用常规分页大小，不再一次性拉大页 */
 const PAGE_SIZE = 20;
 
+/** Snowy 后端排序校验按小写枚举值比较，请求统一发小写 */
+function lowerSortOrder<T extends Record<string, unknown>>(params: T): T {
+  if (typeof params.sortOrder === 'string') {
+    return { ...params, sortOrder: params.sortOrder.toLowerCase() };
+  }
+  return params;
+}
+
 /** 逐页拉取模块全部数据，避免一次性请求过大分页 */
-async function fetchAll<T>(module: string): Promise<T[]> {
+async function fetchAll<T>(module: string, params: Record<string, unknown> = {}): Promise<T[]> {
   const all: T[] = [];
   for (let current = 1; ; current++) {
-    const page = await get<SnowyPage<T>>(`/biz/${module}/page`, {
+    const page = await get<SnowyPage<T>>(`/biz/${module}/page`, lowerSortOrder({
       current,
       size: PAGE_SIZE,
       sortField: 'createTime',
       sortOrder: 'DESCEND',
-    });
+      ...params,
+    }));
     const records = page?.records || [];
     all.push(...records);
     if (records.length < PAGE_SIZE || all.length >= (page?.total ?? all.length)) {
@@ -688,6 +697,29 @@ export interface VideoPageQuery {
   sortOrder?: 'DESCEND' | 'ASCEND';
 }
 
+export interface ArticlePageQuery {
+  current: number;
+  size: number;
+  searchKey?: string;
+  /** cms 状态：published / draft */
+  status?: 'published' | 'draft';
+  category?: string;
+  createUser?: string;
+  /** 时间排序：DESCEND 最新优先，ASCEND 最早优先 */
+  sortOrder?: 'DESCEND' | 'ASCEND';
+}
+
+export interface GraphicPageQuery {
+  current: number;
+  size: number;
+  searchKey?: string;
+  /** cms 状态：published / draft */
+  status?: 'published' | 'draft';
+  category?: string;
+  /** 时间排序：DESCEND 最新优先，ASCEND 最早优先 */
+  sortOrder?: 'DESCEND' | 'ASCEND';
+}
+
 export interface SnowyBizApi {
   /** 文本转图文：调用后端渲染，返回图片地址列表 */
   renderGraphicPoster(draft: GraphicPosterDraft): Promise<string[]>;
@@ -697,12 +729,13 @@ export interface SnowyBizApi {
   updateVideo(id: string, payload: Partial<VideoItem>): Promise<void>;
   deleteVideo(id: string): Promise<void>;
   deleteVideos(ids: string[]): Promise<void>;
-  listArticles(): Promise<ArticleItem[]>;
+  listArticles(query?: ArticlePageQuery): Promise<ArticleItem[]>;
+  countArticles(query?: Omit<ArticlePageQuery, 'current' | 'size'>): Promise<number>;
   createArticle(payload: Partial<ArticleItem>): Promise<void>;
   updateArticle(id: string, payload: Partial<ArticleItem>): Promise<void>;
   deleteArticle(id: string): Promise<void>;
   deleteArticles(ids: string[]): Promise<void>;
-  listImageTexts(): Promise<ImageTextItem[]>;
+  listImageTexts(query?: GraphicPageQuery): Promise<ImageTextItem[]>;
   createImageText(payload: Partial<ImageTextItem>): Promise<void>;
   updateImageText(id: string, payload: Partial<ImageTextItem>): Promise<void>;
   deleteImageText(id: string): Promise<void>;
@@ -770,7 +803,7 @@ export const snowyBiz: SnowyBizApi = {
     return post<string[]>('/public/graphics/poster/preview', draft);
   },
   async listVideoPage(query) {
-    const page = await get<SnowyPage<SnowyVideo>>('/biz/video/page', {
+    const page = await get<SnowyPage<SnowyVideo>>('/biz/video/page', lowerSortOrder({
       current: query.current,
       size: query.size,
       searchKey: query.searchKey,
@@ -779,7 +812,7 @@ export const snowyBiz: SnowyBizApi = {
       createUser: query.createUser,
       sortField: query.sortOrder ? 'createTime' : undefined,
       sortOrder: query.sortOrder
-    });
+    }));
     return {
       items: (page?.records || []).map(videoFromSnowy),
       total: page?.total || 0
@@ -802,8 +835,27 @@ export const snowyBiz: SnowyBizApi = {
     return post<void>('/biz/video/delete', ids.map((id) => ({ id })));
   },
 
-  async listArticles() {
-    return (await fetchAll<SnowyArticle>('article')).map(articleFromSnowy);
+  async listArticles(query) {
+    const rows = await fetchAll<SnowyArticle>('article', {
+      searchKey: query?.searchKey,
+      status: query?.status ? fromStatus(query.status) : undefined,
+      category: query?.category,
+      createUser: query?.createUser,
+      sortField: query?.sortOrder ? 'createTime' : undefined,
+      sortOrder: query?.sortOrder || 'DESCEND',
+    });
+    return rows.map(articleFromSnowy);
+  },
+  async countArticles(query) {
+    const page = await get<SnowyPage<SnowyArticle>>('/biz/article/page', {
+      current: 1,
+      size: 1,
+      status: query?.status ? fromStatus(query.status) : undefined,
+      category: query?.category,
+      createUser: query?.createUser,
+      searchKey: query?.searchKey,
+    });
+    return page?.total || 0;
   },
   createArticle(payload) {
     return post<void>('/biz/article/add', articlePayload(payload));
@@ -818,8 +870,15 @@ export const snowyBiz: SnowyBizApi = {
     return post<void>('/biz/article/delete', ids.map((id) => ({ id })));
   },
 
-  async listImageTexts() {
-    return (await fetchAll<SnowyGraphic>('graphic')).map(graphicFromSnowy);
+  async listImageTexts(query) {
+    const rows = await fetchAll<SnowyGraphic>('graphic', {
+      searchKey: query?.searchKey,
+      status: query?.status ? fromStatus(query.status) : undefined,
+      category: query?.category,
+      sortField: query?.sortOrder ? 'createTime' : undefined,
+      sortOrder: query?.sortOrder || 'DESCEND',
+    });
+    return rows.map(graphicFromSnowy);
   },
   createImageText(payload) {
     return post<void>('/biz/graphic/add', graphicPayload(payload));

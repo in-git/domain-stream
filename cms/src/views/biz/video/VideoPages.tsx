@@ -10,6 +10,7 @@ import { uploadTaskQueue } from '../../../lib/uploadTaskQueue.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import {
+  captureFrameFromVideo,
   extractVideoMetadataAndFrame,
   titleFromFileName,
 } from '../../../lib/videoDrop.ts';
@@ -237,22 +238,13 @@ export function VideoEditorPage({
   /** 从预览视频当前帧生成封面，统一转 WebP 后作为待上传封面 */
   async function captureCoverFromPreview() {
     const video = previewVideoRef.current;
-    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+    if (!video) {
       setFormError('请先播放视频，再点击截取封面');
       return;
     }
     setCapturingCover(true);
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('当前浏览器不支持画面截取');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/jpeg', 0.92)
-      );
-      if (!blob) throw new Error('截取失败，请换一帧重试');
+      const blob = await captureFrameFromVideo(video);
       const frame = new File([blob], `video-frame-${Date.now()}.jpg`, { type: 'image/jpeg' });
       applyCoverFile(await convertToWebp(frame, 0.9));
       setFormError('');

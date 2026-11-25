@@ -4,8 +4,8 @@
  * 对应后端菜单：path = /biz/category，component = biz/category/index
  * 接口：vip.xiaonuo.biz.modular.category（BizCategoryController）
  *
- * 后端 page 为通用分页（无条件过滤），因此本页一次拉取全量分类，
- * 在前端完成搜索 / 模块 / 状态筛选、树形层级组装与分页展示。
+ * 搜索 / 模块 / 状态筛选通过 page 接口在服务端完成；
+ * 本页仅负责树形层级组装与分页展示。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -34,6 +34,7 @@ import {
   hasCategoryPerm,
   listAllCategories,
   type BizCategory,
+  type CategoryPageQuery,
   type CategoryPayload,
   type CategoryPermAction,
 } from '../../../lib/category.ts';
@@ -48,6 +49,7 @@ import {
 } from './dialogs.tsx';
 
 const PAGE_SIZE = 10;
+const DEFAULT_QUERY: CategoryPageQuery = {};
 const GRID_CLASS =
   'grid grid-cols-[36px_minmax(220px,1.7fr)_110px_92px_64px_120px_132px] gap-3 items-center';
 
@@ -139,9 +141,8 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
   const [items, setItems] = useState<BizCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [moduleFilter, setModuleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [query, setQuery] = useState<CategoryPageQuery>(DEFAULT_QUERY);
+  const [searchText, setSearchText] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
@@ -158,31 +159,37 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await listAllCategories();
+      const data = await listAllCategories(query);
       setItems(data);
     } catch (err) {
       setLoadError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const hasFilter = !!search.trim() || moduleFilter !== 'all' || statusFilter !== 'all';
+  useEffect(() => {
+    setSearchText(query.searchKey || '');
+  }, [query.searchKey]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((item) => {
-      if (moduleFilter !== 'all' && (item.module || '') !== moduleFilter) return false;
-      if (statusFilter !== 'all' && (item.status || '') !== statusFilter) return false;
-      if (!q) return true;
-      return [item.name, item.description, item.remark]
-        .some((v) => (v || '').toLowerCase().includes(q));
-    });
-  }, [items, search, moduleFilter, statusFilter]);
+  // 搜索防抖后由服务端返回匹配结果
+  useEffect(() => {
+    const keyword = searchText.trim();
+    if (keyword === (query.searchKey || '').trim()) return;
+    const timer = window.setTimeout(() => {
+      setQuery((prev) => ({ ...prev, searchKey: keyword }));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText, query.searchKey]);
+
+  const hasFilter = !!query.searchKey?.trim() || !!query.module || !!query.status;
+
+  // 服务端已按条件筛选，这里只做树形组装
+  const filtered = items;
 
   const rows = useMemo<CategoryRow[]>(() => {
     if (hasFilter) {
@@ -206,7 +213,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
 
   useEffect(() => {
     setPage(1);
-  }, [search, moduleFilter, statusFilter]);
+  }, [query.searchKey, query.module, query.status]);
 
   const enabledCount = useMemo(
     () => items.filter((i) => (i.status || 'ENABLE') === 'ENABLE').length,
@@ -337,8 +344,8 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
               <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
                 placeholder="搜索名称、描述、备注..."
                 className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
               />
@@ -347,9 +354,8 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
               <button
                 type="button"
                 onClick={() => {
-                  setSearch('');
-                  setModuleFilter('all');
-                  setStatusFilter('all');
+                  setSearchText('');
+                  setQuery(DEFAULT_QUERY);
                 }}
                 className="h-9 px-2.5 rounded-xl text-[12px] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F2F2F7] inline-flex items-center gap-1 transition-colors shrink-0"
               >
@@ -372,14 +378,17 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                 ...CATEGORY_MODULES.map((m) => ({ value: m.value as string, label: m.label })),
                 { value: '', label: '未设置' },
               ].map((m) => {
-                const active = moduleFilter === m.value;
+                const active = (query.module === '__EMPTY__' ? '' : query.module || 'all') === m.value;
                 return (
                   <button
                     key={m.value || 'none'}
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    onClick={() => setModuleFilter(m.value)}
+                    onClick={() => setQuery((prev) => ({
+                      ...prev,
+                      module: m.value === 'all' ? undefined : m.value === '' ? '__EMPTY__' : m.value,
+                    }))}
                     className={`h-8 px-2.5 rounded-lg text-[12px] font-medium transition-colors ${
                       active
                         ? 'bg-[#0071E3] text-white'
@@ -406,14 +415,17 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                 { value: 'ENABLE', label: '已启用' },
                 { value: 'DISABLE', label: '已禁用' },
               ].map((s) => {
-                const active = statusFilter === s.value;
+                const active = (query.status || 'all') === s.value;
                 return (
                   <button
                     key={s.value}
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    onClick={() => setStatusFilter(s.value)}
+                    onClick={() => setQuery((prev) => ({
+                      ...prev,
+                      status: s.value === 'all' ? undefined : s.value,
+                    }))}
                     className={`h-8 px-2.5 rounded-lg text-[12px] font-medium transition-colors ${
                       active
                         ? 'bg-[#0071E3] text-white'

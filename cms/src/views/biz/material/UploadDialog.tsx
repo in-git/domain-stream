@@ -69,16 +69,17 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
     try {
       const all: BizCategory[] = [];
       for (let current = 1; ; current++) {
-        const result = await categoryApi.page({ current, size: 20 });
+        const result = await categoryApi.page({
+          current,
+          size: 20,
+          module: 'MATERIAL',
+          status: 'ENABLE',
+        });
         const records = result?.records || [];
         all.push(...records);
         if (records.length < 20 || all.length >= (result?.total ?? all.length)) break;
-        if (current >= 500) break;
       }
-      const list = all.filter(
-        (item) => item.module === 'MATERIAL' && (item.status || 'ENABLE') === 'ENABLE'
-      );
-      setCategories(list.sort((a, b) => (a.sortCode ?? 0) - (b.sortCode ?? 0)));
+      setCategories(all);
     } catch {
       setCategories([]);
     } finally {

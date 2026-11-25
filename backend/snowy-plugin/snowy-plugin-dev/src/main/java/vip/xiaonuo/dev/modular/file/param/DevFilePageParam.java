@@ -45,4 +45,12 @@ public class DevFilePageParam {
     /** 文件名关键词 */
     @Schema(description = "文件名关键词")
     private String searchKey;
+
+    /** 排序字段：createTime / name / sizeKb */
+    @Schema(description = "排序字段：createTime / name / sizeKb")
+    private String sortField;
+
+    /** 排序方式：ASCEND / DESCEND */
+    @Schema(description = "排序方式：ASCEND / DESCEND")
+    private String sortOrder;
 }

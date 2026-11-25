@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, UploadCloud, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, Camera, CheckCircle2, Loader2, Trash2, UploadCloud, X } from 'lucide-react';
 import { api, convertToWebp } from '../../../lib/api.ts';
 import { showToast } from '../../../components/AppToast.tsx';
 import { CategorySelect } from '../../../components/CategorySelect.tsx';
@@ -11,6 +11,7 @@ import {
 } from '../../../lib/videoDrop.ts';
 import { uploadTaskQueue } from '../../../lib/uploadTaskQueue.ts';
 import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
+import { VideoCoverCaptureModal } from './VideoCoverCaptureModal.tsx';
 
 interface BatchRow {
   id: string;
@@ -46,6 +47,7 @@ export function VideoBatchUploadModal({
   const [status, setStatus] = useState<ContentStatus>('published');
   const [preparing, setPreparing] = useState(true);
   const [formError, setFormError] = useState('');
+  const [coverCaptureRow, setCoverCaptureRow] = useState<BatchRow | null>(null);
   const { options: categoryOptions } = usePublishCategories('VIDEO');
   const objectUrlsRef = useRef<Set<string>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
@@ -145,6 +147,15 @@ export function VideoBatchUploadModal({
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
+  function removeRow(id: string) {
+    const row = rows.find((item) => item.id === id);
+    if (!row || row.status === 'uploading') return;
+    for (const url of [row.videoUrl, row.coverUrl]) {
+      if (url && objectUrlsRef.current.delete(url)) URL.revokeObjectURL(url);
+    }
+    setRows((prev) => prev.filter((item) => item.id !== id));
+  }
+
   function applyTopSettings() {
     setRows((prev) =>
       prev.map((row) => ({
@@ -155,23 +166,16 @@ export function VideoBatchUploadModal({
     );
   }
 
-  async function handleCoverChange(row: BatchRow, event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !file.type.startsWith('image/')) return;
-    try {
-      const cover = await convertToWebp(file, 0.9);
-      const oldUrl = row.coverUrl;
-      if (oldUrl && objectUrlsRef.current.has(oldUrl)) {
-        URL.revokeObjectURL(oldUrl);
-        objectUrlsRef.current.delete(oldUrl);
-      }
-      const url = URL.createObjectURL(cover);
-      objectUrlsRef.current.add(url);
-      patchRow(row.id, { coverFile: cover, coverUrl: url, error: '' });
-    } catch {
-      patchRow(row.id, { error: '封面处理失败' });
-    }
+  async function handleCoverCapture(file: File) {
+    const target = coverCaptureRow;
+    if (!target) return;
+    const cover = await convertToWebp(file, 0.9);
+    const oldUrl = target.coverUrl;
+    if (oldUrl && objectUrlsRef.current.delete(oldUrl)) URL.revokeObjectURL(oldUrl);
+    const url = URL.createObjectURL(cover);
+    objectUrlsRef.current.add(url);
+    patchRow(target.id, { coverFile: cover, coverUrl: url, error: '' });
+    setCoverCaptureRow(null);
   }
 
   function uploadRow(row: BatchRow) {
@@ -340,7 +344,6 @@ export function VideoBatchUploadModal({
               <thead className="sticky top-0 bg-[#F9F9FB] z-10">
                 <tr className="text-left text-[#86868B]">
                   <th className="px-2 py-2 font-medium w-[190px]">视频</th>
-                  <th className="px-2 py-2 font-medium w-[120px]">封面</th>
                   <th className="px-2 py-2 font-medium">视频标题</th>
                   <th className="px-2 py-2 font-medium">描述信息</th>
                   <th className="px-2 py-2 font-medium w-[180px]">分类</th>
@@ -351,42 +354,45 @@ export function VideoBatchUploadModal({
                 {rows.map((row) => (
                   <tr key={row.id} className="align-middle">
                     <td className="px-2 py-2 align-middle">
-                      <div className="relative w-[170px] h-[96px] rounded-lg overflow-hidden bg-black/5">
+                      <div className="relative h-[90px] w-[170px] overflow-hidden rounded-lg bg-black/5">
                         <video
                           src={row.videoUrl}
                           muted
                           preload="metadata"
-                          className="w-full h-full object-cover"
+                          className="h-full w-full object-cover"
                         />
-                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-[10px] leading-none text-white">
+                        <span
+                          className="absolute left-1 right-12 top-1 truncate rounded bg-black/55 px-1.5 py-0.5 text-[10px] leading-none text-white"
+                          title={row.title}
+                        >
+                          {row.title || titleFromFileName(row.file.name)}
+                        </span>
+                        <div className="absolute right-1 top-1 flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="获取封面"
+                            aria-label={`获取「${row.title || row.file.name}」的封面`}
+                            disabled={row.status === 'uploading'}
+                            onClick={() => setCoverCaptureRow(row)}
+                            className="flex h-5 w-5 items-center justify-center rounded bg-black/55 text-white transition-colors hover:bg-black/75 disabled:opacity-40"
+                          >
+                            <Camera className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`移除 ${row.title || row.file.name}`}
+                            title="从列表移除"
+                            disabled={row.status === 'uploading'}
+                            onClick={() => removeRow(row.id)}
+                            className="flex h-5 w-5 items-center justify-center rounded bg-black/55 text-white transition-colors hover:bg-[#D70015] disabled:opacity-40"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] leading-none text-white">
                           {row.resolution} · {row.durationSec}s
                         </span>
                       </div>
-                      <div className="mt-1 text-[11px] text-[#86868B] truncate" title={row.file.name}>
-                        {row.file.name}
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 align-middle">
-                      {row.coverUrl ? (
-                        <img
-                          src={row.coverUrl}
-                          alt="封面预览"
-                          className="w-[110px] h-[72px] object-cover rounded-lg border border-[#E5E5EA]"
-                        />
-                      ) : (
-                        <div className="w-[110px] h-[72px] rounded-lg border border-dashed border-[#C7C7CC] flex items-center justify-center text-[11px] text-[#86868B]">
-                          无封面
-                        </div>
-                      )}
-                      <label className="mt-1 inline-flex items-center gap-1 text-[11px] text-[#0071E3] cursor-pointer">
-                        更换封面
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(event) => void handleCoverChange(row, event)}
-                        />
-                      </label>
                     </td>
                     <td className="px-2 py-2 align-middle">
                       <input
@@ -424,18 +430,25 @@ export function VideoBatchUploadModal({
                     <td className="px-2 py-2 align-middle">
                       <button
                         type="button"
+                        aria-label={
+                          row.status === 'success'
+                            ? `「${row.title || row.file.name}」已加入`
+                            : row.status === 'uploading'
+                              ? `「${row.title || row.file.name}」上传中`
+                              : `上传「${row.title || row.file.name}」`
+                        }
+                        title={row.status === 'success' ? '已加入' : row.status === 'uploading' ? '上传中' : '上传'}
                         disabled={row.status === 'uploading' || row.status === 'success' || preparing}
                         onClick={() => uploadRow(row)}
-                        className="h-8 px-3 rounded-lg bg-[#0071E3] text-white text-[12px] font-medium inline-flex items-center gap-1 disabled:opacity-50"
+                        className="h-8 w-8 rounded-lg bg-[#0071E3] text-white inline-flex items-center justify-center disabled:opacity-50"
                       >
                         {row.status === 'uploading' ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : row.status === 'success' ? (
-                          <CheckCircle2 className="w-3 h-3" />
+                          <CheckCircle2 className="w-3.5 h-3.5" />
                         ) : (
-                          <UploadCloud className="w-3 h-3" />
+                          <UploadCloud className="w-3.5 h-3.5" />
                         )}
-                        {row.status === 'success' ? '已加入' : row.status === 'uploading' ? '上传中' : '上传'}
                       </button>
                     </td>
                   </tr>
@@ -470,6 +483,14 @@ export function VideoBatchUploadModal({
           </div>
         </div>
       </div>
+
+      <VideoCoverCaptureModal
+        open={!!coverCaptureRow}
+        videoUrl={coverCaptureRow?.videoUrl || ''}
+        title={coverCaptureRow?.title || titleFromFileName(coverCaptureRow?.file.name || '')}
+        onClose={() => setCoverCaptureRow(null)}
+        onCapture={(file) => void handleCoverCapture(file)}
+      />
     </div>
   );
 }

@@ -16,6 +16,8 @@ import {
   getSnowyToken,
   setSnowyToken,
   snowyBiz,
+  type ArticlePageQuery,
+  type GraphicPageQuery,
   type VideoPageQuery,
   snowyGetLoginUser,
   snowyLogin,
@@ -202,14 +204,16 @@ export const api = {
   // ---- 图文 ----
   /** 文本转图文：返回渲染好的图片地址，供编辑页勾选后作为图文图片 */
   renderGraphicPoster: (draft: GraphicPosterDraft) => snowyBiz.renderGraphicPoster(draft),
-  getImageTexts: async () => ({ items: await snowyBiz.listImageTexts() }),
+  getImageTexts: async (query?: GraphicPageQuery) => ({ items: await snowyBiz.listImageTexts(query) }),
   createImageText: (payload: Partial<ImageTextItem>) => snowyBiz.createImageText(payload),
   updateImageText: (id: string, payload: Partial<ImageTextItem>) => snowyBiz.updateImageText(id, payload),
   deleteImageText: (id: string) => snowyBiz.deleteImageText(id),
   deleteImageTexts: (ids: string[]) => snowyBiz.deleteImageTexts(ids),
 
   // ---- 文章 ----
-  getArticles: async () => ({ items: await snowyBiz.listArticles() }),
+  getArticles: async (query?: ArticlePageQuery) => ({ items: await snowyBiz.listArticles(query) }),
+  countArticles: (query?: Omit<ArticlePageQuery, 'current' | 'size'>) =>
+    snowyBiz.countArticles(query),
   createArticle: (payload: Partial<ArticleItem>) => snowyBiz.createArticle(payload),
   updateArticle: (id: string, payload: Partial<ArticleItem>) => snowyBiz.updateArticle(id, payload),
   deleteArticle: (id: string) => snowyBiz.deleteArticle(id),

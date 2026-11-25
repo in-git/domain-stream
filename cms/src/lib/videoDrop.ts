@@ -133,6 +133,24 @@ export function extractVideoMetadataAndFrame(file: File): Promise<{
   });
 }
 
+/** 从播放器当前帧截取 JPEG 封面，供单个编辑与批量封面弹窗共用 */
+export async function captureFrameFromVideo(video: HTMLVideoElement): Promise<Blob> {
+  if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+    throw new Error('请先播放视频，再点击截取封面');
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('当前浏览器不支持画面截取');
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', 0.92)
+  );
+  if (!blob) throw new Error('截取失败，请换一帧重试');
+  return blob;
+}
+
 export function titleFromFileName(name: string): string {
   return name.replace(/\.[^/.]+$/, '');
 }

@@ -48,4 +48,12 @@ public class BizCategoryPageParam {
     @Schema(description = "关键词")
     private String searchKey;
 
+    /** 适用模块 */
+    @Schema(description = "适用模块：ARTICLE/VIDEO/GRAPHIC/IMAGE/MATERIAL/COMMON")
+    private String module;
+
+    /** 状态：ENABLE启用/DISABLE禁用 */
+    @Schema(description = "状态：ENABLE启用/DISABLE禁用")
+    private String status;
+
 }

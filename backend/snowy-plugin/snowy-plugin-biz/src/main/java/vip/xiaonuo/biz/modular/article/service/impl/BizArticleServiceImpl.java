@@ -79,8 +79,34 @@ public class BizArticleServiceImpl extends ServiceImpl<BizArticleMapper, BizArti
             CommonSortOrderEnum.validate(bizArticlePageParam.getSortOrder());
             queryWrapper.orderBy(true, bizArticlePageParam.getSortOrder().equals(CommonSortOrderEnum.ASC.getValue()),
                     StrUtil.toUnderlineCase(bizArticlePageParam.getSortField()));
+            // 加唯一 tie-breaker，避免 create_time 重复/为空时分页跨页漏数据
+            queryWrapper.lambda().orderByDesc(BizArticle::getId);
         } else {
-            queryWrapper.lambda().orderByAsc(BizArticle::getSortCode);
+            queryWrapper.lambda().orderByAsc(BizArticle::getSortCode).orderByDesc(BizArticle::getId);
+        }
+        // 服务端筛选，保证分页/总数与前端查询条件一致
+        String status = bizArticlePageParam.getStatus();
+        if (StrUtil.isNotBlank(status)) {
+            // CMS 的“草稿”同时包含草稿和已下架，保持与前端原映射一致
+            if ("DRAFT".equals(status)) {
+                queryWrapper.in("status", "DRAFT", "OFFLINE");
+            } else {
+                queryWrapper.eq("status", status);
+            }
+        }
+        if (StrUtil.isNotBlank(bizArticlePageParam.getCategory())) {
+            queryWrapper.eq("category", bizArticlePageParam.getCategory());
+        }
+        if (StrUtil.isNotBlank(bizArticlePageParam.getCreateUser())) {
+            queryWrapper.eq("create_user", bizArticlePageParam.getCreateUser());
+        }
+        if (StrUtil.isNotBlank(bizArticlePageParam.getSearchKey())) {
+            String keyword = bizArticlePageParam.getSearchKey().trim();
+            queryWrapper.and(wrapper -> wrapper
+                    .like("title", keyword)
+                    .or().like("summary", keyword)
+                    .or().like("category", keyword)
+                    .or().like("author", keyword));
         }
         // 校验数据范围
         List<String> loginUserDataScope = StpLoginUserUtil.getLoginUserDataScope();

@@ -5,6 +5,7 @@ import type { PhotoItem } from '../../data/content';
 import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import { EmptyState } from '../../components/PortalStates';
+import { TimeSortButton, sortByTime, type TimeSortOrder } from '../../components/TimeSortButton';
 import NoteDetail from './NoteDetail';
 
 interface GalleryViewProps {
@@ -225,6 +226,7 @@ export function GalleryView({
   onClearExternalSelection,
 }: GalleryViewProps) {
   const album = category || ALL;
+  const [sortOrder, setSortOrder] = useState<TimeSortOrder>('DESC');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
@@ -249,15 +251,15 @@ export function GalleryView({
   }, [categories, photos]);
 
   const query = searchQuery.trim().toLowerCase();
-  // 分类已由后端筛选，这里只处理搜索关键词
+  // 分类已由后端筛选，这里只处理时间排序与搜索关键词
   const list = useMemo(
     () =>
-      photos.filter((note) =>
+      sortByTime(photos, sortOrder).filter((note) =>
         !query ||
         note.title.toLowerCase().includes(query) ||
         (note.content ?? '').toLowerCase().includes(query)
       ),
-    [photos, query]
+    [photos, query, sortOrder]
   );
 
   const activeNote = useMemo(() => {
@@ -269,25 +271,33 @@ export function GalleryView({
     <section aria-label="图文笔记" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
       {/* 顶部分类：PC 端间距按断点递进 6/8/12/16px，移动端保持原刻度 */}
       <div className="sticky top-14 z-10 -mx-2.5 bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:-mx-1.5 sm:px-1.5 md:-mx-2 md:px-2 lg:-mx-3 lg:px-3 xl:-mx-4 xl:px-4 2xl:-mx-4 2xl:px-4">
-        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {chips.map((item) => {
-            const active = album === item;
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => onCategoryChange(item)}
-                aria-pressed={active}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-                  active
-                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
-                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
-                }`}
-              >
-                {item}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2.5 py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4">
+          <div
+            role="tablist"
+            aria-label="图文分类"
+            className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {chips.map((item) => {
+              const active = album === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  // 全部也走一次后端请求，等价于刷新当前板块
+                  onClick={() => onCategoryChange(item)}
+                  aria-pressed={active}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                    active
+                      ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
+                      : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+          <TimeSortButton order={sortOrder} onChange={setSortOrder} className="hidden md:flex" />
         </div>
       </div>
 

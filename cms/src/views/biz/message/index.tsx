@@ -32,6 +32,7 @@ import {
   messageStatusClass,
   messageStatusLabel,
   type BizMessage,
+  type MessagePageQuery,
   type MessagePayload,
   type MessagePermAction,
 } from '../../../lib/message.ts';
@@ -45,6 +46,7 @@ import {
 import { SelectField } from '../../../components/SelectField.tsx';
 
 const PAGE_SIZE = 10;
+const DEFAULT_QUERY: MessagePageQuery = { sortField: 'createTime', sortOrder: 'DESCEND' };
 const GRID_CLASS =
   'grid grid-cols-[36px_minmax(320px,3.4fr)_92px_130px_140px_112px] gap-3 items-center';
 
@@ -131,8 +133,8 @@ export default function MessageView({ permissions }: { permissions?: string[] })
   const [items, setItems] = useState<BizMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [query, setQuery] = useState<MessagePageQuery>(DEFAULT_QUERY);
+  const [searchText, setSearchText] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
@@ -146,34 +148,37 @@ export default function MessageView({ permissions }: { permissions?: string[] })
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await listAllMessages();
+      const data = await listAllMessages(query);
       setItems(data);
     } catch (err) {
       setLoadError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const hasFilter = !!search.trim() || statusFilter !== 'all';
+  useEffect(() => {
+    setSearchText(query.searchKey || '');
+  }, [query.searchKey]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return [...items]
-      .filter((item) => {
-        if (statusFilter !== 'all' && (item.status || '') !== statusFilter) return false;
-        if (!q) return true;
-        return [item.nickname, item.userId, item.content, item.replyToNickname]
-          .some((v) => (v || '').toLowerCase().includes(q));
-      })
-      .sort((a, b) => {
-        return (b.createTime || '').localeCompare(a.createTime || '');
-      });
-  }, [items, search, statusFilter]);
+  // 搜索防抖后由服务端返回匹配结果
+  useEffect(() => {
+    const keyword = searchText.trim();
+    if (keyword === (query.searchKey || '').trim()) return;
+    const timer = window.setTimeout(() => {
+      setQuery((prev) => ({ ...prev, searchKey: keyword }));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText, query.searchKey]);
+
+  const hasFilter = !!query.searchKey?.trim() || !!query.status;
+
+  // 服务端已按条件筛选/排序，这里只保留树形组装所需的原始顺序
+  const filtered = items;
 
   const rows = useMemo<MessageRow[]>(() => {
     if (hasFilter) {
@@ -200,7 +205,7 @@ export default function MessageView({ permissions }: { permissions?: string[] })
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [query.searchKey, query.status]);
 
   /** 有回复的留言 id（用于展开/折叠全部） */
   const collapsibleIds = useMemo(
@@ -313,15 +318,15 @@ export default function MessageView({ permissions }: { permissions?: string[] })
             <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder="搜索用户名字、内容..."
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
           </div>
           <SelectField
-            value={statusFilter}
-            onChange={setStatusFilter}
+            value={query.status || 'all'}
+            onChange={(value) => setQuery((prev) => ({ ...prev, status: value === 'all' ? undefined : value }))}
             ariaLabel="按审核状态筛选"
             className="w-[132px]"
             options={[
@@ -333,8 +338,8 @@ export default function MessageView({ permissions }: { permissions?: string[] })
             <button
               type="button"
               onClick={() => {
-                setSearch('');
-                setStatusFilter('all');
+                setSearchText('');
+                setQuery(DEFAULT_QUERY);
               }}
               className="h-9 px-2.5 rounded-xl text-[12px] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F2F2F7] inline-flex items-center gap-1 transition-colors"
             >

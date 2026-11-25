@@ -5,7 +5,7 @@
  * 路由：/biz/message/*（GET page / detail，POST add / edit / delete）
  * 前端统一经 /snowy 代理访问，与登录态 token 保持一致。
  *
- * 说明：与通用分类模块一致，列表负责分页拉取数据，搜索 / 状态筛选在组件内完成。
+ * 说明：搜索 / 状态筛选 / 排序均通过 page 接口在服务端完成。
  */
 import { snowyRequest } from './snowy.ts';
 
@@ -19,6 +19,14 @@ export const MESSAGE_STATUSES = [
 ] as const;
 
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number]['value'];
+
+/** 留言列表服务端查询条件（分页拉取时逐页透传） */
+export interface MessagePageQuery {
+  searchKey?: string;
+  status?: string;
+  sortField?: string;
+  sortOrder?: string;
+}
 
 export function messageStatusLabel(value?: string): string {
   return MESSAGE_STATUSES.find((s) => s.value === value)?.label || value || '-';
@@ -128,8 +136,11 @@ export const messageApi = {
     sortField?: string;
     sortOrder?: string;
     searchKey?: string;
+    status?: string;
   } = {}): Promise<MessagePage> {
-    return snowyRequest<MessagePage>(`${BASE}/page${qs(params)}`);
+    // Snowy 后端排序校验按小写枚举值比较
+    const sortOrder = params.sortOrder?.toLowerCase();
+    return snowyRequest<MessagePage>(`${BASE}/page${qs({ ...params, sortOrder })}`);
   },
 
   /** 详情 */
@@ -162,12 +173,12 @@ export const messageApi = {
   },
 };
 
-/** 循环分页拉取全部留言 */
-export async function listAllMessages(): Promise<BizMessage[]> {
+/** 按服务端条件循环分页拉取留言，默认每页 20 条 */
+export async function listAllMessages(query: MessagePageQuery = {}): Promise<BizMessage[]> {
   const all: BizMessage[] = [];
-  const size = 200;
-  for (let current = 1; current <= 50; current++) {
-    const page = await messageApi.page({ current, size });
+  const size = 20;
+  for (let current = 1; ; current++) {
+    const page = await messageApi.page({ current, size, ...query });
     const records = page?.records || [];
     if (!records.length) break;
     const known = new Set(all.map((item) => item.id));

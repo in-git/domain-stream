@@ -5,6 +5,7 @@ import type { ArticleItem } from '../../data/content';
 import { sanitizeRichHtml } from '../../lib/richtext';
 import { SWIFTUI_BOUNCY, SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { EmptyState } from '../../components/PortalStates';
+import { TimeSortButton, sortByTime, type TimeSortOrder } from '../../components/TimeSortButton';
 import { ResilientImage } from '../../components/ResilientImage';
 import { Tooltip } from '../../components/Tooltip';
 import { CommentPanel } from '../../components/CommentPanel.tsx';
@@ -19,6 +20,7 @@ interface ArticlesViewProps {
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
   onReadArticle: (id: string) => void;
+  onRefresh?: () => void;
   externalSelectedId?: string | null;
   onClearExternalSelection?: () => void;
 }
@@ -39,12 +41,14 @@ export function ArticlesView({
   onToggleSave,
   onToggleLike,
   onReadArticle,
+  onRefresh,
   externalSelectedId,
   onClearExternalSelection,
 }: ArticlesViewProps) {
   const commentsEnabled = useCommentEnabled();
   const filterCategories = categories && categories.length ? categories : DEFAULT_ARTICLE_CATEGORIES;
   const [category, setCategory] = useState<ArticleCategory>('全部');
+  const [sortOrder, setSortOrder] = useState<TimeSortOrder>('DESC');
   const [localActiveId, setLocalActiveId] = useState<string | null>(null);
   const [largeFont, setLargeFont] = useState(false);
   const [serifMode, setSerifMode] = useState(false);
@@ -53,15 +57,22 @@ export function ArticlesView({
   const readerRef = useRef<HTMLDivElement | null>(null);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredArticles = articles.filter((a) => {
-    const matchCategory = category === '全部' || a.category === category;
-    const matchQuery =
-      !normalizedQuery ||
-      a.title.toLowerCase().includes(normalizedQuery) ||
-      a.excerpt.toLowerCase().includes(normalizedQuery) ||
-      a.author.toLowerCase().includes(normalizedQuery);
-    return matchCategory && matchQuery;
-  });
+  const filteredArticles = useMemo(
+    () =>
+      sortByTime(
+        articles.filter((a) => {
+          const matchCategory = category === '全部' || a.category === category;
+          const matchQuery =
+            !normalizedQuery ||
+            a.title.toLowerCase().includes(normalizedQuery) ||
+            a.excerpt.toLowerCase().includes(normalizedQuery) ||
+            a.author.toLowerCase().includes(normalizedQuery);
+          return matchCategory && matchQuery;
+        }),
+        sortOrder
+      ),
+    [articles, category, normalizedQuery, sortOrder]
+  );
 
   const [visibleCount, setVisibleCount] = useState(ARTICLE_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -69,7 +80,7 @@ export function ArticlesView({
 
   useEffect(() => {
     setVisibleCount(ARTICLE_PAGE_SIZE);
-  }, [category, normalizedQuery, articles]);
+  }, [category, normalizedQuery, articles, sortOrder]);
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
@@ -131,26 +142,36 @@ export function ArticlesView({
     <section aria-label="文章列表" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
       {/* 顶部分类：PC 端间距按断点递进 6/8/12/16px，移动端保持原刻度 */}
       <div className="sticky top-14 z-10 -mx-2.5 bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:-mx-1.5 sm:px-1.5 md:-mx-2 md:px-2 lg:-mx-3 lg:px-3 xl:-mx-4 xl:px-4 2xl:-mx-4 2xl:px-4">
-        <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {(['全部', ...filterCategories] as ArticleCategory[]).map((item) => {
-            const active = category === item;
-            return (
-              <button
-                key={item}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setCategory(item)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-                  active
-                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
-                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
-                }`}
-              >
-                {item}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2.5 py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4">
+          <div
+            role="tablist"
+            aria-label="文章分类"
+            className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {(['全部', ...filterCategories] as ArticleCategory[]).map((item) => {
+              const active = category === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setCategory(item);
+                    if (item === '全部') onRefresh?.();
+                  }}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                    active
+                      ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
+                      : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+          <TimeSortButton order={sortOrder} onChange={setSortOrder} className="hidden md:flex" />
         </div>
       </div>
 

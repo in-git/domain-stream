@@ -79,8 +79,29 @@ public class BizGraphicServiceImpl extends ServiceImpl<BizGraphicMapper, BizGrap
             CommonSortOrderEnum.validate(bizGraphicPageParam.getSortOrder());
             queryWrapper.orderBy(true, bizGraphicPageParam.getSortOrder().equals(CommonSortOrderEnum.ASC.getValue()),
                     StrUtil.toUnderlineCase(bizGraphicPageParam.getSortField()));
+            queryWrapper.lambda().orderByDesc(BizGraphic::getId);
         } else {
-            queryWrapper.lambda().orderByAsc(BizGraphic::getSortCode);
+            queryWrapper.lambda().orderByAsc(BizGraphic::getSortCode).orderByDesc(BizGraphic::getId);
+        }
+        // 服务端筛选
+        String status = bizGraphicPageParam.getStatus();
+        if (StrUtil.isNotBlank(status)) {
+            if ("DRAFT".equals(status)) {
+                queryWrapper.in("status", "DRAFT", "OFFLINE");
+            } else {
+                queryWrapper.eq("status", status);
+            }
+        }
+        if (StrUtil.isNotBlank(bizGraphicPageParam.getCategory())) {
+            queryWrapper.eq("category", bizGraphicPageParam.getCategory());
+        }
+        if (StrUtil.isNotBlank(bizGraphicPageParam.getSearchKey())) {
+            String keyword = bizGraphicPageParam.getSearchKey().trim();
+            queryWrapper.and(wrapper -> wrapper
+                    .like("title", keyword)
+                    .or().like("summary", keyword)
+                    .or().like("content", keyword)
+                    .or().like("category", keyword));
         }
         // 校验数据范围
         List<String> loginUserDataScope = StpLoginUserUtil.getLoginUserDataScope();

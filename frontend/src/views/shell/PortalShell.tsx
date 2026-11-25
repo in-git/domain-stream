@@ -249,6 +249,7 @@ export function PortalShell({
                     loading={!!loadingMap.articles}
                     error={errors.articles}
                     onRetry={() => void loadSection('articles', true)}
+                    onRefresh={() => void loadSection('articles', true)}
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
                     externalSelectedId={selectedArticleId}

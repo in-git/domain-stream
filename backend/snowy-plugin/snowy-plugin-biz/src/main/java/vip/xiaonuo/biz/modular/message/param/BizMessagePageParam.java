@@ -48,4 +48,8 @@ public class BizMessagePageParam {
     @Schema(description = "关键词")
     private String searchKey;
 
+    /** 状态：PENDING待审核/APPROVED已通过/REJECTED已拒绝 */
+    @Schema(description = "状态：PENDING待审核/APPROVED已通过/REJECTED已拒绝")
+    private String status;
+
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   ChevronLeft,
@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
-import { SortOrderButton, sortByCreatedAt, type TimeSortOrder } from '../../../components/SortOrderButton.tsx';
+import { SortOrderButton } from '../../../components/SortOrderButton.tsx';
+import type { GraphicPageQuery } from '../../../lib/snowy.ts';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
@@ -25,6 +26,9 @@ import { MediaImage } from '../../../components/MediaImage.tsx';
 
 interface ImageTextManagerViewProps {
   items: ImageTextItem[];
+  query: GraphicPageQuery;
+  loading: boolean;
+  onQueryChange: (query: GraphicPageQuery) => void;
   onRefresh: () => Promise<void>;
   onOpen: (action: 'new' | 'edit' | 'view' | 'delete', id?: string, slide?: number) => void;
   permissions?: string[];
@@ -196,6 +200,9 @@ function ImageTextCard({
 
 export function ImageTextManagerView({
   items,
+  query,
+  loading,
+  onQueryChange,
   onRefresh,
   onOpen,
   permissions,
@@ -203,37 +210,56 @@ export function ImageTextManagerView({
   const canAdd = hasModulePerm('imagetexts', 'Add', permissions);
   const canEdit = hasModulePerm('imagetexts', 'Edit', permissions);
   const canDelete = hasModulePerm('imagetexts', 'Delete', permissions);
-  const [search, setSearch] = useState('');
-  const [sortOrder, setSortOrder] = useState<TimeSortOrder>('DESCEND');
-  const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  /** 批量选择：选中的图文ID集合 */
+  const [searchText, setSearchText] = useState(query.searchKey || '');
+  /** 批量选择：选中的图文ID集合，改筛选后清空 */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** 待删除的图文（单条或批量），非空时打开通用删除确认模态框 */
   const [pendingDelete, setPendingDelete] = useState<ImageTextItem[]>([]);
   const { options: categoryOptions } = usePublishCategories('GRAPHIC');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
-  /** 分类 chip：只列出实际有数据的分类，避免空分类占位 */
-  const categoryChips = useMemo(() => {
-    const codes = Array.from(new Set(items.map((it) => it.category).filter(Boolean)));
-    return codes.map((code) => ({ code, label: categoryName(code) || code }));
-  }, [items, categoryOptions]);
+  const statusFilter = query.status || 'all';
+  const categoryFilter = query.category || 'all';
+  const sortOrder = query.sortOrder || 'DESCEND';
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return sortByCreatedAt(items.filter((it) => {
-      if (statusFilter !== 'all' && it.status !== statusFilter) return false;
-      if (categoryFilter !== 'all' && it.category !== categoryFilter) return false;
-      if (!q) return true;
-      return (
-        it.title.toLowerCase().includes(q) ||
-        it.body.toLowerCase().includes(q) ||
-        it.category.toLowerCase().includes(q) ||
-        categoryName(it.category).toLowerCase().includes(q)
-      );
-    }), sortOrder);
-  }, [items, search, statusFilter, categoryFilter, categoryOptions, sortOrder]);
+  /** 分类 chip 使用完整分类字典，避免筛选后只剩当前结果的分类 */
+  const categoryChips = useMemo(
+    () => categoryOptions.map((option) => ({
+      code: option.code,
+      label: option.name || categoryName(option.code) || option.code,
+    })),
+    [categoryOptions]
+  );
+
+  useEffect(() => {
+    setSearchText(query.searchKey || '');
+  }, [query.searchKey]);
+
+  // 搜索防抖后发请求，筛选与排序直接切换查询条件
+  useEffect(() => {
+    const keyword = searchText.trim();
+    if (keyword === (query.searchKey || '').trim()) return;
+    const timer = window.setTimeout(() => {
+      onQueryChange({ ...query, searchKey: keyword, current: 1 });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText, query, onQueryChange]);
+
+  const firstQuery = useRef(true);
+  useEffect(() => {
+    if (firstQuery.current) {
+      firstQuery.current = false;
+      return;
+    }
+    setSelected(new Set());
+  }, [query]);
+
+  function changeQuery(patch: Partial<GraphicPageQuery>) {
+    onQueryChange({ ...query, ...patch });
+  }
+
+  // 状态、分类、排序、搜索均已下沉到后端，这里直接展示查询结果
+  const filtered = items;
 
   /** 当前筛选结果的全选状态 */
   const allSelected = filtered.length > 0 && filtered.every((it) => selected.has(it.id));
@@ -291,8 +317,8 @@ export function ImageTextManagerView({
             <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder="搜索图文标题、正文或分类..."
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
@@ -309,7 +335,10 @@ export function ImageTextManagerView({
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setStatusFilter(tab.key)}
+                onClick={() => changeQuery({
+                  status: tab.key === 'all' ? undefined : tab.key,
+                  current: 1,
+                })}
                 className={`px-3 py-1 text-[12px] font-medium rounded-[8px] transition-all whitespace-nowrap shrink-0 ${
                   statusFilter === tab.key
                     ? 'bg-white text-[#1D1D1F] shadow-xs'
@@ -323,7 +352,10 @@ export function ImageTextManagerView({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <SortOrderButton order={sortOrder} onChange={setSortOrder} />
+          <SortOrderButton
+            order={sortOrder}
+            onChange={(order) => changeQuery({ sortOrder: order, current: 1 })}
+          />
           {canAdd && (
             <button
               type="button"
@@ -346,7 +378,10 @@ export function ImageTextManagerView({
               <button
                 key={chip.code}
                 type="button"
-                onClick={() => setCategoryFilter(chip.code)}
+                onClick={() => changeQuery({
+                  category: chip.code === 'all' ? undefined : chip.code,
+                  current: 1,
+                })}
                 aria-pressed={active}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   active
@@ -416,7 +451,7 @@ export function ImageTextManagerView({
 
       {/* Empty State */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
+          <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
           <Images className="w-10 h-10 text-[#C7C7CC] mx-auto mb-3" strokeWidth={1.5} />
           <h3 className="text-[16px] font-semibold text-[#1D1D1F]">暂无图文作品</h3>
           <p className="text-[13px] text-[#6E6E73] mt-1">

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileImage, FileVideo2, ImagePlus, Menu } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { Menu } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
-import type { VideoPageQuery } from './lib/snowy.ts';
+import type { ArticlePageQuery, GraphicPageQuery, VideoPageQuery } from './lib/snowy.ts';
 import { deleteFilesByUrls, resourceUrlsInHtml } from './lib/fileCenter.ts';
 import { getCachedMenu, onAuthExpired, type SnowyMenu } from './lib/snowy.ts';
 import {
@@ -105,12 +105,12 @@ export default function App() {
     () => moduleFromStorage() || 'dashboard'
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  // 拖拽视频：单个进入编辑器，多个/文件夹进入批量表格
-  const [dropActive, setDropActive] = useState(false);
+  // 内容区拖拽：根据当前模块分流到视频/图文导入逻辑
+  const [contentDropActive, setContentDropActive] = useState(false);
+  const contentDragDepthRef = useRef(0);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
   const [pendingImageFiles, setPendingImageFiles] = useState<File[] | null>(null);
   const [batchFiles, setBatchFiles] = useState<File[] | null>(null);
-  const dragDepthRef = useRef(0);
 
   // 统一跳转：更新 state + URL hash；列表用 replace，子页面用 push（浏览器可返回）
   const go = useCallback((next: AppRoute, replace = false) => {
@@ -148,41 +148,42 @@ export default function App() {
     [go]
   );
 
-  /** 全站拖拽：图片进入图文编辑器，视频进入视频编辑器或批量表格 */
-  const handleDroppedFiles = useCallback(
+  /** 图文列表拖拽：图片进入图文编辑器 */
+  const handleDroppedImages = useCallback(
     async (dataTransfer: DataTransfer) => {
-      const [{ files: imageFiles }, { files: videoFiles, hasDirectory }] = await Promise.all([
-        collectDroppedImages(dataTransfer),
-        collectDroppedVideos(dataTransfer),
-      ]);
-
-      if (imageFiles.length && !videoFiles.length) {
-        if (!hasModulePerm('imagetexts', 'Add', permissions)) {
-          showToast('当前账号没有新增图文权限', 'danger');
-          return;
-        }
-        setPendingImageFiles(imageFiles);
-        goContent('imagetexts', 'new');
+      const { files } = await collectDroppedImages(dataTransfer);
+      if (!files.length) {
+        showToast('未发现可上传的图片文件', 'warning');
         return;
       }
+      if (!hasModulePerm('imagetexts', 'Add', permissions)) {
+        showToast('当前账号没有新增图文权限', 'danger');
+        return;
+      }
+      setPendingImageFiles(files);
+      goContent('imagetexts', 'new');
+    },
+    [goContent, permissions]
+  );
 
-      if (!videoFiles.length) {
-        showToast('未发现可上传的图片或视频文件', 'warning');
+  /** 视频列表表格拖入：单个进入编辑器，多个/文件夹进入批量表格 */
+  const handleDroppedVideos = useCallback(
+    async (dataTransfer: DataTransfer) => {
+      const { files, hasDirectory } = await collectDroppedVideos(dataTransfer);
+      if (!files.length) {
+        showToast('未发现可上传的视频文件', 'warning');
         return;
       }
       if (!hasModulePerm('videos', 'Add', permissions)) {
         showToast('当前账号没有新增视频权限', 'danger');
         return;
       }
-      if (imageFiles.length) {
-        showToast('图片和视频请分开拖入，本次已忽略图片', 'warning');
-      }
-      if (videoFiles.length === 1 && !hasDirectory && !imageFiles.length) {
-        setPendingVideoFile(videoFiles[0]);
+      if (files.length === 1 && !hasDirectory) {
+        setPendingVideoFile(files[0]);
         goContent('videos', 'new');
         return;
       }
-      setBatchFiles(videoFiles);
+      setBatchFiles(files);
     },
     [goContent, permissions]
   );
@@ -222,6 +223,57 @@ export default function App() {
   }, [route]);
 
   const activeModule = route.kind === 'quick' ? lastModule : routeModule(route);
+
+  /** 内容区拖拽：按当前模块分流；仅在模块列表页生效，详情页不劫持文件 */
+  const handleContentDrop = useCallback(
+    (dataTransfer: DataTransfer) => {
+      if (route.kind !== 'module') return;
+      if (activeModule === 'videos') {
+        void handleDroppedVideos(dataTransfer);
+        return;
+      }
+      if (activeModule === 'imagetexts') {
+        void handleDroppedImages(dataTransfer);
+        return;
+      }
+      showToast('请在视频管理或图文管理页面拖入文件', 'warning');
+    },
+    [activeModule, route.kind, handleDroppedVideos, handleDroppedImages]
+  );
+
+  function isFileDrag(event: DragEvent<HTMLDivElement>) {
+    return Array.from(event.dataTransfer.types || []).includes('Files');
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (
+      route.kind !== 'module' ||
+      (activeModule !== 'videos' && activeModule !== 'imagetexts') ||
+      !isFileDrag(event)
+    ) return;
+    event.preventDefault();
+    contentDragDepthRef.current += 1;
+    setContentDropActive(true);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    contentDragDepthRef.current = 0;
+    setContentDropActive(false);
+  }
+
+  function handleContentDragDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    contentDragDepthRef.current = 0;
+    setContentDropActive(false);
+    handleContentDrop(event.dataTransfer);
+  }
+
   // 列表路由越权拦截（如手动改 hash 到无权限模块）
   const moduleBlocked =
     route.kind === 'module' && !modules.some((m) => m.key === route.module);
@@ -229,12 +281,19 @@ export default function App() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
   const [myVideoCount, setMyVideoCount] = useState(0);
+  const [myArticleCount, setMyArticleCount] = useState(0);
   const [videoDetail, setVideoDetail] = useState<VideoItem | null>(null);
   const [videoDetailLoading, setVideoDetailLoading] = useState(false);
   const [videosLoading, setVideosLoading] = useState(false);
   const initialVideoQuery: VideoPageQuery = { current: 1, size: 20, sortOrder: 'DESCEND' };
   const [videoQuery, setVideoQuery] = useState<VideoPageQuery>(initialVideoQuery);
+  const [imagetextsLoading, setImagetextsLoading] = useState(false);
+  const initialImageTextQuery: GraphicPageQuery = { current: 1, size: 20, sortOrder: 'DESCEND' };
+  const [imageTextQuery, setImageTextQuery] = useState<GraphicPageQuery>(initialImageTextQuery);
   const [imagetexts, setImagetexts] = useState<ImageTextItem[]>([]);
+  const [articlesLoading, setArticlesLoading] = useState(false);
+  const initialArticleQuery: ArticlePageQuery = { current: 1, size: 20, sortOrder: 'DESCEND' };
+  const [articleQuery, setArticleQuery] = useState<ArticlePageQuery>(initialArticleQuery);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
   // 各模块是否已加载完成（驱动详情页加载态）
   const [moduleReady, setModuleReady] = useState<Record<ContentModule, boolean>>({
@@ -255,6 +314,8 @@ export default function App() {
     articles: false,
   });
   const videoQueryRef = useRef<VideoPageQuery>(videoQuery);
+  const imageTextQueryRef = useRef<GraphicPageQuery>(imageTextQuery);
+  const articleQueryRef = useRef<ArticlePageQuery>(articleQuery);
 
   const markReady = useCallback((mod: ContentModule) => {
     setModuleReady((prev) => (prev[mod] ? prev : { ...prev, [mod]: true }));
@@ -291,43 +352,71 @@ export default function App() {
     [loadVideos]
   );
 
-  const loadImageTexts = useCallback(async (force = false) => {
-    if (!force && loadedRef.current.imagetexts) return;
-    if (loadingRef.current.imagetexts) return;
-    loadingRef.current.imagetexts = true;
-    try {
-      const res = await api.getImageTexts();
-      setImagetexts(res.items);
-    } catch {
-      // 同上
-    } finally {
-      loadedRef.current.imagetexts = true;
-      markReady('imagetexts');
-      loadingRef.current.imagetexts = false;
-    }
-  }, [markReady]);
+  const loadImageTexts = useCallback(
+    async (query: GraphicPageQuery = imageTextQueryRef.current, force = false) => {
+      if (!force && loadedRef.current.imagetexts) return;
+      if (loadingRef.current.imagetexts) return;
+      loadingRef.current.imagetexts = true;
+      setImagetextsLoading(true);
+      imageTextQueryRef.current = query;
+      try {
+        const res = await api.getImageTexts(query);
+        setImagetexts(res.items);
+      } catch {
+        // 同上
+      } finally {
+        loadedRef.current.imagetexts = true;
+        markReady('imagetexts');
+        loadingRef.current.imagetexts = false;
+        setImagetextsLoading(false);
+      }
+    },
+    [markReady]
+  );
 
-  const loadArticles = useCallback(async (force = false) => {
-    if (!force && loadedRef.current.articles) return;
-    if (loadingRef.current.articles) return;
-    loadingRef.current.articles = true;
-    try {
-      const res = await api.getArticles();
-      setArticles(res.items);
-    } catch {
-      // 同上
-    } finally {
-      loadedRef.current.articles = true;
-      markReady('articles');
-      loadingRef.current.articles = false;
-    }
-  }, [markReady]);
+  const changeImageTextQuery = useCallback(
+    (query: GraphicPageQuery) => {
+      setImageTextQuery(query);
+      void loadImageTexts(query, true);
+    },
+    [loadImageTexts]
+  );
+
+  const loadArticles = useCallback(
+    async (query: ArticlePageQuery = articleQueryRef.current, force = false) => {
+      if (!force && loadedRef.current.articles) return;
+      if (loadingRef.current.articles) return;
+      loadingRef.current.articles = true;
+      setArticlesLoading(true);
+      articleQueryRef.current = query;
+      try {
+        const res = await api.getArticles(query);
+        setArticles(res.items);
+      } catch {
+        // 同上
+      } finally {
+        loadedRef.current.articles = true;
+        markReady('articles');
+        loadingRef.current.articles = false;
+        setArticlesLoading(false);
+      }
+    },
+    [markReady]
+  );
+
+  const changeArticleQuery = useCallback(
+    (query: ArticlePageQuery) => {
+      setArticleQuery(query);
+      void loadArticles(query, true);
+    },
+    [loadArticles]
+  );
 
   const loadModule = useCallback(
     (mod: ContentModule, force = false) => {
       if (mod === 'videos') return loadVideos(videoQueryRef.current, force);
-      if (mod === 'imagetexts') return loadImageTexts(force);
-      return loadArticles(force);
+      if (mod === 'imagetexts') return loadImageTexts(imageTextQueryRef.current, force);
+      return loadArticles(articleQueryRef.current, force);
     },
     [loadVideos, loadImageTexts, loadArticles]
   );
@@ -351,6 +440,23 @@ export default function App() {
       })
       .catch(() => {
         if (alive) setMyVideoCount(0);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
+
+  // 首页「我发布的文章」数量单独统计，避免受列表筛选条件影响
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    void api
+      .countArticles({ createUser: user.id })
+      .then((total) => {
+        if (alive) setMyArticleCount(total);
+      })
+      .catch(() => {
+        if (alive) setMyArticleCount(0);
       });
     return () => {
       alive = false;
@@ -603,45 +709,7 @@ export default function App() {
         : modules.find((m) => m.key === route.module)?.label || MODULE_TITLES[route.module];
 
   return (
-    <div
-      className="min-h-screen bg-[#F5F5F7] flex text-[#1D1D1F] relative"
-      onDragEnter={(event) => {
-        if (!Array.from(event.dataTransfer.types || []).includes('Files')) return;
-        if (event.defaultPrevented) return;
-        dragDepthRef.current += 1;
-        setDropActive(true);
-      }}
-      onDragOver={(event) => {
-        if (dropActive && !event.defaultPrevented) event.preventDefault();
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        dragDepthRef.current = 0;
-        setDropActive(false);
-      }}
-      onDrop={(event) => {
-        if (event.defaultPrevented) return;
-        event.preventDefault();
-        dragDepthRef.current = 0;
-        setDropActive(false);
-        void handleDroppedFiles(event.dataTransfer);
-      }}
-    >
-      {dropActive && (
-        <div className="fixed inset-0 z-[9997] bg-[#0071E3]/8 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-          <div className="px-8 py-6 rounded-2xl bg-white/95 border-2 border-dashed border-[#0071E3]/40 shadow-[0_18px_50px_rgba(0,0,0,0.12)] text-center">
-            <div className="flex items-center justify-center gap-3 mx-auto mb-2 text-[#0071E3]">
-              <ImagePlus className="w-8 h-8" strokeWidth={1.6} />
-              <FileImage className="w-8 h-8" strokeWidth={1.6} />
-              <FileVideo2 className="w-8 h-8" strokeWidth={1.6} />
-            </div>
-            <div className="text-[14px] font-semibold text-[#1D1D1F]">松开即可上传文件</div>
-            <div className="text-[12px] text-[#86868B] mt-1">
-              图片自动填充图文编辑器，视频进入视频编辑器或批量上传
-            </div>
-          </div>
-        </div>
-      )}
+    <div className="min-h-screen bg-[#F5F5F7] flex text-[#1D1D1F] relative">
       <AppToast />
       <Sidebar
         menuTree={menuTree}
@@ -655,7 +723,16 @@ export default function App() {
         onCloseMobile={() => setMobileNavOpen(false)}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col h-screen min-h-0">
+      <div
+        className="relative flex-1 min-w-0 flex flex-col h-screen min-h-0"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleContentDragDrop}
+      >
+        {contentDropActive && (
+          <div className="pointer-events-none absolute inset-0 z-[9997] bg-[#0071E3]/8 backdrop-blur-[1px]" />
+        )}
         {/* Top Bar Contract: Breadcrumb on Left — Clean Quick Nav — 1 Primary Action on Right */}
         <header className="sticky top-0 z-30 h-16 bg-[#F5F5F7]/85 backdrop-blur-xl border-b border-[#E5E5EA] px-4 sm:px-8 flex items-center justify-between gap-8">
           <div className="flex items-center gap-3 min-w-0">
@@ -708,7 +785,7 @@ export default function App() {
               myCounts={{
                 videos: myVideoCount,
                 imagetexts: imagetexts.filter((i) => i.authorId === user.id).length,
-                articles: articles.filter((a) => a.authorId === user.id).length,
+                articles: myArticleCount,
               }}
             />
           ) : route.module === 'videos' ? (
@@ -725,6 +802,9 @@ export default function App() {
           ) : route.module === 'imagetexts' ? (
             <ImageTextManagerView
               items={imagetexts}
+              query={imageTextQuery}
+              loading={imagetextsLoading}
+              onQueryChange={changeImageTextQuery}
               onRefresh={() => loadModule('imagetexts', true)}
               onOpen={(action, id, slide) => goContent('imagetexts', action, id, slide)}
               permissions={permissions}
@@ -732,6 +812,9 @@ export default function App() {
           ) : route.module === 'articles' ? (
             <ArticleManagerView
               articles={articles}
+              query={articleQuery}
+              loading={articlesLoading}
+              onQueryChange={changeArticleQuery}
               onRefresh={() => loadModule('articles', true)}
               onOpen={(action, id) => goContent('articles', action, id)}
               permissions={permissions}
