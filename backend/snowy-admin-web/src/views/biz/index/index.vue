@@ -25,6 +25,12 @@
 						<biz-mini-message-card />
 					</a-col>
 				</a-row>
+				<a-row :gutter="10" class="mt-2">
+					<a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
+						<!-- 数据导出与导入 -->
+						<biz-data-transfer-card />
+					</a-col>
+				</a-row>
 			</a-col>
 			<!-- 右侧 -->
 			<a-col :xs="24" :sm="24" :md="8" :lg="8" :xl="8" class="right-col">

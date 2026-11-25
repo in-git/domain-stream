@@ -83,6 +83,24 @@ public class BizVideoServiceImpl extends ServiceImpl<BizVideoMapper, BizVideo> i
         } else {
             queryWrapper.lambda().orderByAsc(BizVideo::getSortCode);
         }
+        // 服务端筛选，保证分页后的总数和当前页数据一致
+        if (StrUtil.isNotBlank(bizVideoPageParam.getCategory())) {
+            queryWrapper.eq("category", bizVideoPageParam.getCategory());
+        }
+        if (StrUtil.isNotBlank(bizVideoPageParam.getStatus())) {
+            queryWrapper.eq("status", bizVideoPageParam.getStatus());
+        }
+        if (StrUtil.isNotBlank(bizVideoPageParam.getCreateUser())) {
+            queryWrapper.eq("create_user", bizVideoPageParam.getCreateUser());
+        }
+        if (StrUtil.isNotBlank(bizVideoPageParam.getSearchKey())) {
+            String keyword = bizVideoPageParam.getSearchKey().trim();
+            queryWrapper.and(wrapper -> wrapper
+                    .like("title", keyword)
+                    .or().like("summary", keyword)
+                    .or().like("category", keyword)
+                    .or().like("tags", keyword));
+        }
         // 校验数据范围
         List<String> loginUserDataScope = StpLoginUserUtil.getLoginUserDataScope();
         if(loginUserDataScope != null && loginUserDataScope.isEmpty()) {

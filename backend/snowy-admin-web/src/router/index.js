@@ -51,6 +51,8 @@ const router = createRouter({
 
 // 判断是否已加载过动态/静态路由
 const isGetRouter = ref(false)
+// 页面刷新时的用户信息/菜单初始化，每个页面生命周期只允许执行一次
+let isRefreshedData = false
 // 白名单校验
 const exportWhiteListFromRouter = (router) => {
 	const res = []
@@ -124,8 +126,9 @@ router.beforeEach(async (to, from, next) => {
 		return false
 	}
 	const token = tool.data.get('TOKEN')
-	// 页面刷新，加载loading
-	if (from.path === '/' && to.path !== '/login' && !window.nextLoading && token) {
+	// 页面刷新：START_LOCATION 的 matched 为空；不能用 from.path === '/'，普通根路径重定向也会命中它
+	if (!isRefreshedData && from.matched.length === 0 && to.path !== '/login' && !window.nextLoading && token) {
+		isRefreshedData = true
 		NextLoading.start()
 		// 并行刷新请求
 		try {

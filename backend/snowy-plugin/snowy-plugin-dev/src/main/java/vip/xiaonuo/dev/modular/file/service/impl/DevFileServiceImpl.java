@@ -78,6 +78,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -979,6 +980,78 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         } catch (IOException e) {
             throw new CommonException("解码图片失败：{}", e.getMessage());
         }
+    }
+
+    @Override
+    public List<DevFile> checkInvalidImages(String bizType) {
+        String normalizedBizType = normalizeBizType(bizType);
+        List<DevFile> invalidFiles = new ArrayList<>();
+        LambdaQueryWrapper<DevFile> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(DevFile::getCategory, DevFileCategoryEnum.IMAGE.getValue())
+                .eq(DevFile::getBizType, normalizedBizType)
+                .orderByAsc(DevFile::getId);
+
+        int pageNo = 1;
+        int pageSize = 200;
+        while (true) {
+            Page<DevFile> page = this.page(new Page<>(pageNo, pageSize, false), queryWrapper);
+            List<DevFile> records = page.getRecords();
+            for (DevFile file : records) {
+                if (StrUtil.hasBlank(file.getEngine(), file.getBucket(), file.getFileKey())) {
+                    invalidFiles.add(file);
+                    continue;
+                }
+                try {
+                    if (getFileSize(file.getEngine(), file.getBucket(), file.getFileKey()) == null) {
+                        invalidFiles.add(file);
+                    }
+                } catch (Exception e) {
+                    // 网络/配置异常不能当成文件丢失，跳过并记日志，避免误删
+                    log.warn("检测图片物理文件失败，id={}，原因={}", file.getId(), e.getMessage());
+                }
+            }
+            if (records.size() < pageSize) break;
+            pageNo++;
+        }
+        return invalidFiles;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteInvalidImages(List<DevFileIdParam> devFileIdParamList) {
+        if (CollUtil.isEmpty(devFileIdParamList)) {
+            throw new CommonException("请选择要清理的文件");
+        }
+        List<String> ids = CollStreamUtil.toList(devFileIdParamList, DevFileIdParam::getId);
+        List<DevFile> files = this.listByIds(ids);
+        List<String> invalidIds = new ArrayList<>();
+        for (DevFile file : files) {
+            if (StrUtil.hasBlank(file.getEngine(), file.getBucket(), file.getFileKey())) {
+                invalidIds.add(file.getId());
+                continue;
+            }
+            try {
+                // 复查一次，期间被恢复的文件不清理
+                if (getFileSize(file.getEngine(), file.getBucket(), file.getFileKey()) == null) {
+                    invalidIds.add(file.getId());
+                }
+            } catch (Exception e) {
+                log.warn("复查图片物理文件失败，id={}，原因={}", file.getId(), e.getMessage());
+            }
+        }
+        if (!invalidIds.isEmpty()) {
+            this.removeByIds(invalidIds);
+        }
+        return invalidIds.size();
+    }
+
+    private String normalizeBizType(String bizType) {
+        String value = StrUtil.blankToDefault(bizType, DevFileBizTypeEnum.USER.getValue()).toUpperCase();
+        if (!DevFileBizTypeEnum.MATERIAL.getValue().equalsIgnoreCase(value)
+                && !DevFileBizTypeEnum.USER.getValue().equalsIgnoreCase(value)) {
+            throw new CommonException("不支持的库类型：{}", bizType);
+        }
+        return value;
     }
 
     @Override

@@ -134,49 +134,6 @@ export async function snowyFetch(
   return fetch(`${SNOWY_BASE}${path}`, { ...init, headers });
 }
 
-const DOWNLOAD_COOKIE_PATH = '/snowy';
-
-/** 直链下载走 sa-token 的 Cookie 读取，避免把长期 token 暴露在 URL 中 */
-function setDownloadTokenCookie(token: string): void {
-  document.cookie = `token=${encodeURIComponent(token)}; path=${DOWNLOAD_COOKIE_PATH}; SameSite=Lax`;
-}
-
-/**
- * 触发浏览器原生下载：隐藏 iframe 请求附件地址，由浏览器直接边收边写盘并显示下载进度条。
- * 不再用 fetch + blob 在内存里攒完整文件；文件名以服务端 Content-Disposition 为准。
- * Promise 在服务端确认文件完整输出后才 resolve，调用方的 loading 会一直保持到下载结束。
- */
-export async function snowyDownload(path: string): Promise<void> {
-  // 先走一次带 token 的普通请求，登录态失效时能复用统一重登逻辑，避免把 401 JSON 当成文件下载
-  await snowyGetLoginUser();
-  const token = getSnowyToken();
-  if (!token) throw new SnowyAuthError('登录已失效，请重新登录');
-  setDownloadTokenCookie(token);
-
-  const ticket =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const frame = document.createElement('iframe');
-  frame.hidden = true;
-  frame.style.display = 'none';
-  document.body.appendChild(frame);
-  const separator = path.includes('?') ? '&' : '?';
-  frame.src = `${SNOWY_BASE}${path}${separator}ticket=${encodeURIComponent(ticket)}&_dl=${Date.now()}`;
-  // 每次下载用独立 iframe，避免并发导出时互相中断；延迟清理防止影响进行中的下载
-  window.setTimeout(() => frame.remove(), 10 * 60 * 1000);
-
-  const deadline = Date.now() + 30 * 60 * 1000;
-  while (Date.now() < deadline) {
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 600));
-    const done = await snowyRequest<boolean>(
-      `/biz/export/status?ticket=${encodeURIComponent(ticket)}`
-    );
-    if (done) return;
-  }
-  throw new Error('导出超时，请稍后查看浏览器下载记录');
-}
-
 /** Snowy 统一请求：自动带 token，解包 {code,msg,data} */
 export async function snowyRequest<T>(
   path: string,
@@ -422,7 +379,6 @@ export function clearSnowyLoginCache(): void {
     [TOKEN_KEY, USER_INFO_KEY, MENU_KEY, 'SNOWY_ACCOUNT', 'PERMISSIONS', 'ACTIVE_MODULE'].forEach(
       (key) => localStorage.removeItem(key)
     );
-    document.cookie = `token=; path=${DOWNLOAD_COOKIE_PATH}; Max-Age=0; SameSite=Lax`;
   } catch {
     // ignore
   }
@@ -700,6 +656,8 @@ async function fetchAll<T>(module: string): Promise<T[]> {
     const page = await get<SnowyPage<T>>(`/biz/${module}/page`, {
       current,
       size: PAGE_SIZE,
+      sortField: 'createTime',
+      sortOrder: 'DESCEND',
     });
     const records = page?.records || [];
     all.push(...records);
@@ -718,10 +676,23 @@ export interface GraphicPosterDraft {
   theme?: string;
 }
 
+export interface VideoPageQuery {
+  current: number;
+  size: number;
+  searchKey?: string;
+  category?: string;
+  /** cms 状态：published / draft */
+  status?: string;
+  createUser?: string;
+  /** 时间排序：DESCEND 最新优先，ASCEND 最早优先 */
+  sortOrder?: 'DESCEND' | 'ASCEND';
+}
+
 export interface SnowyBizApi {
   /** 文本转图文：调用后端渲染，返回图片地址列表 */
   renderGraphicPoster(draft: GraphicPosterDraft): Promise<string[]>;
-  listVideos(): Promise<VideoItem[]>;
+  listVideoPage(query: VideoPageQuery): Promise<{ items: VideoItem[]; total: number }>;
+  getVideo(id: string): Promise<VideoItem>;
   createVideo(payload: Partial<VideoItem>): Promise<void>;
   updateVideo(id: string, payload: Partial<VideoItem>): Promise<void>;
   deleteVideo(id: string): Promise<void>;
@@ -798,8 +769,25 @@ export const snowyBiz: SnowyBizApi = {
     // 方法上直接是 /public/graphics/...，不存在 /biz/portal 前缀
     return post<string[]>('/public/graphics/poster/preview', draft);
   },
-  async listVideos() {
-    return (await fetchAll<SnowyVideo>('video')).map(videoFromSnowy);
+  async listVideoPage(query) {
+    const page = await get<SnowyPage<SnowyVideo>>('/biz/video/page', {
+      current: query.current,
+      size: query.size,
+      searchKey: query.searchKey,
+      category: query.category,
+      status: query.status ? fromStatus(query.status) : undefined,
+      createUser: query.createUser,
+      sortField: query.sortOrder ? 'createTime' : undefined,
+      sortOrder: query.sortOrder
+    });
+    return {
+      items: (page?.records || []).map(videoFromSnowy),
+      total: page?.total || 0
+    };
+  },
+  async getVideo(id) {
+    const video = await get<SnowyVideo>('/biz/video/detail', { id });
+    return videoFromSnowy(video);
   },
   createVideo(payload) {
     return post<void>('/biz/video/add', videoPayload(payload));

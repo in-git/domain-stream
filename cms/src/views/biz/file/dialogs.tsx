@@ -140,6 +140,46 @@ export function FileDetailDialog({ file, onClose }: { file: DevFile; onClose: ()
   );
 }
 
+/** 失效图片检测确认弹窗：列出物理文件已不存在的图片，由调用方执行清理 */
+export function FileInvalidDialog({
+  files,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  files: DevFile[];
+  busy?: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <CategoryModal title="检测到失效图片" onClose={onClose} width="max-w-lg">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-9 h-9 rounded-xl bg-[#FF9F0A]/15 flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-4.5 h-4.5 text-[#B96B00]" strokeWidth={1.8} />
+        </div>
+        <div className="text-[13px] text-[#3A3A3C] leading-relaxed">
+          检测到 {files.length} 个图片记录的物理文件已不存在。清理只会删除这些失效记录，不会调用存储删除；执行前会再次校验，期间被恢复的文件不会被删除。
+        </div>
+      </div>
+      <div className="rounded-xl bg-[#F5F5F7] px-4 py-3 max-h-56 overflow-y-auto">
+        {files.map((file) => (
+          <div key={file.id} className="py-0.5">
+            <div className="text-[13px] text-[#1D1D1F] truncate">{file.name || file.id}</div>
+            <div className="text-[11px] text-[#86868B] truncate">{file.fileKey || file.id}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex items-center justify-end gap-2">
+        <SecondaryButton onClick={onClose} disabled={busy}>取消</SecondaryButton>
+        <PrimaryButton danger busy={busy} onClick={onConfirm}>
+          一键清理
+        </PrimaryButton>
+      </div>
+    </CategoryModal>
+  );
+}
+
 /** 删除确认弹窗（支持批量），confirm 由调用方执行删除请求 */
 export function FileDeleteDialog({
   files,

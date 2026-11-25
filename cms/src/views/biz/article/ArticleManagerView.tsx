@@ -12,6 +12,7 @@ import {
 import { api } from '../../../lib/api.ts';
 import { deleteFilesByUrls, resourceUrlsInHtml } from '../../../lib/fileCenter.ts';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
+import { SortOrderButton, sortByCreatedAt, type TimeSortOrder } from '../../../components/SortOrderButton.tsx';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import type { ArticleItem, ContentStatus } from '../../../types/cms.ts';
@@ -36,6 +37,7 @@ export function ArticleManagerView({
   const canEdit = hasModulePerm('articles', 'Edit', permissions);
   const canDelete = hasModulePerm('articles', 'Delete', permissions);
   const [search, setSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState<TimeSortOrder>('DESCEND');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   /** 批量选择：选中的文章ID集合 */
@@ -53,7 +55,7 @@ export function ArticleManagerView({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return articles.filter((a) => {
+    return sortByCreatedAt(articles.filter((a) => {
       if (statusFilter !== 'all' && a.status !== statusFilter) return false;
       if (categoryFilter !== 'all' && a.category !== categoryFilter) return false;
       if (!q) return true;
@@ -63,8 +65,8 @@ export function ArticleManagerView({
         a.category.toLowerCase().includes(q) ||
         categoryName(a.category).toLowerCase().includes(q)
       );
-    });
-  }, [articles, search, statusFilter, categoryFilter, categoryOptions]);
+    }), sortOrder);
+  }, [articles, search, statusFilter, categoryFilter, categoryOptions, sortOrder]);
 
   async function handleToggleStatus(item: ArticleItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
@@ -158,16 +160,19 @@ export function ArticleManagerView({
           </div>
         </div>
 
-        {canAdd && (
-          <button
-            type="button"
-            onClick={() => onOpen('new')}
-            className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>撰写文章</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <SortOrderButton order={sortOrder} onChange={setSortOrder} />
+          {canAdd && (
+            <button
+              type="button"
+              onClick={() => onOpen('new')}
+              className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>撰写文章</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 分类筛选：与图文管理页一致的 chip 条 */}

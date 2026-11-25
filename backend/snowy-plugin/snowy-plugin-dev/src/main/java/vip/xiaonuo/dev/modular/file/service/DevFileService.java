@@ -256,6 +256,24 @@ public interface DevFileService extends IService<DevFile> {
     Long getFileSize(String engine, String bucket, String fileKey);
 
     /**
+     * 检测图片记录对应的物理文件是否仍然存在，返回失效记录。
+     * 只检查指定库的 IMAGE 记录；存储信息不完整的记录也视为失效。
+     *
+     * @author domain-stream
+     * @date 2026/11/25
+     */
+    List<DevFile> checkInvalidImages(String bizType);
+
+    /**
+     * 再次校验后删除已失效的图片记录（物理对象已不存在，不再调用存储删除）。
+     * 返回实际删除数量。
+     *
+     * @author domain-stream
+     * @date 2026/11/25
+     */
+    int deleteInvalidImages(List<DevFileIdParam> devFileIdParamList);
+
+    /**
      * 根据存储引擎、桶名和文件键把文件边读边写入输出流（不整读进内存，不关闭输出流）
      *
      * @author yubaoshan

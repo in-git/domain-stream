@@ -48,4 +48,16 @@ public class BizVideoPageParam {
     @Schema(description = "关键词")
     private String searchKey;
 
+    /** 分类编码 */
+    @Schema(description = "分类编码")
+    private String category;
+
+    /** 状态：DRAFT草稿/PUBLISHED已发布 */
+    @Schema(description = "状态：DRAFT草稿/PUBLISHED已发布")
+    private String status;
+
+    /** 创建用户，用于统计我发布的内容 */
+    @Schema(description = "创建用户")
+    private String createUser;
+
 }

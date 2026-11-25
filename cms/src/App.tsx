@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Menu } from 'lucide-react';
+import { FileImage, FileVideo2, ImagePlus, Menu } from 'lucide-react';
 import { api, getStoredToken, setStoredToken } from './lib/api.ts';
+import type { VideoPageQuery } from './lib/snowy.ts';
 import { deleteFilesByUrls, resourceUrlsInHtml } from './lib/fileCenter.ts';
 import { getCachedMenu, onAuthExpired, type SnowyMenu } from './lib/snowy.ts';
 import {
@@ -29,10 +30,9 @@ import type {
   VideoItem,
 } from './types/cms.ts';
 import { Sidebar } from './components/Sidebar.tsx';
-import { AppToast } from './components/AppToast.tsx';
+import { AppToast, showToast } from './components/AppToast.tsx';
 import { DeleteConfirmPage } from './components/DeleteConfirmPage.tsx';
 import { QuickCreatePage } from './components/QuickCreatePage.tsx';
-import { UploadQueuePanel } from './components/UploadQueuePanel.tsx';
 import { NoAccessPage, PageNotFound } from './components/PageShell.tsx';
 import { LoginView } from './views/login/LoginView.tsx';
 import { DashboardView } from './views/dashboard/DashboardView.tsx';
@@ -42,6 +42,8 @@ import { ArticleManagerView } from './views/biz/article/ArticleManagerView.tsx';
 import { PersonalCenterView } from './views/profile/PersonalCenterView.tsx';
 import { ExternalMenuView } from './views/system/ExternalMenuView.tsx';
 import { VideoEditorPage } from './views/biz/video/VideoPages.tsx';
+import { VideoBatchUploadModal } from './views/biz/video/VideoBatchUploadModal.tsx';
+import { collectDroppedImages, collectDroppedVideos } from './lib/videoDrop.ts';
 import {
   ImageTextEditorPage,
   ImageViewPage,
@@ -103,6 +105,12 @@ export default function App() {
     () => moduleFromStorage() || 'dashboard'
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // 拖拽视频：单个进入编辑器，多个/文件夹进入批量表格
+  const [dropActive, setDropActive] = useState(false);
+  const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
+  const [pendingImageFiles, setPendingImageFiles] = useState<File[] | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[] | null>(null);
+  const dragDepthRef = useRef(0);
 
   // 统一跳转：更新 state + URL hash；列表用 replace，子页面用 push（浏览器可返回）
   const go = useCallback((next: AppRoute, replace = false) => {
@@ -138,6 +146,45 @@ export default function App() {
     (module: ContentModule, action: ContentAction, id?: string, slide?: number) =>
       go({ kind: 'content', module, action, id, slide }),
     [go]
+  );
+
+  /** 全站拖拽：图片进入图文编辑器，视频进入视频编辑器或批量表格 */
+  const handleDroppedFiles = useCallback(
+    async (dataTransfer: DataTransfer) => {
+      const [{ files: imageFiles }, { files: videoFiles, hasDirectory }] = await Promise.all([
+        collectDroppedImages(dataTransfer),
+        collectDroppedVideos(dataTransfer),
+      ]);
+
+      if (imageFiles.length && !videoFiles.length) {
+        if (!hasModulePerm('imagetexts', 'Add', permissions)) {
+          showToast('当前账号没有新增图文权限', 'danger');
+          return;
+        }
+        setPendingImageFiles(imageFiles);
+        goContent('imagetexts', 'new');
+        return;
+      }
+
+      if (!videoFiles.length) {
+        showToast('未发现可上传的图片或视频文件', 'warning');
+        return;
+      }
+      if (!hasModulePerm('videos', 'Add', permissions)) {
+        showToast('当前账号没有新增视频权限', 'danger');
+        return;
+      }
+      if (imageFiles.length) {
+        showToast('图片和视频请分开拖入，本次已忽略图片', 'warning');
+      }
+      if (videoFiles.length === 1 && !hasDirectory && !imageFiles.length) {
+        setPendingVideoFile(videoFiles[0]);
+        goContent('videos', 'new');
+        return;
+      }
+      setBatchFiles(videoFiles);
+    },
+    [goContent, permissions]
   );
 
   // 浏览器前进/后退或直接修改 hash 时同步视图
@@ -180,6 +227,13 @@ export default function App() {
     route.kind === 'module' && !modules.some((m) => m.key === route.module);
 
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [videoTotal, setVideoTotal] = useState(0);
+  const [myVideoCount, setMyVideoCount] = useState(0);
+  const [videoDetail, setVideoDetail] = useState<VideoItem | null>(null);
+  const [videoDetailLoading, setVideoDetailLoading] = useState(false);
+  const [videosLoading, setVideosLoading] = useState(false);
+  const initialVideoQuery: VideoPageQuery = { current: 1, size: 20, sortOrder: 'DESCEND' };
+  const [videoQuery, setVideoQuery] = useState<VideoPageQuery>(initialVideoQuery);
   const [imagetexts, setImagetexts] = useState<ImageTextItem[]>([]);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
   // 各模块是否已加载完成（驱动详情页加载态）
@@ -200,26 +254,42 @@ export default function App() {
     imagetexts: false,
     articles: false,
   });
+  const videoQueryRef = useRef<VideoPageQuery>(videoQuery);
 
   const markReady = useCallback((mod: ContentModule) => {
     setModuleReady((prev) => (prev[mod] ? prev : { ...prev, [mod]: true }));
   }, []);
 
-  const loadVideos = useCallback(async (force = false) => {
-    if (!force && loadedRef.current.videos) return;
-    if (loadingRef.current.videos) return;
-    loadingRef.current.videos = true;
-    try {
-      const res = await api.getVideos();
-      setVideos(res.items);
-    } catch {
-      // 加载失败时保留空列表，仍标记为已尝试，避免每次切换模块重复请求
-    } finally {
-      loadedRef.current.videos = true;
-      markReady('videos');
-      loadingRef.current.videos = false;
-    }
-  }, [markReady]);
+  const loadVideos = useCallback(
+    async (query: VideoPageQuery = videoQueryRef.current, force = false) => {
+      if (!force && loadedRef.current.videos) return;
+      if (loadingRef.current.videos) return;
+      loadingRef.current.videos = true;
+      setVideosLoading(true);
+      videoQueryRef.current = query;
+      try {
+        const res = await api.getVideos(query);
+        setVideos(res.items);
+        setVideoTotal(res.total);
+      } catch {
+        // 加载失败时保留空列表，仍标记为已尝试，避免每次切换模块重复请求
+      } finally {
+        loadedRef.current.videos = true;
+        markReady('videos');
+        loadingRef.current.videos = false;
+        setVideosLoading(false);
+      }
+    },
+    [markReady]
+  );
+
+  const changeVideoQuery = useCallback(
+    (query: VideoPageQuery) => {
+      setVideoQuery(query);
+      void loadVideos(query, true);
+    },
+    [loadVideos]
+  );
 
   const loadImageTexts = useCallback(async (force = false) => {
     if (!force && loadedRef.current.imagetexts) return;
@@ -255,7 +325,7 @@ export default function App() {
 
   const loadModule = useCallback(
     (mod: ContentModule, force = false) => {
-      if (mod === 'videos') return loadVideos(force);
+      if (mod === 'videos') return loadVideos(videoQueryRef.current, force);
       if (mod === 'imagetexts') return loadImageTexts(force);
       return loadArticles(force);
     },
@@ -269,6 +339,50 @@ export default function App() {
     else if (activeModule === 'imagetexts') void loadImageTexts();
     else if (activeModule === 'articles') void loadArticles();
   }, [user, activeModule, loadVideos, loadImageTexts, loadArticles]);
+
+  // 首页「我发布的视频」数量用轻量分页接口统计，不再依赖当前列表页数据
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    void api
+      .getVideos({ current: 1, size: 1, createUser: user.id })
+      .then((res) => {
+        if (alive) setMyVideoCount(res.total);
+      })
+      .catch(() => {
+        if (alive) setMyVideoCount(0);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
+
+  // 分页后详情/编辑可能不在当前页，按 ID 补拉单条数据
+  useEffect(() => {
+    if (route.kind !== 'content' || route.module !== 'videos' || !route.id || route.action === 'new') {
+      setVideoDetailLoading(false);
+      return;
+    }
+    const id = route.id;
+    if (videos.some((v) => v.id === id)) return;
+    let alive = true;
+    setVideoDetail(null);
+    setVideoDetailLoading(true);
+    void api
+      .getVideo(id)
+      .then((item) => {
+        if (alive) setVideoDetail(item);
+      })
+      .catch(() => {
+        if (alive) setVideoDetail(null);
+      })
+      .finally(() => {
+        if (alive) setVideoDetailLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [route, videos]);
 
   /** 用会话数据更新用户/菜单/权限，并按可访问模块校验恢复路由 */
   const applySession = useCallback(
@@ -373,22 +487,37 @@ export default function App() {
 
     if (action === 'new') {
       if (module === 'videos') {
-        return <VideoEditorPage onSaved={refresh} onBack={back} />;
+        return (
+          <VideoEditorPage
+            initialVideoFile={pendingVideoFile}
+            onInitialFileConsumed={() => setPendingVideoFile(null)}
+            onSaved={refresh}
+            onBack={back}
+          />
+        );
       }
       if (module === 'imagetexts') {
-        return <ImageTextEditorPage onSaved={refresh} onBack={back} />;
+        return (
+          <ImageTextEditorPage
+            initialImageFiles={pendingImageFiles}
+            onInitialFilesConsumed={() => setPendingImageFiles(null)}
+            onSaved={refresh}
+            onBack={back}
+          />
+        );
       }
       return <ArticleEditorPage onSaved={refresh} onBack={back} />;
     }
 
-    const video = module === 'videos' ? videos.find((v) => v.id === id) : undefined;
+    const video =
+      module === 'videos' ? videos.find((v) => v.id === id) || videoDetail : undefined;
     const imageText =
       module === 'imagetexts' ? imagetexts.find((it) => it.id === id) : undefined;
     const article = module === 'articles' ? articles.find((a) => a.id === id) : undefined;
     const missing = !video && !imageText && !article;
 
     // 详情/编辑需要列表数据定位条目，模块尚未加载完成时先显示加载态
-    if (missing && !moduleReady[module]) {
+    if (missing && (videoDetailLoading || !moduleReady[module])) {
       return (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-[#86868B]">
           <div className="w-8 h-8 rounded-full border-2 border-[#0071E3] border-t-transparent animate-spin" />
@@ -474,7 +603,45 @@ export default function App() {
         : modules.find((m) => m.key === route.module)?.label || MODULE_TITLES[route.module];
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] flex text-[#1D1D1F]">
+    <div
+      className="min-h-screen bg-[#F5F5F7] flex text-[#1D1D1F] relative"
+      onDragEnter={(event) => {
+        if (!Array.from(event.dataTransfer.types || []).includes('Files')) return;
+        if (event.defaultPrevented) return;
+        dragDepthRef.current += 1;
+        setDropActive(true);
+      }}
+      onDragOver={(event) => {
+        if (dropActive && !event.defaultPrevented) event.preventDefault();
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        dragDepthRef.current = 0;
+        setDropActive(false);
+      }}
+      onDrop={(event) => {
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        dragDepthRef.current = 0;
+        setDropActive(false);
+        void handleDroppedFiles(event.dataTransfer);
+      }}
+    >
+      {dropActive && (
+        <div className="fixed inset-0 z-[9997] bg-[#0071E3]/8 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="px-8 py-6 rounded-2xl bg-white/95 border-2 border-dashed border-[#0071E3]/40 shadow-[0_18px_50px_rgba(0,0,0,0.12)] text-center">
+            <div className="flex items-center justify-center gap-3 mx-auto mb-2 text-[#0071E3]">
+              <ImagePlus className="w-8 h-8" strokeWidth={1.6} />
+              <FileImage className="w-8 h-8" strokeWidth={1.6} />
+              <FileVideo2 className="w-8 h-8" strokeWidth={1.6} />
+            </div>
+            <div className="text-[14px] font-semibold text-[#1D1D1F]">松开即可上传文件</div>
+            <div className="text-[12px] text-[#86868B] mt-1">
+              图片自动填充图文编辑器，视频进入视频编辑器或批量上传
+            </div>
+          </div>
+        </div>
+      )}
       <AppToast />
       <Sidebar
         menuTree={menuTree}
@@ -539,7 +706,7 @@ export default function App() {
               onNavigate={goModule}
               permissions={permissions}
               myCounts={{
-                videos: videos.filter((v) => v.authorId === user.id).length,
+                videos: myVideoCount,
                 imagetexts: imagetexts.filter((i) => i.authorId === user.id).length,
                 articles: articles.filter((a) => a.authorId === user.id).length,
               }}
@@ -547,6 +714,10 @@ export default function App() {
           ) : route.module === 'videos' ? (
             <VideoManagerView
               videos={videos}
+              total={videoTotal}
+              query={videoQuery}
+              loading={videosLoading}
+              onQueryChange={changeVideoQuery}
               onRefresh={() => loadModule('videos', true)}
               onOpen={(action, id) => goContent('videos', action, id)}
               permissions={permissions}
@@ -589,8 +760,13 @@ export default function App() {
         </main>
       </div>
 
-      {/* 全局后台上传任务面板：上传期间用户可继续操作其它内容 */}
-      <UploadQueuePanel />
+      {batchFiles && (
+        <VideoBatchUploadModal
+          files={batchFiles}
+          onClose={() => setBatchFiles(null)}
+          onUploaded={() => loadModule('videos', true)}
+        />
+      )}
     </div>
   );
 }

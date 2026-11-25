@@ -44,6 +44,7 @@ import {
 import {
   FileDeleteDialog,
   FileDetailDialog,
+  FileInvalidDialog,
   FilePreviewDialog,
 } from './dialogs.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
@@ -57,6 +58,7 @@ type DialogState =
   | { kind: 'preview'; file: DevFile }
   | { kind: 'detail'; file: DevFile }
   | { kind: 'delete'; files: DevFile[] }
+  | { kind: 'invalid'; files: DevFile[] }
   | null;
 
 
@@ -74,14 +76,6 @@ function coverIcon(file: DevFile) {
 }
 
 /** 占位封面底色：按素材类型区分，接近「文件」App 的彩色图标 */
-function tileTone(file: DevFile): string {
-  if (isVideoFile(file)) return 'bg-gradient-to-br from-[#1C1C1E] via-[#2C2C2E] to-[#48484A] text-white';
-  if (isAudioFile(file)) return 'bg-gradient-to-br from-[#FF375F]/14 via-[#FF9F0A]/12 to-[#FFD60A]/14 text-[#FF375F]';
-  if (isImageFile(file)) return 'bg-gradient-to-br from-[#30D158]/14 via-[#0071E3]/10 to-[#5E5CE6]/14 text-[#0071E3]';
-  if ((file.category || '') === 'DOC') return 'bg-gradient-to-br from-[#5E5CE6]/14 to-[#0071E3]/10 text-[#5E5CE6]';
-  return 'bg-gradient-to-br from-[#F2F2F7] to-[#E5E5EA] text-[#8E8E93]';
-}
-
 interface FileCardProps {
   file: DevFile;
   selected: boolean;
@@ -118,9 +112,9 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
     >
       {/* 封面 */}
       <div
-        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden ${
-          showCover ? 'bg-[#F2F2F7]' : tileTone(file)
-        } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
+        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden bg-gradient-to-br from-[#FDFDFE] via-[#F5F5F7] to-[#E9E9ED] text-[#6E6E73] ${
+          selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'
+        } transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
       >
         {showCover ? (
           <img
@@ -248,6 +242,8 @@ export default function FileCenterView() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectingAll, setSelectingAll] = useState(false);
+  const [checkingInvalid, setCheckingInvalid] = useState(false);
+  const [cleaningInvalid, setCleaningInvalid] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
 
   // 分类统计（全部/视频/音频/图片），各取 size=1 的分页 total
@@ -448,6 +444,52 @@ export default function FileCenterView() {
     }
   }
 
+  async function handleCheckInvalidImages() {
+    if (checkingInvalid || cleaningInvalid) return;
+    setCheckingInvalid(true);
+    try {
+      const invalid = await fileCenterApi.checkInvalidImages(library);
+      if (!invalid.length) {
+        notify('success', '未发现失效图片');
+        return;
+      }
+      setDialog({ kind: 'invalid', files: invalid });
+    } catch (err) {
+      notify('error', `检测失败：${errorMessage(err)}`);
+    } finally {
+      setCheckingInvalid(false);
+    }
+  }
+
+  async function handleCleanInvalidImages() {
+    if (dialog?.kind !== 'invalid' || cleaningInvalid) return;
+    const targets = dialog.files;
+    setCleaningInvalid(true);
+    try {
+      const removed = await fileCenterApi.deleteInvalidImages(targets.map((file) => file.id));
+      const removedIds = new Set(targets.map((file) => file.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        removedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      setDialog(null);
+      const skipped = targets.length - removed;
+      notify(
+        'success',
+        `已清理 ${removed} 个失效图片${skipped > 0 ? `，${skipped} 个文件已恢复或检测失败，未删除` : ''}`
+      );
+      const visibleRemoved = records.filter((file) => removedIds.has(file.id)).length;
+      if (visibleRemoved === records.length && page > 1) setPage(page - 1);
+      else await load();
+      void loadStats();
+    } catch (err) {
+      notify('error', `清理失败：${errorMessage(err)}`);
+    } finally {
+      setCleaningInvalid(false);
+    }
+  }
+
   const statCards = [
     { label: '全部文件', value: stats[''] ?? 0, icon: Images },
     { label: '视频', value: stats['VIDEO'] ?? 0, icon: Film },
@@ -563,6 +605,20 @@ export default function FileCenterView() {
             className="h-9 w-9 rounded-xl bg-white border border-[#E5E5EA] flex items-center justify-center text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleCheckInvalidImages()}
+            disabled={loading || uploading || checkingInvalid || cleaningInvalid}
+            title="检测并清理物理文件不存在的图片"
+            className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[#3A3A3C] text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+          >
+            {checkingInvalid ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Search className="w-3.5 h-3.5" />
+            )}
+            {checkingInvalid ? '检测中…' : '检测失效图片'}
           </button>
           {selected.size > 0 && (
             <button
@@ -714,6 +770,14 @@ export default function FileCenterView() {
           files={dialog.files}
           onClose={() => setDialog(null)}
           onConfirm={() => void handleDelete(dialog.files)}
+        />
+      )}
+      {dialog?.kind === 'invalid' && (
+        <FileInvalidDialog
+          files={dialog.files}
+          busy={cleaningInvalid}
+          onClose={() => setDialog(null)}
+          onConfirm={() => void handleCleanInvalidImages()}
         />
       )}
 

@@ -211,6 +211,19 @@ export const fileCenterApi = {
     });
   },
 
+  /** 检测图片记录对应的物理文件是否仍然存在 */
+  checkInvalidImages(bizType: 'USER' | 'MATERIAL'): Promise<DevFile[]> {
+    return snowyRequest<DevFile[]>(`${BASE}/checkInvalidImages${qs({ bizType })}`);
+  },
+
+  /** 清理失效图片记录，后端会再次校验物理文件，返回实际删除数量 */
+  deleteInvalidImages(ids: string[]): Promise<number> {
+    return snowyRequest<number>(`${BASE}/deleteInvalidImages`, {
+      method: 'POST',
+      body: JSON.stringify(ids.map((id) => ({ id }))),
+    });
+  },
+
   /** 调整文件所属库（用户文件 / 素材库） */
   updateBizType(ids: string[], bizType: 'USER' | 'MATERIAL'): Promise<void> {
     return snowyRequest<void>(`${BASE}/updateBizType?bizType=${bizType}`, {

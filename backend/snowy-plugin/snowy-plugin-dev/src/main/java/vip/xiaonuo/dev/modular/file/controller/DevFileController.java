@@ -420,6 +420,33 @@ public class DevFileController {
     }
 
     /**
+     * 检测图片记录对应的物理文件是否仍然存在
+     *
+     * @author domain-stream
+     * @date 2026/11/25
+     */
+    @Operation(summary = "检测失效图片")
+    @CommonLog("检测失效图片")
+    @GetMapping(value = "/dev/file/checkInvalidImages")
+    public CommonResult<List<DevFile>> checkInvalidImages(@RequestParam(defaultValue = "USER") String bizType) {
+        return CommonResult.data(devFileService.checkInvalidImages(bizType));
+    }
+
+    /**
+     * 清理物理文件已不存在的图片记录
+     *
+     * @author domain-stream
+     * @date 2026/11/25
+     */
+    @Operation(summary = "清理失效图片")
+    @CommonLog("清理失效图片")
+    @PostMapping(value = "/dev/file/deleteInvalidImages")
+    public CommonResult<Integer> deleteInvalidImages(@RequestBody @Valid @NotEmpty(message = "集合不能为空")
+                                                     List<DevFileIdParam> devFileIdParamList) {
+        return CommonResult.data(devFileService.deleteInvalidImages(devFileIdParamList));
+    }
+
+    /**
      * 物理删除文件
      *
      * @author 每天一点

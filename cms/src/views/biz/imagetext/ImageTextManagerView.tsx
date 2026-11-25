@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../../lib/api.ts';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
+import { SortOrderButton, sortByCreatedAt, type TimeSortOrder } from '../../../components/SortOrderButton.tsx';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import { formatDateShort, formatNumber } from '../../../lib/format.ts';
 import type { ContentStatus, ImageTextItem } from '../../../types/cms.ts';
@@ -203,6 +204,7 @@ export function ImageTextManagerView({
   const canEdit = hasModulePerm('imagetexts', 'Edit', permissions);
   const canDelete = hasModulePerm('imagetexts', 'Delete', permissions);
   const [search, setSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState<TimeSortOrder>('DESCEND');
   const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   /** 批量选择：选中的图文ID集合 */
@@ -220,7 +222,7 @@ export function ImageTextManagerView({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter((it) => {
+    return sortByCreatedAt(items.filter((it) => {
       if (statusFilter !== 'all' && it.status !== statusFilter) return false;
       if (categoryFilter !== 'all' && it.category !== categoryFilter) return false;
       if (!q) return true;
@@ -230,8 +232,8 @@ export function ImageTextManagerView({
         it.category.toLowerCase().includes(q) ||
         categoryName(it.category).toLowerCase().includes(q)
       );
-    });
-  }, [items, search, statusFilter, categoryFilter, categoryOptions]);
+    }), sortOrder);
+  }, [items, search, statusFilter, categoryFilter, categoryOptions, sortOrder]);
 
   /** 当前筛选结果的全选状态 */
   const allSelected = filtered.length > 0 && filtered.every((it) => selected.has(it.id));
@@ -320,16 +322,19 @@ export function ImageTextManagerView({
           </div>
         </div>
 
-        {canAdd && (
-          <button
-            type="button"
-            onClick={() => onOpen('new')}
-            className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>发布图文</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <SortOrderButton order={sortOrder} onChange={setSortOrder} />
+          {canAdd && (
+            <button
+              type="button"
+              onClick={() => onOpen('new')}
+              className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>发布图文</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 分类筛选：与客户端图文页顶部的分类 chip 一致 */}

@@ -318,12 +318,21 @@ function PendingImagesBoard({
 
 interface ImageTextEditorPageProps {
   item?: ImageTextItem;
+  /** 全站拖拽图片进入时，自动填充到图片列表 */
+  initialImageFiles?: File[] | null;
+  onInitialFilesConsumed?: () => void;
   onSaved: () => Promise<void>;
   onBack: () => void;
 }
 
 /** 图文新建 / 编辑独立页面（原多图上传编辑弹窗） */
-export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPageProps) {
+export function ImageTextEditorPage({
+  item,
+  initialImageFiles,
+  onInitialFilesConsumed,
+  onSaved,
+  onBack,
+}: ImageTextEditorPageProps) {
   const [title, setTitle] = useState(item?.title ?? '');
   const [body, setBody] = useState(item?.body ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
@@ -436,6 +445,24 @@ export function ImageTextEditorPage({ item, onSaved, onBack }: ImageTextEditorPa
     setCropTotal(validFiles.length);
     setCropQueue(validFiles);
   }
+
+  const consumedInitialFilesRef = useRef<File[] | null>(null);
+  useEffect(() => {
+    if (
+      !initialImageFiles ||
+      !initialImageFiles.length ||
+      consumedInitialFilesRef.current === initialImageFiles
+    ) {
+      return;
+    }
+    consumedInitialFilesRef.current = initialImageFiles;
+    handleImageFiles(initialImageFiles);
+    if (!title.trim() && !item) {
+      const first = initialImageFiles[0]?.name || '';
+      setTitle(first.replace(/\.[^/.]+$/, ''));
+    }
+    onInitialFilesConsumed?.();
+  }, [initialImageFiles, item, onInitialFilesConsumed, title]);
 
   /** 单张裁剪完成：本地暂存后继续处理队列中的下一张 */
   function handleCropComplete(cropped: File) {

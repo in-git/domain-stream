@@ -5,7 +5,6 @@ import type {
   UserProfile,
   VideoItem,
 } from '../types/cms.ts';
-import { uploadImportFile as uploadImportChunks, type ImportMode } from './importUpload.ts';
 import {
   SnowyAuthError,
   buildUserProfile,
@@ -17,7 +16,7 @@ import {
   getSnowyToken,
   setSnowyToken,
   snowyBiz,
-  snowyDownload,
+  type VideoPageQuery,
   snowyGetLoginUser,
   snowyLogin,
   snowyLoginMenu,
@@ -38,14 +37,6 @@ export function getStoredToken(): string | null {
 }
 export function setStoredToken(token: string | null) {
   setSnowyToken(token);
-}
-
-/** 数据导入任务状态 */
-export interface DataImportStatus {
-  done: boolean;
-  success: boolean;
-  message: string;
-  count: number;
 }
 
 /** 上传文件到小诺文件服务（复用小诺上传接口），带进度回调 */
@@ -200,19 +191,9 @@ export const api = {
 
   getDashboard: async (): Promise<DashboardPayload> => snowyVisitorDashboard(),
 
-  // ---- 数据导出 ----
-  exportDatabase: async (): Promise<void> => snowyDownload('/biz/export/database'),
-  exportFiles: async (): Promise<void> => snowyDownload('/biz/export/files'),
-  exportUserFiles: async (): Promise<void> => snowyDownload('/biz/export/user-files'),
-
-  // ---- 数据导入 ----
-  uploadImportFile: (file: File, mode: ImportMode, onProgress?: (percent: number) => void): Promise<string> =>
-    uploadImportChunks(file, mode, onProgress),
-  getImportStatus: (ticket: string): Promise<DataImportStatus> =>
-    snowyRequest<DataImportStatus>(`/biz/import/status?ticket=${encodeURIComponent(ticket)}`),
-
   // ---- 视频 ----
-  getVideos: async () => ({ items: await snowyBiz.listVideos() }),
+  getVideos: (query: VideoPageQuery) => snowyBiz.listVideoPage(query),
+  getVideo: (id: string) => snowyBiz.getVideo(id),
   createVideo: (payload: Partial<VideoItem>) => snowyBiz.createVideo(payload),
   updateVideo: (id: string, payload: Partial<VideoItem>) => snowyBiz.updateVideo(id, payload),
   deleteVideo: (id: string) => snowyBiz.deleteVideo(id),

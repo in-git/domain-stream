@@ -17,11 +17,10 @@ export const useUserStore = defineStore('useUserStore', () => {
 		const data = await loginApi.getLoginUser()
 		useGlobalStore().setUserInfo(data)
 	}
-	// 刷新登录用户信息
-	const refreshUserLoginUserInfo = () => {
-		loginApi.getLoginUser().then((data) => {
-			useGlobalStore().setUserInfo(data)
-		})
+	// 刷新登录用户信息（返回 Promise，调用方需要 await 时才能正确等待完成）
+	const refreshUserLoginUserInfo = async () => {
+		const data = await loginApi.getLoginUser()
+		useGlobalStore().setUserInfo(data)
 	}
 	return { initUserInfo, refreshUserLoginUserInfo }
 })

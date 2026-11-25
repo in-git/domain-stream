@@ -138,14 +138,12 @@ export const useMenuStore = defineStore('menuStore', () => {
 		addToRouter()
 		changeRefreshFlag(true)
 	}
-	// 通过API刷新菜单（仅在layout的onMounted内使用，浏览器刷新只刷新一次）
-	const refreshApiMenu = () => {
-		userCenterApi.userLoginMenu().then((data) => {
-			tool.data.set('MENU', data)
-			nextTick(() => {
-				refreshMenu()
-			})
-		})
+	// 通过API刷新菜单（浏览器刷新或锁屏解锁时调用，返回 Promise 便于调用方等待）
+	const refreshApiMenu = async () => {
+		const data = await userCenterApi.userLoginMenu()
+		tool.data.set('MENU', data)
+		await nextTick()
+		refreshMenu()
 	}
 	// 将菜单添加到路由
 	const addToRouter = () => {

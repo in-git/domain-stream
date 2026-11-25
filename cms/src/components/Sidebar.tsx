@@ -34,6 +34,7 @@ import type { ModuleKey, UserProfile } from '../types/cms.ts';
 import type { SnowyMenu } from '../lib/snowy.ts';
 import { menuNodeToModule } from '../lib/menu.ts';
 import { MediaImage } from './MediaImage.tsx';
+import { UploadQueuePanel } from './UploadQueuePanel.tsx';
 
 interface SidebarProps {
   /** /sys/userCenter/loginMenu 返回的原始菜单树（模块 -> 目录 -> 菜单，可任意层级） */
@@ -400,13 +401,15 @@ export function Sidebar({
           />
         </button>
 
+        <UploadQueuePanel />
+
         <button
           type="button"
           onClick={onLogout}
-          className="w-full h-9 px-3 rounded-xl flex items-center gap-2.5 text-[13px] font-medium text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
+          className="w-full h-9 px-3 rounded-xl flex items-center justify-between gap-2.5 text-[13px] font-medium text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
         >
-          <LogOut className="w-4 h-4" strokeWidth={1.8} />
           <span>退出登录</span>
+          <LogOut className="w-4 h-4 shrink-0" strokeWidth={1.8} />
         </button>
       </div>
     </aside>

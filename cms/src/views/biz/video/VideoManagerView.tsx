@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   Film,
   LayoutGrid,
@@ -28,9 +30,15 @@ import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
 import { publishCategoryName } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import { toPlayableVideoUrl } from '../../../lib/fileCenter.ts';
+import type { VideoPageQuery } from '../../../lib/snowy.ts';
+import { SortOrderButton } from '../../../components/SortOrderButton.tsx';
 
 interface VideoManagerViewProps {
   videos: VideoItem[];
+  total: number;
+  query: VideoPageQuery;
+  loading: boolean;
+  onQueryChange: (query: VideoPageQuery) => void;
   onRefresh: () => Promise<void>;
   onOpen: (action: 'new' | 'edit' | 'view' | 'delete', id?: string) => void;
   permissions?: string[];
@@ -101,6 +109,10 @@ function VideoCardPreview({
 
 export function VideoManagerView({
   videos,
+  total,
+  query,
+  loading,
+  onQueryChange,
   onRefresh,
   onOpen,
   permissions,
@@ -108,11 +120,9 @@ export function VideoManagerView({
   const canAdd = hasModulePerm('videos', 'Add', permissions);
   const canEdit = hasModulePerm('videos', 'Edit', permissions);
   const canDelete = hasModulePerm('videos', 'Delete', permissions);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | ContentStatus>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchText, setSearchText] = useState(query.searchKey || '');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  /** 批量选择：选中的视频ID集合 */
+  /** 批量选择：选中的视频ID集合，翻页或改筛选后清空 */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** 待删除的视频（单条或批量），非空时打开通用删除确认模态框 */
   const [pendingDelete, setPendingDelete] = useState<VideoItem[]>([]);
@@ -121,30 +131,50 @@ export function VideoManagerView({
   const { options: categoryOptions } = usePublishCategories('VIDEO');
   const categoryName = (code: string) => publishCategoryName(categoryOptions, code);
 
-  /** 分类 chip：只列出实际有视频的分类，避免空分类占位 */
-  const categoryChips = useMemo(() => {
-    const codes = Array.from(new Set(videos.map((v) => v.category).filter(Boolean)));
-    return codes.map((code) => ({ code, label: categoryName(code) || code }));
-  }, [videos, categoryOptions]);
+  const statusFilter = query.status || 'all';
+  const categoryFilter = query.category || 'all';
+  const sortOrder = query.sortOrder || 'DESCEND';
+  const totalPages = Math.max(1, Math.ceil(total / query.size));
+  const currentPage = Math.min(query.current, totalPages);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return videos.filter((v) => {
-      if (statusFilter !== 'all' && v.status !== statusFilter) return false;
-      if (categoryFilter !== 'all' && v.category !== categoryFilter) return false;
-      if (!q) return true;
-      return (
-        v.title.toLowerCase().includes(q) ||
-        v.category.toLowerCase().includes(q) ||
-        categoryName(v.category).toLowerCase().includes(q) ||
-        v.description.toLowerCase().includes(q)
-      );
-    });
-  }, [videos, search, statusFilter, categoryFilter, categoryOptions]);
+  /** 分类 chip 使用完整分类字典，避免分页后只剩当前页的分类 */
+  const categoryChips = useMemo(
+    () => categoryOptions.map((option) => ({
+      code: option.code,
+      label: option.name || categoryName(option.code) || option.code
+    })),
+    [categoryOptions]
+  );
 
-  /** 当前筛选结果的全选状态 */
-  const allSelected = filtered.length > 0 && filtered.every((v) => selected.has(v.id));
-  const someSelected = filtered.some((v) => selected.has(v.id));
+  useEffect(() => {
+    setSearchText(query.searchKey || '');
+  }, [query.searchKey]);
+
+  useEffect(() => {
+    const keyword = searchText.trim();
+    if (keyword === (query.searchKey || '').trim()) return;
+    const timer = window.setTimeout(() => {
+      onQueryChange({ ...query, searchKey: keyword, current: 1 });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText, query, onQueryChange]);
+
+  const firstQuery = useRef(true);
+  useEffect(() => {
+    if (firstQuery.current) {
+      firstQuery.current = false;
+      return;
+    }
+    setSelected(new Set());
+  }, [query]);
+
+  function changeQuery(patch: Partial<VideoPageQuery>) {
+    onQueryChange({ ...query, ...patch });
+  }
+
+  /** 当前页全选状态 */
+  const allSelected = videos.length > 0 && videos.every((v) => selected.has(v.id));
+  const someSelected = videos.some((v) => selected.has(v.id));
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -155,12 +185,12 @@ export function VideoManagerView({
     });
   }
 
-  /** 全选/取消全选当前筛选结果 */
+  /** 全选/取消全选当前页 */
   function toggleSelectAll() {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allSelected) filtered.forEach((v) => next.delete(v.id));
-      else filtered.forEach((v) => next.add(v.id));
+      if (allSelected) videos.forEach((v) => next.delete(v.id));
+      else videos.forEach((v) => next.add(v.id));
       return next;
     });
   }
@@ -201,8 +231,8 @@ export function VideoManagerView({
             <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder="搜索视频标题或分类..."
               className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
             />
@@ -219,7 +249,7 @@ export function VideoManagerView({
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setStatusFilter(tab.key)}
+                onClick={() => changeQuery({ status: tab.key === 'all' ? undefined : tab.key, current: 1 })}
                 className={`px-3 py-1 text-[12px] font-medium rounded-[8px] transition-all whitespace-nowrap shrink-0 ${
                   statusFilter === tab.key
                     ? 'bg-white text-[#1D1D1F] shadow-xs'
@@ -233,6 +263,11 @@ export function VideoManagerView({
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
+          <SortOrderButton
+            order={sortOrder}
+            onChange={(order) => changeQuery({ sortOrder: order, current: 1 })}
+          />
+
           <div className="flex items-center p-0.5 bg-[#F2F2F7] rounded-[10px]">
             <button
               type="button"
@@ -278,7 +313,7 @@ export function VideoManagerView({
               <button
                 key={chip.code}
                 type="button"
-                onClick={() => setCategoryFilter(chip.code)}
+                onClick={() => changeQuery({ category: chip.code === 'all' ? undefined : chip.code, current: 1 })}
                 aria-pressed={active}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   active
@@ -293,61 +328,105 @@ export function VideoManagerView({
         </div>
       )}
 
-      {/* 批量操作条：全选与已选数量放一起，始终显示（有数据时） */}
-      {canDelete && filtered.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#E5E5EA] bg-white px-4 py-2.5">
+      {/* 全选、批量操作与分页整合在同一行 */}
+      {videos.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[14px] border border-[#E5E5EA] bg-white px-4 py-2.5">
           <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              aria-label={allSelected ? '取消全选' : '全选'}
-              className={`flex h-4 w-4 items-center justify-center rounded border ${
-                allSelected
-                  ? 'border-[#0071E3] bg-[#0071E3] text-white'
-                  : someSelected
-                    ? 'border-[#0071E3] text-[#0071E3]'
-                    : 'border-[#C7C7CC] text-transparent'
-              }`}
-            >
-              {allSelected ? (
-                <Check className="h-3 w-3" strokeWidth={3} />
-              ) : someSelected ? (
-                <span className="h-0.5 w-2 rounded-full bg-[#0071E3]" />
-              ) : null}
-            </button>
-            <span
-              className={`text-[13px] font-medium ${
-                selected.size > 0 ? 'text-[#0071E3]' : 'text-[#6E6E73]'
-              }`}
-            >
-              全选 · 已选择 {selected.size} 个视频
+            {canDelete && (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  aria-label={allSelected ? '取消全选' : '全选'}
+                  className={`flex h-4 w-4 items-center justify-center rounded border ${
+                    allSelected
+                      ? 'border-[#0071E3] bg-[#0071E3] text-white'
+                      : someSelected
+                        ? 'border-[#0071E3] text-[#0071E3]'
+                        : 'border-[#C7C7CC] text-transparent'
+                  }`}
+                >
+                  {allSelected ? (
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  ) : someSelected ? (
+                    <span className="h-0.5 w-2 rounded-full bg-[#0071E3]" />
+                  ) : null}
+                </button>
+                <span
+                  className={`text-[13px] font-medium ${
+                    selected.size > 0 ? 'text-[#0071E3]' : 'text-[#6E6E73]'
+                  }`}
+                >
+                  全选 · 已选择 {selected.size} 个视频
+                </span>
+              </>
+            )}
+            <span className="text-[12px] text-[#86868B]">
+              共 {total} 个视频 · 第 {currentPage}/{totalPages} 页
             </span>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[12px] text-[#86868B]">
+              每页
+              <select
+                value={query.size}
+                disabled={loading}
+                onChange={(e) => changeQuery({ size: Number(e.target.value), current: 1 })}
+                className="h-8 px-2 rounded-lg border border-[#E5E5EA] bg-white text-[#3A3A3C] text-[12px] disabled:opacity-50"
+              >
+                {[20, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              条
+            </label>
             <button
               type="button"
-              onClick={() => setSelected(new Set())}
-              disabled={selected.size === 0}
-              className="h-8 px-3 rounded-[10px] text-[12px] font-medium text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors inline-flex items-center gap-1"
+              disabled={loading || currentPage <= 1}
+              onClick={() => changeQuery({ current: currentPage - 1 })}
+              className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+              aria-label="上一页"
             >
-              <X className="w-3.5 h-3.5" />
-              取消选择
+              <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               type="button"
-              onClick={requestBatchDelete}
-              disabled={selected.size === 0}
-              className="h-8 px-3 rounded-[10px] bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-40 text-white text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors"
+              disabled={loading || currentPage >= totalPages}
+              onClick={() => changeQuery({ current: currentPage + 1 })}
+              className="h-8 w-8 rounded-lg border border-[#E5E5EA] flex items-center justify-center text-[#3A3A3C] hover:bg-[#F5F5F7] disabled:opacity-40 transition-colors"
+              aria-label="下一页"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              批量删除{selected.size > 0 ? ` (${selected.size})` : ''}
+              <ChevronRight className="w-4 h-4" />
             </button>
+            {canDelete && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  disabled={selected.size === 0}
+                  className="h-8 px-3 rounded-[10px] text-[12px] font-medium text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-transparent transition-colors inline-flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  取消选择
+                </button>
+                <button
+                  type="button"
+                  onClick={requestBatchDelete}
+                  disabled={selected.size === 0}
+                  className="h-8 px-3 rounded-[10px] bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-40 text-white text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  批量删除{selected.size > 0 ? ` (${selected.size})` : ''}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* Empty State */}
-      {filtered.length === 0 ? (
+      {videos.length === 0 ? (
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] py-16 px-6 text-center">
           <Film className="w-10 h-10 text-[#C7C7CC] mx-auto mb-3" strokeWidth={1.5} />
           <h3 className="text-[16px] font-semibold text-[#1D1D1F]">暂无匹配的视频内容</h3>
@@ -367,7 +446,7 @@ export function VideoManagerView({
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {filtered.map((item) => (
+          {videos.map((item) => (
             <article
               key={item.id}
               onClick={canDelete ? () => toggleSelect(item.id) : undefined}
@@ -515,7 +594,7 @@ export function VideoManagerView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F2F7] text-[13px]">
-                {filtered.map((item) => (
+                {videos.map((item) => (
                   <tr key={item.id} className="hover:bg-[#F5F5F7]/60 transition-colors">
                     {canDelete && (
                       <td className="py-3 pl-5 pr-1">

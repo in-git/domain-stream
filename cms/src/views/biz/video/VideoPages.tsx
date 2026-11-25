@@ -10,6 +10,11 @@ import { uploadTaskQueue } from '../../../lib/uploadTaskQueue.ts';
 import { publishCategoryName, resolvePublishCategoryCode } from '../../../lib/category.ts';
 import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import {
+  extractVideoMetadataAndFrame,
+  titleFromFileName,
+} from '../../../lib/videoDrop.ts';
+import { MAX_VIDEO_SIZE } from '../../../lib/videoConstants.ts';
+import {
   formatDateShort,
   formatDuration,
   formatFileSize,
@@ -23,9 +28,6 @@ import {
   EditorWorkspace,
   type PreviewDevice,
 } from '../../../components/EditorWorkspace.tsx';
-
-/** 视频最大上传体积：1 GB */
-const MAX_VIDEO_SIZE = 1024 * 1024 * 1024;
 
 interface VideoPreviewProps {
   device: PreviewDevice;
@@ -135,13 +137,24 @@ function VideoPreview({
 
 interface VideoEditorPageProps {
   item?: VideoItem;
+  /** 从首页/列表拖拽单个视频进入时，自动填入表单并截取封面 */
+  initialVideoFile?: File | null;
+  onInitialFileConsumed?: () => void;
   onSaved: () => Promise<void>;
   onBack: () => void;
 }
 
 /** 视频新建 / 编辑独立页面（原上传编辑弹窗） */
-export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps) {
-  const [title, setTitle] = useState(item?.title ?? '');
+export function VideoEditorPage({
+  item,
+  initialVideoFile,
+  onInitialFileConsumed,
+  onSaved,
+  onBack,
+}: VideoEditorPageProps) {
+  const [title, setTitle] = useState(
+    item?.title ?? (initialVideoFile ? titleFromFileName(initialVideoFile.name) : '')
+  );
   const [description, setDescription] = useState(item?.description ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
   const [status, setStatus] = useState<ContentStatus>(item?.status ?? 'published');
@@ -178,6 +191,13 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
     []
   );
 
+  const consumedInitialFileRef = useRef<File | null>(null);
+  useEffect(() => {
+    if (!initialVideoFile || consumedInitialFileRef.current === initialVideoFile) return;
+    consumedInitialFileRef.current = initialVideoFile;
+    void handleVideoFile(initialVideoFile).finally(() => onInitialFileConsumed?.());
+  }, [initialVideoFile, onInitialFileConsumed]);
+
   /** 生成本地预览地址并登记，便于替换/卸载时释放 */
   function trackLocalPreview(file: File): string {
     const url = URL.createObjectURL(file);
@@ -206,62 +226,6 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   }, [category, categoryLoading, categoryOptions]);
 
   const categoryLabel = publishCategoryName(categoryOptions, category);
-
-  async function extractVideoMetadataAndFrame(file: File): Promise<{
-    duration: number;
-    resolution: string;
-    coverBlob: Blob | null;
-  }> {
-    return new Promise((resolve) => {
-      const url = URL.createObjectURL(file);
-      const vid = document.createElement('video');
-      vid.preload = 'metadata';
-      vid.muted = true;
-      vid.playsInline = true;
-      vid.src = url;
-
-      const cleanup = () => URL.revokeObjectURL(url);
-
-      vid.onloadedmetadata = () => {
-        const dur = Number.isFinite(vid.duration) ? Math.round(vid.duration) : 60;
-        const res =
-          vid.videoWidth && vid.videoHeight
-            ? `${vid.videoWidth}×${vid.videoHeight}`
-            : '1920×1080';
-        vid.currentTime = Math.min(1, dur * 0.1);
-
-        vid.onseeked = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = vid.videoWidth || 1280;
-            canvas.height = vid.videoHeight || 720;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-              canvas.toBlob(
-                (blob) => {
-                  cleanup();
-                  resolve({ duration: dur, resolution: res, coverBlob: blob });
-                },
-                'image/jpeg',
-                0.85
-              );
-              return;
-            }
-          } catch {
-            // fallback without frame capture
-          }
-          cleanup();
-          resolve({ duration: dur, resolution: res, coverBlob: null });
-        };
-      };
-
-      vid.onerror = () => {
-        cleanup();
-        resolve({ duration: 60, resolution: '1920×1080', coverBlob: null });
-      };
-    });
-  }
 
   /** 封面同样只在本地暂存，保存时才上传 */
   function applyCoverFile(file: File) {
@@ -362,6 +326,11 @@ export function VideoEditorPage({ item, onSaved, onBack }: VideoEditorPageProps)
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
+    // 多文件或文件夹交给根布局的全局拖拽处理，走批量上传表格
+    if (e.dataTransfer.items.length > 1 || e.dataTransfer.files.length > 1) {
+      setDragOver(false);
+      return;
+    }
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
