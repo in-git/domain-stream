@@ -1,7 +1,5 @@
-import { motion } from 'motion/react';
 import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
-import { SWIFTUI_SNAPPY } from '../../lib/motion';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { navIconUrl, parseNav } from './navConfig';
 
@@ -67,25 +65,20 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
             const isActive = activeSection === id;
             const customIcon = navIconUrl({ iconUrl });
             return (
-              <motion.button
+              <button
                 key={id}
                 type="button"
-                whileTap={{ scale: 0.97 }}
                 onClick={() => onSelectSection(id, true)}
                 title={label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`relative w-full flex items-center justify-center lg:justify-start gap-3.5 px-3 lg:px-3.5 py-3 min-h-[46px] rounded-app text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary ${
+                className={`relative w-full flex items-center justify-center lg:justify-start gap-3.5 px-3 lg:px-3.5 py-3 min-h-[46px] rounded-app text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary ${
                   isActive
                     ? 'text-app-text'
                     : 'text-app-muted hover:text-app-text dark:hover:text-app-text hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
                 }`}
               >
                 {isActive && (
-                  <motion.span
-                    layoutId="leftSidebarActivePill"
-                    transition={SWIFTUI_SNAPPY}
-                    className="absolute inset-0 rounded-app bg-app-card dark:bg-[#1E1E22] shadow-xs border border-black/[0.05] dark:border-app-border"
-                  />
+                  <span className="absolute inset-0 rounded-app bg-app-card dark:bg-[#1E1E22] shadow-xs border border-black/[0.05] dark:border-app-border" />
                 )}
                 {customIcon ? (
                   <img
@@ -103,7 +96,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
                 <span className="relative z-10 hidden lg:inline whitespace-nowrap truncate">
                   {label}
                 </span>
-              </motion.button>
+              </button>
             );
           })}
         </nav>

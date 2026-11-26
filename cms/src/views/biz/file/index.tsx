@@ -38,6 +38,7 @@ import {
   isImageFile,
   isVideoFile,
   toOpenUrl,
+  toStreamUrl,
   uploadLibraryFile,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
@@ -87,17 +88,44 @@ interface FileCardProps {
 
 /** 苹果文件 App 风格素材卡片：大封面 + 名称/大小，悬浮操作，双击打开 */
 function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }: FileCardProps) {
-  const [thumbFailed, setThumbFailed] = useState(false);
+  /** 加载失败的地址，缩略图失败后自动回退到原图 */
+  const [failedSrc, setFailedSrc] = useState('');
+  useEffect(() => setFailedSrc(''), [file.id]);
   const Icon = coverIcon(file);
   const isMedia = isVideoFile(file) || isAudioFile(file) || isImageFile(file);
   const isVideo = isVideoFile(file);
-  const cover = file.thumbnail || (isImageFile(file) ? toOpenUrl(file) : '');
-  const showCover = !!cover && !thumbFailed;
+  const thumbnail = file.thumbnail || '';
+  const originalUrl = isImageFile(file) ? toOpenUrl(file) : '';
+  const cover =
+    thumbnail && thumbnail !== failedSrc
+      ? thumbnail
+      : originalUrl && originalUrl !== failedSrc
+        ? originalUrl
+        : '';
+  const showCover = !!cover;
+  /** 鼠标移入才挂载视频，移出即卸载，避免一次为所有卡片加载视频流 */
+  const [hovered, setHovered] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoUrl = toStreamUrl(file) || toOpenUrl(file);
+  const darkCover = isVideo || showCover || (isVideo && hovered && !!videoUrl);
+
+  useEffect(() => {
+    if (!isVideo) return;
+    const video = videoRef.current;
+    if (!video) return;
+    if (hovered) void video.play().catch(() => {});
+    else {
+      video.pause();
+      video.currentTime = 0;
+    }
+  }, [hovered, isVideo]);
 
   return (
     <div
       title={isMedia ? '双击预览' : '双击查看详情'}
       tabIndex={0}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={() => onToggleSelect(file.id)}
       onDoubleClick={() => onOpen(file)}
       onKeyDown={(e) => {
@@ -112,23 +140,35 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
     >
       {/* 封面 */}
       <div
-        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden bg-gradient-to-br from-[#FDFDFE] via-[#F5F5F7] to-[#E9E9ED] text-[#6E6E73] ${
-          selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'
-        } transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
+        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden ${
+          isVideo ? 'bg-black' : 'bg-gradient-to-br from-[#FDFDFE] via-[#F5F5F7] to-[#E9E9ED] text-[#6E6E73]'
+        } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
       >
-        {showCover ? (
+        {isVideo && hovered && videoUrl ? (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            muted
+            loop
+            playsInline
+            autoPlay
+            preload="auto"
+            className="absolute inset-0 w-full h-full object-contain bg-black"
+            aria-label={`播放 ${file.name || '视频'}`}
+          />
+        ) : showCover ? (
           <img
             src={cover}
             alt={file.name || '素材'}
             loading="lazy"
             referrerPolicy="no-referrer"
-            onError={() => setThumbFailed(true)}
+            onError={() => setFailedSrc(cover)}
             className="w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
             {isVideo ? (
-              <Film className="absolute w-20 h-20 opacity-[0.08]" strokeWidth={1} />
+              <Film className="absolute w-20 h-20 text-white/10" strokeWidth={1} />
             ) : (
               <>
                 <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
@@ -140,13 +180,37 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
           </div>
         )}
 
-        {isVideo && (
+        {isVideo && !hovered && (
           <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="w-10 h-10 rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm text-white flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.28)] transition-transform group-hover:scale-105">
               <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
             </span>
           </span>
         )}
+
+        {/* 四角信息：左下名称、右下大小与格式，绝对定位覆盖在封面上 */}
+        <div
+          className={`pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-[11px] bg-gradient-to-t ${
+            darkCover ? 'from-black/65 via-black/25 to-transparent' : 'from-white/95 via-white/55 to-transparent'
+          }`}
+        />
+        <div className="pointer-events-none absolute bottom-1.5 left-1.5 right-1.5 z-10 flex items-end justify-between gap-2">
+          <span
+            className={`min-w-0 truncate text-[12px] font-medium drop-shadow-sm ${
+              darkCover ? 'text-white' : 'text-[#1D1D1F]'
+            }`}
+            title={file.name}
+          >
+            {file.name || '未命名素材'}
+          </span>
+          <span
+            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] backdrop-blur-sm ${
+              darkCover ? 'bg-black/35 text-white/90' : 'bg-black/5 text-[#6E6E73]'
+            }`}
+          >
+            {file.sizeInfo || '-'} · {(file.suffix || '').toUpperCase() || categoryLabel(file.category)}
+          </span>
+        </div>
 
         {/* 选择圈 */}
         <button
@@ -157,7 +221,7 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
             e.stopPropagation();
             onToggleSelect(file.id);
           }}
-          className={`absolute top-1.5 left-1.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-all ${
+          className={`absolute top-1.5 left-1.5 z-10 w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-all ${
             selected
               ? 'bg-[#0071E3] border-[#0071E3] text-white'
               : 'bg-white/85 border-black/10 text-transparent opacity-0 group-hover:opacity-100'
@@ -168,7 +232,7 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
 
         {/* 悬浮操作条 */}
         <div
-          className="absolute bottom-1.5 right-1.5 flex items-center gap-0.5 p-0.5 rounded-lg bg-white/90 backdrop-blur-md shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
+          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 p-0.5 rounded-lg bg-white/90 backdrop-blur-md shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
         >
@@ -213,18 +277,6 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
-        </div>
-      </div>
-
-      {/* 名称与元信息 */}
-      <div className="mt-1.5 px-0.5 min-w-0">
-        <div className="text-[12px] font-medium text-[#1D1D1F] truncate" title={file.name}>
-          {file.name || '未命名素材'}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#86868B]">
-          <span className="truncate">{file.sizeInfo || '-'}</span>
-          <span className="w-0.5 h-0.5 rounded-full bg-[#C7C7CC] shrink-0" />
-          <span className="shrink-0">{(file.suffix || '').toUpperCase() || categoryLabel(file.category)}</span>
         </div>
       </div>
     </div>

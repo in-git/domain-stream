@@ -209,6 +209,8 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         int skipped = 0;
         Set<String> newIds = new HashSet<>();
         Set<String> oldFileIds = new HashSet<>();
+        /** 已从新 ID 接管存储信息、需要保留不删的源系统文件 ID */
+        Set<String> preservedIds = new HashSet<>();
         Map<String, String> entryToOldId = new HashMap<>();
         Map<String, String> oldIdToNewUrl = new HashMap<>();
         boolean hasManifest = false;
@@ -264,9 +266,18 @@ public class BizDataImportServiceImpl implements BizDataImportService {
                     imported++;
                     String oldId = entryToOldId.get(rawName);
                     if (StrUtil.isNotBlank(oldId)) {
-                        JSONObject info = devFileApi.getFileInfoById(id);
-                        String newUrl = info == null ? null : info.getStr("downloadPath");
-                        if (StrUtil.isNotBlank(newUrl)) oldIdToNewUrl.put(oldId, newUrl);
+                        if (adoptFileIdentity(oldId, id)) {
+                            // 旧 ID 保留，下载地址里的 ID 和签名都不变，无需重写
+                            preservedIds.add(oldId);
+                            JSONObject oldInfo = devFileApi.getFileInfoById(oldId);
+                            String oldUrl = oldInfo == null ? null : oldInfo.getStr("downloadPath");
+                            if (StrUtil.isNotBlank(oldUrl)) oldIdToNewUrl.put(oldId, oldUrl);
+                        } else {
+                            // 旧记录不存在时退回换新 ID 的方案
+                            JSONObject info = devFileApi.getFileInfoById(id);
+                            String newUrl = info == null ? null : info.getStr("downloadPath");
+                            if (StrUtil.isNotBlank(newUrl)) oldIdToNewUrl.put(oldId, newUrl);
+                        }
                     }
                 } else {
                     skipped++;
@@ -286,7 +297,7 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         int rewritten = rewriteFileReferences(oldIdToNewUrl);
         if (overwrite) {
             for (String id : oldFileIds) {
-                if (newIds.contains(id)) continue;
+                if (newIds.contains(id) || preservedIds.contains(id)) continue;
                 try {
                     devFileApi.deleteAbsoluteById(id);
                 } catch (Exception e) {
@@ -296,9 +307,59 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         }
 
         String message = "成功导入 " + imported + " 个文件" + (skipped > 0 ? "，跳过 " + skipped + " 个" : "")
-                + "，重写文件引用 " + rewritten + " 处";
-        if (!hasManifest) message += "（文件包无映射清单，旧引用未重写）";
+                + "，重建文件引用 " + rewritten + " 处，保留原文件 ID " + preservedIds.size() + " 个";
+        if (!hasManifest) message += "（文件包无映射清单，旧引用未重建）";
         commonCacheOperator.put(TICKET_KEY_PREFIX + ticket, toMap(ImportStatus.success(message, imported)), TICKET_TTL_SECONDS);
+    }
+
+    /**
+     * 把新上传文件的存储信息写回源系统文件 ID。
+     * <p>下载签名只由文件 ID 生成，保留 ID 即保留原签名；STORAGE_PATH 按当前系统重新生成，
+     * 因此 Linux 与 Windows 互相迁移后，原下载地址仍然有效。</p>
+     *
+     * @return 是否成功由旧 ID 接管新文件
+     */
+    private boolean adoptFileIdentity(String oldId, String newId) {
+        JSONObject source = devFileApi.getFileInfoById(newId);
+        JSONObject target = devFileApi.getFileInfoById(oldId);
+        if (source == null || source.isEmpty() || target == null || target.isEmpty()) return false;
+        String newStoragePath = source.getStr("storagePath");
+        String newFileKey = source.getStr("fileKey");
+        if (StrUtil.isBlank(newStoragePath) || StrUtil.isBlank(newFileKey)) return false;
+        String sql = "UPDATE DEV_FILE SET ENGINE=?, BUCKET=?, FILE_KEY=?, NAME=?, SUFFIX=?, OBJ_NAME=?, "
+                + "STORAGE_PATH=?, SIZE_KB=?, SIZE_INFO=?, THUMBNAIL=NULL WHERE ID=?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, source.getStr("engine"));
+            statement.setString(2, source.getStr("bucket"));
+            statement.setString(3, newFileKey);
+            statement.setString(4, source.getStr("name"));
+            statement.setString(5, source.getStr("suffix"));
+            statement.setString(6, source.getStr("objName"));
+            statement.setString(7, newStoragePath);
+            statement.setString(8, source.getStr("sizeKb"));
+            statement.setString(9, source.getStr("sizeInfo"));
+            statement.setString(10, oldId);
+            if (statement.executeUpdate() == 0) return false;
+        } catch (Exception e) {
+            log.warn("保留源文件 ID 失败：{}，原因：{}", oldId, e.getMessage());
+            return false;
+        }
+        // 源系统的缩略图地址在新环境无效，按当前存储重新生成（非图片会自动跳过）
+        try {
+            devFileApi.generateThumbnail(oldId);
+        } catch (Exception e) {
+            log.warn("重建缩略图失败：{}，原因：{}", oldId, e.getMessage());
+        }
+        // 只删除临时登记记录，物理文件已交给旧 ID 继续引用
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM DEV_FILE WHERE ID=?")) {
+            statement.setString(1, newId);
+            statement.executeUpdate();
+        } catch (Exception e) {
+            log.warn("清理临时文件记录失败：{}，原因：{}", newId, e.getMessage());
+        }
+        return true;
     }
 
     /** 解析导出包首个条目的文件映射：ZIP 路径 -> 源系统文件 ID */

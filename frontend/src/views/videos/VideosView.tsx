@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MediaPlayerInstance } from '@vidstack/react';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { A11y, Keyboard, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
-import 'swiper/css';
 import type { VideoItem } from '../../types/content';
 import { EmptyState } from '../../components/PortalStates';
-import { FeedSlide } from './FeedSlide';
+import { VideoFeedPlayer } from './VideoFeedPlayer';
 import { ImmersiveModal } from '../../components/ImmersiveModal';
 import { DesktopGridCategories, DesktopVideoGrid } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
@@ -361,8 +358,8 @@ export function VideosView({
     if (player) player.currentTime = clamped;
   };
 
-  const handleSlideChange = (swiper: SwiperClass) => {
-    setActiveIndex(swiper.realIndex);
+  const handleSlideChange = (index: number) => {
+    setActiveIndex(index);
     setCurrentTime(0);
     // 滑动切换视频时，只要用户没有主动点过静音，就自动解除静音，保证能听到声音
     if (!userMutedManuallyRef.current) {
@@ -549,64 +546,39 @@ export function VideosView({
                   : 'relative w-full h-[calc(100dvh-3.5rem)] rounded-none overflow-hidden bg-black border-0 select-none [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none [&:fullscreen]:border-0'
             }
           >
-            <Swiper
-              key={`${category}-${normalizedQuery}`}
+            <VideoFeedPlayer
+              videos={filteredVideos}
+              swiperKey={`${category}-${normalizedQuery}`}
               onSwiper={(instance) => {
                 swiperRef.current = instance;
               }}
-              direction="vertical"
-              slidesPerView={1}
-              /* 无限批次追加时不能用 loop：Swiper 重建循环会打乱 realIndex，追加几批后就不触发加载了 */
-              loop={false}
-              speed={520}
-              initialSlide={safeIndex}
-              modules={[Mousewheel, Keyboard, A11y]}
-              mousewheel={{ forceToAxis: true, sensitivity: 1, thresholdDelta: 16 }}
-              keyboard={{ enabled: true }}
-              a11y={{ enabled: true }}
-              onSlideChange={handleSlideChange}
-              className="w-full h-full"
-            >
-              {filteredVideos.map((video, idx) => (
-                <SwiperSlide key={`${video.id}-${idx}`} className="relative">
-                  <FeedSlide
-                    video={video}
-                    index={idx}
-                    total={filteredVideos.length}
-                    active={idx === safeIndex}
-                    isMuted={isMuted}
-                    playbackRate={playbackRate}
-                    liked={likedIds.includes(video.id)}
-                    saved={savedIds.includes(video.id)}
-                    currentTime={currentTime}
-                    duration={duration}
-                    isFullscreen={isFullscreen}
-                    savedTime={progressById?.[video.id]}
-                    onRegisterPlayer={registerPlayer}
-                    playerKey={`${video.id}-${idx}`}
-                    onStageTap={() => onChromeVisibilityChange?.(true)}
-                    onPlaybackStart={() => onChromeVisibilityChange?.(false)}
-                    chromeVisible={mobileChromeVisible}
-                    onTogglePlay={togglePlayback}
-                    onToggleMute={handleToggleMute}
-                    onSetRate={setPlaybackRate}
-                    onToggleLike={() => onToggleLike(video.id)}
-                    onToggleSave={() => onToggleSave(video.id)}
-                    onToggleFullscreen={toggleFullscreen}
-                    onSeek={seekTo}
-                    onTimeUpdate={setCurrentTime}
-                    onDurationChange={setDuration}
-                    onSaveProgress={onSaveProgress ? (t) => onSaveProgress(video.id, t) : undefined}
-                    mini={isMini}
-                    onMiniClose={onMiniClose}
-                    onMiniExpand={onMiniExpand}
-                    captionToBody={
-                      !isMini && !isHidden && viewMode === 'feed' && !isFullscreen
-                    }
-                  />
-                </SwiperSlide>
-              ))}
-            </Swiper>
+              state={{ activeIndex: safeIndex, isMuted, playbackRate, currentTime, duration }}
+              handlers={{
+                onSlideChange: handleSlideChange,
+                onTogglePlay: togglePlayback,
+                onToggleMute: handleToggleMute,
+                onSetRate: setPlaybackRate,
+                onSeek: seekTo,
+                onTimeUpdate: setCurrentTime,
+                onDurationChange: setDuration,
+                onRegisterPlayer: registerPlayer,
+              }}
+              likedIds={likedIds}
+              savedIds={savedIds}
+              progressById={progressById}
+              onToggleLike={onToggleLike}
+              onToggleSave={onToggleSave}
+              onSaveProgress={onSaveProgress}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+              onStageTap={() => onChromeVisibilityChange?.(true)}
+              onPlaybackStart={() => onChromeVisibilityChange?.(false)}
+              chromeVisible={mobileChromeVisible}
+              mini={isMini}
+              onMiniClose={onMiniClose}
+              onMiniExpand={onMiniExpand}
+              captionToBody={!isMini && !isHidden && viewMode === 'feed' && !isFullscreen}
+            />
 
             {/* PC 播放列表侧边栏：点击分类条右侧列表图标展开 */}
             {!isMini && viewMode === 'feed' && playlistOpen && (

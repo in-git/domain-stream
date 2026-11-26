@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MediaPlayerInstance } from '@vidstack/react';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { A11y, Keyboard, Mousewheel } from 'swiper/modules';
-import type { Swiper as SwiperClass } from 'swiper';
-import 'swiper/css';
 import { X } from 'lucide-react';
 import type { VideoItem } from '../types/content';
-import { FeedSlide } from '../views/videos/FeedSlide';
+import { VideoFeedPlayer } from '../views/videos/VideoFeedPlayer';
 
 interface ImmersiveModalProps {
   /** 当前页的搜索结果（卡片模式里过滤后的视频） */
@@ -89,8 +85,8 @@ export function ImmersiveModal({
     if (player) player.currentTime = clamped;
   };
 
-  const handleSlideChange = (swiper: SwiperClass) => {
-    setActiveIndex(swiper.realIndex);
+  const handleSlideChange = (index: number) => {
+    setActiveIndex(index);
     setCurrentTime(0);
     if (!userMutedManuallyRef.current) {
       setIsMuted(false);
@@ -133,51 +129,28 @@ export function ImmersiveModal({
       </button>
 
       {videos.length > 0 && (
-        <Swiper
-          direction="vertical"
-          slidesPerView={1}
-          loop={videos.length > 1}
-          speed={520}
-          initialSlide={safeInitial}
-          modules={[Mousewheel, Keyboard, A11y]}
-          mousewheel={{ forceToAxis: true, sensitivity: 1, thresholdDelta: 16 }}
-          keyboard={{ enabled: true }}
-          a11y={{ enabled: true }}
-          onSlideChange={handleSlideChange}
-          className="w-full h-full"
-        >
-          {videos.map((video, idx) => (
-            <SwiperSlide key={`${video.id}-${idx}`} className="relative">
-              <FeedSlide
-                video={video}
-                index={idx}
-                total={videos.length}
-                active={idx === activeIndex}
-                isMuted={isMuted}
-                playbackRate={playbackRate}
-                liked={likedIds.includes(video.id)}
-                saved={savedIds.includes(video.id)}
-                currentTime={currentTime}
-                duration={duration}
-                isFullscreen={false}
-                showFullscreen={false}
-                savedTime={progressById?.[video.id]}
-                onRegisterPlayer={registerPlayer}
-                playerKey={`${video.id}-${idx}`}
-                onTogglePlay={togglePlayback}
-                onToggleMute={handleToggleMute}
-                onSetRate={setPlaybackRate}
-                onToggleLike={() => onToggleLike(video.id)}
-                onToggleSave={() => onToggleSave(video.id)}
-                onToggleFullscreen={() => {}}
-                onSeek={seekTo}
-                onTimeUpdate={setCurrentTime}
-                onDurationChange={setDuration}
-                onSaveProgress={onSaveProgress ? (t) => onSaveProgress(video.id, t) : undefined}
-              />
-            </SwiperSlide>
-          ))}
-        </Swiper>
+        <VideoFeedPlayer
+          videos={videos}
+          swiperKey={`modal-${videos[0]?.id}-${videos.length}`}
+          state={{ activeIndex, isMuted, playbackRate, currentTime, duration }}
+          handlers={{
+            onSlideChange: handleSlideChange,
+            onTogglePlay: togglePlayback,
+            onToggleMute: handleToggleMute,
+            onSetRate: setPlaybackRate,
+            onSeek: seekTo,
+            onTimeUpdate: setCurrentTime,
+            onDurationChange: setDuration,
+            onRegisterPlayer: registerPlayer,
+          }}
+          likedIds={likedIds}
+          savedIds={savedIds}
+          progressById={progressById}
+          onToggleLike={onToggleLike}
+          onToggleSave={onToggleSave}
+          onSaveProgress={onSaveProgress}
+          showFullscreen={false}
+        />
       )}
     </div>
   );

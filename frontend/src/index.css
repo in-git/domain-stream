@@ -204,12 +204,6 @@ body::-webkit-scrollbar {
   object-fit: contain;
 }
 
-/* 沉浸式播放舞台：容器内留出内边距，让视频与舞台边缘之间有呼吸空间 */
-[data-video-stage] [data-media-provider] {
-  box-sizing: border-box;
-  padding: clamp(8px, 1.5vw, 24px);
-}
-
 /* Apple-style rich text for the article reader */
 .article-prose {
   max-width: 68ch;
