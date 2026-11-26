@@ -20,12 +20,23 @@ import {
   videoFromPortal,
   type PortalCategory,
   type PortalMessage,
+  type PortalVideo,
   type ReplyDraft,
 } from '../../lib/api';
 import { isSectionId, type ContentSection } from './constants';
 
 /** 客户端视频每次随机推荐的批次大小，看完一批再拉下一批 */
 const VIDEO_BATCH_SIZE = 5;
+
+/** 后端随机视频按主键去重；excludeIds 用于排除当前已加载的视频 */
+function uniqueVideoRows(rows: PortalVideo[], excludeIds: string[] = []): PortalVideo[] {
+  const seen = new Set(excludeIds);
+  return rows.filter((row) => {
+    if (!row.id || seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+}
 
 /**
  * 门户内容数据：按板块懒加载（进入板块才请求，已加载不再重复），
@@ -46,6 +57,11 @@ export function usePortalData(
   /** 当前图文分类（提升到数据层，切换时按分类请求后端；侧栏刷新时沿用） */
   const [graphicCategory, setGraphicCategory] = useState<string>('全部');
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  /** 与 videos 同步的 ref，供加载更多时同步取得已加载 ID */
+  const videosRef = useRef<VideoItem[]>([]);
+  useEffect(() => {
+    videosRef.current = videos;
+  }, [videos]);
   const [videoPageInfo, setVideoPageInfo] = useState({
     current: 1,
     total: 0,
@@ -189,12 +205,13 @@ export function usePortalData(
             section,
             () => portalApi.videoRecommend(videoCategory, VIDEO_BATCH_SIZE),
             (page, names, categories) => {
-              const items = page.records.map((row, i) => videoFromPortal(row, i, names));
+              const rows = uniqueVideoRows(page.records);
+              const items = rows.map((row, i) => videoFromPortal(row, i, names));
               setVideos(items);
               setVideoPageInfo({
                 current: page.current,
                 total: page.total,
-                hasMore: page.records.length > 0,
+                hasMore: rows.length > 0 && rows.length < page.total,
               });
               setVideoCategories(
                 pickCategories(categoriesForModule(categories, 'VIDEO'), items.map((item) => item.category))
@@ -268,11 +285,12 @@ export function usePortalData(
         const page = await portalApi.videoRecommend(categoryCode, VIDEO_BATCH_SIZE);
         if (requestId !== videoCategoryRequestRef.current) return;
         const names = categoryNameMap(categories);
-        setVideos(page.records.map((row, i) => videoFromPortal(row, i, names)));
+        const rows = uniqueVideoRows(page.records);
+        setVideos(rows.map((row, i) => videoFromPortal(row, i, names)));
         setVideoPageInfo({
           current: page.current,
           total: page.total,
-          hasMore: page.records.length > 0,
+          hasMore: rows.length > 0 && rows.length < page.total,
         });
       } catch (error) {
         if (requestId !== videoCategoryRequestRef.current) return;
@@ -285,7 +303,7 @@ export function usePortalData(
     []
   );
 
-  /** 视频列表继续观看下一批随机推荐：不排除已看过的，后端保证每批都有数据 */
+  /** 视频列表继续观看下一批随机推荐：把已加载 ID 交给后端排除，避免重复 */
   const loadMoreVideos = useCallback(async () => {
     if (videoLoadingMoreRef.current) return;
     if (!videoPageInfo.hasMore) return;
@@ -298,17 +316,19 @@ export function usePortalData(
         ? await categoriesPromiseRef.current
         : [];
       const categoryCode = resolveCategoryCode(categories, videoCategory, 'VIDEO');
-      const page = await portalApi.videoRecommend(categoryCode, VIDEO_BATCH_SIZE);
+      const loadedIds = videosRef.current.map((item) => item.id);
+      const page = await portalApi.videoRecommend(categoryCode, VIDEO_BATCH_SIZE, loadedIds);
       if (requestId !== videoCategoryRequestRef.current) return;
       const names = categoryNameMap(categories);
+      const rows = uniqueVideoRows(page.records, loadedIds);
       setVideos((prev) => [
         ...prev,
-        ...page.records.map((row, i) => videoFromPortal(row, prev.length + i, names)),
+        ...rows.map((row, i) => videoFromPortal(row, prev.length + i, names)),
       ]);
       setVideoPageInfo({
         current: page.current,
         total: page.total,
-        hasMore: page.records.length > 0,
+        hasMore: rows.length > 0 && rows.length < page.total,
       });
     } catch (error) {
       if (requestId !== videoCategoryRequestRef.current) return;

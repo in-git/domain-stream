@@ -105,7 +105,7 @@ export function ProfileMobileView({
         <DetailRow
           icon={<Database className="h-4 w-4" />}
           label="缓存设置"
-          description="清理本地播放进度与偏好缓存"
+          description="清理本地偏好缓存"
           onClick={() => setDetail('cache')}
         />
         <DetailRow

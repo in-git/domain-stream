@@ -5,6 +5,7 @@ import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
 import type { VideoItem } from '../../types/content';
 import { FeedSlide } from './FeedSlide';
+import type { VideoMenuConfig } from './videoMenuTypes';
 
 /** 沉浸流播放器对外暴露的状态，由首页 / 模态框各自持有 */
 export interface VideoFeedPlayerState {
@@ -25,6 +26,9 @@ export interface VideoFeedPlayerHandlers {
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
   onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
+  onPlaybackStateChange?: (playing: boolean) => void;
+  /** 首页沉浸流播完自动切下一条；模态框不传则沿用单条循环 */
+  onVideoEnded?: () => void;
 }
 
 interface VideoFeedPlayerProps {
@@ -33,10 +37,8 @@ interface VideoFeedPlayerProps {
   handlers: VideoFeedPlayerHandlers;
   likedIds: string[];
   savedIds: string[];
-  progressById?: Record<string, number>;
   onToggleLike: (id: string) => void;
   onToggleSave: (id: string) => void;
-  onSaveProgress?: (id: string, time: number) => void;
   /** Swiper 重建键：切换分类、搜索词或换一批视频时传入，避免停留在旧 slide */
   swiperKey?: string;
   onSwiper?: (instance: SwiperClass) => void;
@@ -51,6 +53,8 @@ interface VideoFeedPlayerProps {
   chromeVisible?: boolean;
   /** 首页沉浸流需要把标题与操作栏 portal 到 body，模态框保持 slide 内定位 */
   captionToBody?: boolean;
+  /** 传入后启用右键/长按控制菜单；模态框不传 */
+  videoMenu?: VideoMenuConfig;
 }
 
 /**
@@ -63,10 +67,8 @@ export function VideoFeedPlayer({
   handlers,
   likedIds,
   savedIds,
-  progressById,
   onToggleLike,
   onToggleSave,
-  onSaveProgress,
   swiperKey,
   onSwiper,
   isFullscreen = false,
@@ -79,6 +81,7 @@ export function VideoFeedPlayer({
   onPlaybackStart,
   chromeVisible = true,
   captionToBody = false,
+  videoMenu,
 }: VideoFeedPlayerProps) {
   const { activeIndex, isMuted, playbackRate, currentTime, duration } = state;
 
@@ -113,11 +116,12 @@ export function VideoFeedPlayer({
             currentTime={currentTime}
             duration={duration}
             isFullscreen={isFullscreen}
-            savedTime={progressById?.[video.id]}
             onRegisterPlayer={handlers.onRegisterPlayer}
             playerKey={`${video.id}-${idx}`}
             onStageTap={onStageTap}
             onPlaybackStart={onPlaybackStart}
+            onPlaybackStateChange={handlers.onPlaybackStateChange}
+            onVideoEnded={handlers.onVideoEnded}
             chromeVisible={chromeVisible}
             onTogglePlay={handlers.onTogglePlay}
             onToggleMute={handlers.onToggleMute}
@@ -128,12 +132,12 @@ export function VideoFeedPlayer({
             onSeek={handlers.onSeek}
             onTimeUpdate={handlers.onTimeUpdate}
             onDurationChange={handlers.onDurationChange}
-            onSaveProgress={onSaveProgress ? (time) => onSaveProgress(video.id, time) : undefined}
             mini={mini}
             onMiniClose={onMiniClose}
             onMiniExpand={onMiniExpand}
             showFullscreen={showFullscreen}
             captionToBody={captionToBody}
+            videoMenu={videoMenu}
           />
         </SwiperSlide>
       ))}

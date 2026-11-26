@@ -10,6 +10,7 @@ import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
 import { DEFAULT_CATEGORIES, formatTime, type ViewMode } from './shared';
 import { useSystemInfo } from '../../lib/systemInfo';
+import type { VideoMenuConfig } from './videoMenuTypes';
 
 /** 迷你播放器尺寸（与下方 sm 断点样式一致），用于拖拽边界计算 */
 const MINI_SIZE = { width: 240, height: 135 };
@@ -44,8 +45,8 @@ interface VideosViewProps {
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
   onPlayVideo?: (video: VideoItem, opts?: { muted?: boolean; playbackRate?: number }) => void;
-  progressById?: Record<string, number>;
-  onSaveProgress?: (id: string, time: number) => void;
+  /** 当前视频在视频页内被暂停：取消离页续播资格 */
+  onStopVideo?: () => void;
   /** 离开视频模块时 MiniPlayer 里还在播的那条——返回时直接切到它并沿用它的静音/倍速 */
   resumeVideoId?: string | null;
   resumeMuted?: boolean;
@@ -88,8 +89,7 @@ export function VideosView({
   onToggleSave,
   onToggleLike,
   onPlayVideo,
-  progressById,
-  onSaveProgress,
+  onStopVideo,
   resumeVideoId,
   resumeMuted,
   resumePlaybackRate,
@@ -114,7 +114,6 @@ export function VideosView({
   const [activeIndex, setActiveIndex] = useState(Math.max(0, initialIndex));
   /** 首次挂载时保留 resumeVideoId 定位，只有后续分类/搜索变化才重置到第一张 */
   const skipInitialResetRef = useRef(true);
-  const [hasPlayed, setHasPlayed] = useState(false);
   const [isMuted, setIsMuted] = useState(typeof resumeMuted === 'boolean' ? resumeMuted : true);
   /** 用户是否主动点过静音；为 true 时滑动不再自动解除静音（尊重用户选择） */
   const userMutedManuallyRef = useRef(false);
@@ -143,6 +142,19 @@ export function VideosView({
   const playersRef = useRef<Map<string, MediaPlayerInstance>>(new Map());
   const swiperRef = useRef<SwiperClass | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  /** 真实起播状态：只有正在播放的视频才具备离页续播资格 */
+  const isPlayingRef = useRef(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  /** 菜单控制：播完自动切下一条 / 单条循环 */
+  const [autoLoop, setAutoLoop] = useState(true);
+  const [singleLoop, setSingleLoop] = useState(false);
+  /** 播完最后一条时等待下一页加载，加载完成后自动切到下一条 */
+  const pendingAutoAdvanceRef = useRef(false);
+  /** 用 ref 读取当前形态，避免 onPause 闭包拿到切换前的旧 mode */
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   useEffect(() => {
     const handleChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
@@ -179,6 +191,7 @@ export function VideosView({
     setPickedVideo(null);
     setActiveIndex(0);
     setCurrentTime(0);
+    pendingAutoAdvanceRef.current = false;
   }, [category, normalizedQuery]);
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -225,16 +238,15 @@ export function VideosView({
   useEffect(() => {
     setCurrentTime(0);
     setDuration(currentVideo?.durationSeconds ?? 0);
-    if (viewMode === 'feed' && currentVideo && hasPlayed) {
-      onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
-    }
-  }, [currentVideo?.id, hasPlayed]);
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+  }, [currentVideo?.id]);
 
+  // 静音/倍速变化只同步续播配置，不凭空把暂停中的视频标记为“播放中”
   useEffect(() => {
-    if (viewMode === 'feed' && currentVideo && hasPlayed) {
-      onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
-    }
-  }, [isMuted, playbackRate, hasPlayed]);
+    if (!isPlayingRef.current || viewMode !== 'feed' || !currentVideo) return;
+    onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
+  }, [isMuted, playbackRate, viewMode, currentVideo, onPlayVideo]);
 
   /** 进入迷你态时初始化默认位置（右下角），离开不改，便于下次沿用它 */
   useEffect(() => {
@@ -318,6 +330,92 @@ export function VideosView({
     }
   };
 
+  /** 真实播放状态：播放中才记录离页续播候选，视频页内暂停则取消候选 */
+  const handlePlaybackStateChange = useCallback(
+    (playing: boolean) => {
+      isPlayingRef.current = playing;
+      setIsPlaying(playing);
+      if (!currentVideo) return;
+      if (playing) {
+        onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
+      } else if (modeRef.current !== 'mini') {
+        // 迷你窗内暂停仍保留窗口；视频页/隐藏态暂停说明离开时不应续播
+        onStopVideo?.();
+      }
+    },
+    [currentVideo, isMuted, playbackRate, onPlayVideo, onStopVideo]
+  );
+
+  /** 当前视频播完：优先切下一条；最后一条则等待分页加载，无更多时从头继续 */
+  const handleVideoEnded = useCallback(() => {
+    if (!autoLoop) {
+      // 自动循环关闭：停在末尾，不再切下一条
+      safePause(getActivePlayer());
+      setIsPlaying(false);
+      return;
+    }
+    const swiper = swiperRef.current;
+    if (!swiper || filteredVideos.length === 0) return;
+
+    if (safeIndex < filteredVideos.length - 1) {
+      pendingAutoAdvanceRef.current = false;
+      swiper.slideNext();
+      return;
+    }
+
+    // 已到最后一条但还有下一页：等加载完成再切；正在加载中则直接等结果
+    if (hasMoreVideos && onLoadMoreVideos && !loadMoreError) {
+      pendingAutoAdvanceRef.current = true;
+      if (!loadingMoreVideos) onLoadMoreVideos();
+      return;
+    }
+
+    pendingAutoAdvanceRef.current = false;
+    // 只有一条视频时 slideTo(0) 不会重新激活播放器，直接手动重播
+    if (filteredVideos.length === 1 && currentVideo) {
+      const player = playersRef.current.get(`${currentVideo.id}-${safeIndex}`);
+      if (player) {
+        try {
+          player.currentTime = 0;
+          void player.play().catch(() => {});
+        } catch {
+          // 播放器已销毁，忽略
+        }
+      }
+      return;
+    }
+    swiper.slideTo(0);
+  }, [
+    autoLoop,
+    currentVideo,
+    filteredVideos.length,
+    safeIndex,
+    hasMoreVideos,
+    onLoadMoreVideos,
+    loadingMoreVideos,
+    loadMoreError,
+  ]);
+
+  // 等待下一页加载完成后，自动切到新追加的第一条
+  useEffect(() => {
+    if (!pendingAutoAdvanceRef.current || loadingMoreVideos) return;
+    if (filteredVideos.length <= safeIndex + 1) return;
+    pendingAutoAdvanceRef.current = false;
+    const nextIndex = safeIndex + 1;
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    const frame = requestAnimationFrame(() => swiper.slideTo(nextIndex));
+    return () => cancelAnimationFrame(frame);
+  }, [filteredVideos.length, loadingMoreVideos, safeIndex]);
+
+  // 下一页加载失败或确认没有更多时，回到第一条继续播，避免停在结束画面
+  useEffect(() => {
+    if (!pendingAutoAdvanceRef.current || loadingMoreVideos) return;
+    if (!loadMoreError && hasMoreVideos) return;
+    pendingAutoAdvanceRef.current = false;
+    swiperRef.current?.slideTo(0);
+  }, [hasMoreVideos, loadMoreError, loadingMoreVideos]);
+
   /** 用户点击静音/取消静音：记录是否为用户主动静音，后续滑动据此决定是否自动解除 */
   const handleToggleMute = () => {
     setIsMuted((prev) => {
@@ -336,12 +434,10 @@ export function VideosView({
         setIsMuted(false);
         userMutedManuallyRef.current = false;
         player.muted = false;
-        setHasPlayed(true);
         if (player.paused) void player.play().catch(() => {});
         return;
       }
       if (player.paused) {
-        setHasPlayed(true);
         void player.play().catch(() => {});
       } else {
         player.pause();
@@ -361,6 +457,9 @@ export function VideosView({
   const handleSlideChange = (index: number) => {
     setActiveIndex(index);
     setCurrentTime(0);
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+    pendingAutoAdvanceRef.current = false;
     // 滑动切换视频时，只要用户没有主动点过静音，就自动解除静音，保证能听到声音
     if (!userMutedManuallyRef.current) {
       setIsMuted(false);
@@ -375,6 +474,8 @@ export function VideosView({
       setPickedVideo(null);
       setActiveIndex(idx);
       setCurrentTime(0);
+      isPlayingRef.current = false;
+      pendingAutoAdvanceRef.current = false;
       const swiper = swiperRef.current;
       if (swiper) {
         if (swiper.params.loop) swiper.slideToLoop(idx, 0, false);
@@ -424,6 +525,38 @@ export function VideosView({
       | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
       | null;
     videoEl?.webkitEnterFullscreen?.();
+  };
+
+  const goPrevVideo = useCallback(() => {
+    if (!swiperRef.current || safeIndex <= 0) return;
+    swiperRef.current.slidePrev();
+  }, [safeIndex]);
+
+  const goNextVideo = useCallback(() => {
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    if (safeIndex < filteredVideos.length - 1) {
+      swiper.slideNext();
+      return;
+    }
+    if (hasMoreVideos && onLoadMoreVideos && !loadMoreError) {
+      pendingAutoAdvanceRef.current = true;
+      if (!loadingMoreVideos) onLoadMoreVideos();
+      return;
+    }
+    swiper.slideTo(0);
+  }, [safeIndex, filteredVideos.length, hasMoreVideos, onLoadMoreVideos, loadingMoreVideos, loadMoreError]);
+
+  const replayVideo = () => {
+    const player = getActivePlayer();
+    if (!player) return;
+    try {
+      player.currentTime = 0;
+      setCurrentTime(0);
+      void player.play().catch(() => {});
+    } catch {
+      // 播放器已销毁，忽略
+    }
   };
 
   useEffect(() => {
@@ -477,6 +610,34 @@ export function VideosView({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [viewMode, currentVideo?.id]);
+
+  /** 首页沉浸流才启用控制菜单；迷你窗与模态框保持精简界面 */
+  const videoMenu: VideoMenuConfig | undefined =
+    mode === 'immersive' && viewMode === 'feed' && !isMini && !isHidden
+      ? {
+          state: {
+            autoLoop,
+            singleLoop,
+            isPlaying,
+            isMuted,
+            playbackRate,
+            isFullscreen,
+            canPrev: safeIndex > 0,
+            canNext: safeIndex < filteredVideos.length - 1 || hasMoreVideos,
+          },
+          actions: {
+            toggleAutoLoop: () => setAutoLoop((value) => !value),
+            toggleSingleLoop: () => setSingleLoop((value) => !value),
+            togglePlay: togglePlayback,
+            toggleMute: handleToggleMute,
+            setRate: setPlaybackRate,
+            prev: goPrevVideo,
+            next: goNextVideo,
+            replay: replayVideo,
+            toggleFullscreen,
+          },
+        }
+      : undefined;
 
   return (
     <>
@@ -562,13 +723,13 @@ export function VideosView({
                 onTimeUpdate: setCurrentTime,
                 onDurationChange: setDuration,
                 onRegisterPlayer: registerPlayer,
+                onPlaybackStateChange: handlePlaybackStateChange,
+                onVideoEnded: handleVideoEnded,
               }}
               likedIds={likedIds}
               savedIds={savedIds}
-              progressById={progressById}
               onToggleLike={onToggleLike}
               onToggleSave={onToggleSave}
-              onSaveProgress={onSaveProgress}
               isFullscreen={isFullscreen}
               onToggleFullscreen={toggleFullscreen}
               onStageTap={() => onChromeVisibilityChange?.(true)}
@@ -578,6 +739,7 @@ export function VideosView({
               onMiniClose={onMiniClose}
               onMiniExpand={onMiniExpand}
               captionToBody={!isMini && !isHidden && viewMode === 'feed' && !isFullscreen}
+              videoMenu={videoMenu}
             />
 
             {/* PC 播放列表侧边栏：点击分类条右侧列表图标展开 */}
@@ -721,10 +883,8 @@ export function VideosView({
         )}
         likedIds={likedIds}
         savedIds={savedIds}
-        progressById={progressById}
         onToggleLike={onToggleLike}
         onToggleSave={onToggleSave}
-        onSaveProgress={onSaveProgress}
         onClose={() => setPickedVideo(null)}
       />
     )}

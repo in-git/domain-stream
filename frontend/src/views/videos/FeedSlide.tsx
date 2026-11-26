@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react';
@@ -22,6 +30,9 @@ import { ResilientImage } from '../../components/ResilientImage';
 import { CommentPanel } from '../../components/CommentPanel.tsx';
 import { useCommentEnabled } from '../../lib/systemInfo.ts';
 import { countVideoViewOnce, formatTime } from './shared';
+import { VideoContextMenu } from './VideoContextMenu';
+import { VideoLongPressMenu } from './VideoLongPressMenu';
+import type { VideoMenuConfig } from './videoMenuTypes';
 
 interface FeedSlideProps {
   video: VideoItem;
@@ -35,7 +46,6 @@ interface FeedSlideProps {
   currentTime: number;
   duration: number;
   isFullscreen: boolean;
-  savedTime?: number;
   onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
   /** 播放器实例注册键；同一视频重复出现时用位置区分，避免实例互相覆盖 */
   playerKey?: string;
@@ -43,6 +53,10 @@ interface FeedSlideProps {
   onStageTap?: () => void;
   /** 视频开始/恢复播放：回到清屏模式 */
   onPlaybackStart?: () => void;
+  /** 上报真实播放/暂停状态，供外壳判断是否具备离页续播条件 */
+  onPlaybackStateChange?: (playing: boolean) => void;
+  /** 当前视频播完：由外层切换到下一条；未提供时保留单条循环 */
+  onVideoEnded?: () => void;
   /** 移动端顶部/底部导航是否可见；清屏时隐藏标题浮层 */
   chromeVisible?: boolean;
   onTogglePlay: () => void;
@@ -54,7 +68,6 @@ interface FeedSlideProps {
   onSeek: (time: number) => void;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
-  onSaveProgress?: (time: number) => void;
   /** 迷你窗口形态：精简界面，仅保留播放控制 */
   mini?: boolean;
   onMiniClose?: () => void;
@@ -68,6 +81,8 @@ interface FeedSlideProps {
    * 由外层根据模式/视图控制，避免切模块或打开模态框后残留。
    */
   captionToBody?: boolean;
+  /** 首页沉浸流传入后启用 PC 右键 / 移动端长按控制菜单 */
+  videoMenu?: VideoMenuConfig;
 }
 
 /** 沉浸刷看的单屏播放器；PC 与移动端共用同一播放器实例，避免重建造成卡顿。 */
@@ -83,11 +98,12 @@ export function FeedSlide({
   currentTime,
   duration,
   isFullscreen,
-  savedTime,
   onRegisterPlayer,
   playerKey,
   onStageTap,
   onPlaybackStart,
+  onPlaybackStateChange,
+  onVideoEnded,
   chromeVisible = true,
   onTogglePlay,
   onToggleMute,
@@ -98,20 +114,24 @@ export function FeedSlide({
   onSeek,
   onTimeUpdate,
   onDurationChange,
-  onSaveProgress,
   mini,
   onMiniClose,
   onMiniExpand,
   showFullscreen = true,
   captionToBody = false,
+  videoMenu,
 }: FeedSlideProps) {
   const commentsEnabled = useCommentEnabled();
   const playerRef = useRef<MediaPlayerInstance | null>(null);
-  const restoredRef = useRef<boolean>(false);
-  const lastSaveRef = useRef<number>(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [commentOpen, setCommentOpen] = useState(false);
+  /** PC 右键菜单锚点；移动端使用独立的底部长按菜单 */
+  const [contextMenuAt, setContextMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const [longPressOpen, setLongPressOpen] = useState(false);
+  const longPressTimerRef = useRef<number | undefined>(undefined);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressFiredRef = useRef(false);
 
   const resolvedPlayerKey = playerKey ?? video.id;
   const setPlayerRef = useCallback(
@@ -125,38 +145,39 @@ export function FeedSlide({
   // 组件卸载时显式注销，避免 playersRef 中残留已销毁实例（其 paused getter 会抛 null 异常）
   useEffect(() => () => onRegisterPlayer(resolvedPlayerKey, null), [onRegisterPlayer, resolvedPlayerKey]);
 
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    if (!savedTime || savedTime <= 1) {
-      restoredRef.current = true;
-      return;
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current !== undefined) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = undefined;
     }
-    let cancelled = false;
-    let timer: number | undefined;
-    const tryRestore = () => {
-      if (cancelled || restoredRef.current) return;
-      const d = player.duration;
-      if (!d || d <= 0) {
-        timer = window.setTimeout(tryRestore, 150);
-        return;
-      }
-      const safe = Math.min(savedTime, d - 3);
-      if (safe > 0 && safe < d) player.currentTime = safe;
-      restoredRef.current = true;
-    };
-    timer = window.setTimeout(tryRestore, 100);
-    const giveUp = window.setTimeout(() => {
-      restoredRef.current = true;
-      if (timer) window.clearTimeout(timer);
-    }, 4000);
+    longPressStartRef.current = null;
+  }, []);
+
+  const closeContextMenu = useCallback(() => setContextMenuAt(null), []);
+  const closeLongPressMenu = useCallback(() => {
+    setLongPressOpen(false);
+    longPressFiredRef.current = false;
+  }, []);
+
+  // 手指在屏幕外松开时也要取消长按计时
+  useEffect(() => {
+    window.addEventListener('pointerup', clearLongPressTimer);
+    window.addEventListener('pointercancel', clearLongPressTimer);
     return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-      window.clearTimeout(giveUp);
+      window.removeEventListener('pointerup', clearLongPressTimer);
+      window.removeEventListener('pointercancel', clearLongPressTimer);
     };
-    // active 加入依赖：播放器现在仅在 active 时挂载，切到该卡片时需重新尝试恢复进度
-  }, [video.id, savedTime, active]);
+  }, [clearLongPressTimer]);
+
+  // 切到别的视频或退出沉浸流时关闭菜单，避免浮层残留
+  useEffect(() => {
+    setContextMenuAt(null);
+    setLongPressOpen(false);
+    longPressFiredRef.current = false;
+    clearLongPressTimer();
+  }, [active, video.id, mini, clearLongPressTimer]);
+
+  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -192,21 +213,8 @@ export function FeedSlide({
   }, [mini, active]);
 
   useEffect(() => {
-    restoredRef.current = false;
     if (active) setLoading(true);
   }, [video.id, active]);
-
-  const handleTimeUpdate = useCallback(
-    (t: number) => {
-      onTimeUpdate(t);
-      if (!active || !onSaveProgress) return;
-      const now = Date.now();
-      if (now - lastSaveRef.current < 1000) return;
-      lastSaveRef.current = now;
-      onSaveProgress(t);
-    },
-    [onTimeUpdate, onSaveProgress, active],
-  );
 
   const progressMax = Math.max(duration, video.durationSeconds, 1);
   const progressValue = Math.min(currentTime, progressMax);
@@ -215,6 +223,47 @@ export function FeedSlide({
     () => ({ src: video.src, type: 'video/mp4' }),
     [video.src],
   );
+
+  /** 触屏设备走长按菜单；仅按指针类型判断，避免 PC 窄窗口被误判为移动端 */
+  const isTouchLike = () =>
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+  const handleContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!videoMenu || mini || isTouchLike()) return;
+    setLongPressOpen(false);
+    setContextMenuAt({ x: event.clientX, y: event.clientY });
+  };
+
+  const handleMenuPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    clearLongPressTimer();
+    longPressFiredRef.current = false;
+    if (!videoMenu || mini || event.pointerType === 'mouse') return;
+    longPressStartRef.current = { x: event.clientX, y: event.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      setContextMenuAt(null);
+      setLongPressOpen(true);
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(12);
+      }
+    }, 500);
+  };
+
+  const handleMenuPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = longPressStartRef.current;
+    if (!start) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+      clearLongPressTimer();
+    }
+  };
+
+  const handleMenuClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!longPressFiredRef.current) return;
+    longPressFiredRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   const captionInner = (
     <>
@@ -305,7 +354,7 @@ export function FeedSlide({
             whileTap={{ scale: 0.88 }}
             onClick={onToggleFullscreen}
             aria-label={isFullscreen ? '退出全屏' : '全屏播放'}
-            className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 flex items-center justify-center text-white hover:bg-black/65 transition-colors"
+            className="hidden w-11 h-11 rounded-full bg-black/45 backdrop-blur-md border border-white/15 items-center justify-center text-white hover:bg-black/65 transition-colors md:flex"
           >
             {isFullscreen ? (
               <Minimize className="w-5 h-5" />
@@ -331,11 +380,16 @@ export function FeedSlide({
   );
 
   return (
+    <>
     <div
       data-video-stage
       className="relative w-full h-full bg-black overflow-hidden"
-      // 视频区域统一屏蔽右键菜单（含浏览器默认菜单与播放器右键），PC 视频首页不弹出
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={handleContextMenu}
+      onPointerDown={handleMenuPointerDown}
+      onPointerMove={handleMenuPointerMove}
+      onPointerUp={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
+      onClickCapture={handleMenuClickCapture}
     >
       {active ? (
         <MediaPlayer
@@ -343,7 +397,7 @@ export function FeedSlide({
           poster={video.cover}
           title={video.title}
           playsInline
-          loop
+          loop={!!videoMenu?.state.singleLoop || !onVideoEnded}
           src={source}
           posterLoad="eager"
           muted={isMuted}
@@ -367,8 +421,17 @@ export function FeedSlide({
             setLoading(false);
             countVideoViewOnce(video.id);
             onPlaybackStart?.();
+            onPlaybackStateChange?.(true);
           }}
-          onPause={() => setPlaying(false)}
+          onPause={() => {
+            setPlaying(false);
+            onPlaybackStateChange?.(false);
+          }}
+          onEnded={() => {
+            setPlaying(false);
+            onPlaybackStateChange?.(false);
+            onVideoEnded?.();
+          }}
           onCanPlay={() => {
             setLoading(false);
             // 视频源就绪后立即播放当前 active 项：点选卡片时播放器可能刚挂载，
@@ -382,7 +445,7 @@ export function FeedSlide({
           onWaiting={() => setLoading(true)}
           onPlaying={() => setLoading(false)}
           onError={() => setLoading(false)}
-          onTimeUpdate={(detail) => handleTimeUpdate(detail.currentTime)}
+          onTimeUpdate={(detail) => onTimeUpdate(detail.currentTime)}
           onDurationChange={onDurationChange}
         >
           <MediaProvider className="w-full h-full" />
@@ -586,5 +649,19 @@ export function FeedSlide({
         onClose={() => setCommentOpen(false)}
       />
     </div>
+
+    <VideoContextMenu
+      open={!!contextMenuAt && !!videoMenu && !mini}
+      x={contextMenuAt?.x ?? 0}
+      y={contextMenuAt?.y ?? 0}
+      config={videoMenu}
+      onClose={closeContextMenu}
+    />
+    <VideoLongPressMenu
+      open={longPressOpen && !!videoMenu && !mini}
+      config={videoMenu}
+      onClose={closeLongPressMenu}
+    />
+    </>
   );
 }

@@ -18,7 +18,6 @@ interface VideosSectionProps {
   savedIds: string[];
   likedIds: string[];
   searchQuery: string;
-  progressById: Record<string, number>;
   resumeVideoId?: string;
   resumeMuted: boolean;
   resumePlaybackRate: number;
@@ -27,7 +26,8 @@ interface VideosSectionProps {
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
   onPlayVideo: (video: VideoItem, opts?: { muted?: boolean; playbackRate?: number }) => void;
-  onSaveProgress: (id: string, time: number) => void;
+  /** 当前视频在视频页内被暂停：取消离页续播资格 */
+  onStopVideo?: () => void;
   onMiniClose: () => void;
   onMiniExpand: () => void;
   viewMode?: 'feed' | 'grid';
@@ -62,7 +62,6 @@ export function VideosSection({
   savedIds,
   likedIds,
   searchQuery,
-  progressById,
   resumeVideoId,
   resumeMuted,
   resumePlaybackRate,
@@ -71,7 +70,7 @@ export function VideosSection({
   onToggleSave,
   onToggleLike,
   onPlayVideo,
-  onSaveProgress,
+  onStopVideo,
   onMiniClose,
   onMiniExpand,
   viewMode,
@@ -104,8 +103,7 @@ export function VideosSection({
         onToggleSave={onToggleSave}
         onToggleLike={onToggleLike}
         onPlayVideo={onPlayVideo}
-        progressById={progressById}
-        onSaveProgress={onSaveProgress}
+        onStopVideo={onStopVideo}
         resumeVideoId={resumeVideoId}
         resumeMuted={resumeMuted}
         resumePlaybackRate={resumePlaybackRate}

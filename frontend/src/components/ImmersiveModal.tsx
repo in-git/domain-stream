@@ -11,10 +11,8 @@ interface ImmersiveModalProps {
   initialIndex: number;
   likedIds: string[];
   savedIds: string[];
-  progressById?: Record<string, number>;
   onToggleLike: (id: string) => void;
   onToggleSave: (id: string) => void;
-  onSaveProgress?: (id: string, time: number) => void;
   onClose: () => void;
 }
 
@@ -27,10 +25,8 @@ export function ImmersiveModal({
   initialIndex,
   likedIds,
   savedIds,
-  progressById,
   onToggleLike,
   onToggleSave,
-  onSaveProgress,
   onClose,
 }: ImmersiveModalProps) {
   const safeInitial = Math.max(0, Math.min(initialIndex, videos.length - 1));
@@ -145,10 +141,8 @@ export function ImmersiveModal({
           }}
           likedIds={likedIds}
           savedIds={savedIds}
-          progressById={progressById}
           onToggleLike={onToggleLike}
           onToggleSave={onToggleSave}
-          onSaveProgress={onSaveProgress}
           showFullscreen={false}
         />
       )}

@@ -1,7 +1,7 @@
 import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
-import { navIconUrl, parseNav } from './navConfig';
+import { findModuleKeyBySection, navIconUrl, parseNav } from './navConfig';
 
 interface LeftSidebarProps {
   activeSection: string;
@@ -38,7 +38,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         {/* Brand Emblem & Wordmark */}
         <button
           type="button"
-          onClick={() => onSelectSection('videos', true)}
+          onClick={() => onSelectSection(findModuleKeyBySection(navItems, 'videos') ?? 'videos', true)}
           className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary"
         >
           <span className="flex items-center justify-center w-9 h-9 shrink-0">

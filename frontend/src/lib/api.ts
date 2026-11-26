@@ -622,13 +622,14 @@ export const portalApi = {
     if (category && category !== '全部') params.set('category', category);
     return request<PortalVideoPage>(`/public/video/page?${params.toString()}`);
   },
-  /** 随机推荐：每次只取一小批，不排除已看过的，保证每批都有数据 */
-  videoRecommend: (category: string | undefined, size: number) =>
+  /** 随机推荐：每次只取一小批，传入已加载 ID 让后端排除，避免批次之间重复 */
+  videoRecommend: (category: string | undefined, size: number, excludeIds: string[] = []) =>
     request<PortalVideoPage>('/public/video/recommend', {
       method: 'POST',
       body: JSON.stringify({
         category: category && category !== '全部' ? category : undefined,
         size,
+        excludeIds,
       }),
     }),
   recordVideoView: (id: string) =>

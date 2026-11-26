@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { startVisitorTracking, trackPageView } from './lib/visitor';
 import { loadSystemInfo, useSystemInfo, useSystemInfoLoaded } from './lib/systemInfo';
@@ -16,7 +16,11 @@ import {
   usePersistentPlayer,
 } from './views/app';
 import { PortalShell } from './views/shell/PortalShell';
-import { parseNav } from './views/shell/navConfig';
+import {
+  findModuleKeyBySection,
+  parseNav,
+  sectionKeyByModuleKey,
+} from './views/shell/navConfig';
 
 /** 应用入口：只负责组合 hooks、路由分发与懒加载触发，视图细节在 views/ 下 */
 export default function App() {
@@ -35,6 +39,9 @@ export default function App() {
   const session = useUserSession();
   const { config } = useSystemInfo();
   const configLoaded = useSystemInfoLoaded();
+  const navItems = useMemo(() => parseNav(config.navItems), [config.navItems]);
+  /** 当前导航项真实对应的内置页面；模块标识改名后仍用它加载数据 */
+  const activeSectionKey = sectionKeyByModuleKey(navItems, activeSection);
   const data = usePortalData(session.profile.name, activeSection, session.likeCounts);
   const { loadSection } = data;
   const player = usePersistentPlayer();
@@ -43,41 +50,49 @@ export default function App() {
      自定义模块没有数据源，退化为拉取视频；留言墙每次进入都重新拉取。 */
   useEffect(() => {
     // 留言墙每次进入都重新拉取，避免切回时展示过期留言
-    if (activeSection === 'messages') {
+    if (activeSectionKey === 'messages') {
       void data.loadSection('messages', true);
       return;
     }
     // 自定义模块没有数据源，但整页刷新时仍要保证有内容板块被加载，否则页面空白
-    void data.loadSection(isSectionId(activeSection) ? activeSection : 'videos');
-    // loadSection 内部有 loading 防重入，依赖只随 activeSection 变化
+    void data.loadSection(isSectionId(activeSectionKey) ? activeSectionKey : 'videos');
+    // loadSection 内部有 loading 防重入，依赖只随当前页面变化
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection]);
+  }, [activeSectionKey]);
 
   // /profile 统一落到设置中心的个人中心分类
   useEffect(() => {
     if (session.route.kind !== 'profile') return;
-    setActiveSection('settings');
+    setActiveSection(findModuleKeyBySection(navItems, 'settings') ?? 'settings');
     setSettingsProfileToken((value) => value + 1);
     navigate('/', true);
-  }, [session.route.kind, setActiveSection]);
+  }, [session.route.kind, navItems, setActiveSection]);
 
   // 应用启动时拉取系统基础信息（网页标题 / 开屏文本）
   useEffect(() => {
     void loadSystemInfo();
   }, []);
 
-  // 本地记住的 moduleKey 若已被 CMS 删除或隐藏，回退到当前可用的内置模块
+  // 本地记住的 moduleKey 若已被 CMS 改名、删除或隐藏，迁移或回退到当前可用的模块
   useEffect(() => {
     if (!configLoaded) return;
-    const navItems = parseNav(config.navItems);
     const availableKeys = navItems.map((item) => item.moduleKey);
     if (availableKeys.includes(activeSection)) return;
+    // 老版本记住的是内置页面 key，改名后自动迁移到新的 moduleKey
+    const migrated = isSectionId(activeSection)
+      ? findModuleKeyBySection(navItems, activeSection)
+      : null;
+    if (migrated) {
+      setActiveSection(migrated);
+      return;
+    }
     const fallback =
-      navItems.find((item) => item.moduleType === 'builtin')?.moduleKey ||
-      availableKeys[0] ||
+      findModuleKeyBySection(navItems, 'videos') ??
+      navItems.find((item) => item.moduleType === 'builtin')?.moduleKey ??
+      availableKeys[0] ??
       'videos';
     setActiveSection(fallback);
-  }, [configLoaded, config.navItems, activeSection, setActiveSection]);
+  }, [configLoaded, navItems, activeSection, setActiveSection]);
 
   // 启动访客在线追踪（WebSocket 心跳 + 关键事件上报）
   useEffect(() => startVisitorTracking(), []);
@@ -90,23 +105,24 @@ export default function App() {
 
   const handleSelectSection = useCallback(
     (section: string, force = false) => {
+      const pageKey = sectionKeyByModuleKey(navItems, section);
       // 侧栏点击强制刷新对应板块；个人中心与自定义模块没有独立内容接口
-      if (force && isSectionId(section)) {
-        void loadSection(section, true);
+      if (force && isSectionId(pageKey)) {
+        void loadSection(pageKey, true);
       }
       setActiveSection(section);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       // 自定义模块没有专属埋点类型，跳过上报
       const pageType =
-        section === 'videos' ? 'VIDEO'
-          : section === 'articles' ? 'ARTICLE'
-            : section === 'gallery' ? 'GRAPHIC'
-              : section === 'messages' ? 'MESSAGE'
-                : section === 'profile' ? 'PROFILE'
+        pageKey === 'videos' ? 'VIDEO'
+          : pageKey === 'articles' ? 'ARTICLE'
+            : pageKey === 'gallery' ? 'GRAPHIC'
+              : pageKey === 'messages' ? 'MESSAGE'
+                : pageKey === 'profile' ? 'PROFILE'
                   : null;
       if (pageType) trackPageView(pageType);
     },
-    [loadSection, setActiveSection]
+    [loadSection, navItems, setActiveSection]
   );
 
   const handleSplashComplete = useCallback(() => setShowSplash(false), []);

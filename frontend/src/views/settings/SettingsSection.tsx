@@ -42,7 +42,6 @@ interface SettingsSectionProps {
 }
 
 const CACHE_KEYS = [
-  'lumina:video-progress',
   'lumina:favorites',
   'lumina:saved',
   'lumina:dark',
@@ -73,7 +72,7 @@ const SETTING_ITEMS = [
   {
     key: 'cache',
     label: '缓存设置',
-    description: '清理本地播放进度与偏好缓存',
+    description: '清理本地偏好缓存',
     Icon: Database,
   },
   {
@@ -251,7 +250,7 @@ export function SettingDetail({
                   清理本地缓存？
                 </h2>
                 <p id="clear-cache-description" className="mt-2 text-[13px] leading-relaxed text-app-muted">
-                  此操作会删除播放进度、收藏、喜欢、主题和资料缓存，且不可恢复；不会退出当前账号。确定继续吗？
+                  此操作会删除收藏、喜欢、主题和资料缓存，且不可恢复；不会退出当前账号。确定继续吗？
                 </p>
                 <div className="mt-5 flex gap-2">
                   <button

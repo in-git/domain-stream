@@ -54,6 +54,8 @@ import vip.xiaonuo.auth.core.util.StpClientUtil;
 import vip.xiaonuo.common.pojo.CommonResult;
 import vip.xiaonuo.common.util.CommonIpAddressUtil;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -137,8 +139,18 @@ public class BizPortalController {
      * @date  2026/11/19
      */
     private LambdaQueryWrapper<BizVideo> publicVideoQuery(String category) {
+        return publicVideoQuery(category, null);
+    }
+
+    /**
+     * 已发布视频查询条件；excludeIds 用于随机推荐时排除已返回过的视频，避免批次之间重复
+     */
+    private LambdaQueryWrapper<BizVideo> publicVideoQuery(String category, Set<String> excludeIds) {
         LambdaQueryWrapper<BizVideo> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(BizVideo::getStatus, "PUBLISHED");
+        if (excludeIds != null && !excludeIds.isEmpty()) {
+            queryWrapper.notIn(BizVideo::getId, excludeIds);
+        }
 
         String categoryFilter = StrUtil.blankToDefault(category, "").trim();
         if (StrUtil.isNotBlank(categoryFilter) && !"全部".equals(categoryFilter)) {
@@ -188,7 +200,7 @@ public class BizPortalController {
         return CommonResult.data(result);
     }
 
-    @Operation(summary = "随机推荐已发布视频（短批次，不排除已看过的）")
+    @Operation(summary = "随机推荐已发布视频（同批次及已加载视频不重复）")
     @PostMapping("/public/video/recommend")
     public CommonResult<Map<String, Object>> recommendVideos(
             @RequestBody(required = false) Map<String, Object> body) {
@@ -203,13 +215,14 @@ public class BizPortalController {
             size = Integer.parseInt(String.valueOf(sizeValue));
         }
         int safeSize = Math.min(20, Math.max(1, size));
+        Set<String> excludeIds = parseExcludeIds(params.get("excludeIds"));
 
-        Long total = bizVideoMapper.selectCount(publicVideoQuery(category));
-        List<BizVideo> records = selectRandomVideos(category, safeSize);
-        // 分类下暂无已发布视频时回退到全部视频，保证只要站内有视频就不返回空列表
+        Long total = bizVideoMapper.selectCount(publicVideoQuery(category, excludeIds));
+        List<BizVideo> records = selectRandomVideos(category, safeSize, excludeIds);
+        // 分类下暂无可用视频时回退到全部视频，但仍排除已加载过的，保证只要站内有新视频就不返回空列表
         if (records.isEmpty() && StrUtil.isNotBlank(category) && !"全部".equals(category)) {
-            total = bizVideoMapper.selectCount(publicVideoQuery(null));
-            records = selectRandomVideos(null, safeSize);
+            total = bizVideoMapper.selectCount(publicVideoQuery(null, excludeIds));
+            records = selectRandomVideos(null, safeSize, excludeIds);
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -220,11 +233,40 @@ public class BizPortalController {
         return CommonResult.data(result);
     }
 
-    /** 按分类随机取一小批已发布视频；safeSize 已限制为 1~20，拼接 LIMIT 无注入风险 */
-    private List<BizVideo> selectRandomVideos(String category, int safeSize) {
-        LambdaQueryWrapper<BizVideo> queryWrapper = publicVideoQuery(category);
+    /** 解析前台已加载的视频 ID，限制数量避免生成过大的 NOT IN 条件 */
+    private Set<String> parseExcludeIds(Object value) {
+        Set<String> ids = new HashSet<>();
+        if (value instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                if (item != null && StrUtil.isNotBlank(String.valueOf(item))) {
+                    ids.add(String.valueOf(item).trim());
+                }
+            }
+        } else if (value != null && StrUtil.isNotBlank(String.valueOf(value))) {
+            for (String part : String.valueOf(value).split(",")) {
+                if (StrUtil.isNotBlank(part)) {
+                    ids.add(part.trim());
+                }
+            }
+        }
+        if (ids.size() <= 1000) {
+            return ids;
+        }
+        return new HashSet<>(new ArrayList<>(ids).subList(0, 1000));
+    }
+
+    /**
+     * 按分类随机取一小批未返回过的已发布视频；
+     * safeSize 已限制为 1~20，拼接 LIMIT 无注入风险，结果再按主键去重防止同批次重复
+     */
+    private List<BizVideo> selectRandomVideos(String category, int safeSize, Set<String> excludeIds) {
+        LambdaQueryWrapper<BizVideo> queryWrapper = publicVideoQuery(category, excludeIds);
         queryWrapper.last("ORDER BY RAND() LIMIT " + safeSize);
-        return bizVideoMapper.selectList(queryWrapper);
+        List<BizVideo> records = bizVideoMapper.selectList(queryWrapper);
+        Set<String> seen = new HashSet<>();
+        return records.stream()
+                .filter(record -> record != null && StrUtil.isNotBlank(record.getId()) && seen.add(record.getId()))
+                .collect(Collectors.toList());
     }
 
     /**

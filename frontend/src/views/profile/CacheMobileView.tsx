@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 
 const CACHE_KEYS = [
-  'lumina:video-progress',
   'lumina:favorites',
   'lumina:saved',
   'lumina:dark',
@@ -111,7 +110,7 @@ export function CacheMobileView() {
                 清理本地缓存？
               </h2>
               <p id="mobile-clear-cache-description" className="mt-2 text-[13px] leading-relaxed text-app-muted">
-                此操作会删除播放进度、收藏、喜欢、主题和资料缓存，且不可恢复；不会退出当前账号。确定继续吗？
+                此操作会删除收藏、喜欢、主题和资料缓存，且不可恢复；不会退出当前账号。确定继续吗？
               </p>
               <div className="mt-5 flex gap-2">
                 <button

@@ -48,17 +48,20 @@ import {
   NAV_LABEL_MAX_LENGTH,
   parseNavItems,
   stringifyNavItems,
+  validateNavModuleKey,
   type NavItemConfig,
 } from './schema';
 import { SwitchField } from '../../../components/SwitchField.tsx';
 
 /** 可用的内置板块选项：moduleKey 与 frontend 实际路由一一对应 */
-const SECTION_OPTIONS: Array<Pick<NavItemConfig, 'id' | 'moduleKey' | 'moduleType' | 'label'>> = [
-  { id: 'videos', moduleKey: 'videos', moduleType: 'builtin', label: '视频' },
-  { id: 'articles', moduleKey: 'articles', moduleType: 'builtin', label: '文章' },
-  { id: 'gallery', moduleKey: 'gallery', moduleType: 'builtin', label: '图文' },
-  { id: 'messages', moduleKey: 'messages', moduleType: 'builtin', label: '留言' },
-  { id: 'settings', moduleKey: 'settings', moduleType: 'builtin', label: '设置' },
+const SECTION_OPTIONS: Array<
+  Pick<NavItemConfig, 'id' | 'moduleKey' | 'sectionKey' | 'moduleType' | 'label'>
+> = [
+  { id: 'videos', moduleKey: 'videos', sectionKey: 'videos', moduleType: 'builtin', label: '视频' },
+  { id: 'articles', moduleKey: 'articles', sectionKey: 'articles', moduleType: 'builtin', label: '文章' },
+  { id: 'gallery', moduleKey: 'gallery', sectionKey: 'gallery', moduleType: 'builtin', label: '图文' },
+  { id: 'messages', moduleKey: 'messages', sectionKey: 'messages', moduleType: 'builtin', label: '留言' },
+  { id: 'settings', moduleKey: 'settings', sectionKey: 'settings', moduleType: 'builtin', label: '设置' },
 ];
 
 /** 配置里存的是纯后端路径，CMS 预览时补回 /snowy 代理前缀 */
@@ -91,13 +94,23 @@ interface NavItemDialogProps {
   initial: NavItemConfig;
   /** 弹窗标题（新增 / 编辑） */
   title: string;
+  /** 当前全部模块标识，用于唯一性校验 */
+  existingKeys: string[];
   onClose: () => void;
   onConfirm: (next: NavItemConfig) => void;
 }
 
-/** 名称 + 图标的编辑弹窗 */
-function NavItemDialog({ open, initial, title, onClose, onConfirm }: NavItemDialogProps) {
+/** 名称 + 模块标识 + 图标的编辑弹窗 */
+function NavItemDialog({
+  open,
+  initial,
+  title,
+  existingKeys,
+  onClose,
+  onConfirm,
+}: NavItemDialogProps) {
   const [label, setLabel] = useState(initial.label);
+  const [moduleKey, setModuleKey] = useState(initial.moduleKey || initial.id);
   const [iconUrl, setIconUrl] = useState(initial.iconUrl || '');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState('');
@@ -107,6 +120,7 @@ function NavItemDialog({ open, initial, title, onClose, onConfirm }: NavItemDial
   useEffect(() => {
     if (!open) return;
     setLabel(clampLabel(initial.label));
+    setModuleKey(initial.moduleKey || initial.id);
     setIconUrl(initial.iconUrl || '');
     setError('');
     // 打开后聚焦名称输入框
@@ -128,9 +142,21 @@ function NavItemDialog({ open, initial, title, onClose, onConfirm }: NavItemDial
       setError('请输入模块名称');
       return;
     }
+    const nextKey = moduleKey.trim();
+    const keyError = validateNavModuleKey(nextKey, {
+      editingKey: initial.moduleKey || initial.id,
+      existingKeys,
+      sectionKey: initial.sectionKey,
+    });
+    if (keyError) {
+      setError(keyError);
+      return;
+    }
     onConfirm({
       ...initial,
       label: trimmed,
+      id: nextKey,
+      moduleKey: nextKey,
       // 空串不写入，保持数据结构干净
       ...(iconUrl ? { iconUrl } : {}),
     });
@@ -185,16 +211,32 @@ function NavItemDialog({ open, initial, title, onClose, onConfirm }: NavItemDial
             </span>
           </label>
 
-          {/* 模块 key：永久唯一，客户端按它定位模块，创建后不可修改 */}
-          <div className="px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA]">
-            <span className="block text-[12px] font-medium text-[#1D1D1F]">模块标识</span>
-            <span className="mt-1 block text-[11px] font-mono text-[#6E6E73] break-all">
-              {initial.moduleKey || initial.id}
-            </span>
+          {/* 模块标识：可修改；内置页面保留 sectionKey，前台仍按原页面渲染 */}
+          <label className="block">
+            <span className="block mb-1.5 text-[12px] font-medium text-[#1D1D1F]">模块标识</span>
+            <input
+              value={moduleKey}
+              onChange={(event) => {
+                setModuleKey(event.target.value.trim());
+                setError('');
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleConfirm();
+                } else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  onClose();
+                }
+              }}
+              maxLength={40}
+              placeholder="如：my-videos"
+              className="w-full h-10 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[13px] font-mono text-[#1D1D1F] outline-none focus:border-[#0071E3]"
+            />
             <span className="mt-1 block text-[11px] text-[#86868B]">
-              客户端用此标识定位模块，创建后不可修改
+              客户端用此标识定位模块；内置页面改名后仍打开原页面
             </span>
-          </div>
+          </label>
 
           {/* 图标：统一从文件库选择图片 */}
           <div>
@@ -488,16 +530,10 @@ export function NavItemsEditor({ value, onChange, onSync }: NavItemsEditorProps)
     setDialogOpen(true);
   }
 
-  /** 弹窗确定：新增追加到末尾，编辑原地替换 */
+  /** 弹窗确定：新增追加到末尾，编辑按原标识定位后原地替换（允许改 moduleKey） */
   function handleDialogConfirm(next: NavItemConfig) {
     if (editingId) {
-      commit(
-        items.map((item) =>
-          item.moduleKey === editingId
-            ? { ...next, id: item.moduleKey, moduleKey: item.moduleKey }
-            : item
-        )
-      );
+      commit(items.map((item) => (item.moduleKey === editingId ? next : item)));
     } else {
       commit([...items, next]);
     }
@@ -508,8 +544,8 @@ export function NavItemsEditor({ value, onChange, onSync }: NavItemsEditorProps)
 
   /** 快速添加预设板块（沿用板块自带图标） */
   function addSection(sectionId: string) {
-    const preset = SECTION_OPTIONS.find((item) => item.moduleKey === sectionId);
-    if (!preset || items.some((item) => item.moduleKey === preset.moduleKey)) return;
+    const preset = SECTION_OPTIONS.find((item) => item.sectionKey === sectionId);
+    if (!preset || items.some((item) => (item.sectionKey || item.moduleKey) === sectionId)) return;
     commit([
       ...items,
       { ...preset, label: preset.label, iconUrl: undefined, enabled: true },
@@ -517,7 +553,7 @@ export function NavItemsEditor({ value, onChange, onSync }: NavItemsEditorProps)
   }
 
   const availableSections = SECTION_OPTIONS.filter(
-    (section) => !items.some((item) => item.moduleKey === section.moduleKey)
+    (section) => !items.some((item) => (item.sectionKey || item.moduleKey) === section.sectionKey)
   );
   const activeItem = activeId ? items.find((item) => item.moduleKey === activeId) : null;
 
@@ -617,6 +653,7 @@ export function NavItemsEditor({ value, onChange, onSync }: NavItemsEditorProps)
           open={dialogOpen}
           initial={draftItem}
           title={editingId ? '编辑模块' : '新增模块'}
+          existingKeys={items.map((item) => item.moduleKey)}
           onClose={() => {
             setDialogOpen(false);
             setDraftItem(null);

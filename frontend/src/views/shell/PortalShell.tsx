@@ -4,9 +4,12 @@ import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { registerCommentLogin } from '../../lib/commentLogin.ts';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
-import { BUILTIN_SECTIONS } from './LeftSidebar';
 import { isSectionId } from '../app';
-import { parseNav } from './navConfig';
+import {
+  findModuleKeyBySection,
+  parseNav,
+  sectionKeyByModuleKey,
+} from './navConfig';
 import { SectionPlaceholder } from './SectionPlaceholder';
 import { MainHeader } from './MainHeader';
 import { PortalNavProvider } from './PortalNav';
@@ -59,8 +62,28 @@ export function PortalShell({
   player,
   settingsProfileToken,
 }: PortalShellProps) {
+  const { config } = useSystemInfo();
+  const navItems = useMemo(() => parseNav(config.navItems), [config.navItems]);
+  const activeNavItem = useMemo(
+    () => navItems.find((item) => item.moduleKey === activeSection) ?? null,
+    [navItems, activeSection]
+  );
+  /** 模块标识可改，内容区始终按真实页面标识渲染 */
+  const activeSectionKey = sectionKeyByModuleKey(navItems, activeSection);
+  const homeSectionKey = findModuleKeyBySection(navItems, 'videos') ?? 'videos';
+  const isCustomSection = activeNavItem
+    ? activeNavItem.moduleType === 'placeholder'
+    : !isSectionId(activeSectionKey);
+  const customNavItem = useMemo(() => {
+    if (!isCustomSection || !activeNavItem) return null;
+    return {
+      label: activeNavItem.label,
+      iconUrl: publicFileUrl(activeNavItem.iconUrl || ''),
+    };
+  }, [activeNavItem, isCustomSection]);
+
   // 搜索范围只接受内置板块；自定义模块没有专属数据，退化为搜索全部内容
-  const searchSection = isSectionId(activeSection) ? activeSection : 'profile';
+  const searchSection = isSectionId(activeSectionKey) ? activeSectionKey : 'profile';
   /** 视频首页的视图模式，由顶栏按钮与视频页内部共用 */
   const [videoViewMode, setVideoViewMode] = useState<'feed' | 'grid'>('feed');
   /** PC 沉浸播放列表侧栏开关：分类条在顶栏，侧栏在视频区，状态需提升到共同父级 */
@@ -117,8 +140,6 @@ export function PortalShell({
     isMobileViewport,
     persistentMuted,
     persistentRate,
-    videoProgress,
-    saveVideoProgress,
     handlePlayVideo,
   } = player;
 
@@ -191,48 +212,30 @@ export function PortalShell({
 
   // 视图切换界面保持现状：搜索时切到卡片模式，点卡片条上的按钮或清空搜索后回到主视图
   useEffect(() => {
-    if (activeSection !== 'videos') return;
+    if (activeSectionKey !== 'videos') return;
     if (searchQuery.trim()) {
       setVideoViewMode('grid');
     } else if (!isMobileViewport) {
       setVideoViewMode('feed');
     }
-  }, [isMobileViewport, activeSection, searchQuery]);
+  }, [isMobileViewport, activeSectionKey, searchQuery]);
 
   // 离开视频沉浸流或切到卡片模式时，清除临时唤出的导航状态
   useEffect(() => {
-    if (activeSection !== 'videos' || videoViewMode !== 'feed') setVideoChromeVisible(false);
-  }, [activeSection, videoViewMode]);
+    if (activeSectionKey !== 'videos' || videoViewMode !== 'feed') setVideoChromeVisible(false);
+  }, [activeSectionKey, videoViewMode]);
 
   // 稳定引用：加载失败触发的重渲染不应让 IntersectionObserver 反复重连
   const handleLoadMoreVideos = useCallback(() => void loadMoreVideos(), [loadMoreVideos]);
 
-  /* 当前板块按 moduleKey 找配置；moduleType 为 placeholder 时显示占位页 */
-  const { config } = useSystemInfo();
-  const navItems = useMemo(() => parseNav(config.navItems), [config.navItems]);
-  const activeNavItem = useMemo(
-    () => navItems.find((item) => item.moduleKey === activeSection) ?? null,
-    [navItems, activeSection]
-  );
-  const isCustomSection = activeNavItem
-    ? activeNavItem.moduleType === 'placeholder'
-    : !BUILTIN_SECTIONS.includes(activeSection);
-  const customNavItem = useMemo(() => {
-    if (!isCustomSection || !activeNavItem) return null;
-    return {
-      label: activeNavItem.label,
-      iconUrl: publicFileUrl(activeNavItem.iconUrl || ''),
-    };
-  }, [activeNavItem, isCustomSection]);
-
   return (
     <PortalNavProvider
-      value={{ activeSection, onSelectSection, transparent: activeSection === 'videos' }}
+      value={{ activeSection, onSelectSection, transparent: activeSectionKey === 'videos' }}
     >
       <MotionConfig reducedMotion="user">
       <div
         className={`min-h-screen flex md:pl-20 lg:pl-60 text-app-text transition-colors duration-300 ease-out ${
-          activeSection === 'videos' && isMobileViewport
+          activeSectionKey === 'videos' && isMobileViewport
             ? 'bg-black'
             : 'bg-app-bg'
         }`}
@@ -244,23 +247,23 @@ export function PortalShell({
         <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh] overflow-hidden">
           <AnimatePresence>
           {!(isMobileViewport &&
-              (activeSection === 'settings' ||
-                (activeSection === 'videos' &&
+              (activeSectionKey === 'settings' ||
+                (activeSectionKey === 'videos' &&
                   videoViewMode === 'feed' &&
                   !videoChromeVisible))) && (
             <MainHeader
               key="main-header"
-              chromeAnimated={isMobileViewport && activeSection === 'videos' && videoViewMode === 'feed'}
+              chromeAnimated={isMobileViewport && activeSectionKey === 'videos' && videoViewMode === 'feed'}
               searchQuery={searchQuery}
               onChangeSearch={onChangeSearch}
               onOpenSearch={onOpenSearch}
               isDark={isDark}
               onToggleTheme={toggleTheme}
-              overlay={activeSection === 'videos' && isMobileViewport && videoViewMode === 'feed'}
-              solidBlack={activeSection === 'videos' && isMobileViewport && videoViewMode === 'grid'}
-              showViewToggle={activeSection === 'videos' && isMobileViewport}
-              sectionBackground={activeSection === 'articles' ? 'page' : 'default'}
-              pcImmersive={activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
+              overlay={activeSectionKey === 'videos' && isMobileViewport && videoViewMode === 'feed'}
+              solidBlack={activeSectionKey === 'videos' && isMobileViewport && videoViewMode === 'grid'}
+              showViewToggle={activeSectionKey === 'videos' && isMobileViewport}
+              sectionBackground={activeSectionKey === 'articles' ? 'page' : 'default'}
+              pcImmersive={activeSectionKey === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
               viewMode={videoViewMode}
               onToggleViewMode={() =>
                 setVideoViewMode((mode) => (mode === 'feed' ? 'grid' : 'feed'))
@@ -285,7 +288,7 @@ export function PortalShell({
           {/* 移动端视频板块全出血：去掉左右留白与顶部间距，让播放区贴满容器 */}
           <main className="flex-1 w-full h-full">
             <VideosSection
-              active={activeSection === 'videos'}
+              active={activeSectionKey === 'videos'}
               loading={!loadedSections.videos && !!loadingMap.videos}
               error={errors.videos}
               videos={videos}
@@ -299,7 +302,6 @@ export function PortalShell({
               savedIds={savedIds}
               likedIds={likedIds}
               searchQuery={searchQuery}
-              progressById={videoProgress}
               resumeVideoId={persistentVideo?.id}
               resumeMuted={persistentMuted}
               resumePlaybackRate={persistentRate}
@@ -308,17 +310,17 @@ export function PortalShell({
               onToggleSave={toggleFavorite}
               onToggleLike={toggleLike}
               onPlayVideo={handlePlayVideo}
-              onSaveProgress={saveVideoProgress}
+              onStopVideo={() => player.setPersistentVideo(null)}
               onMiniClose={() => setPersistentVideo(null)}
-              onMiniExpand={() => onSelectSection('videos')}
+              onMiniExpand={() => onSelectSection(homeSectionKey)}
               viewMode={videoViewMode}
               onViewModeChange={setVideoViewMode}
-              headerFloating={activeSection === 'videos' && videoViewMode === 'feed'}
+              headerFloating={activeSectionKey === 'videos' && videoViewMode === 'feed'}
               playlistOpen={videoPlaylistOpen}
               onClosePlaylist={() => setVideoPlaylistOpen(false)}
               hideMobileTabBar={
                 isMobileViewport &&
-                activeSection === 'videos' &&
+                activeSectionKey === 'videos' &&
                 videoViewMode === 'feed' &&
                 !videoChromeVisible
               }
@@ -327,7 +329,7 @@ export function PortalShell({
             />
 
             <AnimatePresence mode="wait">
-              {activeSection === 'articles' && (
+              {activeSectionKey === 'articles' && (
                 <motion.div
                   key="section-articles"
                   initial={{ opacity: 0 }}
@@ -353,7 +355,7 @@ export function PortalShell({
                 </motion.div>
               )}
 
-              {activeSection === 'gallery' && (
+              {activeSectionKey === 'gallery' && (
                 <motion.div
                   key="section-gallery"
                   initial={{ opacity: 0 }}
@@ -378,7 +380,7 @@ export function PortalShell({
                 </motion.div>
               )}
 
-              {activeSection === 'messages' && (
+              {activeSectionKey === 'messages' && (
                 <motion.div
                   key="section-messages"
                   className="px-2"
@@ -391,7 +393,7 @@ export function PortalShell({
                 </motion.div>
               )}
 
-              {activeSection === 'settings' &&
+              {activeSectionKey === 'settings' &&
                 (isMobileViewport ? (
                   <SettingsMobileSection
                     profileContent={profileContentMobile}
@@ -431,13 +433,13 @@ export function PortalShell({
                 ))}
 
               {/* 自定义模块 / 个人中心兜底：保证这些导航项也有板块级导航 */}
-              {(isCustomSection || activeSection === 'profile') && (
+              {(isCustomSection || activeSectionKey === 'profile') && (
                 <SectionPlaceholder
                   key={`section-${activeSection}`}
-                  label={activeSection === 'profile' ? '个人中心' : customNavItem?.label || activeSection}
+                  label={activeSectionKey === 'profile' ? '个人中心' : customNavItem?.label || activeSection}
                   sectionId={activeSection}
-                  iconUrl={activeSection === 'profile' ? undefined : customNavItem?.iconUrl}
-                  onGoHome={() => onSelectSection('videos')}
+                  iconUrl={activeSectionKey === 'profile' ? undefined : customNavItem?.iconUrl}
+                  onGoHome={() => onSelectSection(homeSectionKey)}
                 />
               )}
             </AnimatePresence>

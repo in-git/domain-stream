@@ -264,8 +264,13 @@ export interface NavItemConfig {
    * 客户端老版本仍按 id 匹配，新版本优先读 moduleKey。
    */
   id: string;
-  /** 永久唯一的模块 key；创建后不可修改，改名/排序/换图标都不影响它 */
+  /** 前台导航定位用的唯一标识；支持修改，改名/排序/换图标互不影响 */
   moduleKey: string;
+  /**
+   * 内置页面的真实板块标识。moduleKey 修改后仍按它渲染对应页面；
+   * 自定义模块没有该字段。
+   */
+  sectionKey?: string;
   /** 模块类型；决定客户端渲染内置页面还是占位模块 */
   moduleType: NavModuleType;
   /** 显示名称，限 4 个字符 */
@@ -279,9 +284,43 @@ export interface NavItemConfig {
 /** 导航名称最大长度：侧栏宽度有限，超过 4 个字会被截断 */
 export const NAV_LABEL_MAX_LENGTH = 4;
 
-/** 根据模块 key 推断类型，兼容没有 moduleType 的旧配置 */
-export function inferNavModuleType(moduleKey: string): NavModuleType {
-  return BUILTIN_MODULE_KEYS.includes(moduleKey) ? 'builtin' : 'placeholder';
+/** 根据真实页面标识推断类型，兼容没有 moduleType 的旧配置 */
+export function inferNavModuleType(moduleKey: string, sectionKey?: string): NavModuleType {
+  const pageKey = (sectionKey || moduleKey).trim();
+  return BUILTIN_MODULE_KEYS.includes(pageKey) ? 'builtin' : 'placeholder';
+}
+
+/** 取导航项对应的内置页面标识；旧配置按 moduleKey 推断 */
+export function resolveSectionKey(
+  moduleKey: string,
+  sectionKey?: string
+): string | undefined {
+  const raw = (sectionKey || '').trim();
+  if (raw) return raw;
+  return BUILTIN_MODULE_KEYS.includes((moduleKey || '').trim())
+    ? (moduleKey || '').trim()
+    : undefined;
+}
+
+const MODULE_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
+
+/** 校验模块标识：唯一、格式合法，且不能占用其他内置页面的标识 */
+export function validateNavModuleKey(
+  value: string,
+  options: { editingKey?: string; existingKeys: string[]; sectionKey?: string }
+): string | null {
+  const key = (value || '').trim();
+  if (!key) return '请输入模块标识';
+  if (!MODULE_KEY_PATTERN.test(key)) {
+    return '模块标识需以字母开头，只能包含字母、数字、下划线或短横线，最多 40 个字符';
+  }
+  if (options.existingKeys.some((item) => item !== options.editingKey && item === key)) {
+    return '模块标识已存在，请换一个';
+  }
+  if (BUILTIN_MODULE_KEYS.includes(key) && options.sectionKey !== key) {
+    return '该标识为系统内置页面保留';
+  }
+  return null;
 }
 
 /** 生成不会和内置页面冲突的自定义模块 key */
@@ -305,9 +344,13 @@ export const DEFAULT_NAV_ITEMS: NavItemConfig[] = [
   { ...SETTINGS_NAV_ITEM },
 ];
 
-function parseModuleType(value: unknown, moduleKey: string): NavModuleType {
+function parseModuleType(
+  value: unknown,
+  moduleKey: string,
+  sectionKey?: string
+): NavModuleType {
   if (value === 'builtin' || value === 'placeholder') return value;
-  return inferNavModuleType(moduleKey);
+  return inferNavModuleType(moduleKey, sectionKey);
 }
 
 /** 解析配置里的导航 JSON，异常时回退默认值 */
@@ -329,11 +372,16 @@ export function parseNavItems(raw: string | undefined): NavItemConfig[] {
             : '';
       if (!moduleKey || seen.has(moduleKey)) continue;
       seen.add(moduleKey);
+      const sectionKey = resolveSectionKey(
+        moduleKey,
+        typeof row.sectionKey === 'string' ? row.sectionKey : undefined
+      );
       const iconUrl = typeof row.iconUrl === 'string' ? row.iconUrl.trim() : '';
-      const moduleType = parseModuleType(row.moduleType, moduleKey);
+      const moduleType = parseModuleType(row.moduleType, moduleKey, sectionKey);
       items.push({
         id: moduleKey,
         moduleKey,
+        ...(sectionKey ? { sectionKey } : {}),
         moduleType,
         label:
           typeof row.label === 'string' && row.label.trim()
@@ -359,13 +407,15 @@ export function normalizeNavItems(items: NavItemConfig[]): NavItemConfig[] {
     const moduleKey = (item.moduleKey || item.id || '').trim();
     if (!moduleKey || seen.has(moduleKey)) continue;
     seen.add(moduleKey);
-    const moduleType = parseModuleType(item.moduleType, moduleKey);
+    const sectionKey = resolveSectionKey(moduleKey, item.sectionKey);
+    const moduleType = parseModuleType(item.moduleType, moduleKey, sectionKey);
     const label = (item.label || moduleKey).trim().slice(0, NAV_LABEL_MAX_LENGTH) || moduleKey;
     const iconUrl = (item.iconUrl || '').trim();
     result.push({
       ...item,
       id: moduleKey,
       moduleKey,
+      ...(sectionKey ? { sectionKey } : {}),
       moduleType,
       label,
       ...(iconUrl ? { iconUrl } : {}),
