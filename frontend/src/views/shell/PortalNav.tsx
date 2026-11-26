@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
 import { LeftSidebar } from './LeftSidebar';
 import { MobileTabBar } from './MobileTabBar';
@@ -33,7 +34,8 @@ export function PortalNavProvider({
  */
 export function PortalNav({ hideMobileTabBar = false }: { hideMobileTabBar?: boolean }) {
   const { activeSection, onSelectSection, transparent } = useContext(PortalNavContext);
-  return (
+  // 导航挂到 body，避免被区块切换时的 opacity 动画带着一起淡出
+  return createPortal(
     <>
       <LeftSidebar activeSection={activeSection} onSelectSection={onSelectSection} />
       <AnimatePresence>
@@ -47,6 +49,7 @@ export function PortalNav({ hideMobileTabBar = false }: { hideMobileTabBar?: boo
           />
         )}
       </AnimatePresence>
-    </>
+    </>,
+    document.body,
   );
 }
