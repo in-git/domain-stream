@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { LayoutGrid, Moon, Rows3, Search, Sun, X } from 'lucide-react';
+import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { AccountMenu, type AccountMenuProps } from '../../components/AccountMenu';
 import { Tooltip } from '../../components/Tooltip';
 import { useSystemInfo } from '../../lib/systemInfo';
@@ -23,6 +24,8 @@ interface MainHeaderProps {
   sectionBackground?: 'default' | 'page';
   /** PC 沉浸模式：顶栏悬浮在视频上方，不占文档流位置 */
   pcImmersive?: boolean;
+  /** 移动端视频沉浸流：导航显隐使用过渡动画 */
+  chromeAnimated?: boolean;
   viewMode?: 'feed' | 'grid';
   onToggleViewMode?: () => void;
   /** PC 沉浸模式分类条：放顶栏左侧，与搜索框同排 */
@@ -45,6 +48,7 @@ export function MainHeader({
   showViewToggle = false,
   sectionBackground = 'default',
   pcImmersive = false,
+  chromeAnimated = false,
   viewMode = 'feed',
   onToggleViewMode,
   feedCategories = [],
@@ -79,7 +83,11 @@ export function MainHeader({
     : 'text-app-text hover:bg-black/[0.05] dark:hover:bg-white/[0.08]';
 
   return (
-    <header
+    <motion.header
+      initial={chromeAnimated ? { y: -20, opacity: 0 } : false}
+      animate={chromeAnimated ? { y: 0, opacity: 1 } : undefined}
+      exit={chromeAnimated ? { y: -20, opacity: 0 } : undefined}
+      transition={SWIFTUI_SMOOTH}
       className={`h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 transition-colors duration-300 ease-out ${shellClass}`}
     >
       {/* Left: 移动端品牌 / PC 沉浸模式分类条（与搜索框同排） */}
@@ -219,6 +227,6 @@ export function MainHeader({
         </Tooltip>
         <AccountMenu {...account} overlay={pcImmersive || overlay || solidBlack} />
       </div>
-    </header>
+    </motion.header>
   );
 }

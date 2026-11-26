@@ -28,9 +28,7 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
 
   return (
     <div className="space-y-6">
-      <MyContentPanel counts={myCounts} onNavigate={onNavigate} />
-
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
         <ModuleFlowPanel onNavigate={onNavigate} permissions={permissions} />
         <DistributionPanel
           total={moduleBreakdown.total}
@@ -39,6 +37,7 @@ export function DashboardView({ onNavigate, permissions, myCounts }: DashboardVi
           onHover={setHoveredModule}
           onNavigate={onNavigate}
         />
+        <MyContentPanel counts={myCounts} onNavigate={onNavigate} />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">

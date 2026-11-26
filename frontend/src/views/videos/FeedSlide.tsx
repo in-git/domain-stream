@@ -39,6 +39,12 @@ interface FeedSlideProps {
   onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
   /** 播放器实例注册键；同一视频重复出现时用位置区分，避免实例互相覆盖 */
   playerKey?: string;
+  /** 点击视频画面：暂停并唤出顶部/底部导航 */
+  onStageTap?: () => void;
+  /** 视频开始/恢复播放：回到清屏模式 */
+  onPlaybackStart?: () => void;
+  /** 移动端顶部/底部导航是否可见；清屏时隐藏标题浮层 */
+  chromeVisible?: boolean;
   onTogglePlay: () => void;
   onToggleMute: () => void;
   onSetRate: (rate: number) => void;
@@ -80,6 +86,9 @@ export function FeedSlide({
   savedTime,
   onRegisterPlayer,
   playerKey,
+  onStageTap,
+  onPlaybackStart,
+  chromeVisible = true,
   onTogglePlay,
   onToggleMute,
   onSetRate,
@@ -341,11 +350,23 @@ export function FeedSlide({
           playbackRate={playbackRate}
           className="absolute inset-0 w-full h-full"
           // 迷你窗双击用于还原播放器，禁用播放器自身的点击切换以免冲突；播放用左下角按钮
-          onClick={mini ? undefined : onTogglePlay}
+          onClick={
+            mini
+              ? undefined
+              : () => {
+                  if (playing) {
+                    onTogglePlay();
+                    onStageTap?.();
+                  } else {
+                    onTogglePlay();
+                  }
+                }
+          }
           onPlay={() => {
             setPlaying(true);
             setLoading(false);
             countVideoViewOnce(video.id);
+            onPlaybackStart?.();
           }}
           onPause={() => setPlaying(false)}
           onCanPlay={() => {
@@ -461,7 +482,7 @@ export function FeedSlide({
               transform 包含块，才能与视口固定的进度条对齐。位置 fixed 到底部导航上方。
             - 否则（迷你窗 / 全屏模态框）：留在 slide 内 absolute 定位。
           */}
-          {captionToBody && !mini && active &&
+          {captionToBody && !mini && active && chromeVisible &&
             createPortal(
               <div className="fixed bottom-[calc(3rem+14px)] left-0 right-0 z-30 text-white pointer-events-none px-4 md:hidden">
                 <div className="space-y-1.5 max-w-2xl pr-16">{captionInner}</div>
@@ -475,7 +496,9 @@ export function FeedSlide({
           */}
           {captionToBody && !mini && active &&
             createPortal(
-              <div className="fixed bottom-[110px] right-3 z-30 text-white pointer-events-none md:hidden">
+              <div className={`fixed right-3 z-30 text-white pointer-events-none md:hidden ${
+                chromeVisible ? 'bottom-[110px]' : 'bottom-6'
+              }`}>
                 <div className="flex flex-col items-center gap-4 pointer-events-auto">
                   {actionRailInner}
                 </div>

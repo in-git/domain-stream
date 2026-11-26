@@ -54,6 +54,10 @@ import java.util.zip.ZipOutputStream;
 public class BizDataExportServiceImpl implements BizDataExportService {
 
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    /** 文件映射清单固定放在 ZIP 第一个条目，导入端先读它再处理文件 */
+    public static final String FILE_MAP_ENTRY = "迁移文件映射.json";
+    /** 完整迁移包里的 SQL 条目名，导入端据此识别 */
+    public static final String DATABASE_ENTRY = "database.sql";
 
     @Resource
     private DataSource dataSource;
@@ -80,14 +84,35 @@ public class BizDataExportServiceImpl implements BizDataExportService {
             Set<String> usedEntries = new HashSet<>();
             Set<String> writtenDirs = new HashSet<>();
             List<String> failures = new ArrayList<>();
+            // 先算好每个文件的 ZIP 路径，才能把映射清单放在第一个条目
+            List<String> entryNames = new ArrayList<>();
+            JSONArray fileMap = new JSONArray();
+            if (files != null) {
+                for (int i = 0; i < files.size(); i++) {
+                    JSONObject file = files.getJSONObject(i);
+                    if (file == null) {
+                        entryNames.add("");
+                        continue;
+                    }
+                    String entryName = uniquePathName(file, directoryOf(file), usedEntries);
+                    entryNames.add(entryName);
+                    JSONObject row = new JSONObject();
+                    row.set("id", file.getStr("id"));
+                    row.set("downloadPath", file.getStr("downloadPath"));
+                    row.set("entryName", entryName);
+                    fileMap.add(row);
+                }
+            }
             try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipFile), StandardCharsets.UTF_8)) {
+                zip.putNextEntry(new ZipEntry(FILE_MAP_ENTRY));
+                zip.write(fileMap.toString().getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
                 if (files != null) {
                     for (int i = 0; i < files.size(); i++) {
                         JSONObject file = files.getJSONObject(i);
                         if (file == null) continue;
-                        String directory = directoryOf(file);
-                        writeDirectoryEntries(zip, directory, writtenDirs);
-                        String entryName = uniquePathName(file, directory, usedEntries);
+                        String entryName = entryNames.get(i);
+                        writeDirectoryEntries(zip, directoryOf(file), writtenDirs);
                         zip.putNextEntry(new ZipEntry(entryName));
                         try {
                             devFileApi.writeFileToStream(
@@ -110,6 +135,75 @@ public class BizDataExportServiceImpl implements BizDataExportService {
                     "domain-stream-full-directory-" + LocalDateTime.now().format(FILE_TIME) + ".zip",
                     "application/zip");
         } finally {
+            Files.deleteIfExists(zipFile);
+        }
+    }
+
+    @Override
+    public void exportMigration(HttpServletResponse response) throws IOException {
+        Path sqlFile = Files.createTempFile("domain-stream-db-", ".sql");
+        Path zipFile = Files.createTempFile("domain-stream-migration-", ".zip");
+        try {
+            writeDatabaseDump(sqlFile);
+            JSONArray files = devFileApi.getAllFiles("USER");
+            Set<String> usedEntries = new HashSet<>();
+            Set<String> writtenDirs = new HashSet<>();
+            List<String> failures = new ArrayList<>();
+            List<String> entryNames = new ArrayList<>();
+            JSONArray fileMap = new JSONArray();
+            if (files != null) {
+                for (int i = 0; i < files.size(); i++) {
+                    JSONObject file = files.getJSONObject(i);
+                    if (file == null) {
+                        entryNames.add("");
+                        continue;
+                    }
+                    String entryName = uniquePathName(file, directoryOf(file), usedEntries);
+                    entryNames.add(entryName);
+                    JSONObject row = new JSONObject();
+                    row.set("id", file.getStr("id"));
+                    row.set("downloadPath", file.getStr("downloadPath"));
+                    row.set("entryName", entryName);
+                    fileMap.add(row);
+                }
+            }
+            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(zipFile), StandardCharsets.UTF_8)) {
+                // 固定第一个条目为 SQL，导入端据此识别完整迁移包
+                zip.putNextEntry(new ZipEntry(DATABASE_ENTRY));
+                Files.copy(sqlFile, zip);
+                zip.closeEntry();
+                zip.putNextEntry(new ZipEntry(FILE_MAP_ENTRY));
+                zip.write(fileMap.toString().getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+                if (files != null) {
+                    for (int i = 0; i < files.size(); i++) {
+                        JSONObject file = files.getJSONObject(i);
+                        if (file == null) continue;
+                        String entryName = entryNames.get(i);
+                        writeDirectoryEntries(zip, directoryOf(file), writtenDirs);
+                        zip.putNextEntry(new ZipEntry(entryName));
+                        try {
+                            devFileApi.writeFileToStream(
+                                    file.getStr("engine"),
+                                    file.getStr("bucket"),
+                                    file.getStr("fileKey"),
+                                    zip
+                            );
+                        } catch (Exception e) {
+                            log.warn("导出迁移包文件失败：{}，原因：{}", entryName, e.getMessage());
+                            failures.add(entryName + "（" + StrUtil.blankToDefault(e.getMessage(), "读取失败") + "）");
+                        } finally {
+                            zip.closeEntry();
+                        }
+                    }
+                }
+                writeFailureManifest(zip, failures);
+            }
+            streamTempFile(response, zipFile,
+                    "domain-stream-migration-" + LocalDateTime.now().format(FILE_TIME) + ".zip",
+                    "application/zip");
+        } finally {
+            Files.deleteIfExists(sqlFile);
             Files.deleteIfExists(zipFile);
         }
     }

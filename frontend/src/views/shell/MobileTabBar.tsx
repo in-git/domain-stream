@@ -1,30 +1,37 @@
 import { motion } from 'motion/react';
-import { SWIFTUI_SNAPPY } from '../../lib/motion';
+import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { useSystemInfo } from '../../lib/systemInfo';
 import { navIconUrl, parseNav } from './navConfig';
 
 interface MobileTabBarProps {
   activeSection: string;
   onSelectSection: (section: string, force?: boolean) => void;
-  /** 首页（视频板块）使用透明紧凑样式，让视频铺满全屏 */
+  /** 首页（视频板块）使用磨砂悬浮样式，让视频铺满全屏 */
   transparent?: boolean;
+  /** 视频沉浸流清屏切换时使用进出过渡动画 */
+  animated?: boolean;
 }
 
 export function MobileTabBar({
   activeSection,
   onSelectSection,
   transparent = false,
+  animated = false,
 }: MobileTabBarProps) {
   const { config } = useSystemInfo();
   // 与 PC 左侧栏共用后台导航配置：数量、顺序、名称、图标均由接口决定
   const navItems = parseNav(config.navItems);
 
   return (
-    <nav
+    <motion.nav
+      initial={animated ? { y: 24, opacity: 0 } : false}
+      animate={animated ? { y: 0, opacity: 1 } : undefined}
+      exit={animated ? { y: 24, opacity: 0 } : undefined}
+      transition={SWIFTUI_SMOOTH}
       aria-label="底部导航"
       className={`md:hidden fixed bottom-0 left-0 right-0 z-30 ${
         transparent
-          ? 'bg-transparent'
+          ? 'bg-black/55 backdrop-blur-xl'
           : 'border-t border-app-border bg-app-card/95 backdrop-blur-md'
       }`}
     >
@@ -75,6 +82,6 @@ export function MobileTabBar({
           );
         })}
       </div>
-    </nav>
+    </motion.nav>
   );
 }

@@ -4,12 +4,12 @@ import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { registerCommentLogin } from '../../lib/commentLogin.ts';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
-import { BUILTIN_SECTIONS, LeftSidebar } from './LeftSidebar';
+import { BUILTIN_SECTIONS } from './LeftSidebar';
 import { isSectionId } from '../app';
 import { parseNav } from './navConfig';
 import { SectionPlaceholder } from './SectionPlaceholder';
 import { MainHeader } from './MainHeader';
-import { MobileTabBar } from './MobileTabBar';
+import { PortalNavProvider } from './PortalNav';
 import { SearchOverlay } from '../search/SearchOverlay';
 import type { useUserSession, usePortalData, usePersistentPlayer } from '../app';
 import { VideosSection } from '../videos/VideosSection';
@@ -65,6 +65,8 @@ export function PortalShell({
   const [videoViewMode, setVideoViewMode] = useState<'feed' | 'grid'>('feed');
   /** PC 沉浸播放列表侧栏开关：分类条在顶栏，侧栏在视频区，状态需提升到共同父级 */
   const [videoPlaylistOpen, setVideoPlaylistOpen] = useState(false);
+  /** 移动端沉浸流清屏：顶部/底部导航默认隐藏，点画面唤出，播放后自动收起 */
+  const [videoChromeVisible, setVideoChromeVisible] = useState(false);
   /** 搜索结果点击文章时，交给文章板块打开同一个阅读器 */
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
@@ -156,9 +158,10 @@ export function PortalShell({
     />
   );
 
-  // 留言墙内容复用：独立板块与设置中心共用同一个实例定义
-  const messagesContent = (
+  // 留言墙内容复用：独立板块自己带导航，设置中心内嵌时不带
+  const renderMessages = (withNav: boolean) => (
     <MessagesSection
+      withNav={withNav}
       messages={messages}
       replies={replies}
       likedIds={likedIds}
@@ -196,6 +199,11 @@ export function PortalShell({
     }
   }, [isMobileViewport, activeSection, searchQuery]);
 
+  // 离开视频沉浸流或切到卡片模式时，清除临时唤出的导航状态
+  useEffect(() => {
+    if (activeSection !== 'videos' || videoViewMode !== 'feed') setVideoChromeVisible(false);
+  }, [activeSection, videoViewMode]);
+
   // 稳定引用：加载失败触发的重渲染不应让 IntersectionObserver 反复重连
   const handleLoadMoreVideos = useCallback(() => void loadMoreVideos(), [loadMoreVideos]);
 
@@ -218,9 +226,12 @@ export function PortalShell({
   }, [activeNavItem, isCustomSection]);
 
   return (
-    <MotionConfig reducedMotion="user">
+    <PortalNavProvider
+      value={{ activeSection, onSelectSection, transparent: activeSection === 'videos' }}
+    >
+      <MotionConfig reducedMotion="user">
       <div
-        className={`min-h-screen flex text-app-text transition-colors duration-300 ease-out ${
+        className={`min-h-screen flex md:pl-20 lg:pl-60 text-app-text transition-colors duration-300 ease-out ${
           activeSection === 'videos' && isMobileViewport
             ? 'bg-black'
             : 'bg-app-bg'
@@ -230,11 +241,16 @@ export function PortalShell({
           {showSplash && <SplashScreen onComplete={onSplashComplete} />}
         </AnimatePresence>
 
-        <LeftSidebar activeSection={activeSection} onSelectSection={onSelectSection} />
-
         <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh] overflow-hidden">
-          {!(isMobileViewport && activeSection === 'settings') && (
+          <AnimatePresence>
+          {!(isMobileViewport &&
+              (activeSection === 'settings' ||
+                (activeSection === 'videos' &&
+                  videoViewMode === 'feed' &&
+                  !videoChromeVisible))) && (
             <MainHeader
+              key="main-header"
+              chromeAnimated={isMobileViewport && activeSection === 'videos' && videoViewMode === 'feed'}
               searchQuery={searchQuery}
               onChangeSearch={onChangeSearch}
               onOpenSearch={onOpenSearch}
@@ -264,6 +280,7 @@ export function PortalShell({
               }}
             />
           )}
+          </AnimatePresence>
 
           {/* 移动端视频板块全出血：去掉左右留白与顶部间距，让播放区贴满容器 */}
           <main className="flex-1 w-full h-full">
@@ -296,20 +313,26 @@ export function PortalShell({
               onMiniExpand={() => onSelectSection('videos')}
               viewMode={videoViewMode}
               onViewModeChange={setVideoViewMode}
-              headerFloating={
-                activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'
-              }
+              headerFloating={activeSection === 'videos' && videoViewMode === 'feed'}
               playlistOpen={videoPlaylistOpen}
               onClosePlaylist={() => setVideoPlaylistOpen(false)}
+              hideMobileTabBar={
+                isMobileViewport &&
+                activeSection === 'videos' &&
+                videoViewMode === 'feed' &&
+                !videoChromeVisible
+              }
+              mobileChromeVisible={videoChromeVisible}
+              onChromeVisibilityChange={setVideoChromeVisible}
             />
 
             <AnimatePresence mode="wait">
               {activeSection === 'articles' && (
                 <motion.div
                   key="section-articles"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={SWIFTUI_SMOOTH}
                 >
                   <ArticlesSection
@@ -333,9 +356,9 @@ export function PortalShell({
               {activeSection === 'gallery' && (
                 <motion.div
                   key="section-gallery"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={SWIFTUI_SMOOTH}
                 >
                   <GallerySection
@@ -359,12 +382,12 @@ export function PortalShell({
                 <motion.div
                   key="section-messages"
                   className="px-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={SWIFTUI_SMOOTH}
                 >
-                  {messagesContent}
+                  {renderMessages(true)}
                 </motion.div>
               )}
 
@@ -372,7 +395,7 @@ export function PortalShell({
                 (isMobileViewport ? (
                   <SettingsMobileSection
                     profileContent={profileContentMobile}
-                    messagesContent={messagesContent}
+                    messagesContent={renderMessages(false)}
                     profileFocusToken={settingsProfileToken}
                     profileName={profile.name}
                     profileHandle={profile.handle}
@@ -393,7 +416,7 @@ export function PortalShell({
                 ) : (
                   <SettingsSection
                     profileContent={profileContent}
-                    messagesContent={messagesContent}
+                    messagesContent={renderMessages(false)}
                     onOpenFavorites={loadFavoriteSources}
                     onOpenMessages={() => void loadSection('messages', true)}
                     profileFocusToken={settingsProfileToken}
@@ -407,25 +430,19 @@ export function PortalShell({
                   />
                 ))}
 
-              {/* 自定义模块占位页：后台已启用、客户端尚无对应页面 */}
-              {isCustomSection && (
+              {/* 自定义模块 / 个人中心兜底：保证这些导航项也有板块级导航 */}
+              {(isCustomSection || activeSection === 'profile') && (
                 <SectionPlaceholder
-                  key={`section-custom-${activeSection}`}
-                  label={customNavItem?.label || activeSection}
+                  key={`section-${activeSection}`}
+                  label={activeSection === 'profile' ? '个人中心' : customNavItem?.label || activeSection}
                   sectionId={activeSection}
-                  iconUrl={customNavItem?.iconUrl}
+                  iconUrl={activeSection === 'profile' ? undefined : customNavItem?.iconUrl}
                   onGoHome={() => onSelectSection('videos')}
                 />
               )}
             </AnimatePresence>
           </main>
         </div>
-
-        <MobileTabBar
-          activeSection={activeSection}
-          onSelectSection={onSelectSection}
-          transparent={activeSection === 'videos'}
-        />
 
         <AnimatePresence>
           {isSearchOpen && (
@@ -445,6 +462,7 @@ export function PortalShell({
           )}
         </AnimatePresence>
       </div>
-    </MotionConfig>
+      </MotionConfig>
+    </PortalNavProvider>
   );
 }

@@ -32,7 +32,7 @@ export function DistributionPanel({
   const focused = hovered ? segments.find((s) => s.key === hovered) : null;
 
   return (
-    <div className="bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+    <div className="h-full bg-white rounded-[18px] border border-[#E5E5EA] p-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between">
       <div>
         <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">浏览分布</h2>
         <p className="text-[13px] text-[#6E6E73] mt-0.5">按视频、图文、文章累计消费占比统计</p>

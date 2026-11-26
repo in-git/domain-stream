@@ -20,4 +20,7 @@ public interface BizDataExportService {
 
     /** 导出用户上传的全部文件，按原始文件名平铺打包为 ZIP，不分类、不生成清单 */
     void exportUserFiles(HttpServletResponse response) throws IOException;
+
+    /** 导出完整迁移包：一个 ZIP 内含数据库 SQL、文件目录和文件 ID 映射 */
+    void exportMigration(HttpServletResponse response) throws IOException;
 }

@@ -2,8 +2,11 @@ import type { MessageItem, MessageReply } from '../../types/content';
 import type { ReplyDraft } from '../../lib/api';
 import MessagesView from './MessagesView';
 import { PortalError, SectionSkeleton } from '../../components/PortalStates';
+import { PortalNav } from '../shell/PortalNav';
 
 interface MessagesSectionProps {
+  /** 独立留言板块自己带导航；设置中心内嵌时不带 */
+  withNav?: boolean;
   messages: MessageItem[];
   replies: MessageReply[];
   likedIds: string[];
@@ -26,6 +29,7 @@ interface MessagesSectionProps {
 }
 
 export function MessagesSection({
+  withNav = false,
   messages,
   replies,
   likedIds,
@@ -43,6 +47,7 @@ export function MessagesSection({
 }: MessagesSectionProps) {
   return (
     <>
+      {withNav && <PortalNav />}
       {loading ? (
         <SectionSkeleton section="messages" />
       ) : error ? (

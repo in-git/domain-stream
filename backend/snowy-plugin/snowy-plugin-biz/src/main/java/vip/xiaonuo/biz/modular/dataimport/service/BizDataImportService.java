@@ -25,6 +25,9 @@ public interface BizDataImportService {
     /** 恢复分片上传合并后的临时 SQL，方法接管该临时文件的所有权，完成后删除 */
     String restoreDatabaseFromPath(Path file);
 
+    /** 导入完整迁移包：先恢复包内 SQL，再导入文件并重建引用，返回任务票据 */
+    String importMigrationFromPath(Path file);
+
     /** 查询任务状态 */
     ImportStatus status(String ticket);
 }

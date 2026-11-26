@@ -15,6 +15,7 @@ import { ResilientImage } from '../../components/ResilientImage';
 import { SecondaryPage } from '../../components/SecondaryPage';
 import { FavoritesMobileView } from '../profile/FavoritesMobileView';
 import { SettingDetail, type SettingKey } from './SettingsSection';
+import { PortalNav } from '../shell/PortalNav';
 
 interface SettingsMobileSectionProps {
   profileContent: ReactNode;
@@ -94,7 +95,9 @@ export function SettingsMobileSection({
 
   if (detailKey) {
     return (
-      <SecondaryPage onBack={() => setDetailKey(null)}>
+      <>
+        <PortalNav />
+        <SecondaryPage onBack={() => setDetailKey(null)}>
         {detailKey === 'likes' && (
           <FavoritesMobileView
             videos={videos}
@@ -142,12 +145,15 @@ export function SettingsMobileSection({
             />
           </div>
         )}
-      </SecondaryPage>
+        </SecondaryPage>
+      </>
     );
   }
 
   return (
-    <section
+    <>
+      <PortalNav />
+      <section
       ref={rootRef}
       className="h-full w-full overflow-y-auto bg-app-card pb-10 dark:bg-[#08080A]"
     >
@@ -223,6 +229,7 @@ export function SettingsMobileSection({
         </div>
 
       </div>
-    </section>
+      </section>
+    </>
   );
 }

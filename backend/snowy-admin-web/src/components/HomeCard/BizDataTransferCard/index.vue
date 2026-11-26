@@ -10,7 +10,7 @@
 				导入迁移数据
 			</a-button>
 		</a-space>
-		<div class="transfer-hint">迁移数据包含数据库 SQL 和完整文件目录包，导入会覆盖目标系统数据</div>
+		<div class="transfer-hint">导出为单个迁移 ZIP（含数据库 SQL、文件与映射），导入也只需选择这一个包，会覆盖目标系统数据</div>
 
 		<a-modal
 			v-model:open="importVisible"
@@ -26,35 +26,25 @@
 			<a-alert v-if="importError" type="error" :message="importError" show-icon class="mb-3" />
 
 			<a-form layout="vertical">
-				<a-form-item label="数据库备份（.sql）">
-					<a-upload :show-upload-list="false" :before-upload="chooseSql" accept=".sql">
+				<a-form-item label="迁移压缩包（.zip）">
+					<a-upload :show-upload-list="false" :before-upload="choosePackage" accept=".zip">
 						<a-button :disabled="importing">
 							<template #icon><upload-outlined /></template>
-							选择 SQL
+							选择迁移包
 						</a-button>
 					</a-upload>
-					<div v-if="sqlFile" class="file-name">{{ sqlFile.name }}（{{ formatSize(sqlFile.size) }}）</div>
-					<div class="field-hint">恢复数据库会完全覆盖目标系统现有数据</div>
-				</a-form-item>
-
-				<a-form-item label="文件资源包（.zip）">
-					<a-upload :show-upload-list="false" :before-upload="chooseZip" accept=".zip">
-						<a-button :disabled="importing">
-							<template #icon><upload-outlined /></template>
-							选择 ZIP
-						</a-button>
-					</a-upload>
-					<div v-if="zipFile" class="file-name">{{ zipFile.name }}（{{ formatSize(zipFile.size) }}）</div>
-					<div class="field-hint">文件包按完整目录结构覆盖，按 8MB 分片上传</div>
+					<div v-if="packageFile" class="file-name">{{ packageFile.name }}（{{ formatSize(packageFile.size) }}）</div>
+					<div class="field-hint">包内含数据库 SQL、文件与映射；导入会覆盖目标系统数据，按 8MB 分片上传</div>
 				</a-form-item>
 
 				<a-alert
 					type="warning"
-					message="请先导出源系统迁移数据，再导入到目标系统"
-					description="建议同时导入数据库 SQL 和文件资源包；导入过程中请勿刷新页面或关闭浏览器。"
+					message="迁移包由「导出迁移数据」生成的单个 ZIP"
+					description="导入会自动先恢复数据库、再导入文件并重建引用；导入过程中请勿刷新页面或关闭浏览器。"
 					show-icon
 					class="mb-3"
 				/>
+
 
 				<div v-if="importing" class="import-progress">
 					<div class="progress-text">
@@ -91,23 +81,21 @@
 	const exporting = ref(false)
 	const importVisible = ref(false)
 	const importing = ref(false)
-	const sqlFile = ref(null)
-	const zipFile = ref(null)
+	const packageFile = ref(null)
+
 	const uploadPercent = ref(0)
 	const importStage = ref('')
 	const importError = ref(null)
 	const importResult = ref(null)
 
-	const canImport = computed(() => !!(sqlFile.value || zipFile.value))
+	const canImport = computed(() => !!packageFile.value)
 
 	const exportMigration = async () => {
 		if (exporting.value || importing.value) return
 		exporting.value = true
 		try {
-			await bizDataTransferApi.exportDatabase()
-			message.success('数据库备份已下载，继续导出文件资源包')
-			await bizDataTransferApi.exportFullDirectory()
-			message.success('迁移数据导出完成')
+			await bizDataTransferApi.exportMigration()
+			message.success('迁移包已下载，内含数据库与文件资源')
 		} catch (error) {
 			message.error(error?.message || '导出迁移数据失败')
 		} finally {
@@ -116,8 +104,8 @@
 	}
 
 	const openImport = () => {
-		sqlFile.value = null
-		zipFile.value = null
+		packageFile.value = null
+
 		uploadPercent.value = 0
 		importStage.value = ''
 		importError.value = null
@@ -130,35 +118,21 @@
 		importVisible.value = false
 	}
 
-	const chooseSql = (file) => {
-		if (!(file.name || '').toLowerCase().endsWith('.sql')) {
-			message.warning('数据库备份仅支持 .sql 文件')
+	const choosePackage = (file) => {
+		if (!(file.name || '').toLowerCase().endsWith('.zip')) {
+			message.warning('迁移包仅支持 .zip 文件')
 			return false
 		}
 		if (!file.size) {
 			message.warning('导入文件不能为空')
 			return false
 		}
-		sqlFile.value = file
+		packageFile.value = file
 		importError.value = null
 		importResult.value = null
 		return false
 	}
 
-	const chooseZip = (file) => {
-		if (!(file.name || '').toLowerCase().endsWith('.zip')) {
-			message.warning('文件资源包仅支持 .zip 文件')
-			return false
-		}
-		if (!file.size) {
-			message.warning('导入文件不能为空')
-			return false
-		}
-		zipFile.value = file
-		importError.value = null
-		importResult.value = null
-		return false
-	}
 
 	const formatSize = (size) => `${(size / 1024 / 1024).toFixed(2)} MB`
 
@@ -198,8 +172,7 @@
 		importError.value = null
 		importResult.value = null
 		try {
-			if (sqlFile.value) await importOne(sqlFile.value, '导入数据库备份')
-			if (zipFile.value) await importOne(zipFile.value, '导入文件资源包')
+			await importOne(packageFile.value, '导入迁移包')
 			importResult.value = { success: true, message: '数据库与文件资源导入完成' }
 			message.success(importResult.value.message)
 		} catch (error) {

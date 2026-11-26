@@ -1,6 +1,7 @@
 import type { PhotoItem } from '../../types/content';
 import { GalleryView } from './GalleryView';
 import { PortalEmpty, PortalError, SectionSkeleton } from '../../components/PortalStates';
+import { PortalNav } from '../shell/PortalNav';
 
 interface GallerySectionProps {
   photos: PhotoItem[];
@@ -33,6 +34,7 @@ export function GallerySection({
 }: GallerySectionProps) {
   return (
     <>
+      <PortalNav />
       {loading ? (
         <SectionSkeleton section="gallery" />
       ) : error ? (

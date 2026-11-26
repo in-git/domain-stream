@@ -164,7 +164,7 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'contactLinks',
     label: '联系方式',
-    description: '显示在客户端「关于」页面底部，可自由新增、修改与删除',
+    description: '各大社交平台的链接',
     control: 'contactList',
     defaultValue: stringifyContactLinks(DEFAULT_CONTACT_LINKS),
   },

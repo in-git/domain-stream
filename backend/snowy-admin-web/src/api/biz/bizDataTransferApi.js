@@ -40,6 +40,13 @@ function createTicket() {
 	return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
+/** 用真实 FormData 提交，让 axios 自动生成 multipart boundary */
+function postForm(url, params) {
+	const form = new FormData()
+	Object.entries(params).forEach(([key, value]) => form.append(key, String(value)))
+	return service.post(url, form, requestOptions)
+}
+
 /** 导出接口在响应结束时把票据标记为 DONE，前端轮询到这里才结束 loading */
 async function downloadAndWait(path) {
 	const frame = triggerNativeDownload(path)
@@ -63,8 +70,10 @@ const bizDataTransferApi = {
 	exportDatabase: () => downloadAndWait('/biz/export/database'),
 	exportFullDirectory: () => downloadAndWait('/biz/export/files'),
 	exportUserFiles: () => downloadAndWait('/biz/export/user-files'),
+	/** 完整迁移包：一个 ZIP 内含 SQL、文件和 ID 映射 */
+	exportMigration: () => downloadAndWait('/biz/export/migration'),
 
-	importInit: (params) => baseRequest('/biz/import/upload/init', params, 'formdata', requestOptions),
+	importInit: (params) => postForm('/biz/import/upload/init', params),
 
 	/** 单片用 axios 的 onUploadProgress 获取真实上传进度 */
 	importChunk: (uploadId, index, chunk, onProgress) => {
@@ -80,8 +89,7 @@ const bizDataTransferApi = {
 		})
 	},
 
-	importComplete: (uploadId) =>
-		baseRequest('/biz/import/upload/complete', { uploadId }, 'formdata', requestOptions),
+	importComplete: (uploadId) => postForm('/biz/import/upload/complete', { uploadId }),
 	importStatus: (ticket) => baseRequest('/biz/import/status', { ticket }, 'get', requestOptions)
 }
 

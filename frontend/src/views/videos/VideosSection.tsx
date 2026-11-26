@@ -1,6 +1,7 @@
 import type { VideoItem } from '../../types/content';
 import { VideosView } from './VideosView';
 import { PortalError, SectionSkeleton } from '../../components/PortalStates';
+import { PortalNav } from '../shell/PortalNav';
 
 interface VideosSectionProps {
   active: boolean;
@@ -36,6 +37,10 @@ interface VideosSectionProps {
   /** 播放列表开关由顶栏分类条控制，状态在 PortalShell 提升 */
   playlistOpen?: boolean;
   onClosePlaylist?: () => void;
+  /** 移动端清屏时隐藏底部导航 */
+  hideMobileTabBar?: boolean;
+  mobileChromeVisible?: boolean;
+  onChromeVisibilityChange?: (visible: boolean) => void;
 }
 
 /**
@@ -74,11 +79,16 @@ export function VideosSection({
   headerFloating = false,
   playlistOpen,
   onClosePlaylist,
+  hideMobileTabBar = false,
+  mobileChromeVisible = false,
+  onChromeVisibilityChange,
 }: VideosSectionProps) {
   const mode = !active ? (isMini ? 'mini' : 'hidden') : 'immersive';
 
   return (
-    <div className={active ? 'relative block h-full' : 'contents'}>
+    <>
+      {active && <PortalNav hideMobileTabBar={hideMobileTabBar} />}
+      <div className={active ? 'relative block h-full' : 'contents'}>
       <VideosView
         videos={videos}
         categories={categories}
@@ -107,6 +117,8 @@ export function VideosSection({
         headerFloating={headerFloating}
         playlistOpen={playlistOpen}
         onClosePlaylist={onClosePlaylist}
+        mobileChromeVisible={mobileChromeVisible}
+        onChromeVisibilityChange={onChromeVisibilityChange}
       />
 
       {active && loading && videos.length === 0 && (
@@ -120,6 +132,7 @@ export function VideosSection({
           <PortalError section="videos" message={error} onRetry={onRetry} />
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

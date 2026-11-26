@@ -74,6 +74,17 @@ public class BizDataExportController {
         }
     }
 
+    @Operation(summary = "导出完整迁移包（SQL + 文件 + 映射）")
+    @CommonLog("导出完整迁移包")
+    @GetMapping(value = "/migration", produces = "application/zip")
+    public void exportMigration(@RequestParam(required = false) String ticket, HttpServletResponse response) throws IOException {
+        try {
+            bizDataExportService.exportMigration(response);
+        } finally {
+            finish(ticket);
+        }
+    }
+
     @Operation(summary = "导出用户上传文件")
     @CommonLog("导出用户上传文件")
     @GetMapping(value = "/user-files", produces = "application/zip")

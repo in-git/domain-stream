@@ -168,14 +168,14 @@ export default function ModuleFlowChart({
 
   return (
     <div
-      className={`relative w-full overflow-hidden bg-white ${className}`}
+      className={`relative w-full overflow-hidden bg-white h-full ${className}`}
     >
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="模块关系流程图，可拖拽移动、滚轮缩放"
-        className={`block w-full touch-none select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`block h-full w-full touch-none select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}

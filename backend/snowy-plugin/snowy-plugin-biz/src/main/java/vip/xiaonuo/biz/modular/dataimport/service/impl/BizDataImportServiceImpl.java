@@ -4,6 +4,7 @@ import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import vip.xiaonuo.biz.modular.asset.util.ByteArrayMultipartFile;
 import vip.xiaonuo.biz.modular.dataimport.pojo.ImportStatus;
 import vip.xiaonuo.biz.modular.dataimport.service.BizDataImportService;
 import vip.xiaonuo.biz.modular.dataimport.util.SqlScriptRunner;
+import vip.xiaonuo.biz.modular.export.service.impl.BizDataExportServiceImpl;
 import vip.xiaonuo.common.cache.CommonCacheOperator;
 import vip.xiaonuo.common.exception.CommonException;
 import vip.xiaonuo.common.prop.CommonProperties;
@@ -206,22 +208,52 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         int imported = 0;
         int skipped = 0;
         Set<String> newIds = new HashSet<>();
+        Set<String> oldFileIds = new HashSet<>();
+        Map<String, String> entryToOldId = new HashMap<>();
+        Map<String, String> oldIdToNewUrl = new HashMap<>();
+        boolean hasManifest = false;
+        if (overwrite) {
+            JSONArray oldFiles = devFileApi.getAllFiles("USER");
+            if (oldFiles != null) {
+                for (int i = 0; i < oldFiles.size(); i++) {
+                    String id = oldFiles.getJSONObject(i).getStr("id");
+                    if (StrUtil.isNotBlank(id)) oldFileIds.add(id);
+                }
+            }
+        }
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(zipFile), StandardCharsets.UTF_8)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 String rawName = entry.getName();
-                if (entry.isDirectory() || rawName.endsWith("/") || rawName.endsWith("导出清单.txt")) {
+                if (entry.isDirectory() || rawName.endsWith("/")) {
+                    zip.closeEntry();
+                    continue;
+                }
+                if (BizDataExportServiceImpl.FILE_MAP_ENTRY.equals(rawName)) {
+                    entryToOldId.putAll(parseFileMap(readEntry(zip)));
+                    hasManifest = true;
+                    zip.closeEntry();
+                    continue;
+                }
+                if (BizDataExportServiceImpl.DATABASE_ENTRY.equals(rawName)) {
+                    zip.closeEntry();
+                    continue;
+                }
+                if (rawName.endsWith("清单.txt")) {
+                    zip.closeEntry();
                     continue;
                 }
                 String fileName = sanitizeFileName(rawName.substring(Math.max(0, rawName.lastIndexOf('/') + 1)));
                 if (StrUtil.isBlank(fileName)) {
                     skipped++;
+                    zip.closeEntry();
                     continue;
                 }
                 byte[] bytes = readEntry(zip);
                 if (bytes == null) {
                     log.warn("导入跳过超大文件：{}", rawName);
                     skipped++;
+                    zip.closeEntry();
                     continue;
                 }
                 String id = devFileApi.uploadAssetReturnId(null,
@@ -230,6 +262,12 @@ public class BizDataImportServiceImpl implements BizDataImportService {
                 if (StrUtil.isNotBlank(id)) {
                     newIds.add(id);
                     imported++;
+                    String oldId = entryToOldId.get(rawName);
+                    if (StrUtil.isNotBlank(oldId)) {
+                        JSONObject info = devFileApi.getFileInfoById(id);
+                        String newUrl = info == null ? null : info.getStr("downloadPath");
+                        if (StrUtil.isNotBlank(newUrl)) oldIdToNewUrl.put(oldId, newUrl);
+                    }
                 } else {
                     skipped++;
                 }
@@ -244,26 +282,198 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         if (imported == 0) {
             throw new CommonException("文件包中没有可导入的文件，未做任何更改");
         }
+        // 先把业务表里的旧文件地址换成新地址，再删旧文件记录，否则引用会全部失效
+        int rewritten = rewriteFileReferences(oldIdToNewUrl);
         if (overwrite) {
-            JSONArray oldFiles = devFileApi.getAllFiles("USER");
-            if (oldFiles != null) {
-                for (int i = 0; i < oldFiles.size(); i++) {
-                    String id = oldFiles.getJSONObject(i).getStr("id");
-                    if (StrUtil.isBlank(id) || newIds.contains(id)) continue;
-                    try {
-                        devFileApi.deleteAbsoluteById(id);
-                    } catch (Exception e) {
-                        log.warn("覆盖导入时删除旧文件失败：{}，原因：{}", id, e.getMessage());
-                    }
+            for (String id : oldFileIds) {
+                if (newIds.contains(id)) continue;
+                try {
+                    devFileApi.deleteAbsoluteById(id);
+                } catch (Exception e) {
+                    log.warn("覆盖导入时删除旧文件失败：{}，原因：{}", id, e.getMessage());
                 }
             }
         }
 
-        String message = "成功导入 " + imported + " 个文件" + (skipped > 0 ? "，跳过 " + skipped + " 个" : "");
+        String message = "成功导入 " + imported + " 个文件" + (skipped > 0 ? "，跳过 " + skipped + " 个" : "")
+                + "，重写文件引用 " + rewritten + " 处";
+        if (!hasManifest) message += "（文件包无映射清单，旧引用未重写）";
         commonCacheOperator.put(TICKET_KEY_PREFIX + ticket, toMap(ImportStatus.success(message, imported)), TICKET_TTL_SECONDS);
     }
 
+    /** 解析导出包首个条目的文件映射：ZIP 路径 -> 源系统文件 ID */
+    private Map<String, String> parseFileMap(byte[] bytes) {
+        Map<String, String> result = new HashMap<>();
+        if (bytes == null || bytes.length == 0) return result;
+        try {
+            JSONArray rows = JSONUtil.parseArray(new String(bytes, StandardCharsets.UTF_8));
+            for (int i = 0; i < rows.size(); i++) {
+                JSONObject row = rows.getJSONObject(i);
+                String entryName = row.getStr("entryName");
+                String id = row.getStr("id");
+                if (StrUtil.isNotBlank(entryName) && StrUtil.isNotBlank(id)) result.put(entryName, id);
+            }
+        } catch (Exception e) {
+            log.warn("解析文件映射清单失败：{}", e.getMessage());
+        }
+        return result;
+    }
+
+    /** 把业务表里指向旧文件 ID 的下载地址整体换成导入后新生成的文件地址 */
+    private int rewriteFileReferences(Map<String, String> oldIdToNewUrl) {
+        if (oldIdToNewUrl.isEmpty()) return 0;
+        Map<String, String> upperMap = new HashMap<>();
+        oldIdToNewUrl.forEach((oldId, newUrl) -> upperMap.put(oldId.toUpperCase(Locale.ROOT), newUrl));
+        StringBuilder alternation = new StringBuilder();
+        for (String id : upperMap.keySet()) {
+            if (alternation.length() > 0) alternation.append('|');
+            alternation.append(Pattern.quote(id));
+        }
+        Pattern pattern = Pattern.compile("(?i)(?:https?://[^\\s\"'<>\\\\]*)?/dev/file/download\\?id=("
+                + alternation + ")(?:&[^\\s\"'<>\\\\]*)?");
+        int rewritten = 0;
+        try (Connection connection = dataSource.getConnection()) {
+            for (String[] target : findUrlColumnsWithPk(connection)) {
+                rewritten += rewriteColumn(connection, target[0], target[1], target[2], pattern, upperMap);
+            }
+        } catch (Exception e) {
+            log.warn("重写文件引用失败：{}", e.getMessage());
+        }
+        return rewritten;
+    }
+
+    /** 找出带单列主键的文本列，只在这些列里扫描和回写 URL */
+    private List<String[]> findUrlColumnsWithPk(Connection connection) throws Exception {
+        List<String[]> columns = new ArrayList<>();
+        Map<String, String> pkByTable = new HashMap<>();
+        try (ResultSet resultSet = connection.getMetaData().getPrimaryKeys(connection.getCatalog(), null, "%")) {
+            while (resultSet.next()) {
+                String table = resultSet.getString("TABLE_NAME");
+                String pk = resultSet.getString("COLUMN_NAME");
+                if (StrUtil.isBlank(table) || StrUtil.isBlank(pk)) continue;
+                // 复合主键无法用单列定位，跳过
+                pkByTable.merge(table, pk, (old, next) -> old.equals(next) ? old : "");
+            }
+        }
+        try (ResultSet resultSet = connection.getMetaData().getColumns(connection.getCatalog(), null, "%", null)) {
+            while (resultSet.next()) {
+                if (!isTextType(resultSet.getInt("DATA_TYPE"))) continue;
+                String table = resultSet.getString("TABLE_NAME");
+                String column = resultSet.getString("COLUMN_NAME");
+                String pk = pkByTable.get(table);
+                // DEV_FILE 的地址由文件记录自己维护，不能指到别的文件上
+                if ("DEV_FILE".equalsIgnoreCase(table)) continue;
+                if (StrUtil.isBlank(table) || StrUtil.isBlank(column) || StrUtil.isBlank(pk)
+                        || !isUrlColumn(column)) continue;
+                columns.add(new String[]{table, column, pk});
+            }
+        }
+        return columns;
+    }
+
+    private int rewriteColumn(Connection connection, String table, String column, String pk,
+                              Pattern pattern, Map<String, String> upperMap) {
+        String qTable = quoteIdent(table);
+        String qColumn = quoteIdent(column);
+        String select = "SELECT " + quoteIdent(pk) + ", " + qColumn + " FROM " + qTable
+                + " WHERE " + qColumn + " LIKE '%/dev/file/download%'";
+        List<Object[]> updates = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(select);
+             ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                Object key = resultSet.getObject(1);
+                String value = resultSet.getString(2);
+                if (key == null || value == null) continue;
+                Matcher matcher = pattern.matcher(value);
+                StringBuffer buffer = new StringBuffer();
+                boolean changed = false;
+                while (matcher.find()) {
+                    String newUrl = upperMap.get(matcher.group(1).toUpperCase(Locale.ROOT));
+                    if (StrUtil.isBlank(newUrl)) continue;
+                    matcher.appendReplacement(buffer, Matcher.quoteReplacement(newUrl));
+                    changed = true;
+                }
+                if (!changed) continue;
+                matcher.appendTail(buffer);
+                updates.add(new Object[]{key, buffer.toString()});
+            }
+        } catch (Exception e) {
+            log.warn("扫描文件引用失败：{}.{}，原因：{}", table, column, e.getMessage());
+            return 0;
+        }
+        if (updates.isEmpty()) return 0;
+        int count = 0;
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE " + qTable + " SET " + qColumn + " = ? WHERE " + quoteIdent(pk) + " = ?")) {
+            for (Object[] row : updates) {
+                statement.setString(1, (String) row[1]);
+                statement.setObject(2, row[0]);
+                statement.addBatch();
+            }
+            for (int affected : statement.executeBatch()) {
+                if (affected > 0) count += affected;
+            }
+        } catch (Exception e) {
+            log.warn("回写文件引用失败：{}.{}，原因：{}", table, column, e.getMessage());
+        }
+        return count;
+    }
+
+    @Override
+    public String importMigrationFromPath(Path file) {
+        if (!file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip")) {
+            deleteQuietly(file);
+            throw new CommonException("请上传 .zip 格式的迁移包");
+        }
+        try {
+            return start(ticket -> importMigrationAsync(file, ticket), file);
+        } catch (RuntimeException e) {
+            deleteQuietly(file);
+            throw e;
+        }
+    }
+
+    /** 完整迁移包：先恢复包内 SQL，再导入文件并重建引用；无 SQL 时按普通文件包处理 */
+    private void importMigrationAsync(Path zipFile, String ticket) throws IOException {
+        Path sqlFile = Files.createTempFile("biz-import-db-", ".sql");
+        boolean hasSql = false;
+        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(zipFile), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (BizDataExportServiceImpl.DATABASE_ENTRY.equals(entry.getName())) {
+                    Files.copy(zip, sqlFile, StandardCopyOption.REPLACE_EXISTING);
+                    hasSql = true;
+                    break;
+                }
+                zip.closeEntry();
+            }
+        } catch (IOException e) {
+            deleteQuietly(sqlFile);
+            throw new CommonException("读取迁移包失败：" + e.getMessage());
+        }
+        if (!hasSql) {
+            deleteQuietly(sqlFile);
+            importFilesAsync(zipFile, true, ticket);
+            return;
+        }
+        // SQL 阶段不写完成状态，避免前端提前结束轮询
+        int[] dbResult = restoreDatabaseInternal(sqlFile);
+        log.info("完整迁移包数据库恢复完成，执行 {} 条语句，重写地址 {} 处", dbResult[0], dbResult[1]);
+        importFilesAsync(zipFile, true, ticket);
+    }
+
     private void restoreDatabaseAsync(Path sqlFile, String ticket) throws IOException {
+        int[] result = restoreDatabaseInternal(sqlFile);
+        String message = "数据库恢复完成，共执行 " + result[0] + " 条语句";
+        if (result[1] > 0) {
+            message += "，重写文件地址 " + result[1] + " 处";
+        }
+        commonCacheOperator.put(TICKET_KEY_PREFIX + ticket,
+                toMap(ImportStatus.success(message, result[0])), TICKET_TTL_SECONDS);
+    }
+
+    /** 执行 SQL 恢复但不写任务状态，返回 [语句数, 重写地址数] */
+    private int[] restoreDatabaseInternal(Path sqlFile) throws IOException {
         List<String> statements;
         try {
             statements = SqlScriptRunner.split(Files.readString(sqlFile, StandardCharsets.UTF_8));
@@ -288,12 +498,7 @@ public class BizDataImportServiceImpl implements BizDataImportService {
         } catch (Exception e) {
             throw new CommonException("SQL 恢复在第 " + (executed + 1) + " 条语句失败：" + e.getMessage());
         }
-        String message = "数据库恢复完成，共执行 " + executed + " 条语句";
-        if (rewritten > 0) {
-            message += "，重写文件地址 " + rewritten + " 处";
-        }
-        commonCacheOperator.put(TICKET_KEY_PREFIX + ticket,
-                toMap(ImportStatus.success(message, executed)), TICKET_TTL_SECONDS);
+        return new int[]{executed, rewritten};
     }
 
     /** 恢复数据库后，把备份中的旧后端 IP/域名替换为当前系统配置的地址 */

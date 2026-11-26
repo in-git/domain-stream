@@ -1,6 +1,7 @@
 import type { ArticleItem } from '../../types/content';
 import { ArticlesView } from './ArticlesView';
 import { PortalEmpty, PortalError, SectionSkeleton } from '../../components/PortalStates';
+import { PortalNav } from '../shell/PortalNav';
 
 interface ArticlesSectionProps {
   articles: ArticleItem[];
@@ -35,6 +36,7 @@ export function ArticlesSection({
 }: ArticlesSectionProps) {
   return (
     <>
+      <PortalNav />
       {loading ? (
         <SectionSkeleton section="articles" />
       ) : error ? (

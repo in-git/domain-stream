@@ -193,16 +193,22 @@ export function ModuleFlowPanel({ onNavigate, permissions }: ModuleFlowPanelProp
   return (
     <section
       aria-label="导航"
-      className="h-full bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
+      className="flex h-full flex-col bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
     >
-      <ModuleFlowChart
-        nodes={nodes}
-        edges={edges}
-        groups={groups}
-        width={612}
-        height={canvasHeight}
-        minZoom={0.4}
-      />
+      <div className="px-6 pt-6 pb-3">
+        <h2 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">快捷导航</h2>
+        <p className="text-[13px] text-[#6E6E73] mt-0.5">点击节点进入对应模块</p>
+      </div>
+      <div className="min-h-0 flex-1">
+        <ModuleFlowChart
+          nodes={nodes}
+          edges={edges}
+          groups={groups}
+          width={612}
+          height={canvasHeight}
+          minZoom={0.4}
+        />
+      </div>
     </section>
   );
 }

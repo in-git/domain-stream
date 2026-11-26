@@ -33,7 +33,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
   return (
     <aside
       aria-label="左侧主导航"
-      className="hidden md:flex flex-col justify-between sticky top-0 h-screen w-20 lg:w-60 shrink-0 border-r border-app-border bg-app-surface/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
+      className="hidden md:flex flex-col justify-between fixed left-0 top-0 h-screen w-20 lg:w-60 border-r border-app-border bg-app-surface/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
     >
       {/* Top Brand + Primary Vertical Navigation */}
       <div className="space-y-6">

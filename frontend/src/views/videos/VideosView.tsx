@@ -11,7 +11,7 @@ import { ImmersiveModal } from '../../components/ImmersiveModal';
 import { DesktopGridCategories, DesktopVideoGrid } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
-import { DEFAULT_CATEGORIES, type ViewMode } from './shared';
+import { DEFAULT_CATEGORIES, formatTime, type ViewMode } from './shared';
 import { useSystemInfo } from '../../lib/systemInfo';
 
 /** 迷你播放器尺寸（与下方 sm 断点样式一致），用于拖拽边界计算 */
@@ -70,6 +70,10 @@ interface VideosViewProps {
   /** 播放列表侧栏开关由顶栏分类条控制，状态在 PortalShell 提升 */
   playlistOpen?: boolean;
   onClosePlaylist?: () => void;
+  /** 移动端沉浸流是否显示顶部/底部导航（清屏模式为 false） */
+  mobileChromeVisible?: boolean;
+  /** 点击画面唤出导航 / 播放后回到清屏 */
+  onChromeVisibilityChange?: (visible: boolean) => void;
 }
 
 export function VideosView({
@@ -100,6 +104,8 @@ export function VideosView({
   headerFloating = false,
   playlistOpen = false,
   onClosePlaylist,
+  mobileChromeVisible = false,
+  onChromeVisibilityChange,
 }: VideosViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
   const isMini = mode === 'mini';
@@ -120,6 +126,8 @@ export function VideosView({
   );
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  /** 移动端进度条按住时加高，松手还原 */
+  const [seeking, setSeeking] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   /** 从卡片点选后要直接播放的视频（含 src），为 null 时走沉浸流当前索引 */
   const [pickedVideo, setPickedVideo] = useState<VideoItem | null>(null);
@@ -144,6 +152,18 @@ export function VideosView({
     document.addEventListener('fullscreenchange', handleChange);
     return () => document.removeEventListener('fullscreenchange', handleChange);
   }, []);
+
+  // 手指/鼠标松开（可能在进度条外）时还原进度条高度
+  useEffect(() => {
+    if (!seeking) return;
+    const release = () => setSeeking(false);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, [seeking]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   // 分类已由后端按 category 过滤，这里只做搜索关键词的本地过滤
@@ -564,6 +584,9 @@ export function VideosView({
                     savedTime={progressById?.[video.id]}
                     onRegisterPlayer={registerPlayer}
                     playerKey={`${video.id}-${idx}`}
+                    onStageTap={() => onChromeVisibilityChange?.(true)}
+                    onPlaybackStart={() => onChromeVisibilityChange?.(false)}
+                    chromeVisible={mobileChromeVisible}
                     onTogglePlay={togglePlayback}
                     onToggleMute={handleToggleMute}
                     onSetRate={setPlaybackRate}
@@ -660,10 +683,35 @@ export function VideosView({
     {/* 移动端沉浸播放：进度条固定在底部导航栏正上方 2px */}
     {!isMini && viewMode === 'feed' && currentVideo && !isFullscreen && (
       <div
-        className="pointer-events-none fixed bottom-[calc(3rem+2px)] left-0 right-0 z-40 px-4 md:hidden"
+        className={`pointer-events-none fixed left-0 right-0 z-40 px-4 md:hidden ${
+          mobileChromeVisible ? 'bottom-[calc(3rem+2px)]' : 'bottom-2'
+        }`}
       >
-        <div className="pointer-events-auto relative flex h-4 items-end">
-          <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-white/25">
+        {/* 点击区比原 h-4 高 10px（h-[26px]），实际进度条按住时加高到 6px，松手还原 */}
+        <div className="pointer-events-auto relative flex h-[26px] items-end">
+          {seeking && (
+            <div
+              className="pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 rounded-app bg-black/80 px-2 py-1 text-[11px] font-medium tabular-nums text-white backdrop-blur-md"
+              style={{
+                left: `${Math.min(
+                  94,
+                  Math.max(
+                    6,
+                    (duration || currentVideo.durationSeconds
+                      ? (currentTime / (duration || currentVideo.durationSeconds || 1)) * 100
+                      : 0)
+                  )
+                )}%`,
+              }}
+            >
+              {formatTime(currentTime)} / {formatTime(duration || currentVideo.durationSeconds || 0)}
+            </div>
+          )}
+          <div
+            className={`relative w-full overflow-hidden rounded-full bg-white/25 transition-[height] duration-150 ${
+              seeking ? 'h-1.5' : 'h-[2px]'
+            }`}
+          >
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-white/90"
               style={{
@@ -683,6 +731,7 @@ export function VideosView({
             step={0.05}
             value={currentTime}
             onChange={(event) => seekTo(Number(event.target.value))}
+            onPointerDown={() => setSeeking(true)}
             aria-label="播放进度"
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />

@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { Compass, Sparkles } from 'lucide-react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
+import { PortalNav } from './PortalNav';
 
 interface SectionPlaceholderProps {
   /** 模块名称（来自后台导航配置） */
@@ -20,7 +21,9 @@ interface SectionPlaceholderProps {
  */
 export function SectionPlaceholder({ label, sectionId, iconUrl, onGoHome }: SectionPlaceholderProps) {
   return (
-    <motion.div
+    <>
+      <PortalNav />
+      <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -58,6 +61,7 @@ export function SectionPlaceholder({ label, sectionId, iconUrl, onGoHome }: Sect
           </button>
         </div>
       </div>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

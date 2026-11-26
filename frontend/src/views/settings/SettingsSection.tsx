@@ -17,6 +17,7 @@ import {
 import type { ArticleItem, PhotoItem, VideoItem } from '../../types/content';
 import { parseContactLinks, useSystemInfo } from '../../lib/systemInfo';
 import { FavoritesPCView } from '../profile/FavoritesPCView';
+import { PortalNav } from '../shell/PortalNav';
 
 export type SettingKey = 'profile' | 'likes' | 'favorites' | 'cache' | 'about' | 'messages';
 
@@ -360,7 +361,9 @@ export function SettingsSection({
   }, [profileFocusToken]);
 
   return (
-    <section className="h-full w-full p-2">
+    <>
+      <PortalNav />
+      <section className="h-full w-full p-2">
       <div className="flex h-full w-full flex-col">
         <header className="shrink-0 pb-2">
           <div className="flex items-center gap-3">
@@ -438,6 +441,7 @@ export function SettingsSection({
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    </>
   );
 }

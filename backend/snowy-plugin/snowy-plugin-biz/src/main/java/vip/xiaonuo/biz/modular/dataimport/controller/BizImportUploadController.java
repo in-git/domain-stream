@@ -183,9 +183,10 @@ public class BizImportUploadController {
 
         try {
             // 合并后的临时文件所有权交给导入服务：导入完成后由服务删除
+            // ZIP 统一走迁移包流程：含 database.sql 时先恢复数据库再导入文件，否则按普通文件包处理
             return CommonResult.data("sql".equals(task.suffix)
                     ? bizDataImportService.restoreDatabaseFromPath(merged)
-                    : bizDataImportService.importFilesFromPath(merged, task.mode));
+                    : bizDataImportService.importMigrationFromPath(merged));
         } finally {
             FileUtil.del(dir.toFile());
             tasks.remove(uploadId);
