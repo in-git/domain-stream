@@ -1,4 +1,4 @@
-export type SectionId = 'videos' | 'articles' | 'gallery' | 'messages' | 'profile';
+export type SectionId = 'videos' | 'articles' | 'gallery' | 'messages' | 'profile' | 'settings';
 
 export interface VideoChapter {
   time: number; // seconds

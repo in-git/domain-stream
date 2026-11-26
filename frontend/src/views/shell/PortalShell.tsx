@@ -6,6 +6,7 @@ import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
 import { SplashScreen } from '../../components/SplashScreen';
 import { BUILTIN_SECTIONS, LeftSidebar } from './LeftSidebar';
 import { isSectionId } from '../app';
+import { parseNav } from './navConfig';
 import { SectionPlaceholder } from './SectionPlaceholder';
 import { MainHeader } from './MainHeader';
 import { MobileTabBar } from './MobileTabBar';
@@ -15,7 +16,11 @@ import { VideosSection } from '../videos/VideosSection';
 import { ArticlesSection } from '../articles/ArticlesSection';
 import { GallerySection } from '../gallery/GallerySection';
 import { MessagesSection } from '../messages/MessagesSection';
-import { ProfileSection } from '../profile/ProfileSection';
+import { ProfilePCView } from '../profile/ProfilePCView';
+import { ProfileMobileView } from '../profile/ProfileMobileView';
+import { useProfileForms } from '../profile/ProfileForms';
+import { SettingsSection } from '../settings/SettingsSection';
+import { SettingsMobileSection } from '../settings/SettingsMobileSection';
 
 type UserSession = ReturnType<typeof useUserSession>;
 type PortalData = ReturnType<typeof usePortalData>;
@@ -34,6 +39,8 @@ interface PortalShellProps {
   session: UserSession;
   data: PortalData;
   player: PersistentPlayer;
+  /** 个人中心入口触发计数，用于让设置页回到个人中心分类 */
+  settingsProfileToken: number;
 }
 
 /** 门户主壳：导航、搜索、 splash，以及按板块切换的内容区 */
@@ -50,6 +57,7 @@ export function PortalShell({
   session,
   data,
   player,
+  settingsProfileToken,
 }: PortalShellProps) {
   // 搜索范围只接受内置板块；自定义模块没有专属数据，退化为搜索全部内容
   const searchSection = isSectionId(activeSection) ? activeSection : 'profile';
@@ -76,7 +84,6 @@ export function PortalShell({
     handleLogout,
     goLogin,
     goRegister,
-    goProfile,
   } = session;
   const {
     videos,
@@ -87,6 +94,9 @@ export function PortalShell({
     videoCategories,
     videoCategory,
     loadVideosByCategory,
+    videoLoadingMore,
+    videoHasMore,
+    loadMoreVideos,
     articleCategories,
     graphicCategories,
     graphicCategory,
@@ -109,6 +119,36 @@ export function PortalShell({
     handlePlayVideo,
   } = player;
 
+  const profileForm = useProfileForms(profile, setProfile);
+
+  // PC 个人中心独立组件
+  const profileContent = (
+    <ProfilePCView
+      isLoggedIn={isLoggedIn}
+      profile={profile}
+      userInfo={userInfo}
+      likedCount={likedIds.length}
+      savedCount={savedIds.length}
+      onGoLogin={goLogin}
+      onGoRegister={goRegister}
+      onLogout={handleLogout}
+      onUpdateProfile={setProfile}
+    />
+  );
+
+  // 移动端个人中心独立组件，嵌入设置页
+  const profileContentMobile = (
+    <ProfileMobileView
+      isLoggedIn={isLoggedIn}
+      profile={profile}
+      userInfo={userInfo}
+      form={profileForm}
+      onGoLogin={goLogin}
+      onGoRegister={goRegister}
+      onLogout={handleLogout}
+    />
+  );
+
   // 评论区统一复用外壳的登录弹窗，避免各内容组件层层透传 goLogin
   useEffect(() => {
     registerCommentLogin(goLogin);
@@ -124,27 +164,23 @@ export function PortalShell({
     }
   }, [isMobileViewport, activeSection, searchQuery]);
 
-  /* 当前板块若不在内置列表里（CMS 新增的自定义模块），退化为占位页 */
+  /* 当前板块按 moduleKey 找配置；moduleType 为 placeholder 时显示占位页 */
   const { config } = useSystemInfo();
-  const isCustomSection = !BUILTIN_SECTIONS.includes(activeSection);
+  const navItems = useMemo(() => parseNav(config.navItems), [config.navItems]);
+  const activeNavItem = useMemo(
+    () => navItems.find((item) => item.moduleKey === activeSection) ?? null,
+    [navItems, activeSection]
+  );
+  const isCustomSection = activeNavItem
+    ? activeNavItem.moduleType === 'placeholder'
+    : !BUILTIN_SECTIONS.includes(activeSection);
   const customNavItem = useMemo(() => {
-    if (!isCustomSection) return null;
-    try {
-      const list: unknown = JSON.parse(config.navItems || '[]');
-      if (!Array.isArray(list)) return null;
-      const row = list.find(
-        (entry): entry is Record<string, unknown> =>
-          !!entry && typeof entry === 'object' && String((entry as Record<string, unknown>).id) === activeSection
-      );
-      if (!row) return null;
-      return {
-        label: String(row.label ?? activeSection).slice(0, 4) || activeSection,
-        iconUrl: publicFileUrl(String(row.iconUrl ?? '')),
-      };
-    } catch {
-      return null;
-    }
-  }, [config.navItems, activeSection, isCustomSection]);
+    if (!isCustomSection || !activeNavItem) return null;
+    return {
+      label: activeNavItem.label,
+      iconUrl: publicFileUrl(activeNavItem.iconUrl || ''),
+    };
+  }, [activeNavItem, isCustomSection]);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -162,43 +198,39 @@ export function PortalShell({
         <LeftSidebar activeSection={activeSection} onSelectSection={onSelectSection} />
 
         <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh] overflow-hidden">
-          <MainHeader
-            searchQuery={searchQuery}
-            onChangeSearch={onChangeSearch}
-            onOpenSearch={onOpenSearch}
-            isDark={isDark}
-            onToggleTheme={toggleTheme}
-            overlay={activeSection === 'videos' && isMobileViewport && videoViewMode === 'feed'}
-            solidBlack={activeSection === 'videos' && isMobileViewport && videoViewMode === 'grid'}
-            showViewToggle={activeSection === 'videos' && isMobileViewport}
-            pcImmersive={activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
-            viewMode={videoViewMode}
-            onToggleViewMode={() =>
-              setVideoViewMode((mode) => (mode === 'feed' ? 'grid' : 'feed'))
-            }
-            feedCategories={videoCategories}
-            feedCategory={videoCategory}
-            onFeedCategoryChange={(c) => void loadVideosByCategory(c)}
-            playlistOpen={videoPlaylistOpen}
-            onTogglePlaylist={() => setVideoPlaylistOpen((v) => !v)}
-            account={{
-              isLoggedIn,
-              displayName: profile.name,
-              avatarUrl: profile.avatar,
-              onGoLogin: goLogin,
-              onGoProfile: goProfile,
-              onLogout: handleLogout,
-            }}
-          />
+          {!(isMobileViewport && activeSection === 'settings') && (
+            <MainHeader
+              searchQuery={searchQuery}
+              onChangeSearch={onChangeSearch}
+              onOpenSearch={onOpenSearch}
+              isDark={isDark}
+              onToggleTheme={toggleTheme}
+              overlay={activeSection === 'videos' && isMobileViewport && videoViewMode === 'feed'}
+              solidBlack={activeSection === 'videos' && isMobileViewport && videoViewMode === 'grid'}
+              showViewToggle={activeSection === 'videos' && isMobileViewport}
+              pcImmersive={activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
+              viewMode={videoViewMode}
+              onToggleViewMode={() =>
+                setVideoViewMode((mode) => (mode === 'feed' ? 'grid' : 'feed'))
+              }
+              feedCategories={videoCategories}
+              feedCategory={videoCategory}
+              onFeedCategoryChange={(c) => void loadVideosByCategory(c)}
+              playlistOpen={videoPlaylistOpen}
+              onTogglePlaylist={() => setVideoPlaylistOpen((v) => !v)}
+              account={{
+                isLoggedIn,
+                displayName: profile.name,
+                avatarUrl: profile.avatar,
+                onGoLogin: goLogin,
+                onGoProfile: session.goProfile,
+                onLogout: handleLogout,
+              }}
+            />
+          )}
 
           {/* 移动端视频板块全出血：去掉左右留白与顶部间距，让播放区贴满容器 */}
-          <main
-            className={`flex-1 w-full  h-full ${
-              activeSection === 'videos'
-                ? 'px-0 pt-0 pb-0'
-                : 'px-2.5 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 pt-0 pb-0 md:pb-8'
-            }`}
-          >
+          <main className="flex-1 w-full h-full">
             <VideosSection
               active={activeSection === 'videos'}
               loading={!loadedSections.videos && !!loadingMap.videos}
@@ -207,6 +239,9 @@ export function PortalShell({
               categories={videoCategories}
               category={videoCategory}
               onCategoryChange={(c) => void loadVideosByCategory(c)}
+              hasMoreVideos={videoHasMore}
+              loadingMoreVideos={videoLoadingMore}
+              onLoadMoreVideos={() => void loadMoreVideos()}
               savedIds={savedIds}
               likedIds={likedIds}
               searchQuery={searchQuery}
@@ -235,6 +270,7 @@ export function PortalShell({
               {activeSection === 'articles' && (
                 <motion.div
                   key="section-articles"
+                  className="px-2 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 md:pb-8"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -261,6 +297,7 @@ export function PortalShell({
               {activeSection === 'gallery' && (
                 <motion.div
                   key="section-gallery"
+                  className="px-2 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 md:pb-8"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -314,33 +351,37 @@ export function PortalShell({
                 </motion.div>
               )}
 
-              {activeSection === 'profile' && (
-                <motion.div
-                  key="section-profile"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={SWIFTUI_SMOOTH}
-                >
-                  <ProfileSection
-                    isLoggedIn={isLoggedIn}
-                    accountEmail={accountEmail}
-                    profile={profile}
-                    userInfo={userInfo}
-                    onLogout={handleLogout}
-                    onGoLogin={goLogin}
-                    onGoRegister={goRegister}
-                    onUpdateProfile={setProfile}
+              {activeSection === 'settings' &&
+                (isMobileViewport ? (
+                  <SettingsMobileSection
+                    profileContent={profileContentMobile}
+                    profileFocusToken={settingsProfileToken}
+                    profileName={profile.name}
+                    profileHandle={profile.handle}
+                    profileBio={profile.bio}
+                    profileAvatar={profile.avatar}
+                    onOpenEditProfile={profileForm.openEditModal}
                     videos={videos}
                     articles={articles}
                     photos={photos}
-                    savedIds={savedIds}
-                    onToggleSave={toggleFavorite}
                     likedIds={likedIds}
+                    savedIds={savedIds}
                     onToggleLike={toggleLike}
+                    onToggleSave={toggleFavorite}
                   />
-                </motion.div>
-              )}
+                ) : (
+                  <SettingsSection
+                    profileContent={profileContent}
+                    profileFocusToken={settingsProfileToken}
+                    videos={videos}
+                    articles={articles}
+                    photos={photos}
+                    likedIds={likedIds}
+                    savedIds={savedIds}
+                    onToggleLike={toggleLike}
+                    onToggleSave={toggleFavorite}
+                  />
+                ))}
 
               {/* 自定义模块占位页：后台已启用、客户端尚无对应页面 */}
               {isCustomSection && (

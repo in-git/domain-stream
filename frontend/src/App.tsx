@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { startVisitorTracking, trackPageView } from './lib/visitor';
-import { loadSystemInfo } from './lib/systemInfo';
+import { loadSystemInfo, useSystemInfo, useSystemInfoLoaded } from './lib/systemInfo';
 import { LoginView } from './views/auth/LoginView';
 import { RegisterView } from './views/auth/RegisterView';
 import { CallbackView } from './views/auth/CallbackView';
-import { ProfilePage } from './views/profile/ProfilePage';
+import { navigate } from './lib/router';
 import {
   isAnySectionId,
   isSectionId,
@@ -16,11 +16,12 @@ import {
   usePersistentPlayer,
 } from './views/app';
 import { PortalShell } from './views/shell/PortalShell';
+import { parseNav } from './views/shell/navConfig';
 
 /** 应用入口：只负责组合 hooks、路由分发与懒加载触发，视图细节在 views/ 下 */
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  // 板块 id 放宽为 string：CMS 可新增自定义模块，这里需要能记住并恢复它
+  // 当前选中的模块 key：内置板块为固定 key，自定义模块为 CMS 生成的 moduleKey
   const [activeSection, setActiveSection] = usePersistentState<string>(
     LAST_SECTION_KEY,
     'videos',
@@ -29,20 +30,19 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   /** 移动端独立搜索模块是否展开 */
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [settingsProfileToken, setSettingsProfileToken] = useState(0);
 
   const session = useUserSession();
+  const { config } = useSystemInfo();
+  const configLoaded = useSystemInfoLoaded();
   const data = usePortalData(session.profile.name, activeSection, session.likeCounts);
   const { loadSection } = data;
   const player = usePersistentPlayer();
 
-  const isProfileBehindLogin =
-    session.route.kind === 'login' && session.loginReturnPath === '/profile';
-  const isProfileView = session.route.kind === 'profile' || isProfileBehindLogin;
-
-  /* 每次切换到板块时都重新拉取该板块数据；个人中心的喜欢/收藏需要三类内容，
-     进入个人中心时先把视频、文章、图文都加载好。自定义模块没有数据源，直接跳过。 */
+  /* 每次切换到板块时都重新拉取该板块数据；设置中心里的个人中心需要三类内容，
+     进入设置时先把视频、文章、图文都加载好。自定义模块没有数据源，直接跳过。 */
   useEffect(() => {
-    if (isProfileView) {
+    if (activeSection === 'settings') {
       (['videos', 'articles', 'gallery'] as const).forEach((section) =>
         void data.loadSection(section)
       );
@@ -50,14 +50,35 @@ export default function App() {
     }
     // 自定义模块没有数据源，但整页刷新时仍要保证有内容板块被加载，否则页面空白
     void data.loadSection(isSectionId(activeSection) ? activeSection : 'videos');
-    // loadSection 内部有 loading 防重入，依赖只随 activeSection / isProfileView 变化
+    // loadSection 内部有 loading 防重入，依赖只随 activeSection 变化
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection, isProfileView]);
+  }, [activeSection]);
+
+  // /profile 统一落到设置中心的个人中心分类
+  useEffect(() => {
+    if (session.route.kind !== 'profile') return;
+    setActiveSection('settings');
+    setSettingsProfileToken((value) => value + 1);
+    navigate('/', true);
+  }, [session.route.kind, setActiveSection]);
 
   // 应用启动时拉取系统基础信息（网页标题 / 开屏文本）
   useEffect(() => {
     void loadSystemInfo();
   }, []);
+
+  // 本地记住的 moduleKey 若已被 CMS 删除或隐藏，回退到当前可用的内置模块
+  useEffect(() => {
+    if (!configLoaded) return;
+    const navItems = parseNav(config.navItems);
+    const availableKeys = navItems.map((item) => item.moduleKey);
+    if (availableKeys.includes(activeSection)) return;
+    const fallback =
+      navItems.find((item) => item.moduleType === 'builtin')?.moduleKey ||
+      availableKeys[0] ||
+      'videos';
+    setActiveSection(fallback);
+  }, [configLoaded, config.navItems, activeSection, setActiveSection]);
 
   // 启动访客在线追踪（WebSocket 心跳 + 关键事件上报）
   useEffect(() => startVisitorTracking(), []);
@@ -98,26 +119,6 @@ export default function App() {
         <RegisterView />
       ) : session.route.kind === 'callback' ? (
         <CallbackView platform={session.route.platform || ''} onSuccess={session.handleAuthSuccess} />
-      ) : isProfileView ? (
-        <ProfilePage
-          isLoggedIn={session.isLoggedIn}
-          accountEmail={session.accountEmail}
-          profile={session.profile}
-          userInfo={session.userInfo}
-          isDark={session.isDark}
-          onToggleTheme={session.toggleTheme}
-          onLogout={session.handleLogout}
-          onGoLogin={session.goLogin}
-          onGoRegister={session.goRegister}
-          onUpdateProfile={session.setProfile}
-          videos={data.videos}
-          articles={data.articles}
-          photos={data.photos}
-          savedIds={session.savedIds}
-          onToggleSave={session.toggleFavorite}
-          likedIds={session.likedIds}
-          onToggleLike={session.toggleLike}
-        />
       ) : (
         <PortalShell
           showSplash={showSplash}
@@ -132,6 +133,7 @@ export default function App() {
           session={session}
           data={data}
           player={player}
+          settingsProfileToken={settingsProfileToken}
         />
       )}
 

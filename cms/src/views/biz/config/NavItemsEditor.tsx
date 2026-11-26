@@ -42,6 +42,7 @@ import {
 import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
 import {
+  createCustomModuleKey,
   DEFAULT_NAV_ITEMS,
   NAV_LABEL_MAX_LENGTH,
   parseNavItems,
@@ -50,12 +51,13 @@ import {
 } from './schema';
 import { SwitchField } from '../../../components/SwitchField.tsx';
 
-/** 可用的板块选项：id 与 frontend 实际路由一一对应 */
-const SECTION_OPTIONS = [
-  { id: 'videos', label: '视频' },
-  { id: 'articles', label: '文章' },
-  { id: 'gallery', label: '图文' },
-  { id: 'messages', label: '留言' },
+/** 可用的内置板块选项：moduleKey 与 frontend 实际路由一一对应 */
+const SECTION_OPTIONS: Array<Pick<NavItemConfig, 'id' | 'moduleKey' | 'moduleType' | 'label'>> = [
+  { id: 'videos', moduleKey: 'videos', moduleType: 'builtin', label: '视频' },
+  { id: 'articles', moduleKey: 'articles', moduleType: 'builtin', label: '文章' },
+  { id: 'gallery', moduleKey: 'gallery', moduleType: 'builtin', label: '图文' },
+  { id: 'messages', moduleKey: 'messages', moduleType: 'builtin', label: '留言' },
+  { id: 'settings', moduleKey: 'settings', moduleType: 'builtin', label: '设置' },
 ];
 
 /** 配置里存的是纯后端路径，CMS 预览时补回 /snowy 代理前缀 */
@@ -180,6 +182,17 @@ function NavItemDialog({ open, initial, title, onClose, onConfirm }: NavItemDial
             </span>
           </label>
 
+          {/* 模块 key：永久唯一，客户端按它定位模块，创建后不可修改 */}
+          <div className="px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA]">
+            <span className="block text-[12px] font-medium text-[#1D1D1F]">模块标识</span>
+            <span className="mt-1 block text-[11px] font-mono text-[#6E6E73] break-all">
+              {initial.moduleKey || initial.id}
+            </span>
+            <span className="mt-1 block text-[11px] text-[#86868B]">
+              客户端用此标识定位模块，创建后不可修改
+            </span>
+          </div>
+
           {/* 图标：统一从文件库选择图片 */}
           <div>
             <span className="block text-[12px] font-medium text-[#1D1D1F] mb-1.5">图标</span>
@@ -293,7 +306,7 @@ function SortableNavRow({
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item.id });
+    useSortable({ id: item.moduleKey });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -353,7 +366,9 @@ function SortableNavRow({
           >
             {item.label}
           </span>
-          <span className="block text-[11px] font-mono text-[#C7C7CC] truncate">{item.id}</span>
+          <span className="block text-[11px] font-mono text-[#C7C7CC] truncate">
+            {item.moduleKey}
+          </span>
         </button>
 
         {/* 悬停/键盘聚焦时出现的编辑按钮 */}
@@ -410,12 +425,14 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
 
   const commit = (next: NavItemConfig[]) => onChange(stringifyNavItems(next));
 
-  function updateItem(id: string, patch: Partial<NavItemConfig>) {
-    commit(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  function updateItem(moduleKey: string, patch: Partial<NavItemConfig>) {
+    commit(
+      items.map((item) => (item.moduleKey === moduleKey ? { ...item, ...patch } : item))
+    );
   }
 
-  function remove(id: string) {
-    commit(items.filter((item) => item.id !== id));
+  function remove(moduleKey: string) {
+    commit(items.filter((item) => item.moduleKey !== moduleKey));
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -426,39 +443,26 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
     const { active, over } = event;
     setActiveId(null);
     if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((item) => item.id === active.id);
-    const newIndex = items.findIndex((item) => item.id === over.id);
+    const oldIndex = items.findIndex((item) => item.moduleKey === active.id);
+    const newIndex = items.findIndex((item) => item.moduleKey === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
     commit(arrayMove(items, oldIndex, newIndex));
   }
 
-  /**
-   * 生成导航项 id。
-   * 客户端侧栏按 id 匹配板块路由，未知 id 会被过滤，
-   * 因此优先复用「已被移除的预设板块 id」，保证新增项在前台可用；
-   * 都已被占用时才退回 custom-* 前缀。
-   */
-  function createId(): string {
-    const reuse = SECTION_OPTIONS.find(
-      (section) => !items.some((item) => item.id === section.id)
-    );
-    if (reuse) return reuse.id;
-    let id = `custom-${Date.now().toString(36)}`;
-    while (items.some((item) => item.id === id)) {
-      id = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    }
-    return id;
+  /** 自定义模块生成独立的 moduleKey，不复用内置页面 key */
+  function createModuleKey(): string {
+    return createCustomModuleKey(items.map((item) => item.moduleKey));
   }
 
-  /** 打开新增弹窗：默认带出可复用板块的名称与图标 */
+  /** 打开新增弹窗：新增项一律作为占位模块，使用独立 moduleKey */
   function openCreate() {
-    const reused = SECTION_OPTIONS.find(
-      (section) => !items.some((item) => item.id === section.id)
-    );
+    const moduleKey = createModuleKey();
     setEditingId(null);
     setDraftItem({
-      id: createId(),
-      label: reused ? reused.label : '',
+      id: moduleKey,
+      moduleKey,
+      moduleType: 'placeholder',
+      label: '新模块',
       iconUrl: '',
       enabled: true,
     });
@@ -467,7 +471,7 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
 
   /** 打开编辑弹窗 */
   function openEdit(item: NavItemConfig) {
-    setEditingId(item.id);
+    setEditingId(item.moduleKey);
     setDraftItem(item);
     setDialogOpen(true);
   }
@@ -475,7 +479,13 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
   /** 弹窗确定：新增追加到末尾，编辑原地替换 */
   function handleDialogConfirm(next: NavItemConfig) {
     if (editingId) {
-      commit(items.map((item) => (item.id === editingId ? next : item)));
+      commit(
+        items.map((item) =>
+          item.moduleKey === editingId
+            ? { ...next, id: item.moduleKey, moduleKey: item.moduleKey }
+            : item
+        )
+      );
     } else {
       commit([...items, next]);
     }
@@ -486,15 +496,18 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
 
   /** 快速添加预设板块（沿用板块自带图标） */
   function addSection(sectionId: string) {
-    const preset = SECTION_OPTIONS.find((item) => item.id === sectionId);
-    if (!preset || items.some((item) => item.id === sectionId)) return;
-    commit([...items, { id: preset.id, label: preset.label, enabled: true }]);
+    const preset = SECTION_OPTIONS.find((item) => item.moduleKey === sectionId);
+    if (!preset || items.some((item) => item.moduleKey === preset.moduleKey)) return;
+    commit([
+      ...items,
+      { ...preset, label: preset.label, iconUrl: undefined, enabled: true },
+    ]);
   }
 
   const availableSections = SECTION_OPTIONS.filter(
-    (section) => !items.some((item) => item.id === section.id)
+    (section) => !items.some((item) => item.moduleKey === section.moduleKey)
   );
-  const activeItem = activeId ? items.find((item) => item.id === activeId) : null;
+  const activeItem = activeId ? items.find((item) => item.moduleKey === activeId) : null;
 
   return (
     <div className="space-y-2">
@@ -538,16 +551,19 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
         onDragCancel={() => setActiveId(null)}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={items.map((item) => item.moduleKey)}
+          strategy={verticalListSortingStrategy}
+        >
           <div className="space-y-2">
             {items.map((item, index) => (
               <SortableNavRow
-                key={item.id}
+                key={item.moduleKey}
                 item={item}
                 index={index}
                 onEdit={() => openEdit(item)}
-                onChange={(patch) => updateItem(item.id, patch)}
-                onRemove={() => remove(item.id)}
+                onChange={(patch) => updateItem(item.moduleKey, patch)}
+                onRemove={() => remove(item.moduleKey)}
               />
             ))}
           </div>
@@ -559,7 +575,7 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
             <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl border border-[#0071E3]/40 bg-white shadow-xl">
               <GripVertical className="w-4 h-4 text-[#0071E3]" />
               <span className="text-[13px] font-medium text-[#1D1D1F]">{activeItem.label}</span>
-              <span className="text-[11px] font-mono text-[#C7C7CC]">{activeItem.id}</span>
+              <span className="text-[11px] font-mono text-[#C7C7CC]">{activeItem.moduleKey}</span>
             </div>
           )}
         </DragOverlay>

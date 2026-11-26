@@ -10,6 +10,9 @@ interface VideosSectionProps {
   categories: string[];
   category: string;
   onCategoryChange: (category: string) => void;
+  hasMoreVideos?: boolean;
+  loadingMoreVideos?: boolean;
+  onLoadMoreVideos?: () => void;
   savedIds: string[];
   likedIds: string[];
   searchQuery: string;
@@ -46,6 +49,9 @@ export function VideosSection({
   categories,
   category,
   onCategoryChange,
+  hasMoreVideos,
+  loadingMoreVideos,
+  onLoadMoreVideos,
   savedIds,
   likedIds,
   searchQuery,
@@ -76,6 +82,9 @@ export function VideosSection({
         categories={categories}
         category={category}
         onCategoryChange={onCategoryChange}
+        hasMoreVideos={hasMoreVideos}
+        loadingMoreVideos={loadingMoreVideos}
+        onLoadMoreVideos={onLoadMoreVideos}
         savedIds={savedIds}
         likedIds={likedIds}
         searchQuery={searchQuery}

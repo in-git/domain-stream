@@ -10,7 +10,7 @@ import {
 import type { SectionId } from '../data/content';
 import { APPLE_EASE } from '../lib/motion';
 
-type ContentSection = Exclude<SectionId, 'profile'>;
+type ContentSection = Exclude<SectionId, 'profile' | 'settings'>;
 
 /** 加载态：不显示任何内容，数据到位后直接渲染 */
 export function SectionSkeleton(_props: { section: ContentSection }) {

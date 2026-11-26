@@ -24,6 +24,9 @@ import {
 } from '../../lib/api';
 import { isSectionId, type ContentSection } from './constants';
 
+/** 客户端视频分页大小，避免首页一次性拉全量 */
+const VIDEO_PAGE_SIZE = 20;
+
 /**
  * 门户内容数据：按板块懒加载（进入板块才请求，已加载不再重复），
  * 分类接口全站只请求一次，分类失败时降级用内容自身携带的分类。
@@ -43,6 +46,8 @@ export function usePortalData(
   /** 当前图文分类（提升到数据层，切换时按分类请求后端；侧栏刷新时沿用） */
   const [graphicCategory, setGraphicCategory] = useState<string>('全部');
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [videoPageInfo, setVideoPageInfo] = useState({ current: 1, total: 0 });
+  const [videoLoadingMore, setVideoLoadingMore] = useState(false);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loadedSections, setLoadedSections] = useState<Partial<Record<SectionId, boolean>>>({});
@@ -56,6 +61,7 @@ export function usePortalData(
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
   /** 分类快速切换时只应用最后一次请求结果 */
   const videoCategoryRequestRef = useRef(0);
+  const videoLoadingMoreRef = useRef(false);
   const graphicCategoryRequestRef = useRef(0);
   /** 与 loadingMap 同步的 ref，供 loadSection 内同步判断防重入 */
   const loadingMapRef = useRef<Partial<Record<SectionId, boolean>>>({});
@@ -132,7 +138,7 @@ export function usePortalData(
       // 自定义模块没有数据源，直接忽略
       if (!isSectionId(rawSection)) return;
       const section = rawSection;
-      if (section === 'profile') return;
+      if (section === 'profile' || section === 'settings') return;
       // 已成功加载过的板块不再重复请求，避免切回视频时把常驻播放器卸载重建
       if (!force && loadedSectionsRef.current[section]) return;
       // 防重入：同一板块正在请求时直接返回，避免并发重复拉取
@@ -168,10 +174,11 @@ export function usePortalData(
         } else if (section === 'videos') {
           loaded = await loadWithCategories(
             section,
-            () => portalApi.videos(videoCategory),
-            (rows, names, categories) => {
-              const items = rows.map((row, i) => videoFromPortal(row, i, names));
+            () => portalApi.videoPage(videoCategory, 1, VIDEO_PAGE_SIZE),
+            (page, names, categories) => {
+              const items = page.records.map((row, i) => videoFromPortal(row, i, names));
               setVideos(items);
+              setVideoPageInfo({ current: page.current, total: page.total });
               setVideoCategories(
                 pickCategories(categoriesForModule(categories, 'VIDEO'), items.map((item) => item.category))
               );
@@ -232,16 +239,18 @@ export function usePortalData(
     async (category: string) => {
       const requestId = ++videoCategoryRequestRef.current;
       setVideoCategory(category);
+      setVideoPageInfo({ current: 1, total: 0 });
       setErrors((prev) => ({ ...prev, videos: undefined }));
       try {
         const categories = categoriesPromiseRef.current
           ? await categoriesPromiseRef.current
           : [];
         const categoryCode = resolveCategoryCode(categories, category, 'VIDEO');
-        const rows = await portalApi.videos(categoryCode);
+        const page = await portalApi.videoPage(categoryCode, 1, VIDEO_PAGE_SIZE);
         if (requestId !== videoCategoryRequestRef.current) return;
         const names = categoryNameMap(categories);
-        setVideos(rows.map((row, i) => videoFromPortal(row, i, names)));
+        setVideos(page.records.map((row, i) => videoFromPortal(row, i, names)));
+        setVideoPageInfo({ current: page.current, total: page.total });
       } catch (error) {
         if (requestId !== videoCategoryRequestRef.current) return;
         setErrors((prev) => ({
@@ -252,6 +261,39 @@ export function usePortalData(
     },
     []
   );
+
+  /** 视频列表触底加载下一页，按当前分类追加，不重复拉全量 */
+  const loadMoreVideos = useCallback(async () => {
+    if (videoLoadingMoreRef.current) return;
+    if (videoPageInfo.current * VIDEO_PAGE_SIZE >= videoPageInfo.total) return;
+    videoLoadingMoreRef.current = true;
+    setVideoLoadingMore(true);
+    try {
+      const categories = categoriesPromiseRef.current
+        ? await categoriesPromiseRef.current
+        : [];
+      const categoryCode = resolveCategoryCode(categories, videoCategory, 'VIDEO');
+      const nextCurrent = videoPageInfo.current + 1;
+      const page = await portalApi.videoPage(categoryCode, nextCurrent, VIDEO_PAGE_SIZE);
+      const names = categoryNameMap(categories);
+      setVideos((prev) => {
+        const seen = new Set(prev.map((item) => item.id));
+        const appended = page.records
+          .map((row, i) => videoFromPortal(row, prev.length + i, names))
+          .filter((item) => !seen.has(item.id));
+        return [...prev, ...appended];
+      });
+      setVideoPageInfo({ current: page.current, total: page.total });
+    } catch (error) {
+      setErrors((prev) => ({
+        ...prev,
+        videos: error instanceof Error ? error.message : '加载更多失败',
+      }));
+    } finally {
+      videoLoadingMoreRef.current = false;
+      setVideoLoadingMore(false);
+    }
+  }, [videoCategory, videoPageInfo]);
 
   /** 切换图文分类：按分类重新请求后端，只替换图文列表，不重拉分类字典、不触发全屏骨架屏 */
   const loadGraphicsByCategory = useCallback(
@@ -329,6 +371,10 @@ export function usePortalData(
     videoCategories,
     videoCategory,
     loadVideosByCategory,
+    videoPageInfo,
+    videoLoadingMore,
+    videoHasMore: videoPageInfo.current * VIDEO_PAGE_SIZE < videoPageInfo.total,
+    loadMoreVideos,
     articleCategories,
     graphicCategories,
     graphicCategory,

@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { SWIFTUI_SNAPPY } from '../../lib/motion';
 import { useSystemInfo } from '../../lib/systemInfo';
-import { navIconComponent, navIconUrl, parseNav } from './navConfig';
+import { navIconUrl, parseNav } from './navConfig';
 
 interface MobileTabBarProps {
   activeSection: string;
@@ -30,8 +30,7 @@ export function MobileTabBar({
       >
         {navItems.map(({ id, label, iconUrl }) => {
           const isActive = activeSection === id;
-          const Icon = navIconComponent(id);
-          const customIcon = navIconUrl({ id, label, iconUrl });
+          const customIcon = navIconUrl({ iconUrl });
           return (
             <motion.button
               key={id}
@@ -50,12 +49,12 @@ export function MobileTabBar({
               }`}
               aria-current={isActive ? 'page' : undefined}
             >
-              <motion.div
-                animate={{ scale: isActive ? 1.08 : 1 }}
-                transition={SWIFTUI_SNAPPY}
-                className="shrink-0"
-              >
-                {customIcon ? (
+              {customIcon && (
+                <motion.div
+                  animate={{ scale: isActive ? 1.08 : 1 }}
+                  transition={SWIFTUI_SNAPPY}
+                  className="shrink-0"
+                >
                   <img
                     src={customIcon}
                     alt=""
@@ -63,16 +62,9 @@ export function MobileTabBar({
                     loading="lazy"
                     className="w-[22px] h-[22px] object-contain"
                   />
-                ) : (
-                  <Icon
-                    className="w-[22px] h-[22px]"
-                    strokeWidth={isActive ? 2.4 : 1.8}
-                    fill={isActive ? 'currentColor' : 'none'}
-                    fillOpacity={isActive ? 0.12 : 0}
-                  />
-                )}
-              </motion.div>
-              <span className="text-[10px] font-medium tracking-tight whitespace-nowrap">
+                </motion.div>
+              )}
+              <span className="text-[14px] font-normal leading-none tracking-tight whitespace-nowrap">
                 {label}
               </span>
             </motion.button>

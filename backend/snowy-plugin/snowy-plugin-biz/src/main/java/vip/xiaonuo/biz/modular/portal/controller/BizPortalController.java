@@ -16,6 +16,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -104,18 +105,28 @@ public class BizPortalController {
     private SaBaseLoginUserApi clientLoginUserApi;
 
     /**
-     * 全部分类列表（仅启用），前端按 MODULE 字段自行筛选
+     * 分类列表（仅启用）：可按模块筛选，始终按排序值升序返回
      *
      * @author wuwenlong
      * @date  2026/11/19
      */
-    @Operation(summary = "获取全部分类")
+    @Operation(summary = "获取分类列表（可按模块筛选，按排序值升序）")
     @GetMapping("/public/categories")
-    public CommonResult<List<BizCategory>> categories() {
+    public CommonResult<List<BizCategory>> categories(@RequestParam(value = "module", required = false) String module) {
         LambdaQueryWrapper<BizCategory> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(BizCategory::getStatus, "ENABLE")
-                .orderByAsc(BizCategory::getParentId)
-                .orderByAsc(BizCategory::getSortCode);
+        queryWrapper.eq(BizCategory::getStatus, "ENABLE");
+        // 按模块查询时并入通用分类（COMMON），与发布表单选项保持一致
+        if (StrUtil.isNotBlank(module) && !"ALL".equals(module)) {
+            if ("__EMPTY__".equals(module)) {
+                queryWrapper.isNull(BizCategory::getModule);
+            } else {
+                queryWrapper.and(wrapper -> wrapper
+                        .eq(BizCategory::getModule, module)
+                        .or().eq(BizCategory::getModule, "COMMON"));
+            }
+        }
+        queryWrapper.orderByAsc(BizCategory::getSortCode)
+                .orderByDesc(BizCategory::getId);
         return CommonResult.data(bizCategoryMapper.selectList(queryWrapper));
     }
 
@@ -125,9 +136,7 @@ public class BizPortalController {
      * @author wuwenlong
      * @date  2026/11/19
      */
-    @Operation(summary = "获取已发布视频列表（随机推荐，可按分类筛选）")
-    @GetMapping("/public/videos")
-    public CommonResult<List<BizVideo>> videos(@RequestParam(value = "category", required = false) String category) {
+    private LambdaQueryWrapper<BizVideo> publicVideoQuery(String category) {
         LambdaQueryWrapper<BizVideo> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(BizVideo::getStatus, "PUBLISHED");
 
@@ -149,8 +158,34 @@ public class BizPortalController {
                 queryWrapper.eq(BizVideo::getCategory, categoryFilter);
             }
         }
+        return queryWrapper;
+    }
+
+    @Operation(summary = "获取已发布视频列表（随机推荐，可按分类筛选）")
+    @GetMapping("/public/videos")
+    public CommonResult<List<BizVideo>> videos(@RequestParam(value = "category", required = false) String category) {
+        LambdaQueryWrapper<BizVideo> queryWrapper = publicVideoQuery(category);
         queryWrapper.last("ORDER BY RAND()");
         return CommonResult.data(bizVideoMapper.selectList(queryWrapper));
+    }
+
+    @Operation(summary = "分页获取已发布视频列表（按发布时间倒序，可按分类筛选）")
+    @GetMapping("/public/video/page")
+    public CommonResult<Map<String, Object>> videoPage(
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "current", defaultValue = "1") int current,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        int safeCurrent = Math.max(1, current);
+        int safeSize = Math.min(50, Math.max(1, size));
+        LambdaQueryWrapper<BizVideo> queryWrapper = publicVideoQuery(category);
+        queryWrapper.orderByDesc(BizVideo::getCreateTime).orderByDesc(BizVideo::getId);
+        Page<BizVideo> page = bizVideoMapper.selectPage(new Page<>(safeCurrent, safeSize), queryWrapper);
+        Map<String, Object> result = new HashMap<>();
+        result.put("records", page.getRecords());
+        result.put("total", page.getTotal());
+        result.put("current", page.getCurrent());
+        result.put("size", page.getSize());
+        return CommonResult.data(result);
     }
 
     /**

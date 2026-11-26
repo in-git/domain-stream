@@ -362,19 +362,18 @@ export interface PublishCategoryOption {
 /**
  * 拉取发布表单可选分类（数据源为后端通用分类模块 BIZ_CATEGORY）。
  *
- * 优先使用门户只读接口 `/public/categories`（后端仅返回 ENABLE，免登录），
+ * 优先使用门户只读接口 `/public/categories?module=...`（后端按模块筛选并 ENABLE，免登录），
  * 接口不可用（如旧环境未部署）时回退到 CMS 分类管理分页接口 `/biz/category/page`。
- *
- * 注意：分类表单的「适用模块」是必填项，但历史数据仍可能为空或标错模块。
- * 这里先返回全部启用分类（按本模块 / COMMON 优先排序），由
- * filterPublishCategories 在调用侧按需过滤，避免旧数据直接消失。
+ * 返回顺序严格按后端 sortCode 升序，不再在前端重排模块优先级。
  */
 export async function fetchPublishCategories(
   module: PublishCategoryModule
 ): Promise<PublishCategoryOption[]> {
   let source: BizCategory[] = [];
   try {
-    source = await snowyRequest<BizCategory[]>('/public/categories');
+    source = await snowyRequest<BizCategory[]>(
+      `/public/categories?module=${encodeURIComponent(module)}`
+    );
   } catch {
     source = await listAllCategories();
   }
@@ -407,17 +406,11 @@ export async function fetchPublishCategories(
     }
   }
 
-  // 本模块优先，其次 COMMON / 未设置模块，其余模块靠后但仍可选
-  const moduleRank = (item: (typeof usable)[number]) => {
-    const m = (item.module || '').toUpperCase();
-    if (m === module) return 0;
-    if (!m || m === 'COMMON') return 1;
-    return 2;
-  };
+  // 后端已按 sortCode 升序返回，这里只补稳定的同值兜底
   const compare = (a: (typeof usable)[number], b: (typeof usable)[number]) =>
-    moduleRank(a) - moduleRank(b) ||
     (a.sortCode ?? 0) - (b.sortCode ?? 0) ||
-    a.name.localeCompare(b.name, 'zh-CN');
+    a.name.localeCompare(b.name, 'zh-CN') ||
+    a.id.localeCompare(b.id);
   roots.sort(compare);
   childrenOf.forEach((list) => list.sort(compare));
 
@@ -450,7 +443,7 @@ export async function fetchPublishCategories(
 }
 
 /**
- * 按适用模块筛选分类（纯前端筛选，后端一次性返回全部分类）：
+ * 按适用模块兜底筛选分类（发布接口已按模块返回，兼容旧数据/缓存）：
  * 只保留目标模块与「通用」（COMMON）分类。
  * 父级被筛掉时，子分类按顶级展示并重算缩进，避免出现悬空层级。
  */

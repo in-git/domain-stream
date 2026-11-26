@@ -15,6 +15,7 @@ import vip.xiaonuo.biz.modular.dataimport.service.BizDataImportService;
 import vip.xiaonuo.biz.modular.dataimport.util.SqlScriptRunner;
 import vip.xiaonuo.common.cache.CommonCacheOperator;
 import vip.xiaonuo.common.exception.CommonException;
+import vip.xiaonuo.common.prop.CommonProperties;
 import vip.xiaonuo.dev.api.DevFileApi;
 
 import javax.sql.DataSource;
@@ -26,7 +27,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,6 +40,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
@@ -56,6 +63,7 @@ public class BizDataImportServiceImpl implements BizDataImportService {
     private static final long TICKET_TTL_SECONDS = 30 * 60;
     /** 单个 ZIP 条目最大 200MB，避免异常包撑爆内存 */
     private static final int MAX_ENTRY_BYTES = 200 * 1024 * 1024;
+    private static final Pattern HOST_PATTERN = Pattern.compile("^(https?://[^/]+)", Pattern.CASE_INSENSITIVE);
 
     @Resource
     private DataSource dataSource;
@@ -65,6 +73,9 @@ public class BizDataImportServiceImpl implements BizDataImportService {
 
     @Resource
     private CommonCacheOperator commonCacheOperator;
+
+    @Resource
+    private CommonProperties commonProperties;
 
     private final ExecutorService executor = Executors.newFixedThreadPool(2, r -> {
         Thread thread = new Thread(r, "biz-data-import");
@@ -263,17 +274,142 @@ public class BizDataImportServiceImpl implements BizDataImportService {
             throw new CommonException("SQL 备份文件中没有可执行的语句");
         }
         int executed = 0;
+        int rewritten = 0;
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
             for (String sql : statements) {
                 statement.execute(sql);
                 executed++;
             }
+            // 迁移到新系统时，把备份里旧的后端 IP/域名替换为当前配置的新地址
+            rewritten = rewriteFileUrls(connection);
+        } catch (CommonException e) {
+            throw e;
         } catch (Exception e) {
             throw new CommonException("SQL 恢复在第 " + (executed + 1) + " 条语句失败：" + e.getMessage());
         }
+        String message = "数据库恢复完成，共执行 " + executed + " 条语句";
+        if (rewritten > 0) {
+            message += "，重写文件地址 " + rewritten + " 处";
+        }
         commonCacheOperator.put(TICKET_KEY_PREFIX + ticket,
-                toMap(ImportStatus.success("数据库恢复完成，共执行 " + executed + " 条语句", executed)), TICKET_TTL_SECONDS);
+                toMap(ImportStatus.success(message, executed)), TICKET_TTL_SECONDS);
+    }
+
+    /** 恢复数据库后，把备份中的旧后端 IP/域名替换为当前系统配置的地址 */
+    private int rewriteFileUrls(Connection connection) throws Exception {
+        String backendUrl = StrUtil.trim(commonProperties.getBackendUrl());
+        if (StrUtil.isBlank(backendUrl)) {
+            log.warn("跳过文件地址重写：snowy.config.common.backend-url 未配置");
+            return 0;
+        }
+        String product = connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
+        if (!product.contains("mysql")) {
+            log.warn("跳过文件地址重写：当前数据库不是 MySQL");
+            return 0;
+        }
+
+        String oldBase = detectOldBackendBase(connection);
+        String newBase = trimTrailingSlash(backendUrl);
+        String oldHost = hostOf(oldBase);
+        String newHost = hostOf(newBase);
+        if (StrUtil.isBlank(oldHost) || StrUtil.isBlank(newHost)) {
+            return 0;
+        }
+
+        List<String[]> targets = findTextColumns(connection);
+        int rewritten = 0;
+        if (StrUtil.isNotBlank(oldBase) && !oldBase.equals(newBase)) {
+            for (String[] target : targets) {
+                rewritten += replaceInColumn(connection, target[0], target[1], oldBase, newBase);
+            }
+        }
+        if (!oldHost.equals(newHost)) {
+            for (String[] target : targets) {
+                rewritten += replaceInColumn(connection, target[0], target[1], oldHost, newHost);
+            }
+        }
+        return rewritten;
+    }
+
+    /** 从文件下载地址推断备份系统使用的后端根地址 */
+    private String detectOldBackendBase(Connection connection) {
+        String sql = "SELECT DOWNLOAD_PATH FROM DEV_FILE WHERE DOWNLOAD_PATH LIKE '%/dev/file/%' LIMIT 1";
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
+            if (resultSet.next()) {
+                String url = StrUtil.trim(resultSet.getString(1));
+                int index = url.indexOf("/dev/file/");
+                if (index > 0) return url.substring(0, index);
+            }
+        } catch (Exception e) {
+            log.warn("推断旧后端地址失败：{}", e.getMessage());
+        }
+        return "";
+    }
+
+    /** 只处理可能包含 URL/路径的文本列，避免误改数字或二进制字段 */
+    private List<String[]> findTextColumns(Connection connection) throws Exception {
+        List<String[]> columns = new ArrayList<>();
+        try (ResultSet resultSet = connection.getMetaData().getColumns(connection.getCatalog(), null, "%", null)) {
+            while (resultSet.next()) {
+                int type = resultSet.getInt("DATA_TYPE");
+                if (!isTextType(type)) continue;
+                String table = resultSet.getString("TABLE_NAME");
+                String column = resultSet.getString("COLUMN_NAME");
+                if (StrUtil.isBlank(table) || StrUtil.isBlank(column) || !isUrlColumn(column)) continue;
+                columns.add(new String[]{table, column});
+            }
+        }
+        return columns;
+    }
+
+    private boolean isTextType(int type) {
+        return type == Types.CHAR || type == Types.VARCHAR || type == Types.LONGVARCHAR
+                || type == Types.NCHAR || type == Types.NVARCHAR || type == Types.LONGNVARCHAR
+                || type == Types.CLOB || type == Types.LONGVARCHAR;
+    }
+
+    private boolean isUrlColumn(String column) {
+        String name = column.toUpperCase(Locale.ROOT);
+        return name.contains("URL") || name.contains("PATH") || name.contains("COVER")
+                || name.contains("IMAGE") || name.contains("VIDEO") || name.contains("CONTENT")
+                || name.contains("HTML") || name.contains("SRC") || name.contains("THUMB");
+    }
+
+    private int replaceInColumn(Connection connection, String table, String column,
+                                String oldValue, String newValue) {
+        if (StrUtil.isBlank(oldValue) || oldValue.equals(newValue)) return 0;
+        String quotedTable = quoteIdent(table);
+        String quotedColumn = quoteIdent(column);
+        String sql = "UPDATE " + quotedTable + " SET " + quotedColumn +
+                " = REPLACE(" + quotedColumn + ", ?, ?) WHERE " + quotedColumn + " LIKE ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, oldValue);
+            statement.setString(2, newValue);
+            statement.setString(3, "%" + oldValue + "%");
+            return statement.executeUpdate();
+        } catch (Exception e) {
+            log.warn("重写字段地址失败：{}.{}，原因：{}", table, column, e.getMessage());
+            return 0;
+        }
+    }
+
+    private String hostOf(String url) {
+        Matcher matcher = HOST_PATTERN.matcher(StrUtil.trim(url));
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    private String trimTrailingSlash(String value) {
+        String result = StrUtil.trim(value);
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
+    }
+
+    private String quoteIdent(String name) {
+        return "`" + name.replace("`", "``") + "`";
     }
 
     private byte[] readEntry(ZipInputStream zip) throws IOException {

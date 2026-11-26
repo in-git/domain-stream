@@ -130,13 +130,45 @@ export const NAV_ICON_OPTIONS = [
 
 export type NavIconKey = (typeof NAV_ICON_OPTIONS)[number]['value'];
 
+/** 导航模块类型：内置页面或后台配置的占位模块 */
+export type NavModuleType = 'builtin' | 'placeholder';
+
+/** 客户端已内置、拥有真实页面的模块 key，自定义模块不可占用 */
+export const BUILTIN_MODULE_KEYS: string[] = [
+  'videos',
+  'articles',
+  'gallery',
+  'messages',
+  'profile',
+  'settings',
+];
+
+/** 自定义模块 key 前缀，避免和内置页面 key 混淆 */
+export const CUSTOM_MODULE_PREFIX = 'mod_';
+
+/** 设置是内置模块，后台配置缺失时自动补齐 */
+const SETTINGS_NAV_ITEM: NavItemConfig = {
+  id: 'settings',
+  moduleKey: 'settings',
+  moduleType: 'builtin',
+  label: '设置',
+  enabled: true,
+};
+
 /** 侧边栏导航项 */
 export interface NavItemConfig {
-  /** 唯一标识，前端用作 key；需对应 frontend 已存在的板块 id */
+  /**
+   * 兼容旧字段；写出时始终等于 moduleKey。
+   * 客户端老版本仍按 id 匹配，新版本优先读 moduleKey。
+   */
   id: string;
+  /** 永久唯一的模块 key；创建后不可修改，改名/排序/换图标都不影响它 */
+  moduleKey: string;
+  /** 模块类型；决定客户端渲染内置页面还是占位模块 */
+  moduleType: NavModuleType;
   /** 显示名称，限 4 个字符 */
   label: string;
-  /** 图标地址（文件库图片）；留空时前台按 id 回退默认图标 */
+  /** 图标地址（文件库图片）；留空时前台按 moduleKey 回退默认图标 */
   iconUrl?: string;
   /** 是否显示该导航 */
   enabled: boolean;
@@ -145,13 +177,41 @@ export interface NavItemConfig {
 /** 导航名称最大长度：侧栏宽度有限，超过 4 个字会被截断 */
 export const NAV_LABEL_MAX_LENGTH = 4;
 
+/** 根据模块 key 推断类型，兼容没有 moduleType 的旧配置 */
+export function inferNavModuleType(moduleKey: string): NavModuleType {
+  return BUILTIN_MODULE_KEYS.includes(moduleKey) ? 'builtin' : 'placeholder';
+}
+
+/** 生成不会和内置页面冲突的自定义模块 key */
+export function createCustomModuleKey(existingKeys: string[]): string {
+  const used = new Set(existingKeys);
+  let key = '';
+  do {
+    key = `${CUSTOM_MODULE_PREFIX}${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+  } while (used.has(key));
+  return key;
+}
+
 /** 默认导航项，与 frontend 原有四个板块一致 */
 export const DEFAULT_NAV_ITEMS: NavItemConfig[] = [
-  { id: 'videos', label: '视频', enabled: true },
-  { id: 'articles', label: '文章', enabled: true },
-  { id: 'gallery', label: '图文', enabled: true },
-  { id: 'messages', label: '留言', enabled: true },
+  { id: 'videos', moduleKey: 'videos', moduleType: 'builtin', label: '视频', enabled: true },
+  { id: 'articles', moduleKey: 'articles', moduleType: 'builtin', label: '文章', enabled: true },
+  { id: 'gallery', moduleKey: 'gallery', moduleType: 'builtin', label: '图文', enabled: true },
+  { id: 'messages', moduleKey: 'messages', moduleType: 'builtin', label: '留言', enabled: true },
+  { ...SETTINGS_NAV_ITEM },
 ];
+
+function parseModuleType(value: unknown, moduleKey: string): NavModuleType {
+  if (value === 'builtin' || value === 'placeholder') return value;
+  return inferNavModuleType(moduleKey);
+}
+
+function ensureSettingsNavItem(items: NavItemConfig[]): NavItemConfig[] {
+  if (items.some((item) => item.moduleKey === 'settings')) return items;
+  return [...items, { ...SETTINGS_NAV_ITEM }];
+}
 
 /** 解析配置里的导航 JSON，异常时回退默认值 */
 export function parseNavItems(raw: string | undefined): NavItemConfig[] {
@@ -160,33 +220,67 @@ export function parseNavItems(raw: string | undefined): NavItemConfig[] {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return DEFAULT_NAV_ITEMS;
     const items: NavItemConfig[] = [];
+    const seen = new Set<string>();
     for (const entry of parsed) {
       if (!entry || typeof entry !== 'object') continue;
       const row = entry as Record<string, unknown>;
-      const id = typeof row.id === 'string' ? row.id.trim() : '';
-      if (!id) continue;
+      const moduleKey =
+        typeof row.moduleKey === 'string' && row.moduleKey.trim()
+          ? row.moduleKey.trim()
+          : typeof row.id === 'string'
+            ? row.id.trim()
+            : '';
+      if (!moduleKey || seen.has(moduleKey)) continue;
+      seen.add(moduleKey);
       const iconUrl = typeof row.iconUrl === 'string' ? row.iconUrl.trim() : '';
+      const moduleType = parseModuleType(row.moduleType, moduleKey);
       items.push({
-        id,
+        id: moduleKey,
+        moduleKey,
+        moduleType,
         label:
           typeof row.label === 'string' && row.label.trim()
             ? row.label.trim().slice(0, NAV_LABEL_MAX_LENGTH)
-            : id.slice(0, NAV_LABEL_MAX_LENGTH),
+            : moduleKey.slice(0, NAV_LABEL_MAX_LENGTH),
         // 图标仅保留文件库图片地址；旧数据里的 icon 标识会被忽略
         ...(iconUrl ? { iconUrl } : {}),
         // 兼容旧数据：未写 enabled 视为启用
         enabled: row.enabled !== false,
       });
     }
-    return items.length ? items : DEFAULT_NAV_ITEMS;
+    return ensureSettingsNavItem(items.length ? items : DEFAULT_NAV_ITEMS);
   } catch {
     return DEFAULT_NAV_ITEMS;
   }
 }
 
+/** 写出前统一模块 key、类型和去重，防止旧字段造成重复 key */
+export function normalizeNavItems(items: NavItemConfig[]): NavItemConfig[] {
+  const seen = new Set<string>();
+  const result: NavItemConfig[] = [];
+  for (const item of items) {
+    const moduleKey = (item.moduleKey || item.id || '').trim();
+    if (!moduleKey || seen.has(moduleKey)) continue;
+    seen.add(moduleKey);
+    const moduleType = parseModuleType(item.moduleType, moduleKey);
+    const label = (item.label || moduleKey).trim().slice(0, NAV_LABEL_MAX_LENGTH) || moduleKey;
+    const iconUrl = (item.iconUrl || '').trim();
+    result.push({
+      ...item,
+      id: moduleKey,
+      moduleKey,
+      moduleType,
+      label,
+      ...(iconUrl ? { iconUrl } : {}),
+    });
+  }
+  return ensureSettingsNavItem(result);
+}
+
 /** 序列化导航项，空列表写成空串 */
 export function stringifyNavItems(items: NavItemConfig[]): string {
-  return items.length ? JSON.stringify(items) : '';
+  const normalized = normalizeNavItems(items);
+  return normalized.length ? JSON.stringify(normalized) : '';
 }
 
 /** 页面草稿：值 + 数据库中实际命中的属性名 */

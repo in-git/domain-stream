@@ -61,6 +61,14 @@ export interface PortalVideo {
   createUser?: string;
 }
 
+/** 视频分页接口响应 */
+export interface PortalVideoPage {
+  records: PortalVideo[];
+  total: number;
+  current: number;
+  size: number;
+}
+
 export interface PortalArticle {
   id: string;
   title?: string;
@@ -219,7 +227,12 @@ export function categoriesForModule(
   categories: PortalCategory[],
   module: CategoryModule
 ): string[] {
-  const names = categories
+  const names = [...categories]
+    .sort(
+      (a, b) =>
+        (a.sortCode ?? 0) - (b.sortCode ?? 0) ||
+        a.id.localeCompare(b.id)
+    )
     .filter((item) => {
       const itemModule = (item.module || '').toUpperCase();
       return itemModule === module || itemModule === 'COMMON';
@@ -594,13 +607,21 @@ export const likeApi = {
 
 export const portalApi = {
   systemInfo: () => request<PublicSystemInfo>('/public/system/info'),
-  categories: () => request<PortalCategory[]>('/public/categories'),
+  categories: (module?: string) =>
+    request<PortalCategory[]>(
+      module ? `/public/categories?module=${encodeURIComponent(module)}` : '/public/categories'
+    ),
   videos: (category?: string) =>
     request<PortalVideo[]>(
       category && category !== '全部'
         ? `/public/videos?category=${encodeURIComponent(category)}`
         : '/public/videos'
     ),
+  videoPage: (category: string | undefined, current: number, size = 20) => {
+    const params = new URLSearchParams({ current: String(current), size: String(size) });
+    if (category && category !== '全部') params.set('category', category);
+    return request<PortalVideoPage>(`/public/video/page?${params.toString()}`);
+  },
   recordVideoView: (id: string) =>
     request<boolean>(`/public/videos/${encodeURIComponent(id)}/view`, { method: 'POST' }),
   articles: () => request<PortalArticle[]>('/public/articles'),

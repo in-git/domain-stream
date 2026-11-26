@@ -1,28 +1,20 @@
 <template>
-	<a-card title="数据导出与导入" :bordered="false">
+	<a-card title="系统数据迁移" :bordered="false">
 		<a-space wrap>
-			<a-button type="primary" :disabled="!!exporting || importing" @click="openImport">
+			<a-button type="primary" :loading="exporting" :disabled="importing" @click="exportMigration">
+				<template #icon><download-outlined /></template>
+				导出迁移数据
+			</a-button>
+			<a-button :disabled="exporting || importing" @click="openImport">
 				<template #icon><import-outlined /></template>
-				导入数据
-			</a-button>
-			<a-button type="primary" :loading="exporting === 'fullDirectory'" :disabled="!!exporting || importing" @click="startExport('fullDirectory')">
-				<template #icon><folder-open-outlined /></template>
-				导出完整目录
-			</a-button>
-			<a-button :loading="exporting === 'database'" :disabled="!!exporting || importing" @click="startExport('database')">
-				<template #icon><database-outlined /></template>
-				导出数据库
-			</a-button>
-			<a-button :loading="exporting === 'userFiles'" :disabled="!!exporting || importing" @click="startExport('userFiles')">
-				<template #icon><cloud-download-outlined /></template>
-				导出用户文件
+				导入迁移数据
 			</a-button>
 		</a-space>
-		<div class="transfer-hint">导出由浏览器直接下载，导入文件不会写入文件中心</div>
+		<div class="transfer-hint">迁移数据包含数据库 SQL 和完整文件目录包，导入会覆盖目标系统数据</div>
 
 		<a-modal
 			v-model:open="importVisible"
-			title="数据导入"
+			title="导入迁移数据"
 			:width="560"
 			:footer="null"
 			:destroy-on-close="true"
@@ -34,36 +26,39 @@
 			<a-alert v-if="importError" type="error" :message="importError" show-icon class="mb-3" />
 
 			<a-form layout="vertical">
-				<a-form-item label="选择导入文件">
-					<a-upload :show-upload-list="false" :before-upload="chooseFile" accept=".zip,.sql">
+				<a-form-item label="数据库备份（.sql）">
+					<a-upload :show-upload-list="false" :before-upload="chooseSql" accept=".sql">
 						<a-button :disabled="importing">
 							<template #icon><upload-outlined /></template>
-							选择文件
+							选择 SQL
 						</a-button>
 					</a-upload>
-					<div v-if="selectedFile" class="file-name">{{ selectedFile.name }}（{{ formatSize(selectedFile.size) }}）</div>
-					<div class="field-hint">仅支持 .sql 数据库备份或 .zip 文件资源包，按 8MB 分片上传</div>
+					<div v-if="sqlFile" class="file-name">{{ sqlFile.name }}（{{ formatSize(sqlFile.size) }}）</div>
+					<div class="field-hint">恢复数据库会完全覆盖目标系统现有数据</div>
 				</a-form-item>
 
-				<a-form-item v-if="isZip" label="导入模式">
-					<a-radio-group v-model:value="importMode" :disabled="importing">
-						<a-radio value="OVERWRITE">覆盖：导入后删除原有的用户文件</a-radio>
-						<a-radio value="APPEND">追加：保留原有文件，仅添加包内文件</a-radio>
-					</a-radio-group>
+				<a-form-item label="文件资源包（.zip）">
+					<a-upload :show-upload-list="false" :before-upload="chooseZip" accept=".zip">
+						<a-button :disabled="importing">
+							<template #icon><upload-outlined /></template>
+							选择 ZIP
+						</a-button>
+					</a-upload>
+					<div v-if="zipFile" class="file-name">{{ zipFile.name }}（{{ formatSize(zipFile.size) }}）</div>
+					<div class="field-hint">文件包按完整目录结构覆盖，按 8MB 分片上传</div>
 				</a-form-item>
 
 				<a-alert
-					v-if="isSql"
 					type="warning"
-					message="SQL 恢复：完全覆盖"
-					description="将按备份脚本重建数据库，现有全部表和数据会被替换，此操作不可撤销。"
+					message="请先导出源系统迁移数据，再导入到目标系统"
+					description="建议同时导入数据库 SQL 和文件资源包；导入过程中请勿刷新页面或关闭浏览器。"
 					show-icon
 					class="mb-3"
 				/>
 
 				<div v-if="importing" class="import-progress">
 					<div class="progress-text">
-						{{ uploadPercent < 100 ? `分片上传中 ${uploadPercent}%` : '文件已上传，导入执行中' }}
+						{{ importStage }}：{{ uploadPercent < 100 ? `上传中 ${uploadPercent}%` : '后台导入中' }}
 					</div>
 					<a-progress :percent="uploadPercent" :show-info="false" />
 				</div>
@@ -79,7 +74,7 @@
 
 			<a-space class="modal-footer">
 				<a-button :disabled="importing" @click="closeImport">关闭</a-button>
-				<a-button type="primary" :loading="importing" :disabled="!selectedFile || !!importResult" @click="doImport">
+				<a-button type="primary" :loading="importing" :disabled="!canImport || !!importResult" @click="doImport">
 					开始导入
 				</a-button>
 			</a-space>
@@ -93,50 +88,38 @@
 	import bizDataTransferApi from '@/api/biz/bizDataTransferApi'
 	import { uploadImportFile } from '@/utils/dataImportUpload'
 
-	const exporting = ref(null)
+	const exporting = ref(false)
 	const importVisible = ref(false)
 	const importing = ref(false)
-	const selectedFile = ref(null)
-	const importMode = ref('APPEND')
+	const sqlFile = ref(null)
+	const zipFile = ref(null)
 	const uploadPercent = ref(0)
+	const importStage = ref('')
 	const importError = ref(null)
 	const importResult = ref(null)
 
-	const isZip = computed(() => (selectedFile.value?.name || '').toLowerCase().endsWith('.zip'))
-	const isSql = computed(() => (selectedFile.value?.name || '').toLowerCase().endsWith('.sql'))
+	const canImport = computed(() => !!(sqlFile.value || zipFile.value))
 
-	const exportTasks = {
-		database: {
-			run: () => bizDataTransferApi.exportDatabase(),
-			label: '数据库备份'
-		},
-		fullDirectory: {
-			run: () => bizDataTransferApi.exportFullDirectory(),
-			label: '完整目录包'
-		},
-		userFiles: {
-			run: () => bizDataTransferApi.exportUserFiles(),
-			label: '用户文件包'
-		}
-	}
-
-	const startExport = async (kind) => {
+	const exportMigration = async () => {
 		if (exporting.value || importing.value) return
-		exporting.value = kind
+		exporting.value = true
 		try {
-			await exportTasks[kind].run()
-			message.success(`${exportTasks[kind].label}已导出，浏览器开始下载`)
+			await bizDataTransferApi.exportDatabase()
+			message.success('数据库备份已下载，继续导出文件资源包')
+			await bizDataTransferApi.exportFullDirectory()
+			message.success('迁移数据导出完成')
 		} catch (error) {
-			message.error(error?.message || '导出失败')
+			message.error(error?.message || '导出迁移数据失败')
 		} finally {
-			exporting.value = null
+			exporting.value = false
 		}
 	}
 
 	const openImport = () => {
-		selectedFile.value = null
-		importMode.value = 'APPEND'
+		sqlFile.value = null
+		zipFile.value = null
 		uploadPercent.value = 0
+		importStage.value = ''
 		importError.value = null
 		importResult.value = null
 		importVisible.value = true
@@ -147,19 +130,31 @@
 		importVisible.value = false
 	}
 
-	const chooseFile = (file) => {
-		const name = (file.name || '').toLowerCase()
-		if (!name.endsWith('.zip') && !name.endsWith('.sql')) {
-			message.warning('仅支持 .sql 数据库备份或 .zip 文件资源包')
+	const chooseSql = (file) => {
+		if (!(file.name || '').toLowerCase().endsWith('.sql')) {
+			message.warning('数据库备份仅支持 .sql 文件')
 			return false
 		}
 		if (!file.size) {
 			message.warning('导入文件不能为空')
 			return false
 		}
-		selectedFile.value = file
-		importMode.value = 'APPEND'
-		uploadPercent.value = 0
+		sqlFile.value = file
+		importError.value = null
+		importResult.value = null
+		return false
+	}
+
+	const chooseZip = (file) => {
+		if (!(file.name || '').toLowerCase().endsWith('.zip')) {
+			message.warning('文件资源包仅支持 .zip 文件')
+			return false
+		}
+		if (!file.size) {
+			message.warning('导入文件不能为空')
+			return false
+		}
+		zipFile.value = file
 		importError.value = null
 		importResult.value = null
 		return false
@@ -169,44 +164,46 @@
 
 	const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
+	const waitImport = async (ticket) => {
+		const deadline = Date.now() + 30 * 60 * 1000
+		let failures = 0
+		while (Date.now() < deadline) {
+			await delay(600)
+			let status
+			try {
+				status = await bizDataTransferApi.importStatus(ticket)
+			} catch (error) {
+				if (++failures >= 50) throw new Error('无法获取导入进度，任务可能仍在后台执行')
+				continue
+			}
+			failures = 0
+			if (status.done) return status
+		}
+		throw new Error('导入超时，请稍后查看导入结果')
+	}
+
+	const importOne = async (file, stage) => {
+		importStage.value = stage
+		uploadPercent.value = 0
+		const ticket = await uploadImportFile(file, 'OVERWRITE', (percent) => {
+			uploadPercent.value = percent
+		})
+		const status = await waitImport(ticket)
+		if (!status.success) throw new Error(status.message || `${stage}失败`)
+	}
+
 	const doImport = async () => {
-		if (!selectedFile.value || importing.value || importResult.value) return
+		if (!canImport.value || importing.value || importResult.value) return
 		importing.value = true
 		importError.value = null
 		importResult.value = null
-		uploadPercent.value = 0
 		try {
-			const ticket = await uploadImportFile(
-				selectedFile.value,
-				isSql.value ? 'APPEND' : importMode.value,
-				(percent) => {
-					uploadPercent.value = percent
-				}
-			)
-
-			const deadline = Date.now() + 30 * 60 * 1000
-			let failures = 0
-			while (Date.now() < deadline) {
-				await delay(600)
-				let status
-				try {
-					status = await bizDataTransferApi.importStatus(ticket)
-				} catch (error) {
-					if (++failures >= 50) throw new Error('无法获取导入进度，任务可能仍在后台执行')
-					continue
-				}
-				failures = 0
-				if (!status.done) continue
-				importResult.value = {
-					success: status.success,
-					message: status.message
-				}
-				message[status.success ? 'success' : 'error'](status.message)
-				return
-			}
-			throw new Error('导入超时，请稍后查看导入结果')
+			if (sqlFile.value) await importOne(sqlFile.value, '导入数据库备份')
+			if (zipFile.value) await importOne(zipFile.value, '导入文件资源包')
+			importResult.value = { success: true, message: '数据库与文件资源导入完成' }
+			message.success(importResult.value.message)
 		} catch (error) {
-			importError.value = error?.message || '导入失败'
+			importError.value = error?.message || '导入迁移数据失败'
 			message.error(importError.value)
 		} finally {
 			importing.value = false

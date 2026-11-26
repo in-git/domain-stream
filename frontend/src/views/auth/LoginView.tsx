@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, QrCode, RefreshCw, UserRound, X } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, MessageCircle, QrCode, RefreshCw, UserRound, X } from 'lucide-react';
 import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
 import { navigate } from '../../lib/router';
 import qqIcon from '../../assets/images/authSource/qq.png';
-import wechatIcon from '../../assets/images/authSource/wechat.png';
 
 interface LoginViewProps {
   onSuccess: (token: string) => void;
@@ -173,7 +172,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
               <div className="relative mx-auto h-40 w-40">
                 <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-[#07C160]/35" />
                 <div className="absolute inset-4 flex items-center justify-center rounded-2xl bg-[#07C160]/10">
-                  <img src={wechatIcon} alt="" className="h-20 w-20" />
+                  <MessageCircle className="h-20 w-20 text-[#07C160]" strokeWidth={1.4} />
                 </div>
                 <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
                   <QrCode className="h-5 w-5" />
@@ -315,7 +314,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
             </form>
 
             <button type="button" onClick={() => switchMode('wechat')} className={secondaryButtonClass}>
-              <img src={wechatIcon} alt="" className="h-5 w-5" />
+              <MessageCircle className="h-5 w-5 text-[#07C160]" />
               返回微信扫码登录
             </button>
           </div>

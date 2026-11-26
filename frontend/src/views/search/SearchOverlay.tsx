@@ -41,8 +41,9 @@ const SCOPE: Record<SectionId, RowKind[]> = {
   articles: ['article'],
   gallery: ['graphic'],
   messages: ['message'],
-  // 个人中心没有专属内容，搜索全部模块
+  // 个人中心和设置页没有专属内容，搜索全部模块
   profile: ['video', 'article', 'graphic', 'message'],
+  settings: ['video', 'article', 'graphic', 'message'],
 };
 
 const SCOPE_LABEL: Record<SectionId, string> = {
@@ -51,6 +52,7 @@ const SCOPE_LABEL: Record<SectionId, string> = {
   gallery: '图文',
   messages: '留言',
   profile: '全部内容',
+  settings: '全部内容',
 };
 
 const KIND_META: Record<RowKind, { Icon: typeof Film }> = {

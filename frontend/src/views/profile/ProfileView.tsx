@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
-import { FavoritesSection } from './FavoritesSection';
+import { FavoritesPCView } from './FavoritesPCView';
 import { ResilientImage } from '../../components/ResilientImage';
 import { authApi, cacheClientUser, getCachedClientUser } from '../../lib/snowyAuth.ts';
 
@@ -73,6 +73,8 @@ interface ProfileViewProps {
   onToggleSave?: (id: string) => void;
   likedIds?: string[];
   onToggleLike?: (id: string) => void;
+  /** 移动端设置页内嵌时隐藏重复的个人资料头图 */
+  hideHero?: boolean;
 }
 
 type ProfilePane = 'profile' | 'likes' | 'favorites';
@@ -168,8 +170,10 @@ export function ProfileView({
   onToggleSave,
   likedIds = [],
   onToggleLike,
+  hideHero = false,
 }: ProfileViewProps) {
   const [activePane, setActivePane] = useState<ProfilePane>('profile');
+  const [profileDetail, setProfileDetail] = useState<'account' | 'security' | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(profile.name);
   const [draftBio, setDraftBio] = useState(profile.bio);
@@ -311,17 +315,8 @@ export function ProfileView({
             transition={SWIFTUI_SMOOTH}
             className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-24 md:pb-0"
           >
-            <ProfileNav
-              activePane={activePane}
-              onSelect={setActivePane}
-              likedCount={likedIds.length}
-              savedCount={savedIds.length}
-            />
-
-            <div className="min-w-0 flex-1 space-y-6">
-              {activePane === 'profile' && (
-                <>
             {/* Light Profile Hero */}
+            {!hideHero && (
             <div className="relative overflow-hidden bg-white text-[#1D1D1F] sm:rounded-[32px] sm:border sm:border-black/[0.06]">
               <div className="relative h-36 sm:h-52 lg:h-60">
                 <div className="absolute inset-0 bg-[linear-gradient(120deg,#F5F5F7_0%,#FFFFFF_45%,#EBEBEF_100%)]" />
@@ -395,86 +390,149 @@ export function ProfileView({
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Account Details */}
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="rounded-none bg-white sm:rounded-3xl sm:border sm:border-black/[0.06] dark:bg-[#161618] sm:dark:border-white/[0.08] sm:p-8 p-6">
-                <div className="mb-7 flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      账号信息
-                    </h2>
-                    <p className="mt-1 text-xs text-[#8E8E93] dark:text-[#8E8E93]">
-                      基本资料与登录状态
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-black/[0.06] px-3 py-1 text-xs font-medium text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
-                    已登录
-                  </span>
-                </div>
-                <dl className="grid gap-x-10 gap-y-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-xs text-[#8E8E93]">昵称</dt>
-                    <dd className="mt-1.5 truncate text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      {profile.name || '用户'}
-                    </dd>
-                  </div>
-                  {userInfo.phone && (
-                    <div>
-                      <dt className="text-xs text-[#8E8E93]">手机号</dt>
-                      <dd className="mt-1.5 text-sm font-medium tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {userInfo.phone}
-                      </dd>
+            {!hideHero && !profileDetail && (
+              <ProfileNav
+                activePane={activePane}
+                onSelect={setActivePane}
+                likedCount={likedIds.length}
+                savedCount={savedIds.length}
+              />
+            )}
+
+            <div className="min-w-0 flex-1 space-y-6">
+              {activePane === 'profile' && (
+                <>
+                  {profileDetail ? (
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setProfileDetail(null)}
+                        className="inline-flex items-center gap-1 px-1 py-1 text-[14px] font-medium text-[#1D1D1F] dark:text-white"
+                      >
+                        <span>←</span>
+                        返回
+                      </button>
+
+                      {profileDetail === 'account' && (
+                        <div className="border border-black/[0.06] bg-white p-6 dark:border-white/[0.08] dark:bg-[#161618]">
+                          <div className="mb-7 flex items-start justify-between gap-4">
+                            <div>
+                              <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                账号信息
+                              </h2>
+                              <p className="mt-1 text-xs text-[#8E8E93]">基本资料与登录状态</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-black/[0.06] px-3 py-1 text-xs font-medium text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                              已登录
+                            </span>
+                          </div>
+                          <dl className="grid gap-x-10 gap-y-6 sm:grid-cols-2">
+                            <div>
+                              <dt className="text-xs text-[#8E8E93]">昵称</dt>
+                              <dd className="mt-1.5 truncate text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                {profile.name || '用户'}
+                              </dd>
+                            </div>
+                            {userInfo.phone && (
+                              <div>
+                                <dt className="text-xs text-[#8E8E93]">手机号</dt>
+                                <dd className="mt-1.5 text-sm font-medium tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                  {userInfo.phone}
+                                </dd>
+                              </div>
+                            )}
+                          </dl>
+                        </div>
+                      )}
+
+                      {profileDetail === 'security' && (
+                        <div className="space-y-5 border border-black/[0.06] bg-white p-6 dark:border-white/[0.08] dark:bg-[#161618]">
+                          <div>
+                            <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                              安全设置
+                            </h2>
+                            <p className="mt-1 text-xs text-[#8E8E93]">保护账号，定期更新登录密码。</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={openPasswordModal}
+                            className="group flex w-full items-center justify-between border border-black/[0.06] bg-[#FBFBFD] px-4 py-4 text-left transition-colors hover:border-black/20 hover:bg-black/[0.03] dark:border-white/[0.08] dark:bg-[#1C1C1E] dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
+                          >
+                            <span className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/[0.06] text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                                <KeyRound className="h-4 w-4" />
+                              </span>
+                              <span>
+                                <span className="block text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                  修改登录密码
+                                </span>
+                                <span className="mt-0.5 block text-[11px] text-[#8E8E93]">
+                                  建议每 3 个月更新一次
+                                </span>
+                              </span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-[#AEAEB2] transition-transform group-hover:translate-x-0.5" />
+                          </button>
+                          {userInfo.latestLoginTime && (
+                            <div className="bg-[#F5F5F7] p-4 dark:bg-[#1C1C1E]">
+                              <p className="text-[11px] text-[#8E8E93]">最近登录</p>
+                              <p className="mt-1.5 text-xs font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                {[formatLoginTime(userInfo.latestLoginTime), userInfo.latestLoginAddress]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden border border-[#E5E5EA] bg-white dark:border-white/10 dark:bg-[#161618]">
+                      <button
+                        type="button"
+                        onClick={() => setProfileDetail('account')}
+                        className="flex w-full items-center gap-3 px-4 py-4 text-left"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FDE8F0] text-[#FB7299] dark:bg-[#FB7299]/10">
+                          <UserRound className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-[#1D1D1F] dark:text-white">
+                            账号信息
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-[#8E8E93]">
+                            基本资料与登录状态
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#AEAEB2]" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfileDetail('security')}
+                        className="flex w-full items-center gap-3 border-t border-[#E5E5EA] px-4 py-4 text-left dark:border-white/5"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FDE8F0] text-[#FB7299] dark:bg-[#FB7299]/10">
+                          <KeyRound className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-[#1D1D1F] dark:text-white">
+                            安全设置
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-[#8E8E93]">
+                            修改登录密码与登录记录
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[#AEAEB2]" />
+                      </button>
                     </div>
                   )}
-                </dl>
-              </div>
-
-              <div className="space-y-5 rounded-none bg-white sm:rounded-3xl sm:border sm:border-black/[0.06] dark:bg-[#161618] sm:dark:border-white/[0.08] p-6">
-                <div>
-                  <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    安全设置
-                  </h2>
-                  <p className="mt-1 text-xs text-[#8E8E93]">保护账号，定期更新登录密码。</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={openPasswordModal}
-                  className="group flex w-full items-center justify-between rounded-2xl border border-black/[0.06] bg-[#FBFBFD] px-4 py-4 text-left transition-colors hover:border-black/20 hover:bg-black/[0.03] dark:border-white/[0.08] dark:bg-[#1C1C1E] dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/[0.06] text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
-                      <KeyRound className="h-4 w-4" />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        修改登录密码
-                      </span>
-                      <span className="mt-0.5 block text-[11px] text-[#8E8E93]">
-                        建议每 3 个月更新一次
-                      </span>
-                    </span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-[#AEAEB2] transition-transform group-hover:translate-x-0.5" />
-                </button>
-                {userInfo.latestLoginTime && (
-                  <div className="rounded-2xl bg-[#F5F5F7] p-4 dark:bg-[#1C1C1E]">
-                    <p className="text-[11px] text-[#8E8E93]">最近登录</p>
-                    <p className="mt-1.5 text-xs font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      {[formatLoginTime(userInfo.latestLoginTime), userInfo.latestLoginAddress]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
                 </>
               )}
 
               {activePane === 'likes' && (
-                <FavoritesSection
+                <FavoritesPCView
                   videos={videos}
                   articles={articles}
                   photos={photos}
@@ -485,7 +543,7 @@ export function ProfileView({
               )}
 
               {activePane === 'favorites' && (
-                <FavoritesSection
+                <FavoritesPCView
                   videos={videos}
                   articles={articles}
                   photos={photos}

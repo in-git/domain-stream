@@ -17,6 +17,7 @@ interface ProfileSectionProps {
   onToggleSave: (id: string) => void;
   likedIds: string[];
   onToggleLike: (id: string) => void;
+  hideHero?: boolean;
 }
 
 export function ProfileSection({
@@ -35,6 +36,7 @@ export function ProfileSection({
   onToggleSave,
   likedIds,
   onToggleLike,
+  hideHero = false,
 }: ProfileSectionProps) {
   return (
     <ProfileView
@@ -53,6 +55,7 @@ export function ProfileSection({
       onToggleSave={onToggleSave}
       likedIds={likedIds}
       onToggleLike={onToggleLike}
+      hideHero={hideHero}
     />
   );
 }

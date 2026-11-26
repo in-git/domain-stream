@@ -26,6 +26,10 @@ function snapshot(): PublicSystemInfo {
   return info;
 }
 
+function snapshotLoaded(): boolean {
+  return loaded;
+}
+
 /**
  * 把配置里存的纯后端文件地址转成前台可访问地址。
  * CMS 存的是 /dev/file/download?id=...&sign=...（公开文件带签名），
@@ -85,6 +89,11 @@ export async function loadSystemInfo(): Promise<void> {
 /** 订阅系统信息，组件无需手动传 props */
 export function useSystemInfo(): PublicSystemInfo {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+
+/** 系统信息是否已从后端加载完成 */
+export function useSystemInfoLoaded(): boolean {
+  return useSyncExternalStore(subscribe, snapshotLoaded, () => false);
 }
 
 /** CLIENT_CONFIG.allowComment 为 NO/FALSE/0 时关闭评论；缺失时默认允许 */

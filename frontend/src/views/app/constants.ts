@@ -3,7 +3,14 @@ import type { SectionId } from '../../data/content';
 /** 需要后端数据的板块（profile 的数据来自其他板块，不单独拉取） */
 export type ContentSection = 'videos' | 'articles' | 'gallery' | 'messages';
 
-export const SECTION_IDS: SectionId[] = ['videos', 'articles', 'gallery', 'messages', 'profile'];
+export const SECTION_IDS: SectionId[] = [
+  'videos',
+  'articles',
+  'gallery',
+  'messages',
+  'profile',
+  'settings',
+];
 
 /** 记住用户上次停留的板块，下次进入站点直接回到该路由 */
 export const LAST_SECTION_KEY = 'lumina:last-section';

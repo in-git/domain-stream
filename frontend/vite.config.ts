@@ -4,6 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
+// 迁移到新后端时只需设置 VITE_API_TARGET / VITE_WS_TARGET
+const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:82';
+const wsTarget = process.env.VITE_WS_TARGET || apiTarget.replace(/^http/, 'ws');
+
 // Snowy 认证后端代理：/snowy/* -> http://<SNOWY_HOST>:<SNOWY_PORT>/api/*
 // 与 cms 项目保持一致，dev 与 preview 共用。
 const snowyProxy = {
@@ -46,13 +50,13 @@ export default defineConfig(() => {
     server: {
       proxy: {
         '/api': {
-          target: 'http://localhost:82',
+          target: apiTarget,
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/api/, ''),
         },
         // 访客 WebSocket：/ws/* -> ws://localhost:82/*
         '/ws': {
-          target: 'ws://localhost:82',
+          target: wsTarget,
           ws: true,
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/ws/, ''),
@@ -68,12 +72,12 @@ export default defineConfig(() => {
     preview: {
       proxy: {
         '/api': {
-          target: 'http://localhost:82',
+          target: apiTarget,
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/api/, ''),
         },
         '/ws': {
-          target: 'ws://localhost:82',
+          target: wsTarget,
           ws: true,
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/ws/, ''),

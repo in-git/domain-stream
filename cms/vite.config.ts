@@ -4,11 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-// 小诺 Snowy 后端代理：/snowy/* -> http://<SNOWY_HOST>:<SNOWY_PORT>/*
+// 迁移到新后端时设置 VITE_API_TARGET，优先级高于 SNOWY_HOST / SNOWY_PORT
+const apiTarget =
+  process.env.VITE_API_TARGET ||
+  `http://${process.env.SNOWY_HOST || 'localhost'}:${Number(process.env.SNOWY_PORT) || 82}`;
+
+// 小诺 Snowy 后端代理：/snowy/* -> 后端根路径
 // 后端服务挂在根路径（无 /api 前缀），这里仅剥掉 /snowy 前缀。
 const snowyProxy = {
   '/snowy': {
-    target: `http://${process.env.SNOWY_HOST || 'localhost'}:${Number(process.env.SNOWY_PORT) || 82}`,
+    target: apiTarget,
     changeOrigin: true,
     rewrite: (p: string) => p.replace(/^\/snowy/, ''),
   },

@@ -11,7 +11,7 @@ import { ImmersiveModal } from './ImmersiveModal';
 import { DesktopGridCategories, DesktopVideoGrid } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
-import { DEFAULT_CATEGORIES, VIDEO_PAGE_SIZE, type ViewMode } from './shared';
+import { DEFAULT_CATEGORIES, type ViewMode } from './shared';
 import { useSystemInfo } from '../../lib/systemInfo';
 
 /** 迷你播放器尺寸（与下方 sm 断点样式一致），用于拖拽边界计算 */
@@ -34,6 +34,9 @@ interface VideosViewProps {
   /** 当前分类由数据层持有，切换时触发后端按分类请求 */
   category: string;
   onCategoryChange: (category: string) => void;
+  hasMoreVideos?: boolean;
+  loadingMoreVideos?: boolean;
+  onLoadMoreVideos?: () => void;
   savedIds: string[];
   likedIds: string[];
   searchQuery?: string;
@@ -70,6 +73,9 @@ export function VideosView({
   categories,
   category,
   onCategoryChange,
+  hasMoreVideos = false,
+  loadingMoreVideos = false,
+  onLoadMoreVideos,
   savedIds,
   likedIds,
   searchQuery = '',
@@ -153,34 +159,34 @@ export function VideosView({
     setCurrentTime(0);
   }, [category, normalizedQuery]);
 
-  const [visibleCount, setVisibleCount] = useState(VIDEO_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const visibleVideos = useMemo(
-    () => filteredVideos.slice(0, visibleCount),
-    [filteredVideos, visibleCount],
-  );
-  const hasMoreVideos = visibleCount < filteredVideos.length;
-  useEffect(() => {
-    setVisibleCount(VIDEO_PAGE_SIZE);
-  }, [category, normalizedQuery]);
+  // 数据层已按服务端分页追加，视图直接使用当前已加载的全部结果
+  const visibleVideos = filteredVideos;
+
   useEffect(() => {
     const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasMoreVideos || viewMode !== 'grid') return;
+    if (!sentinel || !hasMoreVideos || loadingMoreVideos || viewMode !== 'grid' || !onLoadMoreVideos) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((count) => Math.min(count + VIDEO_PAGE_SIZE, filteredVideos.length));
-        }
+        if (entries[0]?.isIntersecting) onLoadMoreVideos();
       },
       { rootMargin: '200px' },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMoreVideos, filteredVideos.length, viewMode]);
+  }, [hasMoreVideos, loadingMoreVideos, onLoadMoreVideos, viewMode]);
 
   const safeIndex =
     filteredVideos.length > 0 ? Math.min(activeIndex, filteredVideos.length - 1) : 0;
   const currentVideo = filteredVideos[safeIndex] ?? null;
+
+  // PC 沉浸刷看：滑到倒数几条时自动加载下一页
+  useEffect(() => {
+    if (viewMode !== 'feed' || !hasMoreVideos || loadingMoreVideos || !onLoadMoreVideos) return;
+    if (filteredVideos.length > 0 && safeIndex >= filteredVideos.length - 3) {
+      onLoadMoreVideos();
+    }
+  }, [viewMode, hasMoreVideos, loadingMoreVideos, onLoadMoreVideos, safeIndex, filteredVideos.length]);
 
   /** 视频模块激活时以当前视频标题作为页面标题，离开时恢复站点标题 */
   useEffect(() => {
@@ -609,12 +615,11 @@ export function VideosView({
             <div ref={loadMoreRef} className="flex justify-center py-6">
               <button
                 type="button"
-                onClick={() =>
-                  setVisibleCount((count) => Math.min(count + VIDEO_PAGE_SIZE, filteredVideos.length))
-                }
-                className="rounded-full bg-white/10 px-5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20"
+                onClick={() => onLoadMoreVideos?.()}
+                disabled={loadingMoreVideos}
+                className="rounded-full bg-white/10 px-5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20 disabled:opacity-50"
               >
-                加载更多
+                {loadingMoreVideos ? '加载中…' : '加载更多'}
               </button>
             </div>
           ) : (

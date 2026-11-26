@@ -3,7 +3,7 @@ import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
 import { SWIFTUI_SNAPPY } from '../../lib/motion';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
-import { navIconComponent, navIconUrl, parseNav, type SidebarNavItem } from './navConfig';
+import { navIconUrl, parseNav } from './navConfig';
 
 interface LeftSidebarProps {
   activeSection: string;
@@ -15,7 +15,14 @@ interface LeftSidebarProps {
  * 不在此列表中的 id（CMS 新增的自定义模块）仍然渲染入口，
  * 但内容区会退化为占位页面，避免「点了没反应」。
  */
-export const BUILTIN_SECTIONS: readonly string[] = ['videos', 'articles', 'gallery', 'messages', 'profile'];
+export const BUILTIN_SECTIONS: readonly string[] = [
+  'videos',
+  'articles',
+  'gallery',
+  'messages',
+  'profile',
+  'settings',
+];
 
 export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
   const { title, config } = useSystemInfo();
@@ -58,9 +65,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         <nav aria-label="板块导航" className="space-y-1.5">
           {navItems.map(({ id, label, iconUrl }) => {
             const isActive = activeSection === id;
-            // 图标完全由 CMS 提供；未上传时按板块 id 回退默认图标
-            const Icon = navIconComponent(id);
-            const customIcon = navIconUrl({ id, label, iconUrl });
+            const customIcon = navIconUrl({ iconUrl });
             return (
               <motion.button
                 key={id}
@@ -91,12 +96,9 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
                     className="relative z-10 w-5 h-5 shrink-0 object-contain"
                   />
                 ) : (
-                  <Icon
-                    className={`relative z-10 w-5 h-5 shrink-0 ${
-                      isActive ? 'text-[#0071E3] dark:text-[#0A84FF]' : ''
-                    }`}
-                    strokeWidth={isActive ? 2.2 : 1.8}
-                  />
+                  <span className="relative z-10 lg:hidden whitespace-nowrap truncate text-[12px]">
+                    {label}
+                  </span>
                 )}
                 <span className="relative z-10 hidden lg:inline whitespace-nowrap truncate">
                   {label}
