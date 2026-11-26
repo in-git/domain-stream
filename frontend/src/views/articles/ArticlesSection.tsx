@@ -1,4 +1,4 @@
-import type { ArticleItem } from '../../data/content';
+import type { ArticleItem } from '../../types/content';
 import { ArticlesView } from './ArticlesView';
 import { PortalEmpty, PortalError, SectionSkeleton } from '../../components/PortalStates';
 

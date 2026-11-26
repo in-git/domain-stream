@@ -39,13 +39,12 @@ export default function App() {
   const { loadSection } = data;
   const player = usePersistentPlayer();
 
-  /* 每次切换到板块时都重新拉取该板块数据；设置中心里的个人中心需要三类内容，
-     进入设置时先把视频、文章、图文都加载好。自定义模块没有数据源，直接跳过。 */
+  /* 按需加载：只拉取当前进入的板块数据，设置页不再预加载视频/文章/图文。
+     自定义模块没有数据源，退化为拉取视频；留言墙每次进入都重新拉取。 */
   useEffect(() => {
-    if (activeSection === 'settings') {
-      (['videos', 'articles', 'gallery'] as const).forEach((section) =>
-        void data.loadSection(section)
-      );
+    // 留言墙每次进入都重新拉取，避免切回时展示过期留言
+    if (activeSection === 'messages') {
+      void data.loadSection('messages', true);
       return;
     }
     // 自定义模块没有数据源，但整页刷新时仍要保证有内容板块被加载，否则页面空白
@@ -149,27 +148,27 @@ export default function App() {
             onClick={session.closeLogoutConfirm}
           >
             <div
-              className="w-full max-w-[320px] rounded-2xl bg-white p-5 text-center shadow-2xl dark:bg-[#1C1C1E]"
+              className="w-full max-w-[320px] rounded-app bg-app-bg p-5 text-center shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <h2 className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <h2 className="text-[16px] font-semibold text-app-text">
                 退出登录
               </h2>
-              <p className="mt-2 text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+              <p className="mt-2 text-[13px] text-app-muted">
                 确定要退出当前账号吗？
               </p>
-              <div className="mt-5 flex gap-2.5">
+              <div className="mt-5 flex gap-2">
                 <button
                   type="button"
                   onClick={session.closeLogoutConfirm}
-                  className="flex-1 rounded-xl bg-[#F2F2F7] py-2.5 text-[13px] font-medium text-[#1D1D1F] dark:bg-[#2C2C2E] dark:text-[#F5F5F7]"
+                  className="flex-1 rounded-app bg-app-surface py-2 text-[13px] font-medium text-app-text dark:bg-app-surface dark:text-app-text"
                 >
                   取消
                 </button>
                 <button
                   type="button"
                   onClick={session.doLogout}
-                  className="flex-1 rounded-xl bg-[#FF3B30] py-2.5 text-[13px] font-medium text-white"
+                  className="flex-1 rounded-app bg-[#FF3B30] py-2 text-[13px] font-medium text-white"
                 >
                   退出
                 </button>

@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
   ListOrdered,
   Loader2,
+  Palette,
   RefreshCw,
   RotateCcw,
   Save,
@@ -40,6 +41,9 @@ import { NavItemsEditor } from './NavItemsEditor';
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
+
+/** 主题配置字段，单独放在「主题配置」Tab 中维护 */
+const THEME_FIELD_KEYS = ['themeColor', 'themeRadius'];
 
 /** 配置里存的是纯后端路径，CMS 预览时补回 /snowy 代理前缀 */
 function previewUrl(raw: string): string {
@@ -94,6 +98,71 @@ function FieldControl({
         offLabel="禁止"
         ariaLabel={field.label}
         className="ml-auto"
+      />
+    );
+  }
+
+  if (field.control === 'color') {
+    const colorValue = /^#[0-9a-fA-F]{6}$/.test(value) ? value : field.defaultValue;
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={colorValue}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label={field.label}
+            className="h-10 w-12 shrink-0 rounded-xl border border-[#D2D2D7] bg-white p-1 cursor-pointer"
+          />
+          <input
+            type="text"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={field.defaultValue}
+            className="min-w-0 flex-1 h-10 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[13px] text-[#1D1D1F] font-mono outline-none focus:border-[#0071E3]"
+          />
+        </div>
+        {field.presets && field.presets.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {field.presets.map((preset) => {
+              const active = value.toLowerCase() === preset.value.toLowerCase();
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  title={`${preset.label} ${preset.value}`}
+                  aria-label={`使用${preset.label}主题色 ${preset.value}`}
+                  onClick={() => onChange(preset.value)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                    active
+                      ? 'border-[#1D1D1F] bg-[#1D1D1F] text-white'
+                      : 'border-[#D2D2D7] bg-white text-[#6E6E73] hover:border-[#8E8E93]'
+                  }`}
+                >
+                  <span
+                    className="h-4 w-4 rounded-full border border-black/10"
+                    style={{ backgroundColor: preset.value }}
+                  />
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (field.control === 'number') {
+    return (
+      <input
+        type="number"
+        min={0}
+        max={64}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={field.placeholder || field.defaultValue}
+        className="w-full h-10 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[13px] text-[#1D1D1F] outline-none focus:border-[#0071E3]"
       />
     );
   }
@@ -176,14 +245,22 @@ export default function ConfigView() {
 
   /** 正在通过文件选择器设置的字段（null 表示未打开） */
   const [pickerField, setPickerField] = useState<string | null>(null);
-  /** 当前编辑分组：页面配置 / 侧边栏导航 */
-  const [tab, setTab] = useState<'basic' | 'nav'>('basic');
+  /** 当前编辑分组：页面配置 / 主题配置 / 侧边栏导航 */
+  const [tab, setTab] = useState<'basic' | 'theme' | 'nav'>('basic');
   /** 底部折叠区：地址与备案信息默认收起，展开才可见 */
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  /** 基础属性字段：排除导航列表，导航用独立 Tab 与拖拽编辑器 */
+  /** 主题配置字段：单独 Tab 维护 */
+  const themeFields = useMemo(
+    () => CONFIG_FIELDS.filter((field) => THEME_FIELD_KEYS.includes(field.key)),
+    []
+  );
+  /** 基础属性字段：排除主题和导航，分别用独立 Tab 维护 */
   const basicFields = useMemo(
-    () => CONFIG_FIELDS.filter((field) => field.control !== 'navList'),
+    () =>
+      CONFIG_FIELDS.filter(
+        (field) => field.control !== 'navList' && !THEME_FIELD_KEYS.includes(field.key)
+      ),
     []
   );
   /** Logo 与图标同排展示 */
@@ -210,7 +287,12 @@ export default function ConfigView() {
     [basicFields, brandFields, advancedFields]
   );
   /** 参与当前 Tab 的字段，用于判断是否有未保存改动 */
-  const tabFields = tab === 'nav' ? CONFIG_FIELDS.filter((f) => f.control === 'navList') : basicFields;
+  const tabFields =
+    tab === 'nav'
+      ? CONFIG_FIELDS.filter((field) => field.control === 'navList')
+      : tab === 'theme'
+        ? themeFields
+        : basicFields;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -260,7 +342,7 @@ export default function ConfigView() {
   }, []);
 
   async function handleSave() {
-    if (!draft || pendingKeys.length === 0) return;
+    if (!draft || !hasAnyChange) return;
     setSaving(true);
     try {
       // 一次提交全部属性：后端整体覆盖写入（存在则更新、不存在则新增，允许空值）
@@ -370,6 +452,7 @@ export default function ConfigView() {
           <div className="shrink-0 flex items-center gap-1 px-4 pt-3 border-b border-[#E5E5EA] bg-[#FAFAFC]">
             {[
               { key: 'basic' as const, label: '页面配置', icon: SlidersHorizontal },
+              { key: 'theme' as const, label: '主题配置', icon: Palette },
               { key: 'nav' as const, label: '侧边栏导航', icon: ListOrdered },
             ].map((item) => {
               const active = tab === item.key;
@@ -402,6 +485,17 @@ export default function ConfigView() {
             </div>
           ) : !draft ? (
             <div className="flex-1 py-16 text-center text-[13px] text-[#86868B]">配置加载失败</div>
+          ) : tab === 'theme' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="divide-y divide-[#F0F0F2]">
+                {themeFields.map((field) => (
+                  <div key={field.key} className="px-5 py-4">
+                    {renderField(field)}
+                  </div>
+                ))}
+              </div>
+           
+            </div>
           ) : tab === 'nav' ? (
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               {CONFIG_FIELDS.filter((field) => field.control === 'navList').map((field) => (

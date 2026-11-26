@@ -44,8 +44,8 @@ export function MobileTabBar({
                     ? 'text-white'
                     : 'text-white/55'
                   : isActive
-                    ? 'text-[#1D1D1F] dark:text-white'
-                    : 'text-[#8E8E93] dark:text-white/55'
+                    ? 'text-app-text'
+                    : 'text-app-subtle dark:text-white/55'
               }`}
               aria-current={isActive ? 'page' : undefined}
             >

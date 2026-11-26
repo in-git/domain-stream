@@ -5,8 +5,8 @@ import { A11y, Keyboard, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
 import { X } from 'lucide-react';
-import type { VideoItem } from '../../data/content';
-import { FeedSlide } from './FeedSlide';
+import type { VideoItem } from '../types/content';
+import { FeedSlide } from '../views/videos/FeedSlide';
 
 interface ImmersiveModalProps {
   /** 当前页的搜索结果（卡片模式里过滤后的视频） */

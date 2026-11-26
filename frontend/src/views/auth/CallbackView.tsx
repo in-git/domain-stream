@@ -16,8 +16,8 @@ const PLATFORM_NAMES: Record<string, string> = {
 };
 
 const fieldClass =
-  'w-full h-14 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.12] dark:border-white/[0.16] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-[#0071E3] dark:focus:border-[#0A84FF] focus:outline-none focus:ring-4 focus:ring-[#0071E3]/12 text-[15px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] transition-all';
-const labelClass = 'block text-[13px] font-medium text-[#6E6E73] dark:text-[#98989D] mb-2';
+  'w-full h-14 rounded-app bg-app-card border border-app-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-app-primary focus:outline-none focus:ring-4 focus:ring-app-primary/12 text-[15px] text-app-text placeholder:text-app-muted transition-all';
+const labelClass = 'block text-[13px] font-medium text-app-muted mb-2';
 
 /** 第三方授权回调落地页：换取 token；未绑定账号时展示绑定表单 */
 export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
@@ -106,14 +106,14 @@ export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
     >
       {loading && (
         <div className="py-16 flex flex-col items-center gap-5 text-center">
-          <Loader2 className="h-9 w-9 animate-spin text-[#0071E3] dark:text-[#0A84FF]" />
-          <p className="text-[14px] text-[#6E6E73] dark:text-[#98989D]">正在与 {platformName} 交换授权信息...</p>
+          <Loader2 className="h-9 w-9 animate-spin text-app-primary" />
+          <p className="text-[14px] text-app-muted">正在与 {platformName} 交换授权信息...</p>
         </div>
       )}
 
       {!loading && needBind && (
         <form onSubmit={handleBind} className="space-y-5">
-          <div className="rounded-2xl bg-[#F5F5F7] dark:bg-[#242426] px-4 py-3.5 text-[13px] leading-relaxed text-[#6E6E73] dark:text-[#98989D]">
+          <div className="rounded-app bg-app-surface dark:bg-[#242426] px-4 py-3.5 text-[13px] leading-relaxed text-app-muted">
             该 {platformName} 账号尚未绑定本站账号，请使用已有账号密码完成绑定。
           </div>
           <div>
@@ -121,7 +121,7 @@ export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
               账号
             </label>
             <div className="relative">
-              <UserRound className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <UserRound className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="bind-account"
                 type="text"
@@ -137,7 +137,7 @@ export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
               密码
             </label>
             <div className="relative">
-              <Lock className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Lock className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="bind-password"
                 type="password"
@@ -149,7 +149,7 @@ export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
             </div>
           </div>
           {error && (
-            <p role="alert" className="rounded-2xl bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 text-[13px] text-[#D70015] dark:text-[#FF453A]">
+            <p role="alert" className="rounded-app bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 text-[13px] text-[#D70015] dark:text-[#FF453A]">
               {error}
             </p>
           )}
@@ -157,7 +157,7 @@ export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
             type="submit"
             whileTap={{ scale: 0.99 }}
             disabled={bindLoading}
-            className="w-full h-14 rounded-2xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60"
+            className="w-full h-14 rounded-app bg-app-primary dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60"
           >
             {bindLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
             {bindLoading ? '正在绑定...' : '确认绑定并登录'}
@@ -174,7 +174,7 @@ export function CallbackView({ platform, onSuccess }: CallbackViewProps) {
           <button
             type="button"
             onClick={() => navigate('/login')}
-            className="w-full h-14 rounded-2xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[15px] font-medium hover:brightness-110"
+            className="w-full h-14 rounded-app bg-app-primary dark:bg-[#0A84FF] text-white text-[15px] font-medium hover:brightness-110"
           >
             重新登录
           </button>

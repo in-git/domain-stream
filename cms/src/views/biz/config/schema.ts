@@ -16,9 +16,11 @@ import type { PageConfigItem } from '../../../lib/pageConfig.ts';
  * - text    文本框
  * - upload  图片上传（前端转 WebP 后走文件中心上传）
  * - switch  布尔开关（值存 YES / NO）
+ * - color   颜色选择（值存 #RRGGBB）
+ * - number  数字输入（值存数字字符串，如 8）
  * - navList 侧边栏导航列表（值是 JSON 数组字符串，由专用编辑器维护）
  */
-export type ConfigControl = 'text' | 'upload' | 'switch' | 'navList';
+export type ConfigControl = 'text' | 'upload' | 'switch' | 'color' | 'number' | 'navList';
 
 export interface ConfigFieldDef {
   /** JSON 中的属性名（回写数据库时使用） */
@@ -32,9 +34,27 @@ export interface ConfigFieldDef {
   /** 数据库中还没有该属性时的初始值 */
   defaultValue: string;
   placeholder?: string;
+  /** 颜色控件的预设候选色 */
+  presets?: { label: string; value: string }[];
   /** 兼容旧数据里用过的属性名（读值时优先按 aliases 兜底） */
   aliases?: string[];
 }
+
+/** 知名企业高亮色，供 CMS 配置时快速选取 */
+export const THEME_COLOR_PRESETS: { label: string; value: string }[] = [
+  { label: 'Apple', value: '#0071E3' },
+  { label: 'Google', value: '#4285F4' },
+  { label: 'Microsoft', value: '#0078D4' },
+  { label: 'Meta', value: '#1877F2' },
+  { label: 'Amazon', value: '#FF9900' },
+  { label: 'Netflix', value: '#E50914' },
+  { label: 'Spotify', value: '#1DB954' },
+  { label: 'NVIDIA', value: '#76B900' },
+  { label: 'Tesla', value: '#E82127' },
+  { label: 'Adobe', value: '#EB1000' },
+  { label: 'Coca-Cola', value: '#F40009' },
+  { label: 'X', value: '#000000' },
+];
 
 /** 客户端可配置属性清单 —— 新增属性只改这里 */
 export const CONFIG_FIELDS: ConfigFieldDef[] = [
@@ -60,11 +80,48 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     defaultValue: '',
   },
   {
+    key: 'themeColor',
+    label: '高亮色',
+    description: '按钮、链接与焦点状态的高亮色',
+    control: 'color',
+    defaultValue: '#0071E3',
+    presets: THEME_COLOR_PRESETS,
+  },
+  {
+    key: 'themeRadius',
+    label: '圆角（px）',
+    description: '全局圆角，留空回退为 8px',
+    control: 'number',
+    defaultValue: '8',
+    placeholder: '8',
+  },
+  {
     key: 'clientUrl',
     label: '客户端地址',
     description: '前台客户端站点的访问地址，如：https://www.example.com',
     defaultValue: '',
     placeholder: '请输入客户端地址',
+  },
+  {
+    key: 'bilibiliUrl',
+    label: 'B 站个人主页',
+    description: '显示在客户端「关于」页面',
+    defaultValue: 'https://space.bilibili.com/3706965849016893?spm_id_from=333.1007.0.0',
+    placeholder: '请输入 B 站个人主页地址',
+  },
+  {
+    key: 'douyinUrl',
+    label: '抖音主页',
+    description: '显示在客户端「关于」页面',
+    defaultValue: 'https://www.douyin.com/',
+    placeholder: '请输入抖音主页地址',
+  },
+  {
+    key: 'githubUrl',
+    label: 'GitHub 开源地址',
+    description: '显示在客户端「关于」页面',
+    defaultValue: 'https://github.com/in-git/domain-stream',
+    placeholder: '请输入 GitHub 开源地址',
   },
   {
     key: 'cmsUrl',

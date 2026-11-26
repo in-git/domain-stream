@@ -1,4 +1,4 @@
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { VideosView } from './VideosView';
 import { PortalError, SectionSkeleton } from '../../components/PortalStates';
 
@@ -107,13 +107,13 @@ export function VideosSection({
       />
 
       {active && loading && videos.length === 0 && (
-        <div className="absolute inset-0 z-20 bg-[#F5F5F7] dark:bg-[#0A0A0C]">
+        <div className="absolute inset-0 z-20 bg-app-surface dark:bg-[#0A0A0C]">
           <SectionSkeleton section="videos" />
         </div>
       )}
 
       {active && error && videos.length === 0 && (
-        <div className="absolute inset-0 z-20 bg-white dark:bg-[#0A0A0C]">
+        <div className="absolute inset-0 z-20 bg-app-card dark:bg-[#0A0A0C]">
           <PortalError section="videos" message={error} onRetry={onRetry} />
         </div>
       )}

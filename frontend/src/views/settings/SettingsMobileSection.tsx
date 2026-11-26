@@ -3,15 +3,15 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Bookmark,
+  Star,
   ChevronRight,
   Edit3,
   Heart,
   Info,
-  MoreHorizontal,
+  MessageCircle,
   UserRound,
 } from 'lucide-react';
-import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
+import type { ArticleItem, PhotoItem, VideoItem } from '../../types/content';
 import { ResilientImage } from '../../components/ResilientImage';
 import { SecondaryPage } from '../../components/SecondaryPage';
 import { FavoritesMobileView } from '../profile/FavoritesMobileView';
@@ -19,12 +19,16 @@ import { SettingDetail, type SettingKey } from './SettingsSection';
 
 interface SettingsMobileSectionProps {
   profileContent: ReactNode;
+  messagesContent: ReactNode;
   profileFocusToken: number;
   profileName: string;
   profileHandle: string;
   profileBio: string;
   profileAvatar: string;
+  isLoggedIn: boolean;
   onOpenEditProfile: () => void;
+  onOpenFavorites: () => void;
+  onOpenMessages: () => void;
   videos: VideoItem[];
   articles: ArticleItem[];
   photos: PhotoItem[];
@@ -45,7 +49,7 @@ const MOBILE_ACTIONS = [
   {
     key: 'favorites',
     label: '收藏',
-    Icon: Bookmark,
+    Icon: Star,
   },
   {
     key: 'about',
@@ -53,20 +57,24 @@ const MOBILE_ACTIONS = [
     Icon: Info,
   },
   {
-    key: 'more',
-    label: '更多',
-    Icon: MoreHorizontal,
+    key: 'messages',
+    label: '留言',
+    Icon: MessageCircle,
   },
 ] as const;
 
 export function SettingsMobileSection({
   profileContent,
+  messagesContent,
   profileFocusToken,
   profileName,
   profileHandle,
   profileBio,
   profileAvatar,
+  isLoggedIn,
   onOpenEditProfile,
+  onOpenFavorites,
+  onOpenMessages,
   videos,
   articles,
   photos,
@@ -93,6 +101,10 @@ export function SettingsMobileSection({
             videos={videos}
             articles={articles}
             photos={photos}
+            likedIds={likedIds}
+            savedIds={savedIds}
+            onToggleLike={onToggleLike}
+            onToggleSave={onToggleSave}
             ids={likedIds}
             onToggle={onToggleLike}
             mode="like"
@@ -103,16 +115,24 @@ export function SettingsMobileSection({
             videos={videos}
             articles={articles}
             photos={photos}
+            likedIds={likedIds}
+            savedIds={savedIds}
+            onToggleLike={onToggleLike}
+            onToggleSave={onToggleSave}
             ids={savedIds}
             onToggle={onToggleSave}
             mode="favorite"
           />
         )}
-        {(detailKey === 'about' || detailKey === 'more') && (
-          <div className="border-[0.5px] border-black/[0.04] bg-white dark:border-white/[0.05] dark:bg-[#161618]">
+        {detailKey === 'messages' && (
+          <div className="px-2 py-4">{messagesContent}</div>
+        )}
+        {detailKey === 'about' && (
+          <div className="border-[0.5px] border-app-border bg-app-card dark:border-app-border dark:bg-app-card">
             <SettingDetail
               itemKey={detailKey}
               profileContent={profileContent}
+              dense
               videos={videos}
               articles={articles}
               photos={photos}
@@ -130,18 +150,20 @@ export function SettingsMobileSection({
   return (
     <section
       ref={rootRef}
-      className="h-full w-full overflow-y-auto bg-white pb-10 dark:bg-[#08080A]"
+      className="h-full w-full overflow-y-auto bg-app-card pb-10 dark:bg-[#08080A]"
     >
       <div className="space-y-3">
-        <div className="relative bg-[linear-gradient(120deg,#F5F5F7_0%,#FFFFFF_45%,#EBEBEF_100%)] px-8 pb-8 pt-12 dark:bg-white/5">
-          <button
-            type="button"
-            onClick={onOpenEditProfile}
-            className="absolute right-6 top-3 inline-flex items-center gap-1.5 border-[0.5px] border-black/[0.04] bg-white px-3 py-1.5 text-[12px] font-medium text-[#1D1D1F] dark:border-white/[0.05] dark:bg-[#1C1C1E] dark:text-white"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
-            编辑资料
-          </button>
+        <div className="relative bg-[linear-gradient(120deg,var(--app-color-surface)_0%,var(--app-color-card)_45%,var(--app-color-surface)_100%)] px-8 pb-8 pt-12 dark:bg-white/5">
+          {isLoggedIn && (
+            <button
+              type="button"
+              onClick={onOpenEditProfile}
+              className="absolute right-6 top-3 inline-flex items-center gap-1.5 rounded-app border-[0.5px] border-app-border bg-app-card px-3 py-1.5 text-[12px] font-medium text-app-text dark:border-app-border dark:bg-app-card dark:text-white"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+              编辑资料
+            </button>
+          )}
           <button
             type="button"
             onClick={() =>
@@ -149,7 +171,7 @@ export function SettingsMobileSection({
             }
             className="flex w-full items-center gap-4 text-left"
           >
-            <span className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E5EA] dark:bg-[#2C2C2E]">
+            <span className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E5EA] dark:bg-app-surface">
               <ResilientImage
                 src={profileAvatar}
                 alt={profileName || '用户'}
@@ -160,16 +182,16 @@ export function SettingsMobileSection({
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
-                <span className="truncate text-[19px] font-semibold text-[#1D1D1F] dark:text-white">
+                <span className="truncate text-[19px] font-semibold text-app-text">
                   {profileName || '用户'}
                 </span>
                 {profileHandle && (
-                  <span className="shrink-0 rounded border-[0.5px] border-black/[0.04] px-1.5 py-0.5 text-[10px] text-[#1D1D1F] dark:border-white/[0.05] dark:text-white">
+                  <span className="shrink-0 rounded border-[0.5px] border-app-border px-1.5 py-0.5 text-[10px] text-app-text dark:border-app-border dark:text-white">
                     {profileHandle}
                   </span>
                 )}
               </span>
-              <span className="mt-1 block truncate text-[12px] text-[#8E8E93]">
+              <span className="mt-1 block truncate text-[12px] text-app-subtle">
                 {profileBio || '这个人很神秘，还没有填写简介'}
               </span>
             </span>
@@ -182,10 +204,14 @@ export function SettingsMobileSection({
             <button
               key={key}
               type="button"
-              onClick={() => setDetailKey(key)}
+              onClick={() => {
+                if (key === 'likes' || key === 'favorites') onOpenFavorites();
+                if (key === 'messages') onOpenMessages();
+                setDetailKey(key);
+              }}
               className="flex flex-col items-center gap-2 py-2"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/[0.06] text-[#1D1D1F] dark:bg-white/10 dark:text-white">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/[0.06] text-app-text dark:bg-white/10 dark:text-white">
                 <Icon className="h-[20px] w-[20px]" strokeWidth={1.8} />
               </span>
               <span className="text-[12px] text-[#3A3A3C] dark:text-white/80">{label}</span>
@@ -197,10 +223,6 @@ export function SettingsMobileSection({
           {profileContent}
         </div>
 
-        <div className="flex items-center justify-center gap-2 text-[#8E8E93]">
-          <UserRound className="h-3.5 w-3.5" />
-          <span className="text-[11px]">设置数据仅保存在当前设备</span>
-        </div>
       </div>
     </section>
   );

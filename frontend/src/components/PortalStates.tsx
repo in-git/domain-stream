@@ -7,7 +7,7 @@ import {
   Newspaper,
   RefreshCw,
 } from 'lucide-react';
-import type { SectionId } from '../data/content';
+import type { SectionId } from '../types/content';
 import { APPLE_EASE } from '../lib/motion';
 
 type ContentSection = Exclude<SectionId, 'profile' | 'settings'>;
@@ -46,19 +46,19 @@ export function ErrorState({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: APPLE_EASE }}
-      className={`mt-2.5 rounded-[24px] bg-[#FF3B30]/[0.04] dark:bg-[#FF3B30]/[0.06] text-center sm:mt-1.5 md:mt-2 lg:mt-3 xl:mt-4 2xl:mt-4 ${
+      className={`mt-2 rounded-app bg-[#FF3B30]/[0.04] dark:bg-[#FF3B30]/[0.06] text-center sm:mt-1.5 md:mt-2 lg:mt-3 xl:mt-4 2xl:mt-4 ${
         compact ? 'px-5 py-10' : 'px-6 py-16'
       } ${className}`}
     >
       <div
-        className={`mx-auto flex items-center justify-center rounded-[18px] bg-[#FF3B30]/10 ${
+        className={`mx-auto flex items-center justify-center rounded-app bg-[#FF3B30]/10 ${
           compact ? 'mb-3 w-10 h-10' : 'mb-4 w-14 h-14'
         }`}
       >
         <AlertCircle className="w-6 h-6 text-[#D70015]" strokeWidth={1.7} />
       </div>
-      <h2 className="text-[17px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">{title}</h2>
-      <p className="mt-2 text-[13px] text-[#86868B] dark:text-[#A1A1A6] max-w-md mx-auto">
+      <h2 className="text-[17px] font-semibold text-app-text">{title}</h2>
+      <p className="mt-2 text-[13px] text-app-muted max-w-md mx-auto">
         {message}
       </p>
       {onRetry && (
@@ -67,7 +67,7 @@ export function ErrorState({
           onClick={onRetry}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
-          className="mt-6 h-10 px-5 rounded-[14px] bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-2"
+          className="mt-6 h-10 px-5 rounded-app bg-app-primary hover:bg-app-primary text-white text-[13px] font-medium inline-flex items-center gap-2"
         >
           <RefreshCw className="w-4 h-4" />
           重新加载
@@ -123,15 +123,15 @@ export function EmptyState({
     >
       {Icon && (
         <div
-          className={`mx-auto flex items-center justify-center rounded-[18px] ${
-            onDark ? 'bg-white/10' : 'bg-[#F5F5F7] dark:bg-white/[0.06]'
+          className={`mx-auto flex items-center justify-center rounded-app ${
+            onDark ? 'bg-white/10' : 'bg-app-surface dark:bg-white/[0.06]'
           } ${compact ? 'mb-3 w-10 h-10' : 'mb-4 w-14 h-14'}`}
         >
           <Icon
             className={
               onDark
                 ? compact ? 'w-5 h-5 text-white/70' : 'w-6 h-6 text-white/70'
-                : compact ? 'w-5 h-5 text-[#AEAEB2]' : 'w-6 h-6 text-[#AEAEB2] dark:text-[#636366]'
+                : compact ? 'w-5 h-5 text-app-subtle' : 'w-6 h-6 text-app-subtle dark:text-[#636366]'
             }
             strokeWidth={1.6}
           />
@@ -139,7 +139,7 @@ export function EmptyState({
       )}
       <h2
         className={`text-[17px] font-semibold ${
-          onDark ? 'text-white' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+          onDark ? 'text-white' : 'text-app-text'
         }`}
       >
         {title}
@@ -147,7 +147,7 @@ export function EmptyState({
       {description && (
         <p
           className={`mt-2 text-[13px] ${
-            onDark ? 'text-white/65' : 'text-[#86868B] dark:text-[#A1A1A6]'
+            onDark ? 'text-white/65' : 'text-app-muted'
           }`}
         >
           {description}
@@ -176,7 +176,7 @@ export function PortalEmpty({
           <button
             type="button"
             onClick={onRetry}
-            className="h-9 px-4 rounded-xl bg-white dark:bg-white/[0.06] border border-[#E5E5EA] dark:border-white/10 text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] inline-flex items-center gap-2 hover:bg-[#F5F5F7] dark:hover:bg-white/[0.1] transition-colors"
+            className="h-9 px-4 rounded-app bg-app-card dark:bg-white/[0.06] border border-app-border text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] inline-flex items-center gap-2 hover:bg-app-surface dark:hover:bg-white/[0.1] transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             刷新内容

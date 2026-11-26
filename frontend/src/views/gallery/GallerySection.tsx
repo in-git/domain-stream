@@ -1,4 +1,4 @@
-import type { PhotoItem } from '../../data/content';
+import type { PhotoItem } from '../../types/content';
 import { GalleryView } from './GalleryView';
 import { PortalEmpty, PortalError, SectionSkeleton } from '../../components/PortalStates';
 

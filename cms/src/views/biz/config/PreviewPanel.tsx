@@ -29,6 +29,8 @@ export function PreviewPanel({ values, className }: PreviewPanelProps) {
   const logoUrl = previewUrl((values.logoUrl || '').trim());
   const icpNo = (values.icpNo || '').trim();
   const policeNo = (values.policeNo || '').trim();
+  const themeColor = values.themeColor || '#0071E3';
+  const themeRadius = values.themeRadius || '8';
   const json = useMemo(() => draftToJson(values), [values]);
   // 仅展示已启用的导航项，与客户端侧边栏一致
   const navItems = useMemo(
@@ -48,7 +50,10 @@ export function PreviewPanel({ values, className }: PreviewPanelProps) {
 
       <div className="flex-1 min-h-0 p-4 flex flex-col">
         {/* 模拟浏览器窗口：占满预览区全部剩余高度 */}
-        <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-[#D2D2D7] overflow-hidden bg-white">
+        <div
+          className="flex-1 min-h-0 flex flex-col border border-[#D2D2D7] overflow-hidden bg-white"
+          style={{ borderRadius: `${themeRadius}px` }}
+        >
           <div className="shrink-0 flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] border-b border-[#E5E5EA]">
             <span className="flex gap-1.5">
               <i className="w-2 h-2 rounded-full bg-[#FF5F57]" />
@@ -63,7 +68,7 @@ export function PreviewPanel({ values, className }: PreviewPanelProps) {
           </div>
 
           {/* 站点预览区：左侧为侧边栏导航示意，右侧为主内容 */}
-          <div className="flex-1 min-h-0 flex" style={{ borderTop: '3px solid #0071E3' }}>
+          <div className="flex-1 min-h-0 flex" style={{ borderTop: `3px solid ${themeColor}` }}>
             <div className="w-[128px] shrink-0 border-r border-[#E5E5EA] bg-[#FAFAFC] px-2 pt-3 pb-2 flex flex-col">
               <div className="flex items-center justify-start gap-2 mb-2 px-1">
                 {logoUrl ? (

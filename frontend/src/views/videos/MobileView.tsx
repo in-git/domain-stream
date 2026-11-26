@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Play } from 'lucide-react';
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import type { CategoryBarProps, VideoGridProps } from './shared';
@@ -10,8 +10,8 @@ import type { CategoryBarProps, VideoGridProps } from './shared';
  * ------------------------------------------------------------------ */
 export function MobileGridCategories({ categories, category, onChange }: CategoryBarProps) {
   return (
-    <div className="sticky top-14 z-10 bg-black px-2.5 backdrop-blur-xl sm:hidden">
-      <div className="flex items-center gap-2.5 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="sticky top-14 z-10 bg-black px-2 backdrop-blur-xl sm:hidden">
+      <div className="flex items-center gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {(['全部', ...categories] as const).map((item) => {
           const active = category === item;
           return (
@@ -22,7 +22,7 @@ export function MobileGridCategories({ categories, category, onChange }: Categor
               aria-selected={active}
               onClick={() => onChange(item)}
               className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-                active ? 'bg-white font-medium text-[#1D1D1F]' : 'bg-white/[0.08] text-[#98989D]'
+                active ? 'bg-app-card font-medium text-app-text' : 'bg-white/[0.08] text-app-muted'
               }`}
             >
               {item}
@@ -43,7 +43,7 @@ function MobileBanner({ video, onOpen }: { video: VideoItem; onOpen: () => void 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SWIFTUI_SMOOTH}
-      className="relative mb-2.5 overflow-hidden rounded-md bg-black"
+      className="relative mb-2 overflow-hidden rounded-app bg-black"
     >
       <button
         type="button"
@@ -95,7 +95,7 @@ function MobileGridCard({ video, index, onOpen }: MobileGridCardProps) {
       transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
       className="min-w-0"
     >
-      <div className="group overflow-hidden rounded-md">
+      <div className="group overflow-hidden rounded-app">
         <div className="relative overflow-hidden">
           <button
             type="button"
@@ -114,8 +114,8 @@ function MobileGridCard({ video, index, onOpen }: MobileGridCardProps) {
             {video.category}
           </span>
         </div>
-        <div className="px-2.5 py-2">
-          <h3 className="text-[12px] leading-snug text-[#F5F5F7] line-clamp-2">{video.title}</h3>
+        <div className="px-2 py-2">
+          <h3 className="text-[12px] leading-snug text-app-text line-clamp-2">{video.title}</h3>
         </div>
       </div>
     </motion.article>
@@ -131,7 +131,7 @@ export function MobileVideoGrid({
   return (
     <div className="sm:hidden">
       {videos.length > 0 && <MobileBanner video={videos[0]} onOpen={() => onOpen(videos[0])} />}
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-2">
         {videos.slice(1).map((video, idx) => (
           <MobileGridCard
             key={video.id}

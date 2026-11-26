@@ -19,6 +19,8 @@ interface MainHeaderProps {
   solidBlack?: boolean;
   /** 移动端首页：顶栏搜索旁显示视图切换按钮 */
   showViewToggle?: boolean;
+  /** 文章板块使用页面底色，与分类筛选区、卡片区域区分 */
+  sectionBackground?: 'default' | 'page';
   /** PC 沉浸模式：顶栏悬浮在视频上方，不占文档流位置 */
   pcImmersive?: boolean;
   viewMode?: 'feed' | 'grid';
@@ -41,6 +43,7 @@ export function MainHeader({
   overlay = false,
   solidBlack = false,
   showViewToggle = false,
+  sectionBackground = 'default',
   pcImmersive = false,
   viewMode = 'feed',
   onToggleViewMode,
@@ -66,22 +69,24 @@ export function MainHeader({
     : solidBlack
       ? 'sticky top-0 z-30 border-b border-white/10 bg-black/55 backdrop-blur-xl'
       : overlay
-        ? 'fixed inset-x-0 top-0 z-30 bg-black/55 backdrop-blur-xl md:sticky md:z-20 md:border-b md:border-black/[0.06] dark:md:border-white/[0.08] md:bg-[#FBFBFD]/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
-        : 'sticky top-0 z-20 border-b border-black/[0.06] dark:border-white/[0.08] bg-[#FBFBFD]/85 dark:bg-[#0A0A0C]/85 backdrop-blur-xl';
+        ? 'fixed inset-x-0 top-0 z-30 bg-black/55 backdrop-blur-xl md:sticky md:z-20 md:border-b md:border-app-border dark:md:border-white/[0.08] md:bg-app-surface/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
+        : sectionBackground === 'page'
+          ? 'sticky top-0 z-20 border-b border-app-border bg-app-header backdrop-blur-xl'
+          : 'sticky top-0 z-20 border-b border-app-border bg-app-surface/85 dark:bg-app-bg/85 backdrop-blur-xl';
 
   const iconClass = pcImmersive || solidBlack || overlay
     ? 'text-white hover:bg-white/15'
-    : 'text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]';
+    : 'text-app-text hover:bg-black/[0.05] dark:hover:bg-white/[0.08]';
 
   return (
     <header
       className={`h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 transition-colors duration-300 ease-out ${shellClass}`}
     >
       {/* Left: 移动端品牌 / PC 沉浸模式分类条（与搜索框同排） */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
         <span
           className={`md:hidden text-base font-semibold tracking-tight ${
-            pcImmersive || overlay || solidBlack ? 'text-white drop-shadow' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+            pcImmersive || overlay || solidBlack ? 'text-white drop-shadow' : 'text-app-text'
           }`}
         >
           {title}
@@ -98,9 +103,9 @@ export function MainHeader({
                     role="tab"
                     aria-selected={active}
                     onClick={() => onFeedCategoryChange?.(item)}
-                    className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
+                    className={`shrink-0 rounded-app px-3 py-1.5 text-xs font-medium transition-colors ${
                       active
-                        ? 'bg-white text-[#1D1D1F]'
+                        ? 'bg-app-card text-app-text'
                         : 'text-white/75 hover:bg-white/15 hover:text-white'
                     }`}
                   >
@@ -116,7 +121,7 @@ export function MainHeader({
       {/* Center: 桌面端内联搜索框（移动端改为图标入口） */}
       <div className="hidden md:block flex-1 max-w-md">
         <div className="relative flex items-center">
-          <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 pointer-events-none" />
+          <Search className="w-4 h-4 text-app-muted absolute left-3.5 pointer-events-none" />
           <input
             type="text"
             value={draft}
@@ -129,10 +134,10 @@ export function MainHeader({
             }}
             placeholder="搜索视频、文章、作品或留言"
             aria-label="搜索内容"
-            className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border border-transparent focus:border-[#0071E3]/40 focus:outline-none transition-colors text-xs sm:text-sm ${
+            className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border border-transparent focus:border-app-primary/40 focus:outline-none transition-colors text-xs sm:text-sm ${
               pcImmersive
                 ? 'bg-white/15 backdrop-blur-md text-white placeholder:text-white/60 focus:bg-white/25'
-                : 'bg-[#EEEEF0] dark:bg-[#1C1C1E] dark:focus:border-[#0A84FF]/50 focus:bg-white dark:focus:bg-[#242426] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B]'
+                : 'bg-app-surface dark:bg-app-card focus:bg-app-card dark:focus:bg-app-surface text-app-text placeholder:text-app-muted'
             }`}
           />
           {draft && (
@@ -140,7 +145,7 @@ export function MainHeader({
               type="button"
               onClick={clearSearch}
               aria-label="清空搜索"
-              className="absolute right-10 w-5 h-5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+              className="absolute right-10 w-5 h-5 rounded-full flex items-center justify-center text-app-muted hover:text-app-text dark:hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -150,7 +155,7 @@ export function MainHeader({
             onClick={submitSearch}
             aria-label="搜索"
             title="搜索"
-            className="absolute right-1.5 w-7 h-7 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center justify-center transition-colors"
+            className="absolute right-1.5 w-7 h-7 rounded-full bg-app-primary hover:bg-app-primary text-white flex items-center justify-center transition-colors"
           >
             <Search className="w-3.5 h-3.5" />
           </button>
@@ -166,9 +171,9 @@ export function MainHeader({
             aria-label={playlistOpen ? '收起播放列表' : '展开播放列表'}
             title={playlistOpen ? '收起播放列表' : '播放列表'}
             aria-pressed={playlistOpen}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-app transition-colors ${
               playlistOpen
-                ? 'bg-white text-[#1D1D1F]'
+                ? 'bg-app-card text-app-text'
                 : iconClass
             }`}
           >

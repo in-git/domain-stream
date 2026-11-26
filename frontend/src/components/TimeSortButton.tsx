@@ -28,7 +28,7 @@ export function TimeSortButton({
       title={label}
       aria-label={label}
       aria-pressed={order === 'ASC'}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#6E6E73] transition-colors hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D] dark:hover:bg-white/[0.12] ${className}`}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-app-muted transition-colors hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-app-muted dark:hover:bg-white/[0.12] ${className}`}
     >
       <ArrowDownUp
         className={`h-4 w-4 transition-transform ${order === 'ASC' ? 'rotate-180' : ''}`}

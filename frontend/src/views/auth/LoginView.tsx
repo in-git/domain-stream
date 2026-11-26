@@ -13,12 +13,12 @@ interface LoginViewProps {
 type LoginMode = 'wechat' | 'password';
 
 const fieldClass =
-  'w-full h-14 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.12] dark:border-white/[0.16] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-[#0071E3] dark:focus:border-[#0A84FF] focus:outline-none focus:ring-4 focus:ring-[#0071E3]/12 text-[15px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] transition-all';
-const labelClass = 'block text-[13px] font-medium text-[#6E6E73] dark:text-[#98989D] mb-2';
+  'w-full h-14 rounded-app bg-app-card border border-app-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-app-primary focus:outline-none focus:ring-4 focus:ring-app-primary/12 text-[15px] text-app-text placeholder:text-app-muted transition-all';
+const labelClass = 'block text-[13px] font-medium text-app-muted mb-2';
 const primaryButtonClass =
-  'w-full h-14 rounded-2xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 transition-all';
+  'w-full h-14 rounded-app bg-app-primary dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 transition-all';
 const secondaryButtonClass =
-  'w-full h-14 rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white dark:bg-[#242426] flex items-center justify-center gap-2.5 text-[15px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F5F5F7] dark:hover:bg-[#2C2C2E] disabled:opacity-50 transition-colors';
+  'w-full h-14 rounded-app border border-black/[0.08] dark:border-white/[0.12] bg-app-card flex items-center justify-center gap-2 text-[15px] font-medium text-app-text hover:bg-app-surface dark:hover:bg-[#2C2C2E] disabled:opacity-50 transition-colors';
 
 /** 当前页面上层展示的登录弹窗 */
 export function LoginView({ onSuccess, onClose }: LoginViewProps) {
@@ -145,13 +145,13 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-        className="no-scrollbar relative h-[100dvh] max-h-[100dvh] w-full max-w-[460px] overflow-y-auto rounded-none border border-black/[0.06] bg-white px-6 pb-7 pt-8 shadow-[0_32px_100px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-[#111318] sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-[28px] sm:px-9 sm:pb-9 sm:pt-9"
+        className="no-scrollbar relative h-[100dvh] max-h-[100dvh] w-full max-w-[460px] overflow-y-auto rounded-none border border-app-border bg-app-card px-6 pb-7 pt-8 shadow-[0_32px_100px_rgba(0,0,0,0.35)] dark:border-app-border dark:bg-[#111318] sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:rounded-app sm:px-9 sm:pb-9 sm:pt-9"
       >
         <div className="mb-6 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h2
               id="login-modal-title"
-              className="text-center text-[24px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-left"
+              className="text-center text-[24px] font-semibold tracking-tight text-app-text sm:text-left"
             >
               {mode === 'wechat' ? '微信扫码登录' : '账号密码登录'}
             </h2>
@@ -160,7 +160,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
             type="button"
             onClick={onClose}
             aria-label="关闭登录弹窗"
-            className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#86868B] transition-colors hover:bg-black/[0.05] hover:text-[#1D1D1F] dark:hover:bg-white/[0.08] dark:hover:text-white"
+            className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-app-muted transition-colors hover:bg-black/[0.05] hover:text-app-text dark:hover:bg-white/[0.08] dark:hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -170,8 +170,8 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
           <div className="flex flex-col space-y-4">
             <div className="py-1 text-center space-y-4">
               <div className="relative mx-auto h-40 w-40">
-                <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-[#07C160]/35" />
-                <div className="absolute inset-4 flex items-center justify-center rounded-2xl bg-[#07C160]/10">
+                <div className="absolute inset-0 rounded-app border-2 border-dashed border-[#07C160]/35" />
+                <div className="absolute inset-4 flex items-center justify-center rounded-app bg-[#07C160]/10">
                   <MessageCircle className="h-20 w-20 text-[#07C160]" strokeWidth={1.4} />
                 </div>
                 <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#07C160] text-white shadow-lg">
@@ -179,7 +179,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                 </span>
               </div>
               <div className="space-y-1.5">
-                <p className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <p className="text-[16px] font-semibold text-app-text">
                   微信扫码登录 / 注册
                 </p>
               </div>
@@ -191,7 +191,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                 whileTap={{ scale: 0.99 }}
                 onClick={() => void handleThirdLogin('WECHAT')}
                 disabled={!!thirdLoading}
-                className="flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-[#07C160] text-[15px] font-medium text-white hover:brightness-110 disabled:opacity-60 transition-all"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-app bg-[#07C160] text-[15px] font-medium text-white hover:brightness-110 disabled:opacity-60 transition-all"
               >
                 {thirdLoading === 'WECHAT' ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -201,7 +201,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                 {thirdLoading === 'WECHAT' ? '正在跳转微信授权...' : '微信扫码登录 / 注册'}
               </motion.button>
             ) : (
-              <div className="rounded-2xl bg-[#F5F5F7] dark:bg-[#242426] px-4 py-3.5 text-center text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+              <div className="rounded-app bg-app-surface dark:bg-[#242426] px-4 py-3.5 text-center text-[13px] text-app-muted">
                 微信登录暂未开通，请使用账号密码登录
               </div>
             )}
@@ -227,7 +227,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                   账号
                 </label>
                 <div className="relative">
-                  <UserRound className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <UserRound className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     id="login-account"
                     type="text"
@@ -246,7 +246,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                   密码
                 </label>
                 <div className="relative">
-                  <Lock className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Lock className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     id="login-password"
                     type={showPassword ? 'text' : 'password'}
@@ -260,7 +260,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                     type="button"
                     onClick={() => setShowPassword((value) => !value)}
                     aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-app text-app-muted hover:text-app-text dark:hover:text-white"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -272,7 +272,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                   <label htmlFor="login-captcha" className={labelClass}>
                     验证码
                   </label>
-                  <div className="flex gap-2.5">
+                  <div className="flex gap-2">
                     <input
                       id="login-captcha"
                       type="text"
@@ -285,7 +285,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                       type="button"
                       onClick={loadCaptcha}
                       title="点击刷新验证码"
-                      className="h-14 shrink-0 rounded-2xl overflow-hidden border border-black/[0.06] dark:border-white/[0.1] bg-white flex items-center justify-center hover:opacity-80 transition-opacity"
+                      className="h-14 shrink-0 rounded-app overflow-hidden border border-app-border dark:border-white/[0.1] bg-app-card flex items-center justify-center hover:opacity-80 transition-opacity"
                     >
                       <img src={captcha.validCodeBase64} alt="图形验证码" className="h-full w-auto object-contain" />
                     </button>
@@ -293,7 +293,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
                       type="button"
                       onClick={loadCaptcha}
                       aria-label="刷新验证码"
-                      className="w-14 h-14 shrink-0 rounded-2xl border border-black/[0.06] dark:border-white/[0.1] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+                      className="w-14 h-14 shrink-0 rounded-app border border-app-border dark:border-white/[0.1] flex items-center justify-center text-app-muted hover:text-app-text dark:hover:text-white"
                     >
                       <RefreshCw className="w-4 h-4" />
                     </button>
@@ -320,12 +320,12 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
           </div>
         )}
 
-        <div className="mt-5 border-t border-black/[0.06] pt-4 text-center text-[13px] text-[#6E6E73] dark:border-white/[0.08] dark:text-[#98989D]">
+        <div className="mt-5 border-t border-app-border pt-4 text-center text-[13px] text-app-muted dark:border-app-border dark:text-app-muted">
           还没有账号？{' '}
           <button
             type="button"
             onClick={() => navigate('/register')}
-            className="font-semibold text-[#0071E3] hover:underline dark:text-[#0A84FF]"
+            className="font-semibold text-app-primary hover:underline"
           >
             立即注册
           </button>
@@ -340,7 +340,7 @@ export function LoginView({ onSuccess, onClose }: LoginViewProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="mt-4 rounded-2xl bg-[#FF3B30]/10 px-4 py-3 text-center text-[13px] font-medium text-[#D70015] dark:bg-[#FF3B30]/15 dark:text-[#FF453A]"
+              className="mt-4 rounded-app bg-[#FF3B30]/10 px-4 py-3 text-center text-[13px] font-medium text-[#D70015] dark:bg-[#FF3B30]/15 dark:text-[#FF453A]"
             >
               {error}
             </motion.div>

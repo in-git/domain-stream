@@ -22,13 +22,13 @@ export function SecondaryPage({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
       transition={{ duration: 0.18 }}
-      className="fixed inset-0 z-40 overflow-y-auto bg-white p-2 dark:bg-[#08080A]"
+      className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-2"
     >
       <div className={`mx-auto w-full space-y-3 ${contentClassName}`}>
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 px-2 py-2 text-[14px] font-medium text-[#1D1D1F] dark:text-white"
+          className="inline-flex items-center gap-1.5 px-2 py-2 text-[14px] font-medium text-app-text"
         >
           <ArrowLeft className="h-4 w-4" />
           返回

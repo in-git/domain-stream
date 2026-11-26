@@ -1,4 +1,4 @@
-import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../types/content';
 import { ProfileView, type UserBasicInfo } from './ProfileView';
 
 interface ProfileSectionProps {

@@ -1,4 +1,4 @@
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { portalApi } from '../../lib/api';
 
 export const VIDEO_PAGE_SIZE = 8;

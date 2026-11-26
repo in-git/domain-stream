@@ -6,7 +6,7 @@ import type {
   PhotoItem,
   SectionId,
   VideoItem,
-} from '../../data/content';
+} from '../../types/content';
 import {
   articleFromPortal,
   categoriesForModule,

@@ -32,7 +32,7 @@ export function ResilientImage({
   if (hasError) {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-gradient-to-br from-[#ECEEF2] to-[#DFE3EA] dark:from-[#1C1C1E] dark:to-[#2C2C2E] text-[#86868B] p-4 text-center ${className}`}
+        className={`flex flex-col items-center justify-center bg-gradient-to-br from-[#ECEEF2] to-[#DFE3EA] dark:from-[#1C1C1E] dark:to-[#2C2C2E] text-app-muted p-4 text-center ${className}`}
         role="img"
         aria-label={alt}
       >

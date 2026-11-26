@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, X } from 'lucide-react';
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { ResilientImage } from '../../components/ResilientImage';
 import { formatTime, VIDEO_PAGE_SIZE } from './shared';
 
@@ -84,7 +84,7 @@ export function PlaylistPanel({
       </div>
 
       {/* 顶部分类条 */}
-      <div className="shrink-0 border-b border-white/10 px-3 py-2.5">
+      <div className="shrink-0 border-b border-white/10 px-3 py-2">
         <div
           role="tablist"
           aria-label="播放列表分类"
@@ -101,7 +101,7 @@ export function PlaylistPanel({
                 onClick={() => onCategoryChange(item)}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] transition-colors ${
                   active
-                    ? 'bg-white font-medium text-[#1D1D1F]'
+                    ? 'bg-app-card font-medium text-app-text'
                     : 'bg-white/[0.08] text-white/70 hover:bg-white/[0.14]'
                 }`}
               >
@@ -121,11 +121,11 @@ export function PlaylistPanel({
               key={video.id}
               type="button"
               onClick={() => onSelect(video)}
-              className={`flex w-full flex-col gap-2 px-3 py-2.5 text-left transition-colors ${
+              className={`flex w-full flex-col gap-2 px-3 py-2 text-left transition-colors ${
                 active ? 'bg-white/[0.14]' : 'hover:bg-white/[0.07]'
               }`}
             >
-              <span className="relative block w-full overflow-hidden rounded-md bg-white/5 aspect-video">
+              <span className="relative block w-full overflow-hidden rounded-app bg-white/5 aspect-video">
                 <ResilientImage
                   src={video.cover}
                   alt={video.title}

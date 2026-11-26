@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronLeft, ChevronRight, Images } from 'lucide-react';
-import type { PhotoItem } from '../../data/content';
+import type { PhotoItem } from '../../types/content';
 import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import { EmptyState } from '../../components/PortalStates';
+import { ContentSection } from '../../components/ContentSection';
 import { TimeSortButton, sortByTime, type TimeSortOrder } from '../../components/TimeSortButton';
-import NoteDetail from './NoteDetail';
+import NoteDetail from '../../components/NoteDetail';
 
 interface GalleryViewProps {
   photos: PhotoItem[];
@@ -104,12 +105,12 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 10) * 0.02 }}
-      className="break-inside-avoid pb-2.5 sm:pb-1.5 md:pb-2 lg:pb-3 xl:pb-4 2xl:pb-4"
+      className="break-inside-avoid pb-2"
     >
       {/* 图片：竖版 3:4，小红书图文的标准比例；卡片大小由列宽控制 */}
       <div
         ref={containerRef}
-        className="group relative w-full overflow-hidden rounded-md bg-[#F2F2F7] dark:bg-[#1C1C1E]"
+        className="group relative w-full overflow-hidden rounded-app bg-app-surface dark:bg-app-card"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -192,7 +193,7 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent md:block" />
 
         {/* 标题 + 描述：移动端不显示，桌面端左下角显示 */}
-        <div className="pointer-events-none absolute inset-x-3 bottom-6 right-4 hidden md:block">
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 hidden md:block">
           <p className="line-clamp-2 text-[17px] font-semibold leading-[1.35] text-white drop-shadow-sm">
             {note.title}
           </p>
@@ -268,14 +269,14 @@ export function GalleryView({
   }, [photos, activeId, externalSelectedId]);
 
   return (
-    <section aria-label="图文笔记" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
+    <ContentSection aria-label="图文笔记">
       {/* 顶部分类：PC 端间距按断点递进 6/8/12/16px，移动端保持原刻度 */}
-      <div className="sticky top-14 z-10 -mx-2.5 bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:-mx-1.5 sm:px-1.5 md:-mx-2 md:px-2 lg:-mx-3 lg:px-3 xl:-mx-4 xl:px-4 2xl:-mx-4 2xl:px-4">
-        <div className="flex items-center gap-2.5 py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4">
+      <div className="sticky top-14 z-10 bg-app-surface/95 px-2 backdrop-blur-xl dark:bg-black/95">
+        <div className="flex items-center gap-2 py-2">
           <div
             role="tablist"
             aria-label="图文分类"
-            className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {chips.map((item) => {
               const active = album === item;
@@ -288,8 +289,8 @@ export function GalleryView({
                   aria-pressed={active}
                   className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                     active
-                      ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
-                      : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
+                      ? 'bg-app-primary font-medium text-white dark:bg-app-card dark:text-app-text'
+                      : 'bg-black/[0.04] text-app-muted hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-app-muted'
                   }`}
                 >
                   {item}
@@ -310,7 +311,7 @@ export function GalleryView({
         />
       ) : (
         /* 小红书桌面端约 5 列，卡片宽 ≈ 350px；列数更多卡片自然更小 */
-        <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">
+        <div className="mt-2 columns-2 gap-2 px-2 sm:columns-3 md:columns-4 lg:columns-5 2xl:columns-6">
           <AnimatePresence mode="popLayout">
             {list.map((note, idx) => (
               <NoteCard
@@ -351,7 +352,7 @@ export function GalleryView({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={SWIFTUI_SNAPPY}
-              className="flex items-center gap-2 whitespace-nowrap rounded-full bg-[#1D1D1F]/90 px-4 py-2 text-[13px] font-medium text-white shadow-lg backdrop-blur-md dark:bg-white/90 dark:text-[#1D1D1F]"
+              className="flex items-center gap-2 whitespace-nowrap rounded-full bg-app-primary/90 px-4 py-2 text-[13px] font-medium text-app-primary-fg shadow-lg backdrop-blur-md"
             >
               <Check className="h-4 w-4" />
               {saveToast}
@@ -359,6 +360,6 @@ export function GalleryView({
           )}
         </AnimatePresence>
       </div>
-    </section>
+    </ContentSection>
   );
 }

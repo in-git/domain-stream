@@ -28,22 +28,22 @@ export function SectionPlaceholder({ label, sectionId, iconUrl, onGoHome }: Sect
       className="min-h-[60vh] flex items-center justify-center py-8"
     >
       <div className="w-full max-w-md text-center px-4">
-        <div className="mx-auto mb-5 w-16 h-16 rounded-2xl bg-white dark:bg-[#1E1E22] border border-black/[0.06] dark:border-white/[0.08] shadow-xs flex items-center justify-center overflow-hidden">
+        <div className="mx-auto mb-5 w-16 h-16 rounded-app bg-app-card dark:bg-[#1E1E22] border border-app-border shadow-xs flex items-center justify-center overflow-hidden">
           {iconUrl ? (
             <img src={iconUrl} alt="" aria-hidden="true" className="w-8 h-8 object-contain" />
           ) : (
-            <Compass className="w-7 h-7 text-[#C7C7CC] dark:text-[#6E6E73]" strokeWidth={1.6} />
+            <Compass className="w-7 h-7 text-[#C7C7CC] dark:text-app-muted" strokeWidth={1.6} />
           )}
         </div>
 
-        <h2 className="text-[20px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <h2 className="text-[20px] font-semibold tracking-tight text-app-text">
           {label}
         </h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-[#86868B] dark:text-[#98989D]">
+        <p className="mt-2 text-[13px] leading-relaxed text-app-muted dark:text-app-muted">
           该模块已在后台启用，客户端页面正在建设中，敬请期待。
         </p>
 
-        <div className="mt-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] dark:bg-white/[0.06] text-[11px] font-mono text-[#AEAEB2] dark:text-[#8E8E93]">
+        <div className="mt-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-app-surface dark:bg-white/[0.06] text-[11px] font-mono text-app-subtle dark:text-app-subtle">
           <Sparkles className="w-3 h-3" />
           {sectionId}
         </div>
@@ -52,7 +52,7 @@ export function SectionPlaceholder({ label, sectionId, iconUrl, onGoHome }: Sect
           <button
             type="button"
             onClick={onGoHome}
-            className="h-9 px-4 rounded-full bg-[#0071E3] text-white text-[13px] font-medium hover:bg-[#0077ED] transition-colors"
+            className="h-9 px-4 rounded-full bg-app-primary text-white text-[13px] font-medium hover:bg-app-primary transition-colors"
           >
             返回首页
           </button>

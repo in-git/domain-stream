@@ -1,4 +1,4 @@
-import type { MessageItem, MessageReply } from '../../data/content';
+import type { MessageItem, MessageReply } from '../../types/content';
 import type { ReplyDraft } from '../../lib/api';
 import MessagesView from './MessagesView';
 import { PortalError, SectionSkeleton } from '../../components/PortalStates';
@@ -18,6 +18,7 @@ interface MessagesSectionProps {
   loading: boolean;
   error?: string;
   onRetry: () => void;
+  onRefresh: () => void;
   onRequireLogin: () => void;
   onToggleLike: (id: string) => void;
   onAddMessage: (message: MessageItem) => void;
@@ -34,6 +35,7 @@ export function MessagesSection({
   loading,
   error,
   onRetry,
+  onRefresh,
   onRequireLogin,
   onToggleLike,
   onAddMessage,
@@ -53,6 +55,7 @@ export function MessagesSection({
           isLoggedIn={isLoggedIn}
           currentUser={currentUser}
           onRequireLogin={onRequireLogin}
+          onRefresh={onRefresh}
           onToggleLike={onToggleLike}
           onAddMessage={onAddMessage}
           replies={replies}

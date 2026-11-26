@@ -37,7 +37,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             返回首页
           </button>
           <div className="flex items-center gap-3 text-white">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/25 bg-black/25 text-[17px] font-semibold">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-app border border-white/25 bg-black/25 text-[17px] font-semibold">
               {logoUrl ? (
                 <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
               ) : (
@@ -87,12 +87,12 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
               transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
               className="w-full"
             >
-              <div className="min-h-dvh rounded-none border-0 bg-white/95 px-6 pb-6 pt-24 shadow-none sm:min-h-0 sm:rounded-[32px] sm:border sm:border-white/70 sm:px-10 sm:pb-10 sm:pt-24 sm:shadow-[0_32px_100px_rgba(2,8,20,0.35)] sm:backdrop-blur-2xl lg:px-11 lg:pb-11 lg:pt-10 dark:bg-[#111318]/95 sm:dark:border-white/10">
+              <div className="min-h-dvh rounded-none border-0 bg-white/95 px-6 pb-6 pt-24 shadow-none sm:min-h-0 sm:rounded-app sm:border sm:border-white/70 sm:px-10 sm:pb-10 sm:pt-24 sm:shadow-[0_32px_100px_rgba(2,8,20,0.35)] sm:backdrop-blur-2xl lg:px-11 lg:pb-11 lg:pt-10 dark:bg-[#111318]/95 sm:dark:border-app-border">
                 <div className="mb-8">
-                  <h1 className="text-[30px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  <h1 className="text-[30px] font-semibold tracking-tight text-app-text">
                     {title}
                   </h1>
-                  <p className="mt-2 text-[14px] text-[#6E6E73] dark:text-[#98989D]">{subtitle}</p>
+                  <p className="mt-2 text-[14px] text-app-muted">{subtitle}</p>
                 </div>
                 {children}
               </div>

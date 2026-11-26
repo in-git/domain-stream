@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { EmptyState } from '../../components/PortalStates';
-import type { ArticleItem, MessageItem, PhotoItem, SectionId, VideoItem } from '../../data/content';
+import type { ArticleItem, MessageItem, PhotoItem, SectionId, VideoItem } from '../../types/content';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoriteDetailModal, type FavoriteTarget } from '../shared/FavoriteDetailModal';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -203,20 +203,20 @@ export function SearchOverlay({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 12 }}
       transition={SWIFTUI_SMOOTH}
-      className="fixed inset-0 z-50 flex flex-col bg-[#FBFBFD] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7]"
+      className="fixed inset-0 z-50 flex flex-col bg-app-surface dark:bg-[#000000] text-app-text"
     >
-      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-black/[0.06] dark:border-white/[0.08]">
+      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-app-border">
         <button
           type="button"
           onClick={onClose}
           aria-label="返回"
-          className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
+          className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-app-text hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
         <div className="relative flex flex-1 items-center">
-          <Search className="w-4 h-4 text-[#86868B] absolute left-3.5 pointer-events-none" />
+          <Search className="w-4 h-4 text-app-muted absolute left-3.5 pointer-events-none" />
           <input
             ref={inputRef}
             type="text"
@@ -232,14 +232,14 @@ export function SearchOverlay({
             placeholder={`搜索${scopeLabel}`}
             aria-label={`搜索${scopeLabel}`}
             enterKeyHint="search"
-            className="w-full h-9 pl-9 pr-[4.5rem] rounded-full bg-[#EEEEF0] dark:bg-[#1C1C1E] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/35 transition-shadow"
+            className="w-full h-9 pl-9 pr-[4.5rem] rounded-full bg-app-surface dark:bg-app-card text-sm text-app-text placeholder:text-app-muted focus:outline-none focus:ring-2 focus:ring-app-primary/35 transition-shadow"
           />
           {draft && (
             <button
               type="button"
               onClick={clearSearch}
               aria-label="清空搜索"
-              className="absolute right-10 w-5 h-5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+              className="absolute right-10 w-5 h-5 rounded-full flex items-center justify-center text-app-muted hover:text-app-text dark:hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -252,7 +252,7 @@ export function SearchOverlay({
             }}
             aria-label="搜索"
             title="搜索"
-            className="absolute right-1.5 w-7 h-7 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center justify-center transition-colors"
+            className="absolute right-1.5 w-7 h-7 rounded-full bg-app-primary hover:bg-app-primary text-white flex items-center justify-center transition-colors"
           >
             <Search className="w-3.5 h-3.5" />
           </button>
@@ -261,16 +261,16 @@ export function SearchOverlay({
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {keyword && results.length > 0 && (
-          <p className="px-4 pt-3 pb-1 text-[11px] text-[#86868B]">
+          <p className="px-4 pt-3 pb-1 text-[11px] text-app-muted">
             在{scopeLabel}中找到 {results.length} 条结果
           </p>
         )}
 
         {!keyword && (
           <div className="px-6 py-20 text-center space-y-2">
-            <Search className="w-6 h-6 mx-auto text-[#AEAEB2]" />
+            <Search className="w-6 h-6 mx-auto text-app-subtle" />
             <p className="text-sm font-medium">搜索{scopeLabel}</p>
-            <p className="text-xs text-[#86868B]">输入关键词，检索当前模块下的内容</p>
+            <p className="text-xs text-app-muted">输入关键词，检索当前模块下的内容</p>
           </div>
         )}
 
@@ -295,7 +295,7 @@ export function SearchOverlay({
                       src={row.video.cover}
                       alt={row.video.title}
                       fallbackTitle={row.video.title}
-                      className="w-16 h-16 rounded-xl shrink-0"
+                      className="w-16 h-16 rounded-app shrink-0"
                     />
                   )}
                   {row.kind === 'article' && (
@@ -303,7 +303,7 @@ export function SearchOverlay({
                       src={row.article.cover}
                       alt={row.article.title}
                       fallbackTitle={row.article.title}
-                      className="w-16 h-16 rounded-xl shrink-0"
+                      className="w-16 h-16 rounded-app shrink-0"
                     />
                   )}
                   {row.kind === 'graphic' && (
@@ -311,25 +311,25 @@ export function SearchOverlay({
                       src={row.photo.src}
                       alt={row.photo.title}
                       fallbackTitle={row.photo.title}
-                      className="w-16 h-16 rounded-xl shrink-0"
+                      className="w-16 h-16 rounded-app shrink-0"
                     />
                   )}
                   {row.kind === 'message' && (
-                    <span className="w-16 h-16 rounded-xl shrink-0 bg-[#F2F2F7] dark:bg-white/[0.06] flex items-center justify-center text-[#86868B]">
+                    <span className="w-16 h-16 rounded-app shrink-0 bg-app-surface dark:bg-white/[0.06] flex items-center justify-center text-app-muted">
                       <Icon className="w-5 h-5" />
                     </span>
                   )}
 
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7] line-clamp-2">
+                    <span className="block text-[13px] font-medium leading-snug text-app-text line-clamp-2">
                       {rowTitle(row)}
                     </span>
-                    <span className="mt-1 block text-[11px] text-[#86868B] truncate">
+                    <span className="mt-1 block text-[11px] text-app-muted truncate">
                       {rowMeta(row)}
                     </span>
                   </span>
 
-                  <Icon className="w-4 h-4 shrink-0 text-[#AEAEB2]" />
+                  <Icon className="w-4 h-4 shrink-0 text-app-subtle" />
                 </>
               );
 

@@ -35,7 +35,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         filter: 'blur(8px)',
         transition: { duration: 0.52, ease: APPLE_EASE },
       }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#000000] text-[#F5F5F7] select-none overflow-hidden"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#000000] text-app-text select-none overflow-hidden"
       aria-label="应用加载中"
     >
       {/* Subtle Apple-grade radial ambient illumination behind emblem */}
@@ -43,7 +43,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         initial={{ opacity: 0, scale: 0.7 }}
         animate={{ opacity: 0.45, scale: 1.15 }}
         transition={{ duration: 1.4, ease: APPLE_EASE }}
-        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-radial from-[#0A84FF]/25 via-[#5E5CE6]/10 to-transparent blur-3xl -translate-y-[20dvh] md:translate-y-0"
+        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-radial from-app-primary/25 via-[#5E5CE6]/10 to-transparent blur-3xl -translate-y-[20dvh] md:translate-y-0"
       />
 
       <div className="relative flex flex-col items-center -translate-y-[20dvh] md:translate-y-0">
@@ -52,11 +52,11 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           initial={{ scale: 0.84, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={SWIFTUI_SMOOTH}
-          className="mb-7 relative flex items-center justify-center w-20 h-20 rounded-[22px] bg-[#161618] border border-white/10 shadow-2xl"
+          className="mb-7 relative flex items-center justify-center w-20 h-20 rounded-app bg-white border border-black/[0.06] shadow-2xl"
         >
           <svg
             viewBox="0 0 64 64"
-            className="w-11 h-11 text-white"
+            className="w-11 h-11 text-[#1D1D1F]"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             aria-hidden="true"
@@ -85,7 +85,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
               cx="32"
               cy="32"
               r="4"
-              fill="#0A84FF"
+              fill="var(--app-color-primary)"
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 420, damping: 24, delay: 0.48 }}
@@ -107,7 +107,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 0.68, y: 0 }}
           transition={{ ...SWIFTUI_SMOOTH, delay: 0.3 }}
-          className="mt-2 text-xs tracking-[0.18em] text-[#A1A1A6]"
+          className="mt-2 text-xs tracking-[0.18em] text-app-subtle"
         >
           影像 · 文章 · 视觉志
         </motion.p>
@@ -124,7 +124,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           aria-valuemax={100}
         >
           <motion.div
-            className="h-full rounded-full bg-white"
+            className="h-full rounded-full bg-app-card"
             initial={{ width: '0%' }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.55, ease: APPLE_EASE }}
@@ -141,7 +141,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         whileHover={{ opacity: 1 }}
         whileTap={{ scale: 0.96 }}
         transition={{ delay: 0.45 }}
-        className="absolute bottom-8 px-4 py-2 min-h-[44px] text-xs font-medium text-[#A1A1A6] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-lg"
+        className="absolute bottom-8 px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app"
       >
         跳过开屏
       </motion.button>

@@ -121,12 +121,18 @@ export function PortalShell({
 
   const profileForm = useProfileForms(profile, setProfile);
 
+  // 设置页的喜欢/收藏需要三类内容，只在用户打开对应详情时才按需加载
+  const loadFavoriteSources = () => {
+    (['videos', 'articles', 'gallery'] as const).forEach((section) =>
+      void loadSection(section)
+    );
+  };
+
   // PC 个人中心独立组件
   const profileContent = (
     <ProfilePCView
       isLoggedIn={isLoggedIn}
       profile={profile}
-      userInfo={userInfo}
       likedCount={likedIds.length}
       savedCount={savedIds.length}
       onGoLogin={goLogin}
@@ -146,6 +152,31 @@ export function PortalShell({
       onGoLogin={goLogin}
       onGoRegister={goRegister}
       onLogout={handleLogout}
+    />
+  );
+
+  // 留言墙内容复用：独立板块与设置中心共用同一个实例定义
+  const messagesContent = (
+    <MessagesSection
+      messages={messages}
+      replies={replies}
+      likedIds={likedIds}
+      searchQuery={searchQuery}
+      isLoggedIn={isLoggedIn}
+      currentUser={{
+        name: isLoggedIn ? profile.name : '',
+        userId: isLoggedIn ? currentUserId : undefined,
+        email: isLoggedIn ? accountEmail : undefined,
+        avatar: isLoggedIn ? profile.avatar : undefined,
+      }}
+      loading={!!loadingMap.messages}
+      error={errors.messages}
+      onRetry={() => void loadSection('messages', true)}
+      onRefresh={() => void loadSection('messages', true)}
+      onRequireLogin={goLogin}
+      onToggleLike={toggleLike}
+      onAddMessage={(message) => void addMessage(message)}
+      onAddReply={addReply}
     />
   );
 
@@ -185,10 +216,10 @@ export function PortalShell({
   return (
     <MotionConfig reducedMotion="user">
       <div
-        className={`min-h-screen flex text-[#1D1D1F] dark:text-[#F5F5F7] transition-colors duration-300 ease-out ${
+        className={`min-h-screen flex text-app-text transition-colors duration-300 ease-out ${
           activeSection === 'videos' && isMobileViewport
             ? 'bg-black'
-            : 'bg-[#FBFBFD] dark:bg-[#000000]'
+            : 'bg-app-bg'
         }`}
       >
         <AnimatePresence>
@@ -208,6 +239,7 @@ export function PortalShell({
               overlay={activeSection === 'videos' && isMobileViewport && videoViewMode === 'feed'}
               solidBlack={activeSection === 'videos' && isMobileViewport && videoViewMode === 'grid'}
               showViewToggle={activeSection === 'videos' && isMobileViewport}
+              sectionBackground={activeSection === 'articles' ? 'page' : 'default'}
               pcImmersive={activeSection === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
               viewMode={videoViewMode}
               onToggleViewMode={() =>
@@ -270,7 +302,6 @@ export function PortalShell({
               {activeSection === 'articles' && (
                 <motion.div
                   key="section-articles"
-                  className="px-2 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 md:pb-8"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -297,7 +328,6 @@ export function PortalShell({
               {activeSection === 'gallery' && (
                 <motion.div
                   key="section-gallery"
-                  className="px-2 sm:px-3 md:px-4 lg:px-5 xl:px-6 2xl:px-8 md:pb-8"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -323,31 +353,13 @@ export function PortalShell({
               {activeSection === 'messages' && (
                 <motion.div
                   key="section-messages"
+                  className="px-2"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={SWIFTUI_SMOOTH}
                 >
-                  <MessagesSection
-                    messages={messages}
-                    replies={replies}
-                    likedIds={likedIds}
-                    searchQuery={searchQuery}
-                    isLoggedIn={isLoggedIn}
-                    currentUser={{
-                      name: isLoggedIn ? profile.name : '',
-                      userId: isLoggedIn ? currentUserId : undefined,
-                      email: isLoggedIn ? accountEmail : undefined,
-                      avatar: isLoggedIn ? profile.avatar : undefined,
-                    }}
-                    loading={!!loadingMap.messages}
-                    error={errors.messages}
-                    onRetry={() => void loadSection('messages', true)}
-                    onRequireLogin={goLogin}
-                    onToggleLike={toggleLike}
-                    onAddMessage={(message) => void addMessage(message)}
-                    onAddReply={addReply}
-                  />
+                  {messagesContent}
                 </motion.div>
               )}
 
@@ -355,12 +367,16 @@ export function PortalShell({
                 (isMobileViewport ? (
                   <SettingsMobileSection
                     profileContent={profileContentMobile}
+                    messagesContent={messagesContent}
                     profileFocusToken={settingsProfileToken}
                     profileName={profile.name}
                     profileHandle={profile.handle}
                     profileBio={profile.bio}
                     profileAvatar={profile.avatar}
+                    isLoggedIn={isLoggedIn}
                     onOpenEditProfile={profileForm.openEditModal}
+                    onOpenFavorites={loadFavoriteSources}
+                    onOpenMessages={() => void loadSection('messages', true)}
                     videos={videos}
                     articles={articles}
                     photos={photos}
@@ -372,6 +388,9 @@ export function PortalShell({
                 ) : (
                   <SettingsSection
                     profileContent={profileContent}
+                    messagesContent={messagesContent}
+                    onOpenFavorites={loadFavoriteSources}
+                    onOpenMessages={() => void loadSection('messages', true)}
                     profileFocusToken={settingsProfileToken}
                     videos={videos}
                     articles={articles}

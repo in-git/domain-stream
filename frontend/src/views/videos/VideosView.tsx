@@ -4,10 +4,10 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { A11y, Keyboard, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { EmptyState } from '../../components/PortalStates';
 import { FeedSlide } from './FeedSlide';
-import { ImmersiveModal } from './ImmersiveModal';
+import { ImmersiveModal } from '../../components/ImmersiveModal';
 import { DesktopGridCategories, DesktopVideoGrid } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
@@ -461,7 +461,7 @@ export function VideosView({
         isHidden
           ? 'hidden'
           : isMini
-            ? `fixed z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-xl sm:rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10 select-none ${
+            ? `fixed z-[60] w-[min(58vw,210px)] h-[118px] sm:w-[240px] sm:h-[135px] rounded-app sm:rounded-app overflow-hidden bg-black shadow-2xl border border-white/10 select-none ${
                 miniPos ? 'cursor-grab active:cursor-grabbing' : 'bottom-3 right-3 sm:bottom-6 sm:right-6'
               }`
             : 'relative space-y-0 h-full'
@@ -594,7 +594,7 @@ export function VideosView({
 
       {/* 卡片模式网格：PC / 移动端各自模块，触底加载由主入口统一持有 */}
       {!isMini && viewMode === 'grid' && visibleVideos.length > 0 && (
-        <div className="px-2.5 sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
+        <div className="px-2 sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
           <DesktopVideoGrid
             videos={visibleVideos}
             likedIds={likedIds}

@@ -1,12 +1,16 @@
 import { AnimatePresence, motion } from 'motion/react';
+import { Star, Heart } from 'lucide-react';
 import { EmptyState } from '../../components/PortalStates';
 import { ResilientImage } from '../../components/ResilientImage';
+import { ArticleReader } from '../../components/ArticleReader';
+import { ImmersiveModal } from '../../components/ImmersiveModal';
+import NoteDetail from '../../components/NoteDetail';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
-import { FavoriteDetailModal } from '../shared/FavoriteDetailModal';
 import { KIND_META, TABS, useFavoritesModel, type FavoritesViewProps } from './favoritesModel';
 
 /** PC 端收藏/喜欢列表：固定桌面布局，不使用移动端响应式分支 */
 export function FavoritesPCView(props: FavoritesViewProps) {
+  const { videos, articles, photos } = props;
   const {
     meta,
     mode,
@@ -15,27 +19,39 @@ export function FavoritesPCView(props: FavoritesViewProps) {
     counts,
     visibleEntries,
     emptyHint,
-    activeTarget,
+    activeItem,
     onToggle,
+    likedIds,
+    savedIds,
+    onToggleLike,
+    onToggleSave,
     openItem,
     closeItem,
   } = useFavoritesModel(props);
+
+  const activeVideo =
+    activeItem?.kind === 'video' ? videos.find((item) => item.id === activeItem.id) : undefined;
+  const activePhoto =
+    activeItem?.kind === 'graphic' ? photos.find((item) => item.id === activeItem.id) ?? null : null;
+  const activeVideoIndex = activeVideo
+    ? Math.max(0, videos.findIndex((item) => item.id === activeVideo.id))
+    : 0;
 
   return (
     <>
       <section
         aria-labelledby={`${mode}-pc-heading`}
-        className="space-y-6 bg-white px-8 py-7 dark:bg-[#161618]"
+        className="space-y-6 bg-app-card px-8 py-7 dark:bg-app-card"
       >
         <div className="flex items-center justify-between gap-6">
           <div className="space-y-1">
             <h2
               id={`${mode}-pc-heading`}
-              className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
+              className="text-lg font-semibold tracking-tight text-app-text"
             >
               {meta.heading}
             </h2>
-            <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
+            <p className="text-xs text-app-muted">
               共 {counts.all} 条 · {meta.orderHint}
             </p>
           </div>
@@ -43,7 +59,7 @@ export function FavoritesPCView(props: FavoritesViewProps) {
           <div
             role="tablist"
             aria-label={`${meta.heading}类型筛选`}
-            className="flex items-center gap-1 rounded-full bg-[#F2F2F7] p-1 dark:bg-[#2C2C2E]"
+            className="flex items-center gap-1 rounded-full bg-app-surface p-1 dark:bg-app-surface"
           >
             {TABS.map((item) => {
               const isActive = tab === item.id;
@@ -56,15 +72,15 @@ export function FavoritesPCView(props: FavoritesViewProps) {
                   onClick={() => setTab(item.id)}
                   className={`relative px-3 py-1.5 text-xs font-medium transition-colors ${
                     isActive
-                      ? 'text-[#1D1D1F] dark:text-[#F5F5F7]'
-                      : 'text-[#8E8E93] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
+                      ? 'text-app-text'
+                      : 'text-app-subtle dark:text-app-muted hover:text-app-text dark:hover:text-app-text'
                   }`}
                 >
                   {isActive && (
                     <motion.span
                       layoutId={meta.indicator}
                       transition={SWIFTUI_SMOOTH}
-                      className="absolute inset-x-1 -bottom-1 h-0.5 rounded-full bg-[#1D1D1F] dark:bg-[#F5F5F7]"
+                      className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-app-primary"
                     />
                   )}
                   <span className="relative">
@@ -104,10 +120,15 @@ export function FavoritesPCView(props: FavoritesViewProps) {
             >
               {visibleEntries.map((entry) => {
                 const { label, Icon } = KIND_META[entry.kind];
+                const isFavorite = mode === 'favorite';
+                const ToggleIcon = isFavorite ? Star : Heart;
+                const activeToggleClass = isFavorite
+                  ? 'bg-app-favorite/25 text-app-favorite ring-1 ring-app-favorite/60 hover:bg-app-favorite/35'
+                  : 'bg-[#FF2C55]/25 text-[#FF6B7E] ring-1 ring-[#FF2C55]/60 hover:bg-[#FF2C55]/35';
                 return (
                   <li
                     key={`${entry.kind}-${entry.id}`}
-                    className="group relative overflow-hidden rounded-2xl bg-[#111111] shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                    className="group relative overflow-hidden rounded-app bg-[#111111] transition duration-300 hover:-translate-y-0.5"
                   >
                     <button
                       type="button"
@@ -140,9 +161,9 @@ export function FavoritesPCView(props: FavoritesViewProps) {
                       type="button"
                       onClick={() => onToggle(entry.id)}
                       aria-label={`${meta.removeLabel}：${entry.title}`}
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-black/65"
+                      className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-colors ${activeToggleClass}`}
                     >
-                      <meta.RemoveIcon className="h-3.5 w-3.5" />
+                      <ToggleIcon className="h-3.5 w-3.5 fill-current" />
                     </button>
                   </li>
                 );
@@ -152,13 +173,40 @@ export function FavoritesPCView(props: FavoritesViewProps) {
         </AnimatePresence>
       </section>
 
-      <FavoriteDetailModal
-        target={activeTarget}
-        onClose={closeItem}
-        onRemove={onToggle}
-        removeLabel={meta.removeLabel}
-        removeIcon={mode === 'like' ? 'heart' : 'bookmark'}
-      />
+      {activeItem?.kind === 'article' && (
+        <ArticleReader
+          articles={articles}
+          articleId={activeItem.id}
+          likedIds={likedIds}
+          savedIds={savedIds}
+          onToggleLike={onToggleLike}
+          onToggleSave={onToggleSave}
+          onClose={closeItem}
+        />
+      )}
+
+      {activePhoto && (
+        <NoteDetail
+          note={activePhoto}
+          liked={likedIds.includes(activePhoto.id)}
+          saved={savedIds.includes(activePhoto.id)}
+          onToggleLike={() => onToggleLike(activePhoto.id)}
+          onToggleSave={() => onToggleSave(activePhoto.id)}
+          onClose={closeItem}
+        />
+      )}
+
+      {activeVideo && (
+        <ImmersiveModal
+          videos={videos}
+          initialIndex={activeVideoIndex}
+          likedIds={likedIds}
+          savedIds={savedIds}
+          onToggleLike={onToggleLike}
+          onToggleSave={onToggleSave}
+          onClose={closeItem}
+        />
+      )}
     </>
   );
 }

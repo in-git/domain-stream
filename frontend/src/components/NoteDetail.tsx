@@ -5,11 +5,11 @@ import { A11y, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
 import { Check, ChevronLeft, ChevronRight, Heart, MessageCircle, Star, X } from 'lucide-react';
-import type { PhotoItem } from '../../data/content';
-import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
-import { ResilientImage } from '../../components/ResilientImage';
-import { CommentPanel } from '../../components/CommentPanel.tsx';
-import { useCommentEnabled } from '../../lib/systemInfo.ts';
+import type { PhotoItem } from '../types/content';
+import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../lib/motion';
+import { ResilientImage } from './ResilientImage';
+import { CommentPanel } from './CommentPanel.tsx';
+import { useCommentEnabled } from '../lib/systemInfo.ts';
 
 interface NoteDetailProps {
   note: PhotoItem | null;
@@ -79,12 +79,12 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
       className={
         mobile
           ? 'absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-4 bg-transparent px-5 text-white md:hidden'
-          : 'hidden h-16 shrink-0 items-center justify-between gap-4 border-b border-black/[0.06] px-7 md:flex dark:border-white/[0.08]'
+          : 'hidden h-16 shrink-0 items-center justify-between gap-4 border-b border-app-border px-7 md:flex dark:border-app-border'
       }
     >
       <h2
         className={`min-w-0 flex-1 truncate text-[14px] font-semibold ${
-          mobile ? 'text-white' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+          mobile ? 'text-white' : 'text-app-text'
         }`}
       >
         {note?.title || '图文详情'}
@@ -94,7 +94,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
         onClick={onClose}
         aria-label="关闭"
         className={`p-2 rounded-full shrink-0 ${
-          mobile ? 'text-white hover:bg-white/15' : 'text-[#86868B] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
+          mobile ? 'text-white hover:bg-white/15' : 'text-app-muted hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
         }`}
       >
         <X className="w-4 h-4" />
@@ -123,7 +123,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
             exit={{ opacity: 0, scale: 0.99 }}
             transition={SWIFTUI_SMOOTH}
             onClick={(event) => event.stopPropagation()}
-            className="relative h-[100dvh] w-screen max-w-none rounded-none bg-black sm:h-[min(97vh,1120px)] sm:w-full sm:max-w-[min(1680px,98vw)] sm:rounded-[36px] sm:bg-white sm:ring-1 sm:ring-white/10 sm:dark:bg-[#161618] overflow-hidden flex flex-col md:flex-row shadow-[0_48px_160px_rgba(0,0,0,0.65)] will-change-transform"
+            className="relative h-[100dvh] w-screen max-w-none rounded-none bg-black sm:h-[min(97vh,1120px)] sm:w-full sm:max-w-[min(1680px,98vw)] sm:rounded-app sm:bg-app-card sm:ring-1 sm:ring-white/10 sm:dark:bg-app-card overflow-hidden flex flex-col md:flex-row shadow-[0_48px_160px_rgba(0,0,0,0.65)] will-change-transform"
           >
             {renderHeader(true)}
 
@@ -202,7 +202,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                             }}
                             aria-label={`查看第 ${i + 1} 张图片`}
                             aria-current={i === index}
-                            className={`relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 transition-all ${
+                            className={`relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-app bg-white/5 transition-all ${
                               i === index ? 'opacity-100' : 'opacity-60 hover:opacity-100'
                             }`}
                           >
@@ -215,9 +215,9 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                             />
                             {i === index && (
                               <>
-                                <span className="absolute inset-0 bg-[#0071E3]/25" />
+                                <span className="absolute inset-0 bg-app-primary/25" />
                                 <span className="absolute inset-0 flex items-center justify-center">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0071E3] text-white shadow-[0_4px_12px_rgba(0,0,0,0.4)] ring-2 ring-white/80">
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-app-primary text-white shadow-[0_4px_12px_rgba(0,0,0,0.4)] ring-2 ring-white/80">
                                     <Check className="h-3.5 w-3.5" strokeWidth={3} />
                                   </span>
                                 </span>
@@ -241,7 +241,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
               {renderHeader(false)}
 
               <div className={`hidden md:block md:min-h-0 md:overflow-y-auto md:px-8 md:py-7 ${commentsEnabled ? 'md:max-h-[42%]' : 'md:flex-1'}`}>
-                <h2 className="text-[22px] font-semibold leading-[1.35] tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <h2 className="text-[22px] font-semibold leading-[1.35] tracking-tight text-app-text">
                   {note.title}
                 </h2>
                 {note.content &&
@@ -254,7 +254,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                       {line}
                     </p>
                   ))}
-                <p className="mt-3 text-[11px] text-[#AEAEB2]">
+                <p className="mt-3 text-[11px] text-app-subtle">
                   {note.date}
                   {note.location ? ` · ${note.location}` : ''}
                 </p>
@@ -262,7 +262,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
 
               {/* PC 端图文右侧评论栏 */}
               {commentsEnabled && (
-                <div className="hidden md:flex md:min-h-0 md:flex-1 md:border-t md:border-black/[0.06] md:dark:border-white/[0.08]">
+                <div className="hidden md:flex md:min-h-0 md:flex-1 md:border-t md:border-app-border md:dark:border-app-border">
                   <CommentPanel
                     embedded
                     open={!!note}
@@ -273,7 +273,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                 </div>
               )}
 
-              <div className="shrink-0 flex h-14 items-center justify-around border-t border-transparent bg-transparent px-4 text-white md:h-16 md:justify-start md:gap-2 md:border-black/[0.06] md:bg-transparent md:px-7 md:text-[#1D1D1F] md:dark:border-white/[0.08] md:dark:text-[#F5F5F7]">
+              <div className="shrink-0 flex h-14 items-center justify-around border-t border-transparent bg-transparent px-4 text-white md:h-16 md:justify-start md:gap-2 md:border-app-border md:bg-transparent md:px-7 md:text-app-text md:dark:border-app-border md:dark:text-app-text">
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.88 }}
@@ -283,7 +283,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   className={`flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] transition-colors ${
                     liked
                       ? 'text-[#FF6B7E] bg-[#FF2E4D]/15 md:text-[#FF2E4D]'
-                      : 'text-white/85 hover:bg-white/10 md:text-[#6E6E73] md:hover:bg-black/[0.04] md:dark:text-[#98989D]'
+                      : 'text-white/85 hover:bg-white/10 md:text-app-muted md:hover:bg-black/[0.04] md:dark:text-app-muted'
                   }`}
                 >
                   <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
@@ -296,8 +296,8 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   aria-pressed={saved}
                   className={`flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] transition-colors ${
                     saved
-                      ? 'text-white bg-white/15 md:bg-[#0071E3]/10 md:text-[#0071E3]'
-                      : 'text-white/85 hover:bg-white/10 md:text-[#6E6E73] md:hover:bg-black/[0.04] md:dark:text-[#98989D]'
+                      ? 'text-app-favorite bg-app-favorite/20 md:bg-app-favorite/12 md:text-app-favorite'
+                      : 'text-white/85 hover:bg-white/10 md:text-app-muted md:hover:bg-black/[0.04] md:dark:text-app-muted'
                   }`}
                 >
                   <Star className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />

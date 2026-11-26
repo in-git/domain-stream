@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { ArrowLeft, Moon, Sun } from 'lucide-react';
-import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../types/content';
 import { navigate } from '../../lib/router';
 import { ProfileView, type UserBasicInfo } from './ProfileView';
 import { Tooltip } from '../../components/Tooltip';
@@ -46,7 +46,7 @@ export function ProfilePage({
   onToggleLike,
 }: ProfilePageProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#F8F8FA] text-[#1D1D1F] dark:bg-[#08080A] dark:text-[#F5F5F7]">
+    <div className="relative min-h-screen overflow-hidden bg-[#F8F8FA] text-app-text dark:bg-[#08080A] dark:text-app-text">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-70 dark:opacity-90"
@@ -55,12 +55,12 @@ export function ProfilePage({
             'radial-gradient(900px 320px at 12% -10%, rgba(0,0,0,0.08), transparent 65%), radial-gradient(760px 300px at 88% 0%, rgba(0,0,0,0.05), transparent 62%)',
         }}
       />
-      <header className="sticky top-0 z-30 border-b border-black/[0.05] bg-white/70 dark:border-white/[0.08] dark:bg-[#08080A]/75 backdrop-blur-2xl">
+      <header className="sticky top-0 z-30 border-b border-black/[0.05] bg-white/70 dark:border-app-border dark:bg-[#08080A]/75 backdrop-blur-2xl">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-10">
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-[#515154] transition-colors hover:bg-black/[0.05] dark:text-[#A1A1A6] dark:hover:bg-white/[0.08]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-[#515154] transition-colors hover:bg-black/[0.05] dark:text-app-subtle dark:hover:bg-white/[0.08]"
           >
             <ArrowLeft className="h-4 w-4" />
             返回首页
@@ -72,7 +72,7 @@ export function ProfilePage({
               whileTap={{ scale: 0.92 }}
               onClick={onToggleTheme}
               aria-label={isDark ? '切换至浅色外观' : '切换至深色外观'}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-[#1D1D1F] transition-colors hover:bg-black/[0.05] dark:text-[#F5F5F7] dark:hover:bg-white/[0.08]"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-app-text transition-colors hover:bg-black/[0.05] dark:text-app-text dark:hover:bg-white/[0.08]"
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </motion.button>

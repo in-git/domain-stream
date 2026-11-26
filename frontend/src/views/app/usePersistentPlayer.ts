@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { usePersistentState } from './usePersistentState';
 
 /** 播放进度最多保留最近 50 条，避免本地缓存无限增长 */

@@ -25,17 +25,17 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
     <>
       <section
         aria-labelledby={`${mode}-mobile-heading`}
-        className="space-y-4 bg-white px-3 py-4 dark:bg-[#161618]"
+        className="space-y-4 bg-app-card px-3 py-4 dark:bg-app-card"
       >
         <div className="space-y-3">
           <div className="space-y-1">
             <h2
               id={`${mode}-mobile-heading`}
-              className="text-base font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
+              className="text-base font-semibold tracking-tight text-app-text"
             >
               {meta.heading}
             </h2>
-            <p className="text-xs text-[#6E6E73] dark:text-[#98989D]">
+            <p className="text-xs text-app-muted">
               共 {counts.all} 条 · {meta.orderHint}
             </p>
           </div>
@@ -43,7 +43,7 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
           <div
             role="tablist"
             aria-label={`${meta.heading}类型筛选`}
-            className="flex items-center gap-1 overflow-x-auto rounded-full bg-[#F2F2F7] p-0.5 dark:bg-[#2C2C2E]"
+            className="flex items-center gap-1 overflow-x-auto rounded-full bg-app-surface p-0.5 dark:bg-app-surface"
           >
             {TABS.map((item) => {
               const isActive = tab === item.id;
@@ -54,17 +54,17 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setTab(item.id)}
-                  className={`relative shrink-0 px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  className={`relative shrink-0 px-2 py-1 text-[11px] font-medium transition-colors ${
                     isActive
-                      ? 'text-[#1D1D1F] dark:text-[#F5F5F7]'
-                      : 'text-[#8E8E93] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
+                      ? 'text-app-text'
+                      : 'text-app-subtle dark:text-app-muted hover:text-app-text dark:hover:text-app-text'
                   }`}
                 >
                   {isActive && (
                     <motion.span
                       layoutId={meta.indicator}
                       transition={SWIFTUI_SMOOTH}
-                      className="absolute inset-x-1 -bottom-1 h-0.5 rounded-full bg-[#1D1D1F] dark:bg-[#F5F5F7]"
+                      className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-app-primary"
                     />
                   )}
                   <span className="relative">
@@ -100,14 +100,14 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={SWIFTUI_SMOOTH}
-              className="grid grid-cols-2 gap-2.5"
+              className="grid grid-cols-2 gap-2"
             >
               {visibleEntries.map((entry) => {
                 const { label, Icon } = KIND_META[entry.kind];
                 return (
                   <li
                     key={`${entry.kind}-${entry.id}`}
-                    className="group relative overflow-hidden rounded-xl bg-[#111111] shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                    className="group relative overflow-hidden rounded-app bg-[#111111] transition duration-300 hover:-translate-y-0.5"
                   >
                     <button
                       type="button"
@@ -140,7 +140,9 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
                       type="button"
                       onClick={() => onToggle(entry.id)}
                       aria-label={`${meta.removeLabel}：${entry.title}`}
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-black/65"
+                      className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 backdrop-blur-md transition-colors hover:bg-black/65 ${
+                        mode === 'favorite' ? 'text-app-favorite' : 'text-white'
+                      }`}
                     >
                       <meta.RemoveIcon className="h-3.5 w-3.5" />
                     </button>
@@ -157,7 +159,7 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
         onClose={closeItem}
         onRemove={onToggle}
         removeLabel={meta.removeLabel}
-        removeIcon={mode === 'like' ? 'heart' : 'bookmark'}
+        removeIcon={mode === 'like' ? 'heart' : 'star'}
       />
     </>
   );

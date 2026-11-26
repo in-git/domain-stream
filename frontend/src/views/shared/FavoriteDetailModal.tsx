@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BookmarkX, ChevronLeft, ChevronRight, Heart, X } from 'lucide-react';
-import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
+import { Star, ChevronLeft, ChevronRight, Heart, X } from 'lucide-react';
+import type { ArticleItem, PhotoItem, VideoItem } from '../../types/content';
 import { sanitizeRichHtml } from '../../lib/richtext';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -20,8 +20,8 @@ interface FavoriteDetailModalProps {
   onRemove?: (id: string) => void;
   /** 移除按钮文案，喜欢列表传「删除」 */
   removeLabel?: string;
-  /** 移除按钮图标：喜欢列表用爱心，收藏用书签 */
-  removeIcon?: 'heart' | 'bookmark';
+  /** 移除按钮图标：喜欢列表用爱心，收藏用星星 */
+  removeIcon?: 'heart' | 'star';
 }
 
 function metaLine(parts: (string | number | undefined)[]): string {
@@ -34,7 +34,7 @@ export function FavoriteDetailModal({
   onClose,
   onRemove,
   removeLabel = '取消收藏',
-  removeIcon = 'bookmark',
+  removeIcon = 'star',
 }: FavoriteDetailModalProps) {
   const [slide, setSlide] = useState(0);
   const isLike = removeIcon === 'heart';
@@ -107,13 +107,13 @@ export function FavoriteDetailModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={SWIFTUI_SMOOTH}
-            className="relative w-full sm:max-w-lg h-full sm:h-auto max-h-none sm:max-h-[86vh] flex flex-col overflow-y-auto rounded-none sm:rounded-3xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-xl"
+            className="relative w-full sm:max-w-lg h-full sm:h-auto max-h-none sm:max-h-[86vh] flex flex-col overflow-y-auto rounded-none sm:rounded-app border border-app-border dark:border-app-border bg-app-card shadow-xl"
           >
             <button
               type="button"
               onClick={onClose}
               aria-label="关闭"
-              className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full flex items-center justify-center bg-white/85 dark:bg-black/55 text-[#1D1D1F] dark:text-white backdrop-blur-md hover:bg-white dark:hover:bg-black/70 transition-colors"
+              className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full flex items-center justify-center bg-white/85 dark:bg-black/55 text-app-text backdrop-blur-md hover:bg-app-card dark:hover:bg-black/70 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -126,13 +126,13 @@ export function FavoriteDetailModal({
                   controls
                   playsInline
                   preload="metadata"
-                  className="w-full aspect-video bg-black sm:rounded-t-3xl"
+                  className="w-full aspect-video bg-black sm:rounded-t-app"
                 />
                 <div className="px-5 pt-4 space-y-2">
-                  <h2 className="text-[17px] font-semibold leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  <h2 className="text-[17px] font-semibold leading-snug text-app-text">
                     {target.video.title}
                   </h2>
-                  <p className="text-[11px] text-[#6E6E73] dark:text-[#98989D]">
+                  <p className="text-[11px] text-app-muted">
                     {metaLine([
                       target.video.category,
                       target.video.durationLabel,
@@ -155,13 +155,13 @@ export function FavoriteDetailModal({
                   src={target.article.cover}
                   alt={target.article.title}
                   fallbackTitle={target.article.title}
-                  className="w-full aspect-[16/9] sm:rounded-t-3xl"
+                  className="w-full aspect-[16/9] sm:rounded-t-app"
                 />
                 <div className="px-5 pt-4 space-y-3">
-                  <h2 className="text-[17px] font-semibold leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  <h2 className="text-[17px] font-semibold leading-snug text-app-text">
                     {target.article.title}
                   </h2>
-                  <p className="text-[11px] text-[#6E6E73] dark:text-[#98989D]">
+                  <p className="text-[11px] text-app-muted">
                     {metaLine([
                       target.article.category,
                       target.article.author,
@@ -170,13 +170,13 @@ export function FavoriteDetailModal({
                     ])}
                   </p>
                   {target.article.excerpt && (
-                    <p className="text-[13px] leading-6 text-[#6E6E73] dark:text-[#98989D] border-l-2 border-[#0071E3]/40 pl-3">
+                    <p className="text-[13px] leading-6 text-app-muted border-l-2 border-[#0071E3]/40 pl-3">
                       {target.article.excerpt}
                     </p>
                   )}
                   {articleHtml ? (
                     <div
-                      className="text-[14px] leading-7 text-[#2C2C2E] dark:text-[#E5E5EA] [&_img]:rounded-xl [&_img]:w-full [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-black/10 [&_blockquote]:pl-3 [&_blockquote]:text-[#6E6E73] [&_a]:text-[#0071E3]"
+                      className="text-[14px] leading-7 text-[#2C2C2E] dark:text-[#E5E5EA] [&_img]:rounded-app [&_img]:w-full [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-black/10 [&_blockquote]:pl-3 [&_blockquote]:text-app-muted [&_a]:text-app-primary"
                       dangerouslySetInnerHTML={{ __html: articleHtml }}
                     />
                   ) : (
@@ -200,7 +200,7 @@ export function FavoriteDetailModal({
                     alt={`${target.photo.title} ${safeSlide + 1}`}
                     fallbackTitle={target.photo.title}
                     priority
-                    className="w-full aspect-[4/3] sm:rounded-t-3xl"
+                    className="w-full aspect-[4/3] sm:rounded-t-app"
                   />
                   {images.length > 1 && (
                     <>
@@ -220,17 +220,17 @@ export function FavoriteDetailModal({
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
-                      <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-black/50 text-[11px] text-white tabular-nums backdrop-blur-sm">
+                      <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-app bg-black/50 text-[11px] text-white tabular-nums backdrop-blur-sm">
                         {safeSlide + 1} / {images.length}
                       </span>
                     </>
                   )}
                 </div>
                 <div className="px-5 pt-4 space-y-2">
-                  <h2 className="text-[17px] font-semibold leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  <h2 className="text-[17px] font-semibold leading-snug text-app-text">
                     {target.photo.title}
                   </h2>
-                  <p className="text-[11px] text-[#6E6E73] dark:text-[#98989D]">
+                  <p className="text-[11px] text-app-muted">
                     {metaLine([
                       target.photo.album,
                       target.photo.location,
@@ -252,9 +252,13 @@ export function FavoriteDetailModal({
                     onRemove(currentId);
                     onClose();
                   }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl bg-[#FF3B30]/[0.08] dark:bg-[#FF453A]/[0.14] text-xs font-medium text-[#FF3B30] dark:text-[#FF453A] hover:bg-[#FF3B30]/[0.14] dark:hover:bg-[#FF453A]/[0.22] transition-colors"
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-app text-xs font-medium transition-colors ${
+                    isLike
+                      ? 'bg-[#FF3B30]/[0.08] text-[#FF3B30] hover:bg-[#FF3B30]/[0.14] dark:bg-[#FF453A]/[0.14] dark:text-[#FF453A] dark:hover:bg-[#FF453A]/[0.22]'
+                      : 'bg-app-favorite/12 text-app-favorite hover:bg-app-favorite/20 dark:bg-app-favorite/14 dark:hover:bg-app-favorite/22'
+                  }`}
                 >
-                  {isLike ? <Heart className="w-3.5 h-3.5" /> : <BookmarkX className="w-3.5 h-3.5" />}
+                  {isLike ? <Heart className="w-3.5 h-3.5" /> : <Star className="w-3.5 h-3.5" />}
                   {removeLabel}
                 </button>
               ) : (
@@ -263,7 +267,7 @@ export function FavoriteDetailModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="h-10 px-4 rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] hover:bg-[#EDEDF0] dark:hover:bg-white/[0.1] transition-colors"
+                className="h-10 px-4 rounded-app bg-app-surface dark:bg-white/[0.06] text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] hover:bg-[#EDEDF0] dark:hover:bg-white/[0.1] transition-colors"
               >
                 关闭
               </button>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { BookmarkX, FileText, Film, Heart, Image as ImageIcon, Sparkles } from 'lucide-react';
-import type { ArticleItem, PhotoItem, VideoItem } from '../../data/content';
+import { Star, FileText, Film, Heart, Image as ImageIcon, Sparkles } from 'lucide-react';
+import type { ArticleItem, PhotoItem, VideoItem } from '../../types/content';
 import type { FavoriteTarget } from '../shared/FavoriteDetailModal';
 
 export type FavoriteKind = 'video' | 'article' | 'graphic';
@@ -14,6 +14,10 @@ export interface FavoritesViewProps {
   ids: string[];
   onToggle: (id: string) => void;
   mode?: CollectionMode;
+  likedIds: string[];
+  savedIds: string[];
+  onToggleLike: (id: string) => void;
+  onToggleSave: (id: string) => void;
 }
 
 interface ModeMeta {
@@ -32,12 +36,12 @@ export const MODE_META: Record<CollectionMode, ModeMeta> = {
   favorite: {
     heading: '我的收藏',
     orderHint: '按收藏时间倒序',
-    emptyHint: '还没有收藏内容，在视频、文章、图文页点击书签图标即可收藏',
+    emptyHint: '还没有收藏内容，在视频、文章、图文页点击星星图标即可收藏',
     emptyKindHint: (label) => `还没有收藏的${label}`,
     removeLabel: '取消收藏',
     indicator: 'favorites-tab-indicator',
     EmptyIcon: FileText,
-    RemoveIcon: BookmarkX,
+    RemoveIcon: Star,
     reverseIds: true,
   },
   like: {
@@ -131,6 +135,10 @@ export function useFavoritesModel({
   ids,
   onToggle,
   mode = 'favorite',
+  likedIds,
+  savedIds,
+  onToggleLike,
+  onToggleSave,
 }: FavoritesViewProps) {
   const meta = MODE_META[mode];
   const [tab, setTab] = useState<FavoriteTab>('all');
@@ -175,8 +183,13 @@ export function useFavoritesModel({
     counts,
     visibleEntries,
     emptyHint,
+    activeItem,
     activeTarget,
     onToggle,
+    likedIds,
+    savedIds,
+    onToggleLike,
+    onToggleSave,
     openItem: (kind: FavoriteKind, id: string) => setActiveItem({ kind, id }),
     closeItem: () => setActiveItem(null),
   };

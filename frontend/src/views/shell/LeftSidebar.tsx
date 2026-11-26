@@ -33,7 +33,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
   return (
     <aside
       aria-label="左侧主导航"
-      className="hidden md:flex flex-col justify-between sticky top-0 h-screen w-20 lg:w-60 shrink-0 border-r border-black/[0.06] dark:border-white/[0.08] bg-[#F5F5F7]/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
+      className="hidden md:flex flex-col justify-between sticky top-0 h-screen w-20 lg:w-60 shrink-0 border-r border-app-border bg-app-surface/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
     >
       {/* Top Brand + Primary Vertical Navigation */}
       <div className="space-y-6">
@@ -41,22 +41,22 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         <button
           type="button"
           onClick={() => onSelectSection('videos', true)}
-          className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
+          className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary"
         >
           <span className="flex items-center justify-center w-9 h-9 shrink-0">
             {logoUrl ? (
               <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
             ) : (
-              <span className="w-full h-full flex items-center justify-center rounded-xl bg-[#1D1D1F] dark:bg-white text-white dark:text-[#1D1D1F] shadow-xs">
+              <span className="w-full h-full flex items-center justify-center rounded-app bg-app-primary text-app-primary-fg shadow-xs">
                 <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none" aria-hidden="true">
                   <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="2" />
                   <path d="M16 9L22.5 20.5H9.5L16 9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  <circle cx="16" cy="16" r="2.2" fill="#0A84FF" />
+                  <circle cx="16" cy="16" r="2.2" fill="var(--app-color-primary)" />
                 </svg>
               </span>
             )}
           </span>
-          <span className="hidden lg:inline text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] whitespace-nowrap">
+          <span className="hidden lg:inline text-lg font-semibold tracking-tight text-app-text whitespace-nowrap">
             {title}
           </span>
         </button>
@@ -74,17 +74,17 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
                 onClick={() => onSelectSection(id, true)}
                 title={label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`relative w-full flex items-center justify-center lg:justify-start gap-3.5 px-3 lg:px-3.5 py-3 min-h-[46px] rounded-2xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+                className={`relative w-full flex items-center justify-center lg:justify-start gap-3.5 px-3 lg:px-3.5 py-3 min-h-[46px] rounded-app text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary ${
                   isActive
-                    ? 'text-[#1D1D1F] dark:text-white'
-                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
+                    ? 'text-app-text'
+                    : 'text-app-muted hover:text-app-text dark:hover:text-app-text hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
                 }`}
               >
                 {isActive && (
                   <motion.span
                     layoutId="leftSidebarActivePill"
                     transition={SWIFTUI_SNAPPY}
-                    className="absolute inset-0 rounded-2xl bg-white dark:bg-[#1E1E22] shadow-xs border border-black/[0.05] dark:border-white/[0.08]"
+                    className="absolute inset-0 rounded-app bg-app-card dark:bg-[#1E1E22] shadow-xs border border-black/[0.05] dark:border-app-border"
                   />
                 )}
                 {customIcon ? (
@@ -111,7 +111,7 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
 
       {/* 备案模块：纯黑背景、靠左对齐，点击跳转官方查询站 */}
       {(icpNo || policeNo) && (
-        <div className="hidden lg:flex shrink-0 mt-3 -mx-4 -mb-3 flex-col items-start gap-1.5 bg-black px-4 py-2.5">
+        <div className="hidden lg:flex shrink-0 mt-3 -mx-4 -mb-3 flex-col items-start gap-1.5 bg-black px-4 py-2">
           {icpNo && (
             <a
               href="https://beian.miit.gov.cn"

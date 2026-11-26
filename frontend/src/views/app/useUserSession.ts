@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { INITIAL_PROFILE, type UserProfile } from '../../data/content';
+import { INITIAL_PROFILE, type UserProfile } from '../../types/content';
 import type { UserBasicInfo } from '../profile/ProfileView';
 import {
   authApi,

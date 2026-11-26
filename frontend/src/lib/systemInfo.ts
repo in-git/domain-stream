@@ -67,6 +67,52 @@ function applyFavicon(url: string): void {
   link.href = url;
 }
 
+function normalizeColor(value?: string): string | undefined {
+  const raw = (value || '').trim();
+  if (!raw) return undefined;
+  if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(raw)) return raw;
+  if (typeof CSS !== 'undefined' && CSS.supports?.('color', raw)) return raw;
+  return undefined;
+}
+
+/** 根据高亮色亮度选择黑/白前景，保证按钮文字可读 */
+function primaryForeground(color: string): string {
+  const full = color.replace(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i, '#$1$1$2$2$3$3');
+  const hex = full.slice(1);
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#FFFFFF';
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.65 ? '#1D1D1F' : '#FFFFFF';
+}
+
+function normalizePixels(value?: string): string | undefined {
+  const raw = (value || '').trim();
+  if (!raw) return undefined;
+  const size = Number.parseFloat(raw);
+  if (!Number.isFinite(size)) return undefined;
+  return `${Math.min(Math.max(size, 0), 64)}px`;
+}
+
+/**
+ * 把 CMS 客户端配置里的高亮色、圆角写到根节点。
+ * 背景色保持现有黑白主题不变；只覆盖有值的变量，缺省或非法值回退到 index.css 默认值。
+ */
+export function applyClientTheme(config: Record<string, string> = {}): void {
+  const root = document.documentElement;
+  const primary = normalizeColor(config.themeColor);
+  const values: Record<string, string | undefined> = {
+    '--app-color-primary': primary,
+    '--app-color-primary-fg': primary ? primaryForeground(primary) : undefined,
+    '--app-radius': normalizePixels(config.themeRadius),
+  };
+  Object.entries(values).forEach(([name, value]) => {
+    if (value) root.style.setProperty(name, value);
+    else root.style.removeProperty(name);
+  });
+}
+
 /** 读取一次系统信息（多次调用只请求一次；失败时允许下次重试） */
 export async function loadSystemInfo(): Promise<void> {
   if (loaded) return;
@@ -80,6 +126,7 @@ export async function loadSystemInfo(): Promise<void> {
     };
     document.title = info.title;
     applyFavicon(publicFileUrl(info.config.faviconUrl));
+    applyClientTheme(info.config);
     emit();
   } catch {
     loaded = false;

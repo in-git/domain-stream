@@ -6,8 +6,8 @@ import { authApi, type CaptchaResult } from '../../lib/snowyAuth';
 import { navigate } from '../../lib/router';
 
 const fieldClass =
-  'w-full h-14 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.12] dark:border-white/[0.16] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-[#0071E3] dark:focus:border-[#0A84FF] focus:outline-none focus:ring-4 focus:ring-[#0071E3]/12 text-[15px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#86868B] transition-all';
-const labelClass = 'block text-[13px] font-medium text-[#6E6E73] dark:text-[#98989D] mb-2';
+  'w-full h-14 rounded-app bg-app-card border border-app-border shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none focus:border-app-primary focus:outline-none focus:ring-4 focus:ring-app-primary/12 text-[15px] text-app-text placeholder:text-app-muted transition-all';
+const labelClass = 'block text-[13px] font-medium text-app-muted mb-2';
 
 export function RegisterView() {
   const [account, setAccount] = useState('');
@@ -85,13 +85,13 @@ export function RegisterView() {
           </div>
           <div>
             <p className="text-[18px] font-medium">欢迎加入，{nickname.trim()}</p>
-            <p className="mt-2 text-[13px] text-[#86868B]">你的账号已创建完成，请使用账号密码登录。</p>
+            <p className="mt-2 text-[13px] text-app-muted">你的账号已创建完成，请使用账号密码登录。</p>
           </div>
           <motion.button
             type="button"
             whileTap={{ scale: 0.99 }}
             onClick={() => navigate('/login')}
-            className="w-full h-14 rounded-2xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[15px] font-medium hover:brightness-110 transition-all"
+            className="w-full h-14 rounded-app bg-app-primary dark:bg-[#0A84FF] text-white text-[15px] font-medium hover:brightness-110 transition-all"
           >
             立即登录
           </motion.button>
@@ -123,7 +123,7 @@ export function RegisterView() {
             账号
           </label>
           <div className="relative">
-            <UserRound className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <UserRound className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="register-account"
               type="text"
@@ -141,7 +141,7 @@ export function RegisterView() {
             昵称
           </label>
           <div className="relative">
-            <AtSign className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <AtSign className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="register-nickname"
               type="text"
@@ -159,7 +159,7 @@ export function RegisterView() {
             密码
           </label>
           <div className="relative">
-            <Lock className="w-5 h-5 text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Lock className="w-5 h-5 text-app-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="register-password"
               type={showPassword ? 'text' : 'password'}
@@ -173,7 +173,7 @@ export function RegisterView() {
               type="button"
               onClick={() => setShowPassword((value) => !value)}
               aria-label={showPassword ? '隐藏密码' : '显示密码'}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-app text-app-muted hover:text-app-text dark:hover:text-white"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
@@ -200,7 +200,7 @@ export function RegisterView() {
             <label htmlFor="register-captcha" className={labelClass}>
               验证码
             </label>
-            <div className="flex gap-2.5">
+            <div className="flex gap-2">
               <input
                 id="register-captcha"
                 type="text"
@@ -213,7 +213,7 @@ export function RegisterView() {
                 type="button"
                 onClick={loadCaptcha}
                 title="点击刷新验证码"
-                className="h-14 shrink-0 rounded-2xl overflow-hidden border border-black/[0.06] dark:border-white/[0.1] bg-white flex items-center justify-center hover:opacity-80 transition-opacity"
+                className="h-14 shrink-0 rounded-app overflow-hidden border border-app-border dark:border-white/[0.1] bg-app-card flex items-center justify-center hover:opacity-80 transition-opacity"
               >
                 <img src={captcha.validCodeBase64} alt="图形验证码" className="h-full w-auto object-contain" />
               </button>
@@ -221,7 +221,7 @@ export function RegisterView() {
                 type="button"
                 onClick={loadCaptcha}
                 aria-label="刷新验证码"
-                className="w-14 h-14 shrink-0 rounded-2xl border border-black/[0.06] dark:border-white/[0.1] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white"
+                className="w-14 h-14 shrink-0 rounded-app border border-app-border dark:border-white/[0.1] flex items-center justify-center text-app-muted hover:text-app-text dark:hover:text-white"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
@@ -230,7 +230,7 @@ export function RegisterView() {
         )}
 
         {error && (
-          <p role="alert" className="rounded-2xl bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 text-[13px] text-[#D70015] dark:text-[#FF453A]">
+          <p role="alert" className="rounded-app bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 text-[13px] text-[#D70015] dark:text-[#FF453A]">
             {error}
           </p>
         )}
@@ -239,7 +239,7 @@ export function RegisterView() {
           type="submit"
           whileTap={{ scale: 0.99 }}
           disabled={submitting}
-          className="w-full h-14 rounded-2xl bg-[#0071E3] dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 transition-all"
+          className="w-full h-14 rounded-app bg-app-primary dark:bg-[#0A84FF] text-white text-[15px] font-medium flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 transition-all"
         >
           {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
           {submitting ? '正在注册...' : '创建账号'}

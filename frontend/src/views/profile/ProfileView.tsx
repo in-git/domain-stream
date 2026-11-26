@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  Bookmark,
+  Star,
   Check,
   ChevronRight,
   Edit3,
@@ -13,7 +13,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../data/content';
+import type { ArticleItem, PhotoItem, UserProfile, VideoItem } from '../../types/content';
 import { SWIFTUI_SHEET, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { FavoritesPCView } from './FavoritesPCView';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -39,20 +39,19 @@ const BILIBILI_HOME_PAGE = 'https://space.bilibili.com/3706965849016893?spm_id_f
 
 function ContactSupportNote() {
   return (
-    <div className="rounded-2xl border border-black/[0.06] bg-[#F5F5F7] px-4 py-3 text-xs leading-relaxed text-[#6E6E73] dark:border-white/[0.08] dark:bg-[#242426] dark:text-[#98989D]">
+    <div className="rounded-app border border-app-border bg-app-surface px-4 py-3 text-xs leading-relaxed text-app-muted dark:border-app-border dark:bg-[#242426] dark:text-app-muted">
       <p className="break-all">
         我的个人主页：
         <a
           href={BILIBILI_HOME_PAGE}
           target="_blank"
           rel="noreferrer noopener"
-          className="inline-flex items-center gap-1 font-medium text-[#1D1D1F] underline decoration-black/25 underline-offset-2 hover:decoration-black dark:text-[#F5F5F7] dark:decoration-white/30 dark:hover:decoration-white"
+          className="inline-flex items-center gap-1 font-medium text-app-text underline decoration-black/25 underline-offset-2 hover:decoration-black dark:text-app-text dark:decoration-white/30 dark:hover:decoration-white"
         >
           <ExternalLink className="h-3.5 w-3.5 shrink-0" />
           {BILIBILI_HOME_PAGE}
         </a>
       </p>
-      <p className="mt-1">有需求或者问题请在 B 站私信我。</p>
     </div>
   );
 }
@@ -95,15 +94,15 @@ function ProfileNav({
   const items = [
     { id: 'profile', label: '个人资料', Icon: UserRound, count: undefined },
     { id: 'likes', label: '喜欢', Icon: Heart, count: likedCount },
-    { id: 'favorites', label: '收藏', Icon: Bookmark, count: savedCount },
+    { id: 'favorites', label: '收藏', Icon: Star, count: savedCount },
   ] as const;
   return (
     <nav
       aria-label="个人中心导航"
       className={
         mobile
-          ? 'fixed inset-x-0 bottom-0 z-40 flex justify-around gap-1 border-t border-black/[0.06] bg-white/95 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0C0C0E]/95 md:hidden'
-          : 'hidden md:relative md:z-10 md:flex md:items-center md:gap-2 md:border-b md:border-black/[0.06] md:dark:border-white/[0.08]'
+          ? 'fixed inset-x-0 bottom-0 z-40 flex justify-around gap-1 border-t border-app-border bg-white/95 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-app-border dark:bg-[#0C0C0E]/95 md:hidden'
+          : 'hidden md:relative md:z-10 md:flex md:items-center md:gap-2 md:border-b md:border-app-border md:dark:border-app-border'
       }
     >
       {items.map(({ id, label, Icon, count }) => {
@@ -116,15 +115,15 @@ function ProfileNav({
             aria-current={isActive ? 'page' : undefined}
             className={
               mobile
-                ? `relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-medium transition-colors ${
+                ? `relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-app px-2 text-[11px] font-medium transition-colors ${
                     isActive
-                      ? 'bg-[#1D1D1F] text-white shadow-xs dark:bg-[#F5F5F7] dark:text-[#1D1D1F]'
-                      : 'text-[#6E6E73] hover:bg-black/[0.04] dark:text-[#98989D] dark:hover:bg-white/[0.06]'
+                      ? 'bg-app-primary text-white shadow-xs dark:bg-app-surface dark:text-app-text'
+                      : 'text-app-muted hover:bg-black/[0.04] dark:text-app-muted dark:hover:bg-white/[0.06]'
                   }`
                 : `relative flex min-h-13 items-center gap-2 px-5 text-[15px] font-medium transition-colors ${
                     isActive
-                      ? 'text-[#1D1D1F] dark:text-[#F5F5F7]'
-                      : 'text-[#8E8E93] hover:text-[#1D1D1F] dark:text-[#98989D] dark:hover:text-[#F5F5F7]'
+                      ? 'text-app-text'
+                      : 'text-app-subtle hover:text-app-text dark:text-app-muted dark:hover:text-app-text'
                   }`
             }
           >
@@ -135,7 +134,7 @@ function ProfileNav({
                 className={
                   mobile
                     ? 'absolute right-2 top-1 text-[10px] tabular-nums opacity-60'
-                    : 'rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6E6E73] dark:bg-white/[0.08] dark:text-[#98989D]'
+                    : 'rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[11px] tabular-nums text-app-muted dark:bg-white/[0.08] dark:text-app-muted'
                 }
               >
                 {count}
@@ -145,7 +144,7 @@ function ProfileNav({
               <motion.span
                 layoutId="profile-tab-indicator"
                 transition={SWIFTUI_SMOOTH}
-                className="absolute inset-x-4 -bottom-px h-0.5 rounded-full bg-[#1D1D1F] dark:bg-[#F5F5F7]"
+                className="absolute inset-x-4 -bottom-px h-0.5 rounded-full bg-app-primary dark:bg-app-surface"
               />
             )}
           </button>
@@ -276,14 +275,14 @@ export function ProfileView({
             className="w-full mt-0 sm:mt-4 p-6 sm:p-8 space-y-6 flex flex-col items-center"
           >
             <div className="w-full max-w-sm py-10 text-center space-y-6">
-              <div className="w-16 h-16 rounded-[20px] bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-[#F5F5F7] flex items-center justify-center mx-auto">
+              <div className="w-16 h-16 rounded-app bg-app-surface text-app-text flex items-center justify-center mx-auto">
                 <UserRound className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h1 className="text-[22px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <h1 className="text-[22px] font-semibold tracking-tight text-app-text">
                   登录后查看个人中心
                 </h1>
-                <p className="text-[13px] text-[#6E6E73] dark:text-[#98989D]">
+                <p className="text-[13px] text-app-muted">
                   使用账号密码或 QQ / 微信登录，即可管理个人资料、收藏与留言。
                 </p>
               </div>
@@ -291,14 +290,14 @@ export function ProfileView({
                 <button
                   type="button"
                   onClick={onGoLogin}
-                  className="h-11 px-6 rounded-xl bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] text-[14px] font-medium hover:brightness-110 transition-all"
+                  className="h-11 px-6 rounded-app bg-app-primary dark:bg-app-surface text-app-primary-fg text-[14px] font-medium hover:brightness-110 transition-all"
                 >
                   立即登录
                 </button>
                 <button
                   type="button"
                   onClick={onGoRegister}
-                  className="h-11 px-6 rounded-xl bg-[#F5F5F7] dark:bg-[#242426] text-[#1D1D1F] dark:text-[#F5F5F7] text-[14px] font-medium hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors"
+                  className="h-11 px-6 rounded-app bg-app-surface dark:bg-[#242426] text-app-text text-[14px] font-medium hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors"
                 >
                   注册账号
                 </button>
@@ -317,11 +316,11 @@ export function ProfileView({
           >
             {/* Light Profile Hero */}
             {!hideHero && (
-            <div className="relative overflow-hidden bg-white text-[#1D1D1F] sm:rounded-[32px] sm:border sm:border-black/[0.06]">
+            <div className="relative overflow-hidden bg-app-card text-app-text sm:rounded-app sm:border sm:border-app-border">
               <div className="relative h-36 sm:h-52 lg:h-60">
-                <div className="absolute inset-0 bg-[linear-gradient(120deg,#F5F5F7_0%,#FFFFFF_45%,#EBEBEF_100%)]" />
-                <div className="absolute right-5 top-5 hidden items-center gap-2 rounded-full border border-black/[0.06] bg-white/75 px-3 py-1.5 text-[11px] font-medium tracking-wide text-[#8E8E93] shadow-sm backdrop-blur-xl sm:flex">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#1D1D1F]" />
+                <div className="absolute inset-0 bg-[linear-gradient(120deg,var(--app-color-surface)_0%,var(--app-color-card)_45%,var(--app-color-surface)_100%)]" />
+                <div className="absolute right-5 top-5 hidden items-center gap-2 rounded-full border border-app-border bg-white/75 px-3 py-1.5 text-[11px] font-medium tracking-wide text-app-subtle shadow-sm backdrop-blur-xl sm:flex">
+                  <span className="h-1.5 w-1.5 rounded-full bg-app-primary" />
                   PERSONAL SPACE
                 </div>
               </div>
@@ -340,16 +339,16 @@ export function ProfileView({
                     </div>
                     <div className="min-w-0 pb-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight text-[#1D1D1F] sm:text-3xl">
+                        <h1 className="text-2xl font-semibold tracking-tight text-app-text sm:text-3xl">
                           {profile.name || '用户'}
                         </h1>
                         {profile.handle && (
-                          <span className="rounded-full bg-black/[0.05] px-2.5 py-1 text-[11px] text-[#6E6E73]">
+                          <span className="rounded-full bg-black/[0.05] px-2 py-1 text-[11px] text-app-muted">
                             {profile.handle}
                           </span>
                         )}
                       </div>
-                      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#6E6E73]">
+                      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-app-muted">
                         {profile.bio || '这个人很神秘，还没有填写简介'}
                       </p>
                     </div>
@@ -360,7 +359,7 @@ export function ProfileView({
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={openEditModal}
-                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#1D1D1F] px-5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors hover:bg-black"
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-app bg-app-primary px-5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors hover:bg-black"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
                       <span>编辑资料</span>
@@ -369,7 +368,7 @@ export function ProfileView({
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={onLogout}
-                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-black/[0.08] bg-white/80 px-5 text-xs font-medium text-[#1D1D1F] transition-colors hover:bg-white"
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-app border border-black/[0.08] bg-white/80 px-5 text-xs font-medium text-app-text transition-colors hover:bg-app-card"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       <span>退出登录</span>
@@ -377,14 +376,14 @@ export function ProfileView({
                   </div>
                 </div>
 
-                <div className="mt-7 grid grid-cols-2 gap-3 border-t border-black/[0.06] pt-6 sm:flex sm:gap-10">
+                <div className="mt-7 grid grid-cols-2 gap-3 border-t border-app-border pt-6 sm:flex sm:gap-10">
                   {[
                     { label: '喜欢', value: likedIds.length },
                     { label: '收藏', value: savedIds.length },
                   ].map((stat) => (
                     <div key={stat.label} className="space-y-1">
-                      <div className="text-xl font-semibold tabular-nums text-[#1D1D1F] sm:text-2xl">{stat.value}</div>
-                      <div className="text-[11px] text-[#8E8E93] sm:text-xs">{stat.label}</div>
+                      <div className="text-xl font-semibold tabular-nums text-app-text sm:text-2xl">{stat.value}</div>
+                      <div className="text-[11px] text-app-subtle sm:text-xs">{stat.label}</div>
                     </div>
                   ))}
                 </div>
@@ -409,36 +408,36 @@ export function ProfileView({
                       <button
                         type="button"
                         onClick={() => setProfileDetail(null)}
-                        className="inline-flex items-center gap-1 px-1 py-1 text-[14px] font-medium text-[#1D1D1F] dark:text-white"
+                        className="inline-flex items-center gap-1 px-1 py-1 text-[14px] font-medium text-app-text"
                       >
                         <span>←</span>
                         返回
                       </button>
 
                       {profileDetail === 'account' && (
-                        <div className="border border-black/[0.06] bg-white p-6 dark:border-white/[0.08] dark:bg-[#161618]">
+                        <div className="border border-app-border bg-app-card p-6 dark:border-app-border dark:bg-app-card">
                           <div className="mb-7 flex items-start justify-between gap-4">
                             <div>
-                              <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                              <h2 className="text-lg font-semibold tracking-tight text-app-text">
                                 账号信息
                               </h2>
-                              <p className="mt-1 text-xs text-[#8E8E93]">基本资料与登录状态</p>
+                              <p className="mt-1 text-xs text-app-subtle">基本资料与登录状态</p>
                             </div>
-                            <span className="shrink-0 rounded-full bg-black/[0.06] px-3 py-1 text-xs font-medium text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                            <span className="shrink-0 rounded-full bg-black/[0.06] px-3 py-1 text-xs font-medium text-app-text dark:bg-white/[0.10] dark:text-app-text">
                               已登录
                             </span>
                           </div>
                           <dl className="grid gap-x-10 gap-y-6 sm:grid-cols-2">
                             <div>
-                              <dt className="text-xs text-[#8E8E93]">昵称</dt>
-                              <dd className="mt-1.5 truncate text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                              <dt className="text-xs text-app-subtle">昵称</dt>
+                              <dd className="mt-1.5 truncate text-sm font-medium text-app-text">
                                 {profile.name || '用户'}
                               </dd>
                             </div>
                             {userInfo.phone && (
                               <div>
-                                <dt className="text-xs text-[#8E8E93]">手机号</dt>
-                                <dd className="mt-1.5 text-sm font-medium tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                <dt className="text-xs text-app-subtle">手机号</dt>
+                                <dd className="mt-1.5 text-sm font-medium tabular-nums text-app-text">
                                   {userInfo.phone}
                                 </dd>
                               </div>
@@ -448,37 +447,37 @@ export function ProfileView({
                       )}
 
                       {profileDetail === 'security' && (
-                        <div className="space-y-5 border border-black/[0.06] bg-white p-6 dark:border-white/[0.08] dark:bg-[#161618]">
+                        <div className="space-y-5 border border-app-border bg-app-card p-6 dark:border-app-border dark:bg-app-card">
                           <div>
-                            <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                            <h2 className="text-lg font-semibold tracking-tight text-app-text">
                               安全设置
                             </h2>
-                            <p className="mt-1 text-xs text-[#8E8E93]">保护账号，定期更新登录密码。</p>
+                            <p className="mt-1 text-xs text-app-subtle">保护账号，定期更新登录密码。</p>
                           </div>
                           <button
                             type="button"
                             onClick={openPasswordModal}
-                            className="group flex w-full items-center justify-between border border-black/[0.06] bg-[#FBFBFD] px-4 py-4 text-left transition-colors hover:border-black/20 hover:bg-black/[0.03] dark:border-white/[0.08] dark:bg-[#1C1C1E] dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
+                            className="group flex w-full items-center justify-between border border-app-border bg-app-surface px-4 py-4 text-left transition-colors hover:border-black/20 hover:bg-black/[0.03] dark:border-app-border dark:bg-app-card dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
                           >
                             <span className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/[0.06] text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-app bg-black/[0.06] text-app-text dark:bg-white/[0.10] dark:text-app-text">
                                 <KeyRound className="h-4 w-4" />
                               </span>
                               <span>
-                                <span className="block text-sm font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                <span className="block text-sm font-medium text-app-text">
                                   修改登录密码
                                 </span>
-                                <span className="mt-0.5 block text-[11px] text-[#8E8E93]">
+                                <span className="mt-0.5 block text-[11px] text-app-subtle">
                                   建议每 3 个月更新一次
                                 </span>
                               </span>
                             </span>
-                            <ChevronRight className="h-4 w-4 text-[#AEAEB2] transition-transform group-hover:translate-x-0.5" />
+                            <ChevronRight className="h-4 w-4 text-app-subtle transition-transform group-hover:translate-x-0.5" />
                           </button>
                           {userInfo.latestLoginTime && (
-                            <div className="bg-[#F5F5F7] p-4 dark:bg-[#1C1C1E]">
-                              <p className="text-[11px] text-[#8E8E93]">最近登录</p>
-                              <p className="mt-1.5 text-xs font-medium leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7]">
+                            <div className="bg-app-surface p-4 dark:bg-app-card">
+                              <p className="text-[11px] text-app-subtle">最近登录</p>
+                              <p className="mt-1.5 text-xs font-medium leading-relaxed text-app-text">
                                 {[formatLoginTime(userInfo.latestLoginTime), userInfo.latestLoginAddress]
                                   .filter(Boolean)
                                   .join(' · ')}
@@ -489,7 +488,7 @@ export function ProfileView({
                       )}
                     </div>
                   ) : (
-                    <div className="overflow-hidden border border-[#E5E5EA] bg-white dark:border-white/10 dark:bg-[#161618]">
+                    <div className="overflow-hidden border border-app-border bg-app-card dark:border-app-border dark:bg-app-card">
                       <button
                         type="button"
                         onClick={() => setProfileDetail('account')}
@@ -499,32 +498,32 @@ export function ProfileView({
                           <UserRound className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium text-[#1D1D1F] dark:text-white">
+                          <span className="block text-sm font-medium text-app-text">
                             账号信息
                           </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-[#8E8E93]">
+                          <span className="mt-0.5 block truncate text-[11px] text-app-subtle">
                             基本资料与登录状态
                           </span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#AEAEB2]" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-app-subtle" />
                       </button>
                       <button
                         type="button"
                         onClick={() => setProfileDetail('security')}
-                        className="flex w-full items-center gap-3 border-t border-[#E5E5EA] px-4 py-4 text-left dark:border-white/5"
+                        className="flex w-full items-center gap-3 border-t border-app-border px-4 py-4 text-left dark:border-white/5"
                       >
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FDE8F0] text-[#FB7299] dark:bg-[#FB7299]/10">
                           <KeyRound className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium text-[#1D1D1F] dark:text-white">
+                          <span className="block text-sm font-medium text-app-text">
                             安全设置
                           </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-[#8E8E93]">
+                          <span className="mt-0.5 block truncate text-[11px] text-app-subtle">
                             修改登录密码与登录记录
                           </span>
                         </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-[#AEAEB2]" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-app-subtle" />
                       </button>
                     </div>
                   )}
@@ -536,6 +535,10 @@ export function ProfileView({
                   videos={videos}
                   articles={articles}
                   photos={photos}
+                  likedIds={likedIds}
+                  savedIds={savedIds}
+                  onToggleLike={onToggleLike || (() => {})}
+                  onToggleSave={onToggleSave || (() => {})}
                   ids={likedIds}
                   onToggle={onToggleLike || (() => {})}
                   mode="like"
@@ -547,6 +550,10 @@ export function ProfileView({
                   videos={videos}
                   articles={articles}
                   photos={photos}
+                  likedIds={likedIds}
+                  savedIds={savedIds}
+                  onToggleLike={onToggleLike || (() => {})}
+                  onToggleSave={onToggleSave || (() => {})}
                   ids={savedIds}
                   onToggle={onToggleSave || (() => {})}
                 />
@@ -583,13 +590,13 @@ export function ProfileView({
               transition={SWIFTUI_SHEET}
               onClick={(e) => e.stopPropagation()}
               onSubmit={handleSaveProfile}
-              className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] p-6 space-y-5 shadow-2xl"
+              className="w-full max-w-md rounded-t-app sm:rounded-app bg-app-card border border-black/[0.08] dark:border-white/[0.1] p-6 space-y-5 shadow-2xl"
               role="dialog"
               aria-modal="true"
               aria-label="编辑个人资料"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <h3 className="text-lg font-semibold text-app-text">
                   编辑个人资料
                 </h3>
                 <button
@@ -606,7 +613,7 @@ export function ProfileView({
                 <div>
                   <label
                     htmlFor="edit-name"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                    className="block text-xs font-medium text-app-muted mb-1.5"
                   >
                     显示名称
                   </label>
@@ -616,14 +623,14 @@ export function ProfileView({
                     value={draftName}
                     onChange={(e) => setDraftName(e.target.value)}
                     maxLength={24}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
+                    className="w-full px-3.5 py-2 min-h-[44px] rounded-app bg-app-surface border border-app-border text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-app-primary"
                   />
                 </div>
 
                 <div>
                   <label
                     htmlFor="edit-bio"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                    className="block text-xs font-medium text-app-muted mb-1.5"
                   >
                     个人简介
                   </label>
@@ -633,23 +640,23 @@ export function ProfileView({
                     value={draftBio}
                     onChange={(e) => setDraftBio(e.target.value)}
                     maxLength={120}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7] resize-none"
+                    className="w-full px-3.5 py-2 rounded-app bg-app-surface border border-app-border text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-app-primary resize-none"
                   />
                 </div>
               </div>
 
               {profileError && (
-                <p className="text-xs text-[#1D1D1F] dark:text-[#F5F5F7]">{profileError}</p>
+                <p className="text-xs text-app-text">{profileError}</p>
               )}
 
               <ContactSupportNote />
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
                   disabled={savingProfile}
-                  className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] disabled:opacity-50"
+                  className="px-4 py-2 min-h-[44px] rounded-app text-xs font-medium text-app-muted hover:bg-black/[0.05] dark:hover:bg-white/[0.06] disabled:opacity-50"
                 >
                   取消
                 </button>
@@ -657,7 +664,7 @@ export function ProfileView({
                   type="submit"
                   whileTap={{ scale: 0.96 }}
                   disabled={savingProfile}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] text-xs font-medium disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 px-5 py-2 min-h-[44px] rounded-app bg-app-primary dark:bg-app-surface text-app-primary-fg text-xs font-medium disabled:opacity-60"
                 >
                   {savingProfile ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -689,17 +696,17 @@ export function ProfileView({
               transition={SWIFTUI_SHEET}
               onClick={(event) => event.stopPropagation()}
               onSubmit={(event) => void handleChangePassword(event)}
-              className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] p-6 space-y-5 shadow-2xl"
+              className="w-full max-w-md rounded-t-app sm:rounded-app bg-app-card border border-black/[0.08] dark:border-white/[0.1] p-6 space-y-5 shadow-2xl"
               role="dialog"
               aria-modal="true"
               aria-label="修改登录密码"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  <h3 className="text-lg font-semibold text-app-text">
                     修改登录密码
                   </h3>
-                  <p className="mt-1 text-xs text-[#8E8E93]">通过当前密码验证后设置新密码</p>
+                  <p className="mt-1 text-xs text-app-subtle">通过当前密码验证后设置新密码</p>
                 </div>
                 <button
                   type="button"
@@ -715,7 +722,7 @@ export function ProfileView({
                 <div>
                   <label
                     htmlFor="current-password"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                    className="block text-xs font-medium text-app-muted mb-1.5"
                   >
                     当前密码
                   </label>
@@ -725,13 +732,13 @@ export function ProfileView({
                     value={oldPassword}
                     onChange={(event) => setOldPassword(event.target.value)}
                     autoComplete="current-password"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
+                    className="w-full px-3.5 py-2 min-h-[44px] rounded-app bg-app-surface border border-app-border text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-app-primary"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="new-password"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                    className="block text-xs font-medium text-app-muted mb-1.5"
                   >
                     新密码
                   </label>
@@ -741,13 +748,13 @@ export function ProfileView({
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     autoComplete="new-password"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
+                    className="w-full px-3.5 py-2 min-h-[44px] rounded-app bg-app-surface border border-app-border text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-app-primary"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="confirm-password"
-                    className="block text-xs font-medium text-[#6E6E73] dark:text-[#98989D] mb-1.5"
+                    className="block text-xs font-medium text-app-muted mb-1.5"
                   >
                     确认新密码
                   </label>
@@ -757,29 +764,29 @@ export function ProfileView({
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl bg-[#F5F5F7] dark:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] text-sm text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none focus:ring-2 focus:ring-[#1D1D1F] dark:focus:ring-[#F5F5F7]"
+                    className="w-full px-3.5 py-2 min-h-[44px] rounded-app bg-app-surface border border-app-border text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-app-primary"
                   />
                 </div>
               </div>
 
               {passwordError && (
-                <p className="rounded-xl bg-black/[0.06] px-3 py-2 text-xs dark:bg-white/[0.10] text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <p className="rounded-app bg-black/[0.06] px-3 py-2 text-xs dark:bg-white/[0.10] text-app-text">
                   {passwordError}
                 </p>
               )}
               {passwordSuccess && (
-                <p className="rounded-xl bg-black/[0.06] px-3 py-2 text-xs text-[#1D1D1F] dark:bg-white/[0.10] dark:text-[#F5F5F7]">
+                <p className="rounded-app bg-black/[0.06] px-3 py-2 text-xs text-app-text dark:bg-white/[0.10] dark:text-app-text">
                   {passwordSuccess}
                 </p>
               )}
 
               <ContactSupportNote />
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setPasswordOpen(false)}
-                  className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-[#6E6E73] dark:text-[#98989D] hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
+                  className="px-4 py-2 min-h-[44px] rounded-app text-xs font-medium text-app-muted hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
                 >
                   关闭
                 </button>
@@ -787,7 +794,7 @@ export function ProfileView({
                   type="submit"
                   whileTap={{ scale: 0.96 }}
                   disabled={savingPassword}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] text-xs font-medium disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-5 py-2 min-h-[44px] rounded-app bg-app-primary dark:bg-app-surface text-app-primary-fg text-xs font-medium disabled:opacity-50"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>{savingPassword ? '提交中…' : '确认修改'}</span>

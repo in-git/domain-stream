@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react';
 import {
-  Bookmark,
+  Star,
   Heart,
   Maximize,
   Maximize2,
@@ -15,7 +15,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import type { VideoItem } from '../../data/content';
+import type { VideoItem } from '../../types/content';
 import { SWIFTUI_BOUNCY } from '../../lib/motion';
 import { Tooltip } from '../../components/Tooltip';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -258,11 +258,11 @@ export function FeedSlide({
           aria-label={saved ? '取消收藏' : '收藏'}
           className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
             saved
-              ? 'bg-[#FFB800]/25 border-[#FFB800]/60 text-[#FFD60A]'
+              ? 'bg-app-favorite/25 border-app-favorite/60 text-app-favorite'
               : 'bg-black/45 border-white/15 text-white hover:bg-black/65'
           }`}
         >
-          <Bookmark className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
+          <Star className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
         </motion.button>
       </Tooltip>
 
@@ -277,7 +277,7 @@ export function FeedSlide({
           >
             <MessageCircle className="w-5 h-5" />
             {!!video.commentCount && (
-              <span className="absolute -top-1 -right-1 rounded-full bg-[#0071E3] px-1.5 text-[10px] font-medium tabular-nums">
+              <span className="absolute -top-1 -right-1 rounded-full bg-app-primary px-1.5 text-[10px] font-medium tabular-nums">
                 {video.commentCount}
               </span>
             )}

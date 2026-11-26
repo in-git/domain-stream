@@ -56,7 +56,7 @@ function renderMentions(content: string): ReactNode {
   const parts = content.split(/(@[^\s@]+)/g);
   return parts.map((part, index) =>
     part.startsWith('@') ? (
-      <span key={index} className="text-[#0071E3] dark:text-[#7DB7FF]">
+      <span key={index} className="text-app-primary">
         {part}
       </span>
     ) : (
@@ -142,24 +142,24 @@ export function CommentPanel({
   // 视频评论区用暗色贴合播放器；文章和图文评论区用亮色贴合内容页。
   const dark = targetType === 'VIDEO';
   const tone = {
-    panel: dark ? 'bg-[#111114] text-white' : 'bg-white text-[#1D1D1F]',
+    panel: dark ? 'bg-[#111114] text-white' : 'bg-app-card text-app-text',
     panelRing: dark ? 'ring-white/10' : 'ring-black/[0.06]',
-    headerBorder: dark ? 'border-white/10' : 'border-black/[0.06]',
-    footerBorder: dark ? 'border-white/10' : 'border-black/[0.06]',
-    footerBg: dark ? 'bg-black/30' : 'bg-[#F5F5F7]',
-    muted: dark ? 'text-white/45' : 'text-[#8E8E93]',
-    soft: dark ? 'text-white/55' : 'text-[#6E6E73]',
+    headerBorder: dark ? 'border-white/10' : 'border-app-border',
+    footerBorder: dark ? 'border-white/10' : 'border-app-border',
+    footerBg: dark ? 'bg-black/30' : 'bg-app-surface',
+    muted: dark ? 'text-white/45' : 'text-app-subtle',
+    soft: dark ? 'text-white/55' : 'text-app-muted',
     // 抖音风格：评论者昵称为灰色、不突出；蓝色只用于 @提及
-    name: dark ? 'text-white/60' : 'text-[#6E6E73]',
+    name: dark ? 'text-white/60' : 'text-app-muted',
     body: dark ? 'text-white/90' : 'text-[#3A3A3C]',
-    childBorder: dark ? 'border-white/10' : 'border-black/[0.06]',
+    childBorder: dark ? 'border-white/10' : 'border-app-border',
     close: dark
       ? 'text-white/60 hover:bg-white/10 hover:text-white'
-      : 'text-[#8E8E93] hover:bg-black/[0.05] hover:text-[#1D1D1F]',
-    action: dark ? 'hover:text-white' : 'hover:text-[#0071E3]',
+      : 'text-app-subtle hover:bg-black/[0.05] hover:text-app-text',
+    action: dark ? 'hover:text-white' : 'hover:text-app-primary',
     textarea: dark
-      ? 'border-white/10 bg-white/5 text-white placeholder:text-white/35 focus:border-[#0071E3]'
-      : 'border-[#D2D2D7] bg-white text-[#1D1D1F] placeholder:text-[#A1A1A6] focus:border-[#0071E3]',
+      ? 'border-white/10 bg-white/5 text-white placeholder:text-white/35 focus:border-app-primary'
+      : 'border-[#D2D2D7] bg-app-card text-app-text placeholder:text-app-subtle focus:border-app-primary',
     overlay: dark ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/35 backdrop-blur-sm',
   };
 
@@ -307,7 +307,7 @@ export function CommentPanel({
         <div className={`flex items-center gap-2 text-[12px] ${tone.soft}`}>
           <span className={`font-medium ${tone.name}`}>{comment.nickname || '用户'}</span>
           {comment.isOfficial === 'YES' && (
-            <span className="rounded-full bg-[#0071E3]/20 px-1.5 py-0.5 text-[10px] text-[#337BC8] dark:text-[#7DB7FF]">
+            <span className="rounded-full bg-app-primary/20 px-1.5 py-0.5 text-[10px] text-[#337BC8]">
               官方
             </span>
           )}
@@ -315,7 +315,7 @@ export function CommentPanel({
         </div>
         <p className={`mt-1.5 text-[13px] leading-6 ${tone.body}`}>
           {!hasInlineMention && comment.replyToNickname && (
-            <span className="text-[#0071E3] dark:text-[#7DB7FF]">回复 @{comment.replyToNickname}：</span>
+            <span className="text-app-primary">回复 @{comment.replyToNickname}：</span>
           )}
           {renderMentions(comment.content)}
         </p>
@@ -350,8 +350,8 @@ export function CommentPanel({
         embedded || (drawer && !isMobile)
           ? 'h-full w-full'
           : isSheet
-            ? 'h-[66dvh] w-full rounded-t-3xl shadow-2xl ring-1'
-            : 'h-[82vh] w-full max-w-2xl rounded-t-3xl shadow-2xl ring-1 sm:h-[min(86vh,820px)] sm:rounded-3xl'
+            ? 'h-[66dvh] w-full rounded-t-app shadow-2xl ring-1'
+            : 'h-[82vh] w-full max-w-2xl rounded-t-app shadow-2xl ring-1 sm:h-[min(86vh,820px)] sm:rounded-app'
       } ${embedded || (drawer && !isMobile) ? '' : tone.panelRing}`}
     >
       {isSheet && (
@@ -361,7 +361,7 @@ export function CommentPanel({
       )}
       <div className={`flex h-14 shrink-0 items-center justify-between border-b px-5 ${tone.headerBorder}`}>
         <div className="flex items-center gap-2">
-          <MessageCircle className="h-5 w-5 text-[#0071E3]" />
+          <MessageCircle className="h-5 w-5 text-app-primary" />
           <h3 className="text-[15px] font-semibold">评论</h3>
           <span className={`text-[12px] ${tone.muted}`}>{comments.length}</span>
         </div>
@@ -403,7 +403,7 @@ export function CommentPanel({
                 setReplyTo(null);
                 setContent((previous) => previous.replace(/^@\S+\s*/, ''));
               }}
-              className="text-[#0071E3] dark:text-[#7DB7FF]"
+              className="text-app-primary"
             >
               取消
             </button>
@@ -434,7 +434,7 @@ export function CommentPanel({
             onClick={() => void submit()}
             disabled={submitting}
             aria-label="发表评论"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#0071E3] text-white disabled:opacity-50"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-app-primary text-white disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
           </button>
@@ -457,7 +457,7 @@ export function CommentPanel({
             }}
           >
             <div
-              className="absolute w-36 overflow-hidden rounded-xl border border-white/10 bg-[#2C2C2E]/98 p-1 shadow-2xl backdrop-blur-xl"
+              className="absolute w-36 overflow-hidden rounded-app border border-white/10 bg-[#2C2C2E]/98 p-1 shadow-2xl backdrop-blur-xl"
               style={{
                 left: Math.min(actionMenu.x, window.innerWidth - 152),
                 top: Math.min(actionMenu.y, window.innerHeight - 96),
@@ -467,7 +467,7 @@ export function CommentPanel({
               <button
                 type="button"
                 onClick={() => void copyComment(actionMenu.comment)}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-white hover:bg-white/10"
+                className="flex w-full items-center gap-2 rounded-app px-3 py-2 text-left text-[13px] text-white hover:bg-white/10"
               >
                 <Copy className="h-4 w-4" />
                 复制
@@ -476,7 +476,7 @@ export function CommentPanel({
                 <button
                   type="button"
                   onClick={() => void removeComment(actionMenu.comment.id)}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-[#FF6B6B] hover:bg-white/10"
+                  className="flex w-full items-center gap-2 rounded-app px-3 py-2 text-left text-[13px] text-[#FF6B6B] hover:bg-white/10"
                 >
                   <Trash2 className="h-4 w-4" />
                   删除

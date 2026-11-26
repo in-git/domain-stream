@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
-import { Bookmark, Heart, Rows3 } from 'lucide-react';
-import type { VideoItem } from '../../data/content';
+import { Star, Heart, Rows3 } from 'lucide-react';
+import type { VideoItem } from '../../types/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import type { CategoryBarProps, VideoGridProps } from './shared';
@@ -19,12 +19,12 @@ export function DesktopGridCategories({
   onBackToFeed,
 }: DesktopGridCategoriesProps) {
   return (
-    <div className="sticky top-14 z-10 hidden bg-[#FBFBFD]/95 px-2.5 backdrop-blur-xl dark:bg-black/95 sm:block sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
-      <div className="flex items-center gap-2.5 py-2.5 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4">
+    <div className="sticky top-14 z-10 hidden bg-app-surface/95 px-2 backdrop-blur-xl dark:bg-black/95 sm:block sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
+      <div className="flex items-center gap-2 py-2 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4">
         <div
           role="tablist"
           aria-label="视频分类"
-          className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {(['全部', ...categories] as const).map((item) => {
             const active = category === item;
@@ -37,8 +37,8 @@ export function DesktopGridCategories({
                 onClick={() => onChange(item)}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                   active
-                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
-                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
+                    ? 'bg-app-primary font-medium text-white dark:bg-app-card dark:text-app-text'
+                    : 'bg-black/[0.04] text-app-muted hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-app-muted'
                 }`}
               >
                 {item}
@@ -53,7 +53,7 @@ export function DesktopGridCategories({
           onClick={onBackToFeed}
           aria-label="切回主视图"
           title="切回主视图"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-[#6E6E73] transition-colors hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D] dark:hover:bg-white/[0.12]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.04] text-app-muted transition-colors hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-app-muted dark:hover:bg-white/[0.12]"
         >
           <Rows3 className="h-4 w-4" />
         </button>
@@ -91,7 +91,7 @@ function DesktopGridCard({
       transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
       className="min-w-0"
     >
-      <div className="group overflow-hidden rounded-md">
+      <div className="group overflow-hidden rounded-app">
         <div className="relative overflow-hidden">
           <button
             type="button"
@@ -109,7 +109,7 @@ function DesktopGridCard({
           <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
             {video.category}
           </span>
-          <span className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-mono-tabular text-white">
+          <span className="absolute right-2 top-2 rounded-app bg-black/60 px-2 py-0.5 text-[10px] font-mono-tabular text-white">
             {video.durationLabel}
           </span>
 
@@ -144,10 +144,10 @@ function DesktopGridCard({
               aria-label={saved ? '取消收藏视频' : '收藏视频'}
               aria-pressed={saved}
               className={`flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm transition-colors ${
-                saved ? 'bg-[#0071E3] text-white' : 'bg-black/45 text-white hover:bg-black/60'
+                saved ? 'bg-app-favorite/25 text-app-favorite' : 'bg-black/45 text-white hover:bg-black/60'
               }`}
             >
-              <Bookmark className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+              <Star className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
             </motion.button>
           </div>
         </div>
@@ -165,7 +165,7 @@ export function DesktopVideoGrid({
   onOpen,
 }: VideoGridProps) {
   return (
-    <div className="hidden grid-cols-2 gap-2.5 sm:gap-1.5 md:grid md:grid-cols-3 md:gap-2 lg:gap-3 xl:grid-cols-4 xl:gap-4 2xl:grid-cols-5 2xl:gap-4">
+    <div className="hidden grid-cols-2 gap-2 sm:gap-1.5 md:grid md:grid-cols-3 md:gap-2 lg:gap-3 xl:grid-cols-4 xl:gap-4 2xl:grid-cols-5 2xl:gap-4">
       {videos.map((video, idx) => (
         <DesktopGridCard
           key={video.id}

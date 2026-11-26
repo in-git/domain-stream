@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Heart, MessageCircle, Send, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Heart, MessageCircle, Send, X } from 'lucide-react';
 import { EmptyState } from '../../components/PortalStates';
-import type { MessageItem, MessageReply } from '../../data/content.ts';
+import { DanmakuCanvas } from './DanmakuCanvas';
+import { ContentSection } from '../../components/ContentSection';
+import type { MessageItem, MessageReply } from '../../types/content.ts';
 import type { ReplyDraft } from '../../lib/api.ts';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { APPLE_EASE, SWIFTUI_BOUNCY, SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion.ts';
@@ -37,13 +39,13 @@ function Avatar({ name, src, size = 'md' }: { name: string; src?: string; size?:
       <img
         src={src}
         alt={name}
-        className={`${sizeClass} rounded-full object-cover bg-[#F2F2F7] dark:bg-white/10 shrink-0`}
+        className={`${sizeClass} rounded-full object-cover bg-app-surface dark:bg-white/10 shrink-0`}
       />
     );
   }
   return (
     <div
-      className={`${sizeClass} rounded-full bg-[#F2F2F7] dark:bg-white/[0.08] flex items-center justify-center text-[#6E6E73] dark:text-[#D1D1D6] font-medium shrink-0`}
+      className={`${sizeClass} rounded-full bg-app-surface dark:bg-white/[0.08] flex items-center justify-center text-app-muted dark:text-[#D1D1D6] font-medium shrink-0`}
     >
       {(name || '访').slice(0, 1).toUpperCase()}
     </div>
@@ -71,6 +73,7 @@ export default function MessagesView({
   isLoggedIn,
   currentUser,
   onRequireLogin,
+  onRefresh,
   onToggleLike,
   onAddMessage,
   onAddReply,
@@ -82,6 +85,7 @@ export default function MessagesView({
   isLoggedIn: boolean;
   currentUser: MessageAuthor;
   onRequireLogin: () => void;
+  onRefresh: () => void;
   onToggleLike: (id: string) => void;
   onAddMessage: (message: MessageItem) => void | Promise<void>;
   onAddReply: (draft: ReplyDraft) => void | Promise<void>;
@@ -89,6 +93,7 @@ export default function MessagesView({
   const [composerOpen, setComposerOpen] = useState(false);
   const [content, setContent] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [danmakuEnabled, setDanmakuEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -142,10 +147,6 @@ export default function MessagesView({
     [activeMessageId, repliesByMessage]
   );
   const modalTrackCount = Math.min(Math.max(modalReplies.length, 1), 4);
-  const modalDanmaku =
-    modalReplies.length > modalTrackCount
-      ? [...modalReplies, ...modalReplies]
-      : modalReplies;
 
   /** 模态框打开时锁定背景滚动，并支持 ESC 关闭 */
   useEffect(() => {
@@ -256,18 +257,18 @@ export default function MessagesView({
   }
 
   return (
-    <section aria-labelledby="messages-heading" className="space-y-0 sm:-mx-3 sm:px-1.5 md:-mx-4 md:px-2 lg:-mx-5 lg:px-3 xl:-mx-6 xl:px-4 2xl:-mx-8 2xl:px-4">
+    <ContentSection aria-labelledby="messages-heading">
       <div>
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: APPLE_EASE }}
-          className="flex flex-col md:flex-row md:items-end justify-between gap-2.5 mt-2.5 mb-2.5 sm:gap-1.5 sm:mt-1.5 sm:mb-1.5 md:gap-2 md:mt-2 md:mb-2 lg:gap-3 lg:mt-3 lg:mb-3 xl:gap-4 xl:mt-4 xl:mb-4 2xl:gap-4 2xl:mt-4 2xl:mb-4"
+          className="flex flex-col md:flex-row md:items-end justify-between gap-2 mt-2 mb-2 sm:gap-1.5 sm:mt-1.5 sm:mb-1.5 md:gap-2 md:mt-2 md:mb-2 lg:gap-3 lg:mt-3 lg:mb-3 xl:gap-4 xl:mt-4 xl:mb-4 2xl:gap-4 2xl:mt-4 2xl:mb-4"
         >
           <div>
             <h1
               id="messages-heading"
-              className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]"
+              className="text-3xl sm:text-4xl font-semibold tracking-tight text-app-text"
             >
               留言墙
             </h1>
@@ -275,11 +276,11 @@ export default function MessagesView({
         </motion.div>
 
         {/* 写留言按钮：置于标题下方 */}
-        <div className="mb-2.5 sm:mb-1.5 md:mb-2 lg:mb-3 xl:mb-4 2xl:mb-4">
+        <div className="mb-2 sm:mb-1.5 md:mb-2 lg:mb-3 xl:mb-4 2xl:mb-4">
           <button
             type="button"
             onClick={openComposer}
-            className="h-10 px-6 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium transition-colors"
+            className="h-10 px-6 rounded-app bg-app-primary hover:bg-app-primary text-white text-[13px] font-medium transition-colors"
           >
             写留言
           </button>
@@ -293,7 +294,7 @@ export default function MessagesView({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-2.5 text-[13px] sm:mb-1.5 md:mb-2 lg:mb-3 xl:mb-4 2xl:mb-4 ${
+              className={`flex items-center justify-between gap-3 rounded-app px-4 py-3 mb-2 text-[13px] sm:mb-1.5 md:mb-2 lg:mb-3 xl:mb-4 2xl:mb-4 ${
                 hint.startsWith('留言已')
                   ? 'bg-[#16A34A]/10 text-[#16A34A]'
                   : 'bg-[#FF3B30]/10 text-[#D70015]'
@@ -315,35 +316,50 @@ export default function MessagesView({
           )}
         </AnimatePresence>
 
-        <div className="mb-2.5 flex items-center justify-between gap-2.5 sm:mb-1.5 sm:gap-1.5 md:mb-2 md:gap-2 lg:mb-3 lg:gap-3 xl:mb-4 xl:gap-4 2xl:mb-4 2xl:gap-4">
+        <div className="mb-2 flex items-center justify-between gap-2 sm:mb-1.5 sm:gap-1.5 md:mb-2 md:gap-2 lg:mb-3 lg:gap-3 xl:mb-4 xl:gap-4 2xl:mb-4 2xl:gap-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <h2 className="text-[15px] font-medium text-app-text">
               全部留言
             </h2>
-            <span className="text-[11px] text-[#AEAEB2] tabular-nums">{visibleMessages.length}</span>
+            <span className="text-[11px] text-app-subtle tabular-nums">{visibleMessages.length}</span>
           </div>
-          <div role="tablist" aria-label="留言排序" className="flex items-center gap-2.5 sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4">
-            {(
-              [
-                { key: 'latest', label: '最新' },
-                { key: 'hot', label: '最热' },
-              ] as { key: SortMode; label: string }[]
-            ).map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                role="tab"
-                aria-selected={sortMode === item.key}
-                onClick={() => setSortMode(item.key)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-                  sortMode === item.key
-                    ? 'bg-[#1D1D1F] font-medium text-white dark:bg-white dark:text-[#1D1D1F]'
-                    : 'bg-black/[0.04] text-[#6E6E73] hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-[#98989D]'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4">
+            <div role="tablist" aria-label="留言排序" className="flex items-center gap-2 sm:gap-1.5 md:gap-2 lg:gap-3 xl:gap-4 2xl:gap-4">
+              {(
+                [
+                  { key: 'latest', label: '最新' },
+                  { key: 'hot', label: '最热' },
+                ] as { key: SortMode; label: string }[]
+              ).map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={sortMode === item.key}
+                  onClick={() => {
+                    setSortMode(item.key);
+                    if (item.key === 'latest') onRefresh();
+                  }}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                    sortMode === item.key
+                      ? 'bg-app-primary font-medium text-white dark:bg-app-card dark:text-app-text'
+                      : 'bg-black/[0.04] text-app-muted hover:bg-black/[0.07] dark:bg-white/[0.08] dark:text-app-muted'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setDanmakuEnabled((value) => !value)}
+              aria-pressed={danmakuEnabled}
+              aria-label={danmakuEnabled ? '关闭弹幕' : '开启弹幕'}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12px] text-app-muted transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+            >
+              {danmakuEnabled ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {danmakuEnabled ? '关闭弹幕' : '开启弹幕'}
+            </button>
           </div>
         </div>
 
@@ -355,27 +371,22 @@ export default function MessagesView({
           />
         ) : (
           /* 与图文笔记一致：CSS columns 瀑布流，列数/间距相同，卡片宽度由列宽决定 */
-          <div className="columns-2 gap-2.5 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">
+          <div className="columns-2 gap-2 sm:columns-3 sm:gap-1.5 md:columns-4 md:gap-2 lg:columns-5 lg:gap-3 xl:gap-4 2xl:columns-6 2xl:gap-4">
             {visibleMessages.map((message, index) => {
               const messageReplies = repliesByMessage.get(message.id) || [];
-              // 弹幕轨道：回复数超过轨道数时循环滚动
               const trackCount = Math.min(Math.max(messageReplies.length, 1), 4);
-              const danmakuStream =
-                messageReplies.length > trackCount
-                  ? [...messageReplies, ...messageReplies]
-                  : messageReplies;
               return (
                 <motion.article
                   key={message.id}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...SWIFTUI_SMOOTH, delay: Math.min(index, 8) * 0.03 }}
-                  className="break-inside-avoid pb-2.5 sm:pb-1.5 md:pb-2 lg:pb-3 xl:pb-4 2xl:pb-4"
+                  className="break-inside-avoid pb-2 sm:pb-1.5 md:pb-2 lg:pb-3 xl:pb-4 2xl:pb-4"
                 >
                   {/* 3:4 竖版卡片，与图文笔记卡片同尺寸；宽度由列宽决定 */}
-                  <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-md bg-white dark:bg-[#161618] border border-black/[0.05] dark:border-white/[0.07] transition-shadow hover:shadow-md">
+                  <div className="group relative flex flex-col w-full aspect-[3/4] overflow-hidden rounded-app bg-app-card border border-app-border transition-shadow hover:shadow-md">
                   {/* 时间固定在卡片右上角 */}
-                  <span className="absolute top-2 right-2 z-20 rounded-md bg-black/[0.04] px-1.5 py-0.5 text-[10px] leading-tight text-[#AEAEB2] tabular-nums dark:bg-white/[0.08] dark:text-[#86868B]">
+                  <span className="absolute top-2 right-2 z-20 rounded-app bg-black/[0.04] px-1.5 py-0.5 text-[10px] leading-tight text-app-subtle tabular-nums dark:bg-white/[0.08] dark:text-app-muted">
                     {formatShortDate(message.createdAt)}
                   </span>
                   {/* 语录区 + 弹幕层 */}
@@ -384,7 +395,7 @@ export default function MessagesView({
                   <button
                     type="button"
                     onClick={() => openMessage(message.id)}
-                    className="flex flex-col h-full w-full px-3 pt-3 pb-3 sm:px-4 sm:pt-4 sm:pb-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3]"
+                    className="flex flex-col h-full w-full px-3 pt-3 pb-3 sm:px-4 sm:pt-4 sm:pb-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-app-primary"
                     aria-label={`查看留言详情：${message.nickname}`}
                   >
                     <span
@@ -401,31 +412,13 @@ export default function MessagesView({
                     </div>
                   </button>
 
-                  {/* 弹幕层：其他人的回复以弹幕形式飘过语录区 */}
-                  {danmakuStream.length > 0 && (
-                    <div
-                      aria-hidden="true"
-                      className="absolute inset-0 overflow-hidden pointer-events-none"
-                    >
-                      {danmakuStream.map((danmaku, danmakuIndex) => {
-                        const lane = danmakuIndex % trackCount;
-                        return (
-                          <span
-                            key={`${danmaku.id}-${danmakuIndex}`}
-                            className="absolute left-0 inline-flex items-center gap-1 max-w-[92%] rounded-md bg-black/55 dark:bg-black/70 backdrop-blur-[2px] px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-tight text-white/95 shadow-sm animate-[danmaku_9s_linear_infinite] group-hover:[animation-play-state:paused]"
-                            style={{
-                              top: `${8 + lane * (82 / trackCount)}%`,
-                              animationDelay: `${-(lane * (9 / trackCount))}s`,
-                            }}
-                          >
-                            <span className="font-medium text-[#8FC0FF] shrink-0">
-                              {danmaku.nickname}
-                            </span>
-                            <span className="truncate">{danmaku.content}</span>
-                          </span>
-                        );
-                      })}
-                    </div>
+                  {/* 弹幕层：Canvas 从边缘随机左右方向飘过语录区 */}
+                  {danmakuEnabled && messageReplies.length > 0 && (
+                    <DanmakuCanvas
+                      items={messageReplies}
+                      laneCount={trackCount}
+                      className="absolute inset-0"
+                    />
                   )}
                   </div>
 
@@ -456,7 +449,7 @@ export default function MessagesView({
                       type="button"
                       onClick={() => openMessage(message.id)}
                       aria-label="查看留言详情与回复"
-                      className="flex items-center gap-1 h-7 px-1.5 rounded-full text-[11px] tabular-nums text-[#8E8E93] dark:text-[#98989D] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors"
+                      className="flex items-center gap-1 h-7 px-1.5 rounded-full text-[11px] tabular-nums text-app-subtle dark:text-app-muted hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-app-primary dark:hover:text-[#0A84FF] transition-colors"
                     >
                       <MessageCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
                       <span>{messageReplies.length}</span>
@@ -492,10 +485,10 @@ export default function MessagesView({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               transition={SWIFTUI_SMOOTH}
-              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-xl"
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-app border border-app-border dark:border-app-border bg-app-card shadow-xl"
             >
               <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-[#F2F2F7] dark:border-white/[0.06]">
-                <h2 className="text-[16px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <h2 className="text-[16px] font-semibold text-app-text">
                   写留言
                 </h2>
                 <button
@@ -503,27 +496,27 @@ export default function MessagesView({
                   onClick={() => setComposerOpen(false)}
                   disabled={submitting}
                   aria-label="关闭"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[#86868B] hover:bg-[#F5F5F7] dark:hover:bg-white/[0.06] disabled:opacity-50 transition-colors"
+                  className="w-8 h-8 rounded-app flex items-center justify-center text-app-muted hover:bg-app-surface dark:hover:bg-white/[0.06] disabled:opacity-50 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               <form onSubmit={(event) => void handleSubmit(event)} className="p-6">
-                <div className="flex items-center gap-3 mb-5 rounded-xl bg-[#F5F5F7] dark:bg-white/[0.05] p-3">
+                <div className="flex items-center gap-3 mb-5 rounded-app bg-app-surface dark:bg-white/[0.05] p-3">
                   <Avatar name={currentUser.name} src={currentUser.avatar} />
                   <div className="min-w-0">
-                    <div className="text-[13px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+                    <div className="text-[13px] font-medium text-app-text truncate">
                       {currentUser.name}
                     </div>
-                    <div className="text-[12px] text-[#86868B] truncate">
+                    <div className="text-[12px] text-app-muted truncate">
                       以 {currentUser.name || '登录用户'} 的身份发布
                     </div>
                   </div>
                 </div>
 
                 <label className="block">
-                  <span className="block text-[12px] font-medium text-[#6E6E73] dark:text-[#A1A1A6] mb-2">
+                  <span className="block text-[12px] font-medium text-app-muted mb-2">
                     留言内容 <span className="text-[#D70015]">*</span>
                   </span>
                   <textarea
@@ -533,9 +526,9 @@ export default function MessagesView({
                     rows={5}
                     autoFocus
                     placeholder="说点什么..."
-                    className="w-full px-4 py-3 rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] border border-transparent text-[14px] leading-6 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:bg-white dark:focus:bg-white/[0.09] focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30 transition-all resize-none"
+                    className="w-full px-4 py-3 rounded-app bg-app-surface dark:bg-white/[0.06] border border-transparent text-[14px] leading-6 text-app-text placeholder:text-app-subtle focus:bg-app-card dark:focus:bg-white/[0.09] focus:outline-none focus:ring-2 focus:ring-app-primary/30 transition-all resize-none"
                   />
-                  <span className="block mt-1.5 text-right text-[11px] text-[#AEAEB2] tabular-nums">
+                  <span className="block mt-1.5 text-right text-[11px] text-app-subtle tabular-nums">
                     {content.length} / 500
                   </span>
                 </label>
@@ -561,7 +554,7 @@ export default function MessagesView({
                     type="button"
                     onClick={() => setComposerOpen(false)}
                     disabled={submitting}
-                    className="h-10 px-4 rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] hover:bg-[#EDEDF0] dark:hover:bg-white/[0.1] disabled:opacity-50 transition-colors"
+                    className="h-10 px-4 rounded-app bg-app-surface dark:bg-white/[0.06] text-[13px] font-medium text-[#3A3A3C] dark:text-[#D1D1D6] hover:bg-[#EDEDF0] dark:hover:bg-white/[0.1] disabled:opacity-50 transition-colors"
                   >
                     取消
                   </button>
@@ -570,7 +563,7 @@ export default function MessagesView({
                     disabled={submitting}
                     whileTap={{ scale: 0.98 }}
                     transition={SWIFTUI_SNAPPY}
-                    className="h-10 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-2 disabled:opacity-60"
+                    className="h-10 px-5 rounded-app bg-app-primary hover:bg-app-primary text-white text-[13px] font-medium inline-flex items-center gap-2 disabled:opacity-60"
                   >
                     {submitting ? (
                       <motion.span
@@ -613,13 +606,13 @@ export default function MessagesView({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.98 }}
               transition={SWIFTUI_SMOOTH}
-              className="relative w-full h-full sm:h-auto sm:max-w-[560px] max-h-none sm:max-h-[88vh] flex flex-col overflow-y-auto rounded-none sm:rounded-3xl border border-black/[0.06] dark:border-white/10 bg-white dark:bg-[#1C1C1E] shadow-xl"
+              className="relative w-full h-full sm:h-auto sm:max-w-[560px] max-h-none sm:max-h-[88vh] flex flex-col overflow-y-auto rounded-none sm:rounded-app border border-app-border dark:border-app-border bg-app-card shadow-xl"
             >
               <button
                 type="button"
                 onClick={closeMessage}
                 aria-label="关闭"
-                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-lg flex items-center justify-center text-[#86868B] hover:bg-[#F5F5F7] dark:hover:bg-white/[0.06] transition-colors"
+                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-app flex items-center justify-center text-app-muted hover:bg-app-surface dark:hover:bg-white/[0.06] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -627,7 +620,7 @@ export default function MessagesView({
               {/* 语录内容区：严格 9:16，高度取 64vh（上限 700px），
                   模态框容器更宽，内容居中显示 */}
               <div className="flex flex-1 items-center justify-center px-5 pt-6 pb-5">
-                <div className="relative w-[80%] max-w-full aspect-[9/16] shrink-0 rounded-md bg-white dark:bg-[#1C1C1E] border border-black/[0.05] dark:border-white/[0.07] px-6 pt-7 pb-5 flex flex-col">
+                <div className="relative w-[80%] max-w-full aspect-[9/16] shrink-0 rounded-app bg-app-card border border-app-border px-6 pt-7 pb-5 flex flex-col">
                 <span
                   aria-hidden="true"
                   className="font-editorial text-[38px] leading-[0.45] text-[#4A7FD4]/85 dark:text-[#6E9BE8]/80 select-none"
@@ -641,31 +634,13 @@ export default function MessagesView({
                   </p>
                 </div>
 
-                {/* 弹幕层 */}
-                {modalDanmaku.length > 0 && (
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-0 overflow-hidden pointer-events-none"
-                  >
-                    {modalDanmaku.map((danmaku, danmakuIndex) => {
-                      const lane = danmakuIndex % modalTrackCount;
-                      return (
-                        <span
-                          key={`${danmaku.id}-${danmakuIndex}`}
-                          className="absolute left-0 inline-flex items-center gap-1 max-w-[92%] rounded-md bg-black/55 dark:bg-black/70 backdrop-blur-[2px] px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-tight text-white/95 shadow-sm animate-[danmaku_9s_linear_infinite]"
-                          style={{
-                            top: `${8 + lane * (78 / modalTrackCount)}%`,
-                            animationDelay: `${-(lane * (9 / modalTrackCount))}s`,
-                          }}
-                        >
-                          <span className="font-medium text-[#8FC0FF] shrink-0">
-                            {danmaku.nickname}
-                          </span>
-                          <span className="truncate">{danmaku.content}</span>
-                        </span>
-                      );
-                    })}
-                  </div>
+                {/* 弹幕层：与卡片共用同一套 Canvas 渲染 */}
+                {danmakuEnabled && modalReplies.length > 0 && (
+                  <DanmakuCanvas
+                    items={modalReplies}
+                    laneCount={modalTrackCount}
+                    className="absolute inset-0"
+                  />
                 )}
 
                 {/* 作者行 */}
@@ -673,10 +648,10 @@ export default function MessagesView({
                   <div className="flex items-center gap-2 min-w-0">
                     <Avatar name={activeMessage.nickname} size="sm" />
                     <div className="min-w-0">
-                      <div className="text-[12px] font-medium text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+                      <div className="text-[12px] font-medium text-app-text truncate">
                         {activeMessage.nickname}
                       </div>
-                      <div className="text-[10px] text-[#AEAEB2] tabular-nums">
+                      <div className="text-[10px] text-app-subtle tabular-nums">
                         {formatDate(activeMessage.createdAt)}
                       </div>
                     </div>
@@ -692,7 +667,7 @@ export default function MessagesView({
                     className={`flex items-center gap-1 px-1 py-1 text-[12px] tabular-nums transition-colors ${
                       likedIds.has(activeMessage.id)
                         ? 'text-[#FF2E4D]'
-                        : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#FF2E4D]'
+                        : 'text-app-muted hover:text-[#FF2E4D]'
                     }`}
                   >
                     <Heart
@@ -709,17 +684,17 @@ export default function MessagesView({
               {isLoggedIn ? (
               <form
                 onSubmit={(event) => void submitReply(event)}
-                className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-[#F5F5F7] dark:bg-white/[0.03] p-3"
+                className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-app-surface dark:bg-white/[0.03] p-3"
               >
                 <div className="flex items-end gap-2">
-                  <div className="flex-1 min-w-0 rounded-xl bg-white dark:bg-white/[0.07] border border-transparent focus-within:ring-2 focus-within:ring-[#0071E3]/25 transition-all">
+                  <div className="flex-1 min-w-0 rounded-app bg-app-card dark:bg-white/[0.07] border border-transparent focus-within:ring-2 focus-within:ring-app-primary/25 transition-all">
                     <textarea
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       maxLength={500}
                       rows={2}
                       placeholder="写下你的留言..."
-                      className="w-full px-3 py-2 bg-transparent rounded-xl text-[13px] leading-5 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-[#AEAEB2] focus:outline-none resize-none"
+                      className="w-full px-3 py-2 bg-transparent rounded-app text-[13px] leading-5 text-app-text placeholder:text-app-subtle focus:outline-none resize-none"
                     />
                   </div>
 
@@ -728,7 +703,7 @@ export default function MessagesView({
                     disabled={replySubmitting || !replyText.trim()}
                     whileTap={{ scale: 0.96 }}
                     transition={SWIFTUI_SNAPPY}
-                    className="h-10 px-4 shrink-0 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+                    className="h-10 px-4 shrink-0 rounded-app bg-app-primary hover:bg-app-primary text-white text-[13px] font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5" strokeWidth={2} />
                     {replySubmitting ? '发送中' : '发送'}
@@ -736,7 +711,7 @@ export default function MessagesView({
                 </div>
 
                 <div className="mt-1.5 flex items-center justify-between gap-2 min-h-[16px]">
-                  <span className="text-[11px] text-[#AEAEB2] tabular-nums">
+                  <span className="text-[11px] text-app-subtle tabular-nums">
                     {replyText.length} / 500
                   </span>
                   {replyError && (
@@ -759,11 +734,11 @@ export default function MessagesView({
                 </div>
               </form>
               ) : (
-                <div className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-[#F5F5F7] dark:bg-white/[0.03] p-3">
+                <div className="border-t border-[#F2F2F7] dark:border-white/[0.06] bg-app-surface dark:bg-white/[0.03] p-3">
                   <button
                     type="button"
                     onClick={onRequireLogin}
-                    className="h-11 w-full rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium"
+                    className="h-11 w-full rounded-app bg-app-primary hover:bg-app-primary text-white text-[13px] font-medium"
                   >
                     登录后参与留言
                   </button>
@@ -773,6 +748,6 @@ export default function MessagesView({
           </motion.div>
         )}
       </AnimatePresence>
-    </section>
+    </ContentSection>
   );
 }

@@ -46,7 +46,7 @@ export function AccountMenu({
         className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
           overlay
             ? 'text-white hover:bg-white/15'
-            : 'text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
+            : 'text-app-text hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
         }`}
       >
         <UserRound className="w-[18px] h-[18px]" />
@@ -61,7 +61,7 @@ export function AccountMenu({
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label="账号菜单"
-        className={`flex items-center gap-1.5 sm:gap-2 h-9 pl-1 pr-1.5 sm:pr-2.5 rounded-full transition-colors ${
+        className={`flex items-center gap-1.5 sm:gap-2 h-9 pl-1 pr-1.5 sm:pr-2 rounded-full transition-colors ${
           overlay ? 'hover:bg-white/15' : 'hover:bg-black/[0.05] dark:hover:bg-white/[0.08]'
         }`}
       >
@@ -72,7 +72,7 @@ export function AccountMenu({
             className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-medium ${
               overlay
                 ? 'bg-white/20 text-white'
-                : 'bg-[#0071E3]/10 text-[#0071E3] dark:text-[#0A84FF]'
+                : 'bg-app-primary/10 text-app-primary'
             }`}
           >
             {displayName.slice(0, 1).toUpperCase()}
@@ -80,13 +80,13 @@ export function AccountMenu({
         )}
         <span
           className={`hidden sm:block max-w-[110px] truncate text-[12px] font-medium ${
-            overlay ? 'text-white' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'
+            overlay ? 'text-white' : 'text-app-text'
           }`}
         >
           {displayName}
         </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 transition-transform ${overlay ? 'text-white/80' : 'text-[#86868B]'} ${
+          className={`w-3.5 h-3.5 transition-transform ${overlay ? 'text-white/80' : 'text-app-muted'} ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -99,7 +99,7 @@ export function AccountMenu({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={SWIFTUI_SNAPPY}
-            className="absolute right-0 top-[calc(100%+8px)] w-44 rounded-2xl bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] p-1.5 z-50 shadow-[0_12px_40px_rgba(0,0,0,0.12)]"
+            className="absolute right-0 top-[calc(100%+8px)] w-44 rounded-app bg-app-card border border-black/[0.08] dark:border-white/[0.1] p-1.5 z-50 shadow-[0_12px_40px_rgba(0,0,0,0.12)]"
           >
             <button
               type="button"
@@ -107,9 +107,9 @@ export function AccountMenu({
                 setOpen(false);
                 onGoProfile();
               }}
-              className="w-full flex items-center gap-2.5 h-9 px-3 rounded-xl text-[13px] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#F5F5F7] dark:hover:bg-white/[0.08] transition-colors"
+              className="w-full flex items-center gap-2 h-9 px-3 rounded-app text-[13px] text-app-text hover:bg-app-surface dark:hover:bg-white/[0.08] transition-colors"
             >
-              <UserRound className="w-4 h-4 text-[#86868B]" />
+              <UserRound className="w-4 h-4 text-app-muted" />
               个人中心
             </button>
             <div className="h-px bg-black/[0.06] dark:bg-white/[0.08] my-1" />
@@ -119,7 +119,7 @@ export function AccountMenu({
                 setOpen(false);
                 onLogout();
               }}
-              className="w-full flex items-center gap-2.5 h-9 px-3 rounded-xl text-[13px] text-[#FF3B30] hover:bg-[#FF3B30]/8 transition-colors"
+              className="w-full flex items-center gap-2 h-9 px-3 rounded-app text-[13px] text-[#FF3B30] hover:bg-[#FF3B30]/8 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               退出登录
