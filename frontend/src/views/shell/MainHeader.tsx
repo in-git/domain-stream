@@ -142,10 +142,10 @@ export function MainHeader({
             }}
             placeholder="搜索视频、文章、作品或留言"
             aria-label="搜索内容"
-            className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border border-transparent focus:border-app-primary/40 focus:outline-none transition-colors text-xs sm:text-sm ${
+            className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border focus:border-app-primary/40 focus:outline-none transition-colors text-xs sm:text-sm ${
               pcImmersive
-                ? 'bg-white/15 backdrop-blur-md text-white placeholder:text-white/60 focus:bg-white/25'
-                : 'bg-app-surface dark:bg-app-card focus:bg-app-card dark:focus:bg-app-surface text-app-text placeholder:text-app-muted'
+                ? 'border-white/15 bg-white/15 backdrop-blur-md text-white placeholder:text-white/60 focus:bg-white/25'
+                : 'border-app-border bg-app-bg dark:border-white/10 dark:bg-app-filter focus:bg-app-bg dark:focus:bg-app-filter text-app-text placeholder:text-app-muted'
             }`}
           />
           {draft && (
