@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Eye, FileJson, Globe2 } from 'lucide-react';
 import icpIcon from '../../../assets/icp-icon.svg';
 import policeIcon from '../../../assets/police-icon.svg';
-import { draftToJson, parseNavItems } from './schema';
+import { draftToJson, parseContactLinks, parseNavItems } from './schema';
 
 interface PreviewPanelProps {
   values: Record<string, string>;
@@ -32,10 +32,14 @@ export function PreviewPanel({ values, className }: PreviewPanelProps) {
   const themeColor = values.themeColor || '#0071E3';
   const themeRadius = values.themeRadius || '8';
   const json = useMemo(() => draftToJson(values), [values]);
-  // 仅展示已启用的导航项，与客户端侧边栏一致
+  // 仅展示已启用的导航项，与 PC 侧边栏、移动端底部导航一致
   const navItems = useMemo(
     () => parseNavItems(values.navItems).filter((item) => item.enabled),
     [values.navItems]
+  );
+  const contacts = useMemo(
+    () => parseContactLinks(values.contactLinks).filter((item) => item.label && item.url),
+    [values.contactLinks]
   );
 
   return (
@@ -174,6 +178,28 @@ export function PreviewPanel({ values, className }: PreviewPanelProps) {
             >
               立即体验
             </button>
+
+            {contacts.length > 0 && (
+              <div className="mt-5 border-t border-[#E5E5EA] pt-3">
+                <span className="text-[10px] font-semibold tracking-wide text-[#86868B]">
+                  联系方式
+                </span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {contacts.map((item, index) => (
+                    <a
+                      key={`${item.label}-${index}`}
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex max-w-full items-center gap-1 rounded-md border border-[#E5E5EA] bg-[#FAFAFC] px-2 py-1 text-[10px] text-[#1D1D1F] hover:border-[#0071E3]"
+                    >
+                      <Globe2 className="h-2.5 w-2.5 shrink-0 text-[#0071E3]" />
+                      <span className="truncate">{item.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
           </div>
         </div>

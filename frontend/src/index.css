@@ -36,8 +36,8 @@
     --app-color-border: rgba(0, 0, 0, 0.06);
     --app-color-primary: #0071E3;
     --app-color-primary-fg: #FFFFFF;
-    /* 收藏态统一使用淡黄色，不随明暗模式切换 */
-    --app-color-favorite: #FFD60A;
+    /* 收藏态统一使用抖音收藏黄，不随明暗模式切换 */
+    --app-color-favorite: #FFD21E;
     --app-radius: 8px;
   }
 

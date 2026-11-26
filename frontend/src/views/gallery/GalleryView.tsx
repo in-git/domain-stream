@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronLeft, ChevronRight, Images } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Heart, Images, Star } from 'lucide-react';
 import type { PhotoItem } from '../../types/content';
 import { SWIFTUI_SMOOTH, SWIFTUI_SNAPPY } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
@@ -35,6 +35,10 @@ const SWIPE_THRESHOLD = 30;
 interface NoteCardProps {
   note: PhotoItem;
   index: number;
+  liked: boolean;
+  saved: boolean;
+  onToggleLike: () => void;
+  onToggleSave: () => void;
   onOpen: () => void;
 }
 
@@ -44,7 +48,7 @@ interface NoteCardProps {
  * - 多图可左右拖动 / 点击箭头切换
  * - 底部标题 + 作者 + 点赞，整体紧凑
  */
-function NoteCard({ note, index, onOpen }: NoteCardProps) {
+function NoteCard({ note, index, liked, saved, onToggleLike, onToggleSave, onOpen }: NoteCardProps) {
   const [active, setActive] = useState(0);
   const total = note.images.length;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -189,6 +193,44 @@ function NoteCard({ note, index, onOpen }: NoteCardProps) {
           </>
         )}
 
+        {/* 喜欢 / 收藏控件 */}
+        <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={liked ? '取消喜欢' : '喜欢'}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleLike();
+            }}
+            className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-colors ${
+              liked
+                ? 'bg-[#FF2C55]/25 text-[#FF6B7E] ring-1 ring-[#FF2C55]/60'
+                : 'bg-black/45 text-white hover:bg-black/70'
+            }`}
+          >
+            <Heart className={`h-3.5 w-3.5 ${liked ? 'fill-current' : ''}`} />
+          </button>
+          <button
+            type="button"
+            aria-label={saved ? '取消收藏' : '收藏'}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSave();
+            }}
+            className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md transition-colors ${
+              saved
+                ? 'bg-app-favorite/25 text-app-favorite ring-1 ring-app-favorite/60'
+                : 'bg-black/45 text-white hover:bg-black/70'
+            }`}
+          >
+            <Star className={`h-3.5 w-3.5 ${saved ? 'fill-current' : ''}`} />
+          </button>
+        </div>
+
         {/* 图片底部压暗：桌面端叠加文字才需要 */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-1/2 bg-gradient-to-t from-black/75 via-black/30 to-transparent md:block" />
 
@@ -318,6 +360,10 @@ export function GalleryView({
                 key={note.id}
                 note={note}
                 index={idx}
+                liked={likedIds.includes(note.id)}
+                saved={savedIds.includes(note.id)}
+                onToggleLike={() => onToggleLike(note.id)}
+                onToggleSave={() => handleToggleSave(note.id)}
                 onOpen={() => {
                   setActiveId(note.id);
                   onClearExternalSelection?.();

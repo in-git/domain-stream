@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
+import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
 import {
   createCustomModuleKey,
   DEFAULT_NAV_ITEMS,
@@ -71,6 +72,8 @@ interface NavItemsEditorProps {
   /** 配置里存储的 JSON 字符串 */
   value: string;
   onChange: (next: string) => void;
+  /** 删除等结构性变更后立即同步到服务器；不传则只更新本地草稿 */
+  onSync?: (next: string) => Promise<void>;
 }
 
 /** 名称截断到 4 个字，粘贴超长内容时也不会超限 */
@@ -409,13 +412,15 @@ function SortableNavRow({
 /* 编辑器                                                              */
 /* ------------------------------------------------------------------ */
 
-export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
+export function NavItemsEditor({ value, onChange, onSync }: NavItemsEditorProps) {
   const items = parseNavItems(value);
   const [activeId, setActiveId] = useState<string | null>(null);
   /** 弹窗状态：editingId 为 null 表示新增 */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftItem, setDraftItem] = useState<NavItemConfig | null>(null);
+  /** 待确认删除的模块，非空时打开删除确认弹窗 */
+  const [pendingDelete, setPendingDelete] = useState<NavItemConfig | null>(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
@@ -431,8 +436,15 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
     );
   }
 
-  function remove(moduleKey: string) {
-    commit(items.filter((item) => item.moduleKey !== moduleKey));
+  /** 删除前先弹窗确认，确认后立刻把 navItems 同步到服务器 */
+  async function confirmRemove() {
+    if (!pendingDelete) return;
+    const nextItems = items.filter((item) => item.moduleKey !== pendingDelete.moduleKey);
+    const nextValue = stringifyNavItems(nextItems);
+
+    onChange(nextValue);
+    if (onSync) await onSync(nextValue);
+    setPendingDelete(null);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -563,7 +575,7 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
                 index={index}
                 onEdit={() => openEdit(item)}
                 onChange={(patch) => updateItem(item.moduleKey, patch)}
-                onRemove={() => remove(item.moduleKey)}
+                onRemove={() => setPendingDelete(item)}
               />
             ))}
           </div>
@@ -611,6 +623,18 @@ export function NavItemsEditor({ value, onChange }: NavItemsEditorProps) {
             setEditingId(null);
           }}
           onConfirm={handleDialogConfirm}
+        />
+      )}
+
+      {/* 删除模块确认弹窗：要求手动输入模块标识，确认后立即同步服务器 */}
+      {pendingDelete && (
+        <DeleteConfirmModal
+          title={`确认删除「${pendingDelete.label}」模块？`}
+          itemTitles={[pendingDelete.label]}
+          description="删除后该导航项会立即从服务器配置中移除，客户端刷新后生效；此操作不可撤销。"
+          requireText={pendingDelete.moduleKey}
+          onConfirm={() => confirmRemove()}
+          onClose={() => setPendingDelete(null)}
         />
       )}
     </div>

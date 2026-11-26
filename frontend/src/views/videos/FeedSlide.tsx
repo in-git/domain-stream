@@ -37,6 +37,8 @@ interface FeedSlideProps {
   isFullscreen: boolean;
   savedTime?: number;
   onRegisterPlayer: (id: string, player: MediaPlayerInstance | null) => void;
+  /** 播放器实例注册键；同一视频重复出现时用位置区分，避免实例互相覆盖 */
+  playerKey?: string;
   onTogglePlay: () => void;
   onToggleMute: () => void;
   onSetRate: (rate: number) => void;
@@ -77,6 +79,7 @@ export function FeedSlide({
   isFullscreen,
   savedTime,
   onRegisterPlayer,
+  playerKey,
   onTogglePlay,
   onToggleMute,
   onSetRate,
@@ -101,16 +104,17 @@ export function FeedSlide({
   const [loading, setLoading] = useState(true);
   const [commentOpen, setCommentOpen] = useState(false);
 
+  const resolvedPlayerKey = playerKey ?? video.id;
   const setPlayerRef = useCallback(
     (player: MediaPlayerInstance | null) => {
       playerRef.current = player;
-      onRegisterPlayer(video.id, player);
+      onRegisterPlayer(resolvedPlayerKey, player);
     },
-    [onRegisterPlayer, video.id],
+    [onRegisterPlayer, resolvedPlayerKey],
   );
 
   // 组件卸载时显式注销，避免 playersRef 中残留已销毁实例（其 paused getter 会抛 null 异常）
-  useEffect(() => () => onRegisterPlayer(video.id, null), [onRegisterPlayer, video.id]);
+  useEffect(() => () => onRegisterPlayer(resolvedPlayerKey, null), [onRegisterPlayer, resolvedPlayerKey]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -369,6 +373,8 @@ export function FeedSlide({
           alt={video.title}
           fallbackTitle={video.title}
           priority
+          placeholderClassName="bg-black"
+          fallbackClassName="bg-black"
           className="absolute inset-0 w-full h-full"
         />
       )}

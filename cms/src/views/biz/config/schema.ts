@@ -20,7 +20,14 @@ import type { PageConfigItem } from '../../../lib/pageConfig.ts';
  * - number  数字输入（值存数字字符串，如 8）
  * - navList 侧边栏导航列表（值是 JSON 数组字符串，由专用编辑器维护）
  */
-export type ConfigControl = 'text' | 'upload' | 'switch' | 'color' | 'number' | 'navList';
+export type ConfigControl =
+  | 'text'
+  | 'upload'
+  | 'switch'
+  | 'color'
+  | 'number'
+  | 'navList'
+  | 'contactList';
 
 export interface ConfigFieldDef {
   /** JSON 中的属性名（回写数据库时使用） */
@@ -55,6 +62,58 @@ export const THEME_COLOR_PRESETS: { label: string; value: string }[] = [
   { label: 'Coca-Cola', value: '#F40009' },
   { label: 'X', value: '#000000' },
 ];
+
+/** 客户端「关于」页底部的联系方式条目 */
+export interface ContactLink {
+  label: string;
+  url: string;
+}
+
+/** 初始联系方式；CMS 中可自由增删改，写回后前台不再使用硬编码链接 */
+export const DEFAULT_CONTACT_LINKS: ContactLink[] = [
+  {
+    label: 'B 站',
+    url: 'https://space.bilibili.com/3706965849016893?spm_id_from=333.1007.0.0',
+  },
+  { label: '抖音', url: 'https://www.douyin.com/' },
+  { label: 'GitHub', url: 'https://github.com/in-git/domain-stream' },
+];
+
+/** 解析配置里的联系方式 JSON，兼容旧字段结构 */
+export function parseContactLinks(raw?: string): ContactLink[] {
+  if (!raw || !raw.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.reduce<ContactLink[]>((acc, entry) => {
+      if (!entry || typeof entry !== 'object') return acc;
+      const row = entry as Record<string, unknown>;
+      const label =
+        typeof row.label === 'string' && row.label.trim()
+          ? row.label.trim()
+          : typeof row.name === 'string' && row.name.trim()
+            ? row.name.trim()
+            : '';
+      const url =
+        typeof row.url === 'string' && row.url.trim()
+          ? row.url.trim()
+          : typeof row.href === 'string' && row.href.trim()
+            ? row.href.trim()
+            : '';
+      acc.push({ label, url });
+      return acc;
+    }, []);
+  } catch {
+    return [];
+  }
+}
+
+/** 序列化时保留空行，方便编辑器继续输入；渲染端会过滤无效条目 */
+export function stringifyContactLinks(items: ContactLink[]): string {
+  return JSON.stringify(
+    items.map((item) => ({ label: item.label.trim(), url: item.url.trim() }))
+  );
+}
 
 /** 客户端可配置属性清单 —— 新增属性只改这里 */
 export const CONFIG_FIELDS: ConfigFieldDef[] = [
@@ -103,25 +162,11 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     placeholder: '请输入客户端地址',
   },
   {
-    key: 'bilibiliUrl',
-    label: 'B 站个人主页',
-    description: '显示在客户端「关于」页面',
-    defaultValue: 'https://space.bilibili.com/3706965849016893?spm_id_from=333.1007.0.0',
-    placeholder: '请输入 B 站个人主页地址',
-  },
-  {
-    key: 'douyinUrl',
-    label: '抖音主页',
-    description: '显示在客户端「关于」页面',
-    defaultValue: 'https://www.douyin.com/',
-    placeholder: '请输入抖音主页地址',
-  },
-  {
-    key: 'githubUrl',
-    label: 'GitHub 开源地址',
-    description: '显示在客户端「关于」页面',
-    defaultValue: 'https://github.com/in-git/domain-stream',
-    placeholder: '请输入 GitHub 开源地址',
+    key: 'contactLinks',
+    label: '联系方式',
+    description: '显示在客户端「关于」页面底部，可自由新增、修改与删除',
+    control: 'contactList',
+    defaultValue: stringifyContactLinks(DEFAULT_CONTACT_LINKS),
   },
   {
     key: 'cmsUrl',
@@ -163,8 +208,8 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   },
   {
     key: 'navItems',
-    label: '侧边栏导航',
-    description: '客户端左侧导航的模块与顺序，可新增、排序与显隐；改完保存后刷新客户端生效',
+    label: '客户端导航',
+    description: 'PC 侧边栏与移动端底部导航共用的模块与顺序，可新增、排序与显隐；改完保存后刷新客户端生效',
     control: 'navList',
     defaultValue: '',
   },
@@ -203,7 +248,7 @@ export const BUILTIN_MODULE_KEYS: string[] = [
 /** 自定义模块 key 前缀，避免和内置页面 key 混淆 */
 export const CUSTOM_MODULE_PREFIX = 'mod_';
 
-/** 设置是内置模块，后台配置缺失时自动补齐 */
+/** 设置是内置模块预设，是否显示由导航配置决定 */
 const SETTINGS_NAV_ITEM: NavItemConfig = {
   id: 'settings',
   moduleKey: 'settings',
@@ -265,11 +310,6 @@ function parseModuleType(value: unknown, moduleKey: string): NavModuleType {
   return inferNavModuleType(moduleKey);
 }
 
-function ensureSettingsNavItem(items: NavItemConfig[]): NavItemConfig[] {
-  if (items.some((item) => item.moduleKey === 'settings')) return items;
-  return [...items, { ...SETTINGS_NAV_ITEM }];
-}
-
 /** 解析配置里的导航 JSON，异常时回退默认值 */
 export function parseNavItems(raw: string | undefined): NavItemConfig[] {
   if (!raw || !raw.trim()) return DEFAULT_NAV_ITEMS;
@@ -305,7 +345,7 @@ export function parseNavItems(raw: string | undefined): NavItemConfig[] {
         enabled: row.enabled !== false,
       });
     }
-    return ensureSettingsNavItem(items.length ? items : DEFAULT_NAV_ITEMS);
+    return items;
   } catch {
     return DEFAULT_NAV_ITEMS;
   }
@@ -331,13 +371,13 @@ export function normalizeNavItems(items: NavItemConfig[]): NavItemConfig[] {
       ...(iconUrl ? { iconUrl } : {}),
     });
   }
-  return ensureSettingsNavItem(result);
+  return result;
 }
 
-/** 序列化导航项，空列表写成空串 */
+/** 序列化导航项，空列表保留为 []，让前端可以显式清空导航 */
 export function stringifyNavItems(items: NavItemConfig[]): string {
   const normalized = normalizeNavItems(items);
-  return normalized.length ? JSON.stringify(normalized) : '';
+  return JSON.stringify(normalized);
 }
 
 /** 页面草稿：值 + 数据库中实际命中的属性名 */
@@ -368,6 +408,17 @@ export function draftFromItems(items: PageConfigItem[]): ConfigDraft {
         }
       }
     }
+
+    // 旧配置里 B 站/抖音/GitHub 是三个独立字段，首次打开时迁移为可编辑列表
+    if (field.key === 'contactLinks' && value === undefined) {
+      const legacy = [
+        { label: 'B 站', url: stored.get('bilibiliUrl') || '' },
+        { label: '抖音', url: stored.get('douyinUrl') || '' },
+        { label: 'GitHub', url: stored.get('githubUrl') || '' },
+      ].filter((item) => item.url);
+      if (legacy.length) value = stringifyContactLinks(legacy);
+    }
+
     values[field.key] = value ?? field.defaultValue;
     storedKeys[field.key] = matchedKey;
   }

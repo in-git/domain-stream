@@ -9,7 +9,7 @@ import { SECTION_IDS } from '../app/constants';
 /** 导航模块类型：内置页面或后台配置的占位模块 */
 export type NavModuleType = 'builtin' | 'placeholder';
 
-/** 设置是内置模块，后台未配置时也始终出现在导航末尾 */
+/** 设置是内置模块预设，是否显示完全由 CMS 的 navItems 决定 */
 const SETTINGS_NAV_ITEM: SidebarNavItem = {
   id: 'settings',
   moduleKey: 'settings',
@@ -50,11 +50,6 @@ function parseModuleType(value: unknown, moduleKey: string): NavModuleType {
   return inferNavModuleType(moduleKey);
 }
 
-function ensureSettingsNavItem(items: SidebarNavItem[]): SidebarNavItem[] {
-  if (items.some((item) => item.moduleKey === 'settings')) return items;
-  return [...items, { ...SETTINGS_NAV_ITEM }];
-}
-
 /** 解析后台配置的导航 JSON，失败或为空时回退默认 */
 export function parseNav(raw: string | undefined): SidebarNavItem[] {
   if (!raw || !raw.trim()) return DEFAULT_NAV;
@@ -84,7 +79,7 @@ export function parseNav(raw: string | undefined): SidebarNavItem[] {
         ...(iconUrl ? { iconUrl } : {}),
       });
     }
-    return ensureSettingsNavItem(items.length ? items : DEFAULT_NAV);
+    return items;
   } catch {
     return DEFAULT_NAV;
   }

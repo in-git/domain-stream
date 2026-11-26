@@ -41,25 +41,25 @@ export function FavoritesPCView(props: FavoritesViewProps) {
     <>
       <section
         aria-labelledby={`${mode}-pc-heading`}
-        className="space-y-6 bg-app-card px-8 py-7 dark:bg-app-card"
+        className="space-y-6 bg-app-card p-2 dark:bg-app-card"
       >
         <div className="flex items-center justify-between gap-6">
           <div className="space-y-1">
             <h2
               id={`${mode}-pc-heading`}
-              className="text-lg font-semibold tracking-tight text-app-text"
+              className="text-[18px] font-bold tracking-tight text-app-text"
             >
               {meta.heading}
             </h2>
             <p className="text-xs text-app-muted">
-              共 {counts.all} 条 · {meta.orderHint}
+              共 {counts.all} 条
             </p>
           </div>
 
           <div
             role="tablist"
             aria-label={`${meta.heading}类型筛选`}
-            className="flex items-center gap-1 rounded-full bg-app-surface p-1 dark:bg-app-surface"
+            className="flex items-center gap-1 rounded-[6px] bg-app-surface p-1 dark:bg-app-surface"
           >
             {TABS.map((item) => {
               const isActive = tab === item.id;

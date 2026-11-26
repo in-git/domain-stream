@@ -24,8 +24,8 @@ import {
 } from '../../lib/api';
 import { isSectionId, type ContentSection } from './constants';
 
-/** 客户端视频分页大小，避免首页一次性拉全量 */
-const VIDEO_PAGE_SIZE = 20;
+/** 客户端视频每次随机推荐的批次大小，看完一批再拉下一批 */
+const VIDEO_BATCH_SIZE = 5;
 
 /**
  * 门户内容数据：按板块懒加载（进入板块才请求，已加载不再重复），
@@ -46,8 +46,15 @@ export function usePortalData(
   /** 当前图文分类（提升到数据层，切换时按分类请求后端；侧栏刷新时沿用） */
   const [graphicCategory, setGraphicCategory] = useState<string>('全部');
   const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [videoPageInfo, setVideoPageInfo] = useState({ current: 1, total: 0 });
+  const [videoPageInfo, setVideoPageInfo] = useState({
+    current: 1,
+    total: 0,
+    // 后端 total 偶尔不可靠，用「本次是否返回数据」作为是否继续加载的依据
+    hasMore: false,
+  });
   const [videoLoadingMore, setVideoLoadingMore] = useState(false);
+  /** 加载更多失败后暂停自动触底，避免失败即重试形成请求风暴 */
+  const [videoLoadMoreError, setVideoLoadMoreError] = useState<string | undefined>(undefined);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loadedSections, setLoadedSections] = useState<Partial<Record<SectionId, boolean>>>({});
@@ -59,7 +66,7 @@ export function usePortalData(
   }));
   const [errors, setErrors] = useState<Partial<Record<ContentSection, string>>>({});
   const categoriesPromiseRef = useRef<Promise<PortalCategory[]> | null>(null);
-  /** 分类快速切换时只应用最后一次请求结果 */
+  /** 分类/刷新/加载更多共用：请求发出时记下 id，过期响应一律丢弃 */
   const videoCategoryRequestRef = useRef(0);
   const videoLoadingMoreRef = useRef(false);
   const graphicCategoryRequestRef = useRef(0);
@@ -171,14 +178,24 @@ export function usePortalData(
               .filter((row) => rootIdOf(row))
               .map((row) => replyFromPortal(row, rootIdOf(row)))
           );
+          loaded = true;
         } else if (section === 'videos') {
+          // 刷新/重新进入使正在进行的加载更多失效，避免旧响应污染新列表
+          ++videoCategoryRequestRef.current;
+          videoLoadingMoreRef.current = false;
+          setVideoLoadingMore(false);
+          setVideoLoadMoreError(undefined);
           loaded = await loadWithCategories(
             section,
-            () => portalApi.videoPage(videoCategory, 1, VIDEO_PAGE_SIZE),
+            () => portalApi.videoRecommend(videoCategory, VIDEO_BATCH_SIZE),
             (page, names, categories) => {
               const items = page.records.map((row, i) => videoFromPortal(row, i, names));
               setVideos(items);
-              setVideoPageInfo({ current: page.current, total: page.total });
+              setVideoPageInfo({
+                current: page.current,
+                total: page.total,
+                hasMore: page.records.length > 0,
+              });
               setVideoCategories(
                 pickCategories(categoriesForModule(categories, 'VIDEO'), items.map((item) => item.category))
               );
@@ -216,7 +233,6 @@ export function usePortalData(
             force
           );
         }
-        loaded = true;
       } catch (error) {
         setErrors((prev) => ({
           ...prev,
@@ -238,19 +254,26 @@ export function usePortalData(
   const loadVideosByCategory = useCallback(
     async (category: string) => {
       const requestId = ++videoCategoryRequestRef.current;
+      videoLoadingMoreRef.current = false;
+      setVideoLoadingMore(false);
+      setVideoLoadMoreError(undefined);
       setVideoCategory(category);
-      setVideoPageInfo({ current: 1, total: 0 });
+      setVideoPageInfo({ current: 1, total: 0, hasMore: false });
       setErrors((prev) => ({ ...prev, videos: undefined }));
       try {
         const categories = categoriesPromiseRef.current
           ? await categoriesPromiseRef.current
           : [];
         const categoryCode = resolveCategoryCode(categories, category, 'VIDEO');
-        const page = await portalApi.videoPage(categoryCode, 1, VIDEO_PAGE_SIZE);
+        const page = await portalApi.videoRecommend(categoryCode, VIDEO_BATCH_SIZE);
         if (requestId !== videoCategoryRequestRef.current) return;
         const names = categoryNameMap(categories);
         setVideos(page.records.map((row, i) => videoFromPortal(row, i, names)));
-        setVideoPageInfo({ current: page.current, total: page.total });
+        setVideoPageInfo({
+          current: page.current,
+          total: page.total,
+          hasMore: page.records.length > 0,
+        });
       } catch (error) {
         if (requestId !== videoCategoryRequestRef.current) return;
         setErrors((prev) => ({
@@ -262,36 +285,40 @@ export function usePortalData(
     []
   );
 
-  /** 视频列表触底加载下一页，按当前分类追加，不重复拉全量 */
+  /** 视频列表继续观看下一批随机推荐：不排除已看过的，后端保证每批都有数据 */
   const loadMoreVideos = useCallback(async () => {
     if (videoLoadingMoreRef.current) return;
-    if (videoPageInfo.current * VIDEO_PAGE_SIZE >= videoPageInfo.total) return;
+    if (!videoPageInfo.hasMore) return;
+    const requestId = videoCategoryRequestRef.current;
     videoLoadingMoreRef.current = true;
     setVideoLoadingMore(true);
+    setVideoLoadMoreError(undefined);
     try {
       const categories = categoriesPromiseRef.current
         ? await categoriesPromiseRef.current
         : [];
       const categoryCode = resolveCategoryCode(categories, videoCategory, 'VIDEO');
-      const nextCurrent = videoPageInfo.current + 1;
-      const page = await portalApi.videoPage(categoryCode, nextCurrent, VIDEO_PAGE_SIZE);
+      const page = await portalApi.videoRecommend(categoryCode, VIDEO_BATCH_SIZE);
+      if (requestId !== videoCategoryRequestRef.current) return;
       const names = categoryNameMap(categories);
-      setVideos((prev) => {
-        const seen = new Set(prev.map((item) => item.id));
-        const appended = page.records
-          .map((row, i) => videoFromPortal(row, prev.length + i, names))
-          .filter((item) => !seen.has(item.id));
-        return [...prev, ...appended];
-      });
-      setVideoPageInfo({ current: page.current, total: page.total });
-    } catch (error) {
-      setErrors((prev) => ({
+      setVideos((prev) => [
         ...prev,
-        videos: error instanceof Error ? error.message : '加载更多失败',
-      }));
+        ...page.records.map((row, i) => videoFromPortal(row, prev.length + i, names)),
+      ]);
+      setVideoPageInfo({
+        current: page.current,
+        total: page.total,
+        hasMore: page.records.length > 0,
+      });
+    } catch (error) {
+      if (requestId !== videoCategoryRequestRef.current) return;
+      setVideoLoadMoreError(error instanceof Error ? error.message : '加载更多失败');
     } finally {
-      videoLoadingMoreRef.current = false;
-      setVideoLoadingMore(false);
+      // 分类切换/刷新时已提前重置，这里只处理仍属于当前批次的结果
+      if (requestId === videoCategoryRequestRef.current) {
+        videoLoadingMoreRef.current = false;
+        setVideoLoadingMore(false);
+      }
     }
   }, [videoCategory, videoPageInfo]);
 
@@ -373,7 +400,8 @@ export function usePortalData(
     loadVideosByCategory,
     videoPageInfo,
     videoLoadingMore,
-    videoHasMore: videoPageInfo.current * VIDEO_PAGE_SIZE < videoPageInfo.total,
+    videoLoadMoreError,
+    videoHasMore: videoPageInfo.hasMore,
     loadMoreVideos,
     articleCategories,
     graphicCategories,

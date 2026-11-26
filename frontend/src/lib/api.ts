@@ -622,6 +622,15 @@ export const portalApi = {
     if (category && category !== '全部') params.set('category', category);
     return request<PortalVideoPage>(`/public/video/page?${params.toString()}`);
   },
+  /** 随机推荐：每次只取一小批，不排除已看过的，保证每批都有数据 */
+  videoRecommend: (category: string | undefined, size: number) =>
+    request<PortalVideoPage>('/public/video/recommend', {
+      method: 'POST',
+      body: JSON.stringify({
+        category: category && category !== '全部' ? category : undefined,
+        size,
+      }),
+    }),
   recordVideoView: (id: string) =>
     request<boolean>(`/public/videos/${encodeURIComponent(id)}/view`, { method: 'POST' }),
   articles: () => request<PortalArticle[]>('/public/articles'),

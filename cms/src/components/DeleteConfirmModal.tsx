@@ -7,6 +7,8 @@ interface DeleteConfirmModalProps {
   /** 删除条目名称（单条或多条） */
   itemTitles?: string[];
   description: string;
+  /** 需要用户手动输入该文本才能确认删除，传空则不校验 */
+  requireText?: string;
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }
@@ -16,11 +18,14 @@ export function DeleteConfirmModal({
   title,
   itemTitles = [],
   description,
+  requireText,
   onConfirm,
   onClose,
 }: DeleteConfirmModalProps) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [typedText, setTypedText] = useState('');
+  const canConfirm = !requireText || typedText.trim() === requireText;
 
   async function handleConfirm() {
     setDeleting(true);
@@ -84,6 +89,23 @@ export function DeleteConfirmModal({
           <p className="mt-2 text-[13px] text-[#6E6E73] leading-relaxed">{description}</p>
         </div>
 
+        {requireText && (
+          <label className="mt-4 block">
+            <span className="mb-1.5 block text-[12px] text-[#6E6E73]">
+              请输入模块标识 <code className="font-mono text-[#1D1D1F]">{requireText}</code> 以确认删除
+            </span>
+            <input
+              value={typedText}
+              onChange={(event) => setTypedText(event.target.value)}
+              disabled={deleting}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="模块标识可编辑，输入一致后即可删除"
+              className="w-full h-10 px-3 rounded-xl border border-[#D2D2D7] bg-white text-[13px] font-mono text-[#1D1D1F] outline-none focus:border-[#FF3B30] disabled:opacity-60"
+            />
+          </label>
+        )}
+
         {error && (
           <p className="mt-3 rounded-xl bg-[#FF3B30]/8 px-3 py-2 text-[12px] text-[#D70015]">
             {error}
@@ -101,7 +123,7 @@ export function DeleteConfirmModal({
           </button>
           <button
             type="button"
-            disabled={deleting}
+            disabled={deleting || !canConfirm}
             onClick={() => void handleConfirm()}
             className="h-10 px-5 rounded-xl bg-[#FF3B30] hover:bg-[#D70015] disabled:opacity-60 text-white text-[13px] font-medium"
           >

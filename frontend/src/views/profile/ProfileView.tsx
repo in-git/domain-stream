@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   Edit3,
-  ExternalLink,
   Heart,
   KeyRound,
   Loader2,
@@ -33,27 +32,6 @@ function formatLoginTime(value?: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('zh-CN', { hour12: false });
-}
-
-const BILIBILI_HOME_PAGE = 'https://space.bilibili.com/3706965849016893?spm_id_from=333.1007.0.0';
-
-function ContactSupportNote() {
-  return (
-    <div className="rounded-app border border-app-border bg-app-surface px-4 py-3 text-xs leading-relaxed text-app-muted dark:border-app-border dark:bg-[#242426] dark:text-app-muted">
-      <p className="break-all">
-        我的个人主页：
-        <a
-          href={BILIBILI_HOME_PAGE}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="inline-flex items-center gap-1 font-medium text-app-text underline decoration-black/25 underline-offset-2 hover:decoration-black dark:text-app-text dark:decoration-white/30 dark:hover:decoration-white"
-        >
-          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-          {BILIBILI_HOME_PAGE}
-        </a>
-      </p>
-    </div>
-  );
 }
 
 interface ProfileViewProps {
@@ -649,8 +627,6 @@ export function ProfileView({
                 <p className="text-xs text-app-text">{profileError}</p>
               )}
 
-              <ContactSupportNote />
-
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -779,8 +755,6 @@ export function ProfileView({
                   {passwordSuccess}
                 </p>
               )}
-
-              <ContactSupportNote />
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button

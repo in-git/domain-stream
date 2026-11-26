@@ -66,7 +66,7 @@ export function ProfilePCView({
 
   return (
     <section className="w-full py-2">
-      <div className="space-y-5 px-8 py-7">
+      <div className="space-y-5 p-2">
         <div className="bg-app-card">
           <div className="h-44 bg-[linear-gradient(120deg,var(--app-color-surface)_0%,var(--app-color-card)_45%,var(--app-color-surface)_100%)]" />
           <div className="-mt-12 px-8 pb-7">

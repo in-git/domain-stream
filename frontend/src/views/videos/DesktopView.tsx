@@ -168,7 +168,7 @@ export function DesktopVideoGrid({
     <div className="hidden grid-cols-2 gap-2 sm:gap-1.5 md:grid md:grid-cols-3 md:gap-2 lg:gap-3 xl:grid-cols-4 xl:gap-4 2xl:grid-cols-5 2xl:gap-4">
       {videos.map((video, idx) => (
         <DesktopGridCard
-          key={video.id}
+          key={`${video.id}-${idx}`}
           video={video}
           index={idx}
           liked={likedIds.includes(video.id)}

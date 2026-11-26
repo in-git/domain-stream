@@ -12,6 +12,7 @@ interface VideosSectionProps {
   onCategoryChange: (category: string) => void;
   hasMoreVideos?: boolean;
   loadingMoreVideos?: boolean;
+  loadMoreError?: string;
   onLoadMoreVideos?: () => void;
   savedIds: string[];
   likedIds: string[];
@@ -51,6 +52,7 @@ export function VideosSection({
   onCategoryChange,
   hasMoreVideos,
   loadingMoreVideos,
+  loadMoreError,
   onLoadMoreVideos,
   savedIds,
   likedIds,
@@ -84,6 +86,7 @@ export function VideosSection({
         onCategoryChange={onCategoryChange}
         hasMoreVideos={hasMoreVideos}
         loadingMoreVideos={loadingMoreVideos}
+        loadMoreError={loadMoreError}
         onLoadMoreVideos={onLoadMoreVideos}
         savedIds={savedIds}
         likedIds={likedIds}

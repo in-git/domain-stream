@@ -22,7 +22,11 @@ export function MobileTabBar({
   return (
     <nav
       aria-label="底部导航"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-transparent"
+      className={`md:hidden fixed bottom-0 left-0 right-0 z-30 ${
+        transparent
+          ? 'bg-transparent'
+          : 'border-t border-app-border bg-app-card/95 backdrop-blur-md'
+      }`}
     >
       <div
         className="h-12 items-center px-1"

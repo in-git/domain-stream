@@ -17,6 +17,8 @@ import { useSystemInfo } from '../../lib/systemInfo';
 /** 迷你播放器尺寸（与下方 sm 断点样式一致），用于拖拽边界计算 */
 const MINI_SIZE = { width: 240, height: 135 };
 const MINI_MARGIN = 12;
+/** 沉浸流提前预加载的剩余条数，接近抖音式无缝续刷 */
+const FEED_PREFETCH_DISTANCE = 2;
 
 /** 把坐标限制在视口内，避免拖出屏幕 */
 function clampMiniPos(x: number, y: number): { x: number; y: number } {
@@ -36,6 +38,8 @@ interface VideosViewProps {
   onCategoryChange: (category: string) => void;
   hasMoreVideos?: boolean;
   loadingMoreVideos?: boolean;
+  /** 加载更多失败：暂停自动触底，改为显示手动重试入口 */
+  loadMoreError?: string;
   onLoadMoreVideos?: () => void;
   savedIds: string[];
   likedIds: string[];
@@ -75,6 +79,7 @@ export function VideosView({
   onCategoryChange,
   hasMoreVideos = false,
   loadingMoreVideos = false,
+  loadMoreError,
   onLoadMoreVideos,
   savedIds,
   likedIds,
@@ -165,7 +170,7 @@ export function VideosView({
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasMoreVideos || loadingMoreVideos || viewMode !== 'grid' || !onLoadMoreVideos) return;
+    if (!sentinel || !hasMoreVideos || loadingMoreVideos || loadMoreError || viewMode !== 'grid' || !onLoadMoreVideos) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) onLoadMoreVideos();
@@ -174,7 +179,7 @@ export function VideosView({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMoreVideos, loadingMoreVideos, onLoadMoreVideos, viewMode]);
+  }, [hasMoreVideos, loadingMoreVideos, loadMoreError, onLoadMoreVideos, viewMode]);
 
   const safeIndex =
     filteredVideos.length > 0 ? Math.min(activeIndex, filteredVideos.length - 1) : 0;
@@ -182,11 +187,14 @@ export function VideosView({
 
   // PC 沉浸刷看：滑到倒数几条时自动加载下一页
   useEffect(() => {
-    if (viewMode !== 'feed' || !hasMoreVideos || loadingMoreVideos || !onLoadMoreVideos) return;
-    if (filteredVideos.length > 0 && safeIndex >= filteredVideos.length - 3) {
+    if (viewMode !== 'feed' || !hasMoreVideos || loadingMoreVideos || loadMoreError || !onLoadMoreVideos) return;
+    if (
+      filteredVideos.length > 0 &&
+      safeIndex >= filteredVideos.length - FEED_PREFETCH_DISTANCE
+    ) {
       onLoadMoreVideos();
     }
-  }, [viewMode, hasMoreVideos, loadingMoreVideos, onLoadMoreVideos, safeIndex, filteredVideos.length]);
+  }, [viewMode, hasMoreVideos, loadingMoreVideos, loadMoreError, onLoadMoreVideos, safeIndex, filteredVideos.length]);
 
   /** 视频模块激活时以当前视频标题作为页面标题，离开时恢复站点标题 */
   useEffect(() => {
@@ -281,7 +289,7 @@ export function VideosView({
   }, []);
 
   const getActivePlayer = () =>
-    currentVideo ? playersRef.current.get(currentVideo.id) ?? null : null;
+    currentVideo ? playersRef.current.get(`${currentVideo.id}-${safeIndex}`) ?? null : null;
 
   /** 安全暂停：已销毁的 MediaPlayer 实例访问内部属性会抛 null 引用异常，统一吞掉 */
   const safePause = (player: MediaPlayerInstance | null | undefined) => {
@@ -416,7 +424,7 @@ export function VideosView({
     if (mode !== 'immersive' || viewMode !== 'feed' || !currentVideo) return;
     const frame = requestAnimationFrame(() => {
       swiperRef.current?.update?.();
-      const player = playersRef.current.get(currentVideo.id);
+      const player = playersRef.current.get(`${currentVideo.id}-${safeIndex}`);
       if (!player) return;
       try {
         if (player.paused) void player.play().catch(() => {});
@@ -528,7 +536,8 @@ export function VideosView({
               }}
               direction="vertical"
               slidesPerView={1}
-              loop={filteredVideos.length > 1}
+              /* 无限批次追加时不能用 loop：Swiper 重建循环会打乱 realIndex，追加几批后就不触发加载了 */
+              loop={false}
               speed={520}
               initialSlide={safeIndex}
               modules={[Mousewheel, Keyboard, A11y]}
@@ -539,7 +548,7 @@ export function VideosView({
               className="w-full h-full"
             >
               {filteredVideos.map((video, idx) => (
-                <SwiperSlide key={video.id} className="relative">
+                <SwiperSlide key={`${video.id}-${idx}`} className="relative">
                   <FeedSlide
                     video={video}
                     index={idx}
@@ -554,6 +563,7 @@ export function VideosView({
                     isFullscreen={isFullscreen}
                     savedTime={progressById?.[video.id]}
                     onRegisterPlayer={registerPlayer}
+                    playerKey={`${video.id}-${idx}`}
                     onTogglePlay={togglePlayback}
                     onToggleMute={handleToggleMute}
                     onSetRate={setPlaybackRate}
@@ -612,19 +622,37 @@ export function VideosView({
             onOpen={openVideoAt}
           />
           {hasMoreVideos ? (
-            <div ref={loadMoreRef} className="flex justify-center py-6">
+            <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-6">
+              {loadMoreError && (
+                <p className="text-[12px] text-red-400">加载失败：{loadMoreError}</p>
+              )}
               <button
                 type="button"
                 onClick={() => onLoadMoreVideos?.()}
                 disabled={loadingMoreVideos}
                 className="rounded-full bg-white/10 px-5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20 disabled:opacity-50"
               >
-                {loadingMoreVideos ? '加载中…' : '加载更多'}
+                {loadingMoreVideos ? '加载中…' : loadMoreError ? '重试加载' : '加载更多'}
               </button>
             </div>
           ) : (
             <p className="py-6 text-center text-[12px] text-white/50">没有更多了</p>
           )}
+        </div>
+      )}
+
+      {/* 沉浸流加载失败：暂停自动预取，提供手动重试 */}
+      {!isMini && !isHidden && viewMode === 'feed' && loadMoreError && (
+        <div className="pointer-events-auto absolute bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-[12px] text-white shadow-lg md:bottom-6">
+          <span className="max-w-[60vw] truncate text-red-300">加载失败：{loadMoreError}</span>
+          <button
+            type="button"
+            onClick={() => onLoadMoreVideos?.()}
+            disabled={loadingMoreVideos}
+            className="rounded-full bg-white/15 px-3 py-1 font-medium text-white transition-colors hover:bg-white/25 disabled:opacity-50"
+          >
+            {loadingMoreVideos ? '加载中…' : '重试'}
+          </button>
         </div>
       )}
     </section>

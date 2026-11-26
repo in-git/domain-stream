@@ -57,7 +57,7 @@ export function ImmersiveModal({
   }, []);
 
   const getActivePlayer = () =>
-    activeVideo ? playersRef.current.get(activeVideo.id) ?? null : null;
+    activeVideo ? playersRef.current.get(`${activeVideo.id}-${activeIndex}`) ?? null : null;
 
   /** 用户点击静音/取消静音：记录主动静音状态 */
   const handleToggleMute = () => {
@@ -147,7 +147,7 @@ export function ImmersiveModal({
           className="w-full h-full"
         >
           {videos.map((video, idx) => (
-            <SwiperSlide key={video.id} className="relative">
+            <SwiperSlide key={`${video.id}-${idx}`} className="relative">
               <FeedSlide
                 video={video}
                 index={idx}
@@ -163,6 +163,7 @@ export function ImmersiveModal({
                 showFullscreen={false}
                 savedTime={progressById?.[video.id]}
                 onRegisterPlayer={registerPlayer}
+                playerKey={`${video.id}-${idx}`}
                 onTogglePlay={togglePlayback}
                 onToggleMute={handleToggleMute}
                 onSetRate={setPlaybackRate}

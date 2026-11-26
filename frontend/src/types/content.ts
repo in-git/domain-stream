@@ -117,5 +117,5 @@ export const INITIAL_PROFILE: UserProfile = {
   handle: '',
   bio: '',
   location: '',
-  avatar: '/src/assets/images/profile_avatar_studio_1795019175018.jpg',
+  avatar: '',
 };

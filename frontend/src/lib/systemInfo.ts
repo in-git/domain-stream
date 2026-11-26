@@ -52,6 +52,33 @@ export function publicFileUrl(raw?: string): string {
   }
 }
 
+/** 客户端「关于」页底部的联系方式条目 */
+export interface ContactLink {
+  label: string;
+  url: string;
+}
+
+/** 解析 CMS 配置的联系方式 JSON；未填完整的条目不展示 */
+export function parseContactLinks(raw?: string): ContactLink[] {
+  const value = (raw || '').trim();
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.reduce<ContactLink[]>((acc, entry) => {
+      if (!entry || typeof entry !== 'object') return acc;
+      const row = entry as Record<string, unknown>;
+      const label =
+        typeof row.label === 'string' ? row.label.trim() : '';
+      const url = typeof row.url === 'string' ? row.url.trim() : '';
+      if (label && url) acc.push({ label, url });
+      return acc;
+    }, []);
+  } catch {
+    return [];
+  }
+}
+
 /** 应用配置的 favicon；留空时移除，回退到浏览器默认图标 */
 function applyFavicon(url: string): void {
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');

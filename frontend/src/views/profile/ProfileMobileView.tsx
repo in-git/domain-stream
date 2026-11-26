@@ -6,7 +6,7 @@ import { AnimatePresence } from 'motion/react';
 import { ChevronRight, Database, KeyRound, LogOut, UserRound } from 'lucide-react';
 import type { UserProfile } from '../../types/content';
 import { SecondaryPage } from '../../components/SecondaryPage';
-import { SettingDetail } from '../settings/SettingsSection';
+import { CacheMobileView } from './CacheMobileView';
 import { ProfileModals, type ProfileForms, type UserBasicInfo } from './ProfileForms';
 
 interface ProfileMobileViewProps {
@@ -82,7 +82,7 @@ export function ProfileMobileView({
           <button
             type="button"
             onClick={onGoLogin}
-            className="h-10 bg-app-primary px-5 text-[13px] font-medium text-white dark:bg-app-card dark:text-app-text"
+            className="h-10 rounded-app bg-app-primary px-5 text-[13px] font-medium text-white dark:bg-app-card dark:text-app-text"
           >
             立即登录
           </button>
@@ -131,13 +131,13 @@ export function ProfileMobileView({
       <AnimatePresence>
         {detail && (
           <SecondaryPage onBack={() => setDetail(null)}>
-              {detail === 'cache' && <SettingDetail itemKey="cache" profileContent={null} />}
+              {detail === 'cache' && <CacheMobileView />}
 
               {detail === 'account' && (
                 <div className="bg-app-card">
                   <div className="flex items-start justify-between gap-4 border-b border-app-border px-4 py-4 dark:border-app-border">
                     <div>
-                      <h2 className="text-[17px] font-semibold text-app-text">
+                      <h2 className="text-sm font-medium text-app-text">
                         账号信息
                       </h2>
                       <p className="mt-1 text-xs text-app-subtle">基本资料与登录状态</p>
@@ -172,9 +172,9 @@ export function ProfileMobileView({
               )}
 
               {detail === 'security' && (
-                <div className="space-y-3 bg-app-card pb-4 dark:bg-app-card">
-                  <div className="px-4 pt-4">
-                    <h2 className="text-[17px] font-semibold text-app-text">
+                <div className="space-y-3 bg-app-card px-2 pb-4 pt-2 dark:bg-app-card">
+                  <div className="px-4">
+                    <h2 className="text-sm font-medium text-app-text">
                       安全设置
                     </h2>
                     <p className="mt-1 text-xs text-app-subtle">保护账号，定期更新登录密码。</p>

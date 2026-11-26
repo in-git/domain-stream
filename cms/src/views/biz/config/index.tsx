@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  AtSign,
   ChevronDown,
   Image as ImageIcon,
   ListOrdered,
@@ -36,6 +37,7 @@ import {
 } from './schema';
 import { PreviewPanel } from './PreviewPanel';
 import { NavItemsEditor } from './NavItemsEditor';
+import { ContactLinksEditor } from './ContactLinksEditor';
 
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -245,8 +247,8 @@ export default function ConfigView() {
 
   /** 正在通过文件选择器设置的字段（null 表示未打开） */
   const [pickerField, setPickerField] = useState<string | null>(null);
-  /** 当前编辑分组：页面配置 / 主题配置 / 侧边栏导航 */
-  const [tab, setTab] = useState<'basic' | 'theme' | 'nav'>('basic');
+  /** 当前编辑分组：页面配置 / 主题配置 / 客户端导航 / 联系方式 */
+  const [tab, setTab] = useState<'basic' | 'theme' | 'nav' | 'contact'>('basic');
   /** 底部折叠区：地址与备案信息默认收起，展开才可见 */
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -259,7 +261,10 @@ export default function ConfigView() {
   const basicFields = useMemo(
     () =>
       CONFIG_FIELDS.filter(
-        (field) => field.control !== 'navList' && !THEME_FIELD_KEYS.includes(field.key)
+        (field) =>
+          field.control !== 'navList' &&
+          field.control !== 'contactList' &&
+          !THEME_FIELD_KEYS.includes(field.key)
       ),
     []
   );
@@ -290,9 +295,11 @@ export default function ConfigView() {
   const tabFields =
     tab === 'nav'
       ? CONFIG_FIELDS.filter((field) => field.control === 'navList')
-      : tab === 'theme'
-        ? themeFields
-        : basicFields;
+      : tab === 'contact'
+        ? CONFIG_FIELDS.filter((field) => field.control === 'contactList')
+        : tab === 'theme'
+          ? themeFields
+          : basicFields;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -359,6 +366,36 @@ export default function ConfigView() {
       setSaving(false);
     }
   }
+
+  /** 结构性变更（如删除模块）后立即写回服务器，失败时回滚本地草稿 */
+  const syncFieldValue = useCallback(
+    async (key: string, value: string) => {
+      if (!draft || !original) return;
+      const next: ConfigDraft = {
+        ...draft,
+        values: { ...draft.values, [key]: value },
+        storedKeys: { ...draft.storedKeys, [key]: draft.storedKeys[key] ?? key },
+      };
+
+      setDraft(next);
+      setSaving(true);
+      try {
+        const items = CONFIG_FIELDS.map((field) => ({
+          key: field.key,
+          value: next.values[field.key] ?? '',
+        }));
+        await pageConfigApi.save(items);
+        setOriginal(next);
+        showToast('模块已删除并同步到服务器', 'success');
+      } catch (err) {
+        setDraft(original);
+        throw err;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [draft, original]
+  );
 
   function handleReset() {
     if (original) setDraft(original);
@@ -453,7 +490,8 @@ export default function ConfigView() {
             {[
               { key: 'basic' as const, label: '页面配置', icon: SlidersHorizontal },
               { key: 'theme' as const, label: '主题配置', icon: Palette },
-              { key: 'nav' as const, label: '侧边栏导航', icon: ListOrdered },
+              { key: 'nav' as const, label: '导航配置', icon: ListOrdered },
+              { key: 'contact' as const, label: '联系方式', icon: AtSign },
             ].map((item) => {
               const active = tab === item.key;
               const Icon = item.icon;
@@ -496,6 +534,23 @@ export default function ConfigView() {
               </div>
            
             </div>
+          ) : tab === 'contact' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+              {CONFIG_FIELDS.filter((field) => field.control === 'contactList').map((field) => (
+                <div key={field.key}>
+                  <div className="mb-3">
+                    <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
+                    {field.description && (
+                      <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
+                    )}
+                  </div>
+                  <ContactLinksEditor
+                    value={draft.values[field.key] ?? ''}
+                    onChange={(value) => setFieldValue(field.key, value)}
+                  />
+                </div>
+              ))}
+            </div>
           ) : tab === 'nav' ? (
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               {CONFIG_FIELDS.filter((field) => field.control === 'navList').map((field) => (
@@ -509,6 +564,7 @@ export default function ConfigView() {
                   <NavItemsEditor
                     value={draft.values[field.key] ?? ''}
                     onChange={(value) => setFieldValue(field.key, value)}
+                    onSync={(value) => syncFieldValue(field.key, value)}
                   />
                 </div>
               ))}

@@ -15,7 +15,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import type { ArticleItem, PhotoItem, VideoItem } from '../../types/content';
-import { useSystemInfo } from '../../lib/systemInfo';
+import { parseContactLinks, useSystemInfo } from '../../lib/systemInfo';
 import { FavoritesPCView } from '../profile/FavoritesPCView';
 
 export type SettingKey = 'profile' | 'likes' | 'favorites' | 'cache' | 'about' | 'messages';
@@ -169,7 +169,7 @@ export function SettingDetail({
   }
 
   if (itemKey === 'messages') {
-    return <div className="min-w-0 px-8 py-7">{messagesContent}</div>;
+    return <div className="min-w-0 p-2">{messagesContent}</div>;
   }
 
   if (itemKey === 'likes' || itemKey === 'favorites') {
@@ -193,7 +193,7 @@ export function SettingDetail({
   if (itemKey === 'cache') {
     return (
       <>
-        <div className="space-y-4 px-8 py-7">
+        <div className="space-y-4 p-2">
           <div>
             <h2 className="text-lg font-semibold text-app-text">缓存设置</h2>
             <p className="mt-1 text-[13px] text-app-muted">
@@ -281,32 +281,15 @@ export function SettingDetail({
 
   if (itemKey === 'about') {
     const clientUrl = (config.clientUrl || '').trim();
-    const bilibiliUrl =
-      (config.bilibiliUrl || '').trim() ||
-      'https://space.bilibili.com/3706965849016893?spm_id_from=333.1007.0.0';
-    const douyinUrl = (config.douyinUrl || '').trim() || 'https://www.douyin.com/';
-    const githubUrl = (config.githubUrl || '').trim() || 'https://github.com/in-git/domain-stream';
-
-    const linkRow = (label: string, href: string) => (
-      <div className="flex items-center justify-between py-3.5 text-[13px]">
-        <span className="text-app-muted">{label}</span>
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="ml-4 max-w-[70%] truncate font-medium text-app-text hover:underline"
-        >
-          {href}
-        </a>
-      </div>
-    );
+    const contacts = parseContactLinks(config.contactLinks);
 
     return (
-      <div className={`space-y-4 ${dense ? 'px-3 py-4' : 'px-8 py-7'}`}>
+      <div className={`space-y-4 ${dense ? 'px-3 py-4' : 'p-2'}`}>
         <div>
-          <h2 className="text-lg font-semibold text-app-text">关于</h2>
+          <h2 className="text-[18px] font-bold text-app-text">关于</h2>
           <p className="mt-1 text-[13px] text-app-muted">当前客户端信息</p>
         </div>
+
         <div className="divide-y divide-app-border rounded-app border-[0.5px] border-app-border bg-app-card px-4 dark:divide-app-border dark:border-app-border dark:bg-white/5">
           <div className="flex items-center justify-between py-3.5 text-[13px]">
             <span className="text-app-muted">网页标题</span>
@@ -318,9 +301,35 @@ export function SettingDetail({
               {clientUrl || '未设置'}
             </span>
           </div>
-          {linkRow('我的个人主页', bilibiliUrl)}
-          {linkRow('抖音', douyinUrl)}
-          {linkRow('GitHub 开源', githubUrl)}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-[13px] font-medium text-app-text">联系方式</h3>
+          {contacts.length > 0 ? (
+            <div className="divide-y divide-app-border rounded-app border-[0.5px] border-app-border bg-app-card px-4 dark:divide-app-border dark:border-app-border dark:bg-white/5">
+              {contacts.map((item, index) => (
+                <div
+                  key={`${item.label}-${index}`}
+                  className="flex items-center justify-between gap-3 py-3.5 text-[13px]"
+                >
+                  <span className="shrink-0 text-app-muted">{item.label}</span>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={item.url}
+                    className="ml-4 max-w-[70%] truncate font-medium text-app-text hover:underline"
+                  >
+                    {item.url}
+                  </a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-app border-[0.5px] border-dashed border-app-border bg-app-card px-4 py-5 text-center text-[12px] text-app-subtle dark:border-app-border dark:bg-white/5">
+              暂无联系方式，可在 CMS 客户端配置中添加
+            </p>
+          )}
         </div>
       </div>
     );

@@ -118,7 +118,7 @@ export function PlaylistPanel({
           const active = video.id === videos[activeIndex]?.id;
           return (
             <button
-              key={video.id}
+              key={`${video.id}-${idx}`}
               type="button"
               onClick={() => onSelect(video)}
               className={`flex w-full flex-col gap-2 px-3 py-2 text-left transition-colors ${

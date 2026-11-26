@@ -25,25 +25,25 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
     <>
       <section
         aria-labelledby={`${mode}-mobile-heading`}
-        className="space-y-4 bg-app-card px-3 py-4 dark:bg-app-card"
+        className="space-y-4 bg-app-card p-2 dark:bg-app-card"
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="space-y-1">
             <h2
               id={`${mode}-mobile-heading`}
-              className="text-base font-semibold tracking-tight text-app-text"
+              className="text-[18px] font-bold text-app-text"
             >
               {meta.heading}
             </h2>
             <p className="text-xs text-app-muted">
-              共 {counts.all} 条 · {meta.orderHint}
+              共 {counts.all} 条
             </p>
           </div>
 
           <div
             role="tablist"
             aria-label={`${meta.heading}类型筛选`}
-            className="flex items-center gap-1 overflow-x-auto rounded-full bg-app-surface p-0.5 dark:bg-app-surface"
+            className="flex w-full items-center gap-1 rounded-[6px] bg-app-surface p-1 dark:bg-app-surface"
           >
             {TABS.map((item) => {
               const isActive = tab === item.id;
@@ -54,7 +54,7 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setTab(item.id)}
-                  className={`relative shrink-0 px-2 py-1 text-[11px] font-medium transition-colors ${
+                  className={`relative flex-1 px-1 py-1.5 text-[12px] font-medium transition-colors ${
                     isActive
                       ? 'text-app-text'
                       : 'text-app-subtle dark:text-app-muted hover:text-app-text dark:hover:text-app-text'
@@ -64,12 +64,12 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
                     <motion.span
                       layoutId={meta.indicator}
                       transition={SWIFTUI_SMOOTH}
-                      className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-app-primary"
+                      className="absolute bottom-0 left-1 right-1 h-0.5 rounded-full bg-app-primary"
                     />
                   )}
                   <span className="relative">
                     {item.label}
-                    <span className="ml-1 tabular-nums opacity-60">{counts[item.id]}</span>
+                    <span className="ml-0.5 tabular-nums opacity-60">{counts[item.id]}</span>
                   </span>
                 </button>
               );
@@ -140,11 +140,13 @@ export function FavoritesMobileView(props: FavoritesViewProps) {
                       type="button"
                       onClick={() => onToggle(entry.id)}
                       aria-label={`${meta.removeLabel}：${entry.title}`}
-                      className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 backdrop-blur-md transition-colors hover:bg-black/65 ${
-                        mode === 'favorite' ? 'text-app-favorite' : 'text-white'
+                      className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full ring-1 backdrop-blur-md transition-colors ${
+                        mode === 'favorite'
+                          ? 'bg-app-favorite/25 text-app-favorite ring-app-favorite/60 hover:bg-app-favorite/35'
+                          : 'bg-[#FF2C55]/25 text-[#FF6B7E] ring-[#FF2C55]/60 hover:bg-[#FF2C55]/35'
                       }`}
                     >
-                      <meta.RemoveIcon className="h-3.5 w-3.5" />
+                      <meta.RemoveIcon className="h-3.5 w-3.5 fill-current" />
                     </button>
                   </li>
                 );

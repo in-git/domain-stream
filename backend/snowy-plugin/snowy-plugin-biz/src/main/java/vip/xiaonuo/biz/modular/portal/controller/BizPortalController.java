@@ -188,6 +188,45 @@ public class BizPortalController {
         return CommonResult.data(result);
     }
 
+    @Operation(summary = "随机推荐已发布视频（短批次，不排除已看过的）")
+    @PostMapping("/public/video/recommend")
+    public CommonResult<Map<String, Object>> recommendVideos(
+            @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> params = body == null ? new HashMap<>() : body;
+        Object categoryValue = params.get("category");
+        String category = categoryValue == null ? null : String.valueOf(categoryValue);
+        Object sizeValue = params.get("size");
+        int size = 5;
+        if (sizeValue instanceof Number) {
+            size = ((Number) sizeValue).intValue();
+        } else if (sizeValue != null && StrUtil.isNumeric(String.valueOf(sizeValue))) {
+            size = Integer.parseInt(String.valueOf(sizeValue));
+        }
+        int safeSize = Math.min(20, Math.max(1, size));
+
+        Long total = bizVideoMapper.selectCount(publicVideoQuery(category));
+        List<BizVideo> records = selectRandomVideos(category, safeSize);
+        // 分类下暂无已发布视频时回退到全部视频，保证只要站内有视频就不返回空列表
+        if (records.isEmpty() && StrUtil.isNotBlank(category) && !"全部".equals(category)) {
+            total = bizVideoMapper.selectCount(publicVideoQuery(null));
+            records = selectRandomVideos(null, safeSize);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("records", records);
+        result.put("total", total == null ? 0 : total);
+        result.put("current", 1);
+        result.put("size", safeSize);
+        return CommonResult.data(result);
+    }
+
+    /** 按分类随机取一小批已发布视频；safeSize 已限制为 1~20，拼接 LIMIT 无注入风险 */
+    private List<BizVideo> selectRandomVideos(String category, int safeSize) {
+        LambdaQueryWrapper<BizVideo> queryWrapper = publicVideoQuery(category);
+        queryWrapper.last("ORDER BY RAND() LIMIT " + safeSize);
+        return bizVideoMapper.selectList(queryWrapper);
+    }
+
     /**
      * 上报视频播放量：仅在视频真正开始播放时由前台调用
      *

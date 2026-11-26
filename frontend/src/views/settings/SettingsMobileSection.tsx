@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Star,
   ChevronRight,
-  Edit3,
   Heart,
   Info,
   MessageCircle,
@@ -153,32 +152,32 @@ export function SettingsMobileSection({
       className="h-full w-full overflow-y-auto bg-app-card pb-10 dark:bg-[#08080A]"
     >
       <div className="space-y-3">
-        <div className="relative bg-[linear-gradient(120deg,var(--app-color-surface)_0%,var(--app-color-card)_45%,var(--app-color-surface)_100%)] px-8 pb-8 pt-12 dark:bg-white/5">
-          {isLoggedIn && (
-            <button
-              type="button"
-              onClick={onOpenEditProfile}
-              className="absolute right-6 top-3 inline-flex items-center gap-1.5 rounded-app border-[0.5px] border-app-border bg-app-card px-3 py-1.5 text-[12px] font-medium text-app-text dark:border-app-border dark:bg-app-card dark:text-white"
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-              编辑资料
-            </button>
-          )}
+        <div className="relative bg-[linear-gradient(120deg,var(--app-color-surface)_0%,var(--app-color-card)_45%,var(--app-color-surface)_100%)] px-8 pb-8 pt-8 dark:bg-white/5">
           <button
             type="button"
-            onClick={() =>
-              profileSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
+            onClick={() => {
+              if (isLoggedIn) {
+                onOpenEditProfile();
+              } else {
+                profileSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
             className="flex w-full items-center gap-4 text-left"
           >
             <span className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#E5E5EA] dark:bg-app-surface">
-              <ResilientImage
-                src={profileAvatar}
-                alt={profileName || '用户'}
-                priority
-                fallbackTitle={profileName || '用户'}
-                className="h-full w-full"
-              />
+              {isLoggedIn && profileAvatar ? (
+                <ResilientImage
+                  src={profileAvatar}
+                  alt={profileName || '用户'}
+                  priority
+                  fallbackTitle={profileName || '用户'}
+                  className="h-full w-full"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-app-muted dark:text-white">
+                  <UserRound className="h-7 w-7" />
+                </span>
+              )}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">

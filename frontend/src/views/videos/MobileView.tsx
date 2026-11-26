@@ -134,7 +134,7 @@ export function MobileVideoGrid({
       <div className="grid grid-cols-2 gap-2">
         {videos.slice(1).map((video, idx) => (
           <MobileGridCard
-            key={video.id}
+            key={`${video.id}-${idx}`}
             video={video}
             index={idx + 1}
             onOpen={() => onOpen(video)}

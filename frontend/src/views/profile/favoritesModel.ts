@@ -22,7 +22,6 @@ export interface FavoritesViewProps {
 
 interface ModeMeta {
   heading: string;
-  orderHint: string;
   emptyHint: string;
   emptyKindHint: (label: string) => string;
   removeLabel: string;
@@ -35,7 +34,6 @@ interface ModeMeta {
 export const MODE_META: Record<CollectionMode, ModeMeta> = {
   favorite: {
     heading: '我的收藏',
-    orderHint: '按收藏时间倒序',
     emptyHint: '还没有收藏内容，在视频、文章、图文页点击星星图标即可收藏',
     emptyKindHint: (label) => `还没有收藏的${label}`,
     removeLabel: '取消收藏',
@@ -46,7 +44,6 @@ export const MODE_META: Record<CollectionMode, ModeMeta> = {
   },
   like: {
     heading: '我的喜欢',
-    orderHint: '按喜欢时间倒序',
     emptyHint: '还没有喜欢内容，在视频、文章、图文页点击爱心图标即可喜欢',
     emptyKindHint: (label) => `还没有喜欢的${label}`,
     removeLabel: '删除',

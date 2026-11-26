@@ -13,6 +13,10 @@ interface ResilientImageProps {
   interactive?: boolean;
   /** 图片填充方式：cover 裁切铺满，contain 完整显示（默认 cover） */
   fit?: 'cover' | 'contain';
+  /** 图片加载占位背景，暗色场景可传入黑色避免闪白 */
+  placeholderClassName?: string;
+  /** 图片加载失败时的兜底背景 */
+  fallbackClassName?: string;
 }
 
 export function ResilientImage({
@@ -25,6 +29,8 @@ export function ResilientImage({
   draggable = false,
   interactive = true,
   fit = 'cover',
+  placeholderClassName = 'bg-[#EAEAEF] dark:bg-[#242426]',
+  fallbackClassName = 'bg-gradient-to-br from-[#ECEEF2] to-[#DFE3EA] dark:from-[#1C1C1E] dark:to-[#2C2C2E]',
 }: ResilientImageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -32,7 +38,7 @@ export function ResilientImage({
   if (hasError) {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-gradient-to-br from-[#ECEEF2] to-[#DFE3EA] dark:from-[#1C1C1E] dark:to-[#2C2C2E] text-app-muted p-4 text-center ${className}`}
+        className={`flex flex-col items-center justify-center ${fallbackClassName} text-app-muted p-4 text-center ${className}`}
         role="img"
         aria-label={alt}
       >
@@ -51,7 +57,7 @@ export function ResilientImage({
       {!isLoaded && (
         <div
           aria-hidden="true"
-          className="absolute inset-0 animate-pulse bg-[#EAEAEF] dark:bg-[#242426]"
+          className={`absolute inset-0 animate-pulse ${placeholderClassName}`}
         />
       )}
       <img

@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { registerCommentLogin } from '../../lib/commentLogin.ts';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
@@ -95,6 +95,7 @@ export function PortalShell({
     videoCategory,
     loadVideosByCategory,
     videoLoadingMore,
+    videoLoadMoreError,
     videoHasMore,
     loadMoreVideos,
     articleCategories,
@@ -195,6 +196,9 @@ export function PortalShell({
     }
   }, [isMobileViewport, activeSection, searchQuery]);
 
+  // 稳定引用：加载失败触发的重渲染不应让 IntersectionObserver 反复重连
+  const handleLoadMoreVideos = useCallback(() => void loadMoreVideos(), [loadMoreVideos]);
+
   /* 当前板块按 moduleKey 找配置；moduleType 为 placeholder 时显示占位页 */
   const { config } = useSystemInfo();
   const navItems = useMemo(() => parseNav(config.navItems), [config.navItems]);
@@ -273,7 +277,8 @@ export function PortalShell({
               onCategoryChange={(c) => void loadVideosByCategory(c)}
               hasMoreVideos={videoHasMore}
               loadingMoreVideos={videoLoadingMore}
-              onLoadMoreVideos={() => void loadMoreVideos()}
+              loadMoreError={videoLoadMoreError}
+              onLoadMoreVideos={handleLoadMoreVideos}
               savedIds={savedIds}
               likedIds={likedIds}
               searchQuery={searchQuery}
