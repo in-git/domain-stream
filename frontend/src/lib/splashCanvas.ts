@@ -62,7 +62,7 @@ export interface SplashProgressNode {
 
 export type SplashNode = SplashTextNode | SplashImageNode | SplashProgressNode;
 
-export type SplashImageMode = 'fit' | 'stretch' | 'stretch-x' | 'stretch-y';
+export type SplashImageMode = 'fit' | 'cover' | 'stretch' | 'stretch-x' | 'stretch-y';
 
 export interface SplashOrientationDoc {
   width: number;
@@ -72,7 +72,7 @@ export interface SplashOrientationDoc {
   backgroundImage?: string;
   /** 背景视频（后端路径），与背景图互斥；有视频时不再叠加开屏音频 */
   backgroundVideo?: string;
-  /** 背景素材铺法，缺省按拉伸铺满 */
+  /** 背景素材铺法，缺省按等比铺满 */
   backgroundMode?: SplashImageMode;
   /** 是否把元素限制在画布内（旧版画布级配置，现按组件存 overflow，这里保留兼容） */
   contained?: boolean;
@@ -180,10 +180,13 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
   if (doc.backgroundVideo) doc.backgroundImage = '';
   doc.backgroundMode =
     row.backgroundMode === 'fit' ||
+    row.backgroundMode === 'cover' ||
+    row.backgroundMode === 'stretch' ||
     row.backgroundMode === 'stretch-x' ||
     row.backgroundMode === 'stretch-y'
       ? row.backgroundMode
-      : 'stretch';
+      : // 脏数据 / 旧字段缺失时回退等比铺满（与旧版整屏素材的 object-cover 一致）
+        'cover';
   doc.contained = row.contained === false ? false : undefined;
 
   const list = Array.isArray(row.nodes) ? row.nodes : [];

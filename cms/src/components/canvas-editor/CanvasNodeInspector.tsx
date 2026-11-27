@@ -507,6 +507,9 @@ export function CanvasNodeInspector({
                   </button>
                 ))}
               </div>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#A1A1A6]">
+                等比铺满不变形、裁掉超出部分；拉伸铺满强制变形铺满画布
+              </p>
             </div>
           )}
 

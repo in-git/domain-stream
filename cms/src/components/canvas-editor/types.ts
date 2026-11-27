@@ -9,7 +9,16 @@
  * 存库格式、多套尺寸（如 PC / 移动端）由调用方自己组织。
  */
 export type CanvasNodeType = 'text' | 'image' | 'progress';
-export type CanvasImageMode = 'fit' | 'stretch' | 'stretch-x' | 'stretch-y';
+/**
+ * 图片 / 背景素材的填充方式。
+ * 与前台 CSS 的 object-fit 语义一一对应（见 imageBoxFor 的注释）：
+ *   fit        → contain（完整显示，可能留边）
+ *   cover      → cover（等比放大铺满，超出部分裁掉）
+ *   stretch    → fill（强制变形铺满）
+ *   stretch-x  → 宽撑满、高等比（可能上下溢出）
+ *   stretch-y  → 高撑满、宽等比（可能左右溢出）
+ */
+export type CanvasImageMode = 'fit' | 'cover' | 'stretch' | 'stretch-x' | 'stretch-y';
 export type CanvasTextAlign = 'left' | 'center' | 'right';
 /** 多选对齐方式：水平按左/中/右，垂直按顶/中/底 */
 export type CanvasAlignMode = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
@@ -23,8 +32,9 @@ export interface CanvasSize {
 
 /** 图片填充方式：决定图片加入画布时的初始框（之后仍可自由拖拽缩放） */
 export const CANVAS_IMAGE_MODES: { value: CanvasImageMode; label: string }[] = [
+  { value: 'cover', label: '等比铺满' },
   { value: 'fit', label: '原比例' },
-  { value: 'stretch', label: '拉伸' },
+  { value: 'stretch', label: '拉伸铺满' },
   { value: 'stretch-x', label: '横向拉伸' },
   { value: 'stretch-y', label: '纵向拉伸' },
 ];
@@ -87,7 +97,7 @@ export interface CanvasDoc extends CanvasSize {
   backgroundImage?: string;
   /** 背景视频（后端存储路径）；与背景图可同时存在，渲染时视频优先，编辑器里只取首帧做静态预览 */
   backgroundVideo?: string;
-  /** 背景素材铺法：原比例 / 拉伸 / 横向拉伸 / 纵向拉伸，图片与视频共用，默认拉伸铺满 */
+  /** 背景素材铺法：等比铺满 / 原比例 / 拉伸铺满 / 横向拉伸 / 纵向拉伸，图片与视频共用，默认等比铺满 */
   backgroundMode?: CanvasImageMode;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布，默认开启 */
   allowPan?: boolean;
@@ -135,7 +145,15 @@ export function hasProgress(nodes: CanvasNode[]): boolean {
   return nodes.some((node) => node.type === 'progress');
 }
 
-/** 图片按四种模式换算成画布里的初始框 */
+/**
+ * 图片 / 背景素材按模式换算成画布里的框（编辑器侧唯一实现）。
+ * 前台用 CSS 渲染同一语义（object-fit / auto 尺寸），两边必须保持等价：
+ *   fit        ≈ object-fit: contain
+ *   cover      ≈ object-fit: cover（等比放大铺满，超出被裁切框裁掉）
+ *   stretch    ≈ object-fit: fill
+ *   stretch-x  ≈ width: 100% + height: auto 垂直居中
+ *   stretch-y  ≈ height: 100% + width: auto 水平居中
+ */
 export function imageBoxFor(
   mode: CanvasImageMode,
   natural: CanvasSize,
@@ -169,7 +187,20 @@ export function imageBoxFor(
     };
   }
 
-  // 原比例：完整显示，居中铺在画布内
+  // 等比铺满（cover）：等比放大到完全覆盖画布，超出部分由裁切框裁掉
+  if (mode === 'cover') {
+    const scale = Math.max(canvas.width / nw, canvas.height / nh);
+    const width = round1(nw * scale);
+    const height = round1(nh * scale);
+    return {
+      x: round1((canvas.width - width) / 2),
+      y: round1((canvas.height - height) / 2),
+      width,
+      height,
+    };
+  }
+
+  // 原比例（fit）：完整显示，居中铺在画布内
   const scale = Math.min(canvas.width / nw, canvas.height / nh);
   const width = round1(nw * scale);
   const height = round1(nh * scale);

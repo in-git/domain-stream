@@ -489,10 +489,21 @@ function textDecorationCss(decoration: SplashTextNode['decoration']): string {
   return 'none';
 }
 
-/** 背景图铺法：与后台「原比例 / 拉伸 / 横向拉伸 / 纵向拉伸」一一对应 */
-function backgroundImageStyle(mode: SplashImageMode = 'stretch'): CSSProperties {  const base: CSSProperties = { position: 'absolute', left: 0, top: 0 };
+/**
+ * 背景素材铺法：与后台画布的五种模式一一对应（语义定义见 cms 的 imageBoxFor）。
+ *   cover      → object-fit: cover（等比铺满，裁掉超出）
+ *   fit        → object-fit: contain（完整显示，可能留边）
+ *   stretch    → object-fit: fill（强制变形铺满）
+ *   stretch-x  → 宽撑满、高等比，垂直居中
+ *   stretch-y  → 高撑满、宽等比，水平居中
+ */
+function backgroundImageStyle(mode: SplashImageMode = 'cover'): CSSProperties {
+  const base: CSSProperties = { position: 'absolute', left: 0, top: 0 };
   if (mode === 'fit') {
     return { ...base, width: '100%', height: '100%', objectFit: 'contain' };
+  }
+  if (mode === 'cover') {
+    return { ...base, width: '100%', height: '100%', objectFit: 'cover' };
   }
   if (mode === 'stretch-x') {
     return { ...base, width: '100%', height: 'auto', top: '50%', transform: 'translateY(-50%)' };

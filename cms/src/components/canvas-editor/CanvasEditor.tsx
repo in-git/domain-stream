@@ -361,7 +361,7 @@ export function CanvasEditor({
     background: value.background,
     backgroundImage: (value.backgroundImage || '').trim(),
     backgroundVideo: (value.backgroundVideo || '').trim(),
-    backgroundMode: value.backgroundMode ?? 'stretch',
+    backgroundMode: value.backgroundMode ?? 'cover',
     allowPan: value.allowPan !== false,
   });
   const backgroundSyncRef = useRef<(() => void) | null>(null);
@@ -549,7 +549,7 @@ export function CanvasEditor({
       value.background === meta.background &&
       (value.backgroundImage || '').trim() === meta.backgroundImage &&
       (value.backgroundVideo || '').trim() === meta.backgroundVideo &&
-      (value.backgroundMode ?? 'stretch') === meta.backgroundMode &&
+      (value.backgroundMode ?? 'cover') === meta.backgroundMode &&
       (value.allowPan !== false) === meta.allowPan
     ) {
       return;
@@ -560,7 +560,7 @@ export function CanvasEditor({
       background: value.background,
       backgroundImage: (value.backgroundImage || '').trim(),
       backgroundVideo: (value.backgroundVideo || '').trim(),
-      backgroundMode: value.backgroundMode ?? 'stretch',
+      backgroundMode: value.backgroundMode ?? 'cover',
       allowPan: value.allowPan !== false,
     };
     nodesRef.current = value.nodes;

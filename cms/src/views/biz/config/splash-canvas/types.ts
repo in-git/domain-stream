@@ -69,11 +69,11 @@ function readColor(value: unknown, fallback: string): string {
   return HEX_COLOR.test(raw) ? raw.toUpperCase() : fallback;
 }
 
-/** 背景图铺法：只认四种，脏数据回退拉伸铺满 */
+/** 背景素材铺法：只认五种，脏数据回退等比铺满（与旧版整屏素材的 object-cover 一致） */
 function readMode(value: unknown): CanvasImageMode {
-  return value === 'fit' || value === 'stretch-x' || value === 'stretch-y'
+  return value === 'fit' || value === 'cover' || value === 'stretch' || value === 'stretch-x' || value === 'stretch-y'
     ? value
-    : 'stretch';
+    : 'cover';
 }
 
 /** 文本装饰：只认四种，脏数据回退无装饰 */
@@ -352,7 +352,8 @@ function createOrientationDoc(
       height: size.height,
       background: SPLASH_CANVAS_BACKGROUND,
       backgroundVideo: legacyVideo,
-      backgroundMode: 'stretch',
+      // 旧版整屏视频是 object-cover 渲染的，迁移成等比铺满保持视觉一致
+      backgroundMode: 'cover',
       nodes: [],
     };
   }
