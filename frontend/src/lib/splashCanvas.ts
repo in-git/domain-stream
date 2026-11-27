@@ -176,7 +176,7 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
   doc.background = color(row.background, '#000000');
   doc.backgroundImage = typeof row.backgroundImage === 'string' ? row.backgroundImage.trim() : '';
   doc.backgroundVideo = typeof row.backgroundVideo === 'string' ? row.backgroundVideo.trim() : '';
-  // 两种背景素材互斥：脏数据里同时存在时视频优先，忽略背景图
+  // 两种背景素材都保留时视频优先：忽略背景图，避免双层背景
   if (doc.backgroundVideo) doc.backgroundImage = '';
   doc.backgroundMode =
     row.backgroundMode === 'fit' ||

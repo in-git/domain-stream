@@ -21,7 +21,7 @@ import {
 import { FilePicker } from '../../../components/FilePicker.tsx';
 import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { SPLASH_AUDIO_KEY, SPLASH_CANVAS_KEY, SPLASH_DURATION_KEY } from './schema';
-import { parseSplashCanvas } from './splash-canvas/types';
+import { parseSplashCanvas, type SplashOrientation } from './splash-canvas/types';
 
 const SplashCanvasEditor = lazy(() => import('./splash-canvas'));
 
@@ -132,6 +132,8 @@ export function SplashMaterialDialog({
 }: SplashMaterialDialogProps) {
   /** 正在选择哪个素材字段；null 表示未打开 */
   const [pickerKey, setPickerKey] = useState<string | null>(null);
+  /** 当前编辑的画布方向：横屏（PC）/ 竖屏（移动），两块画布数据互相独立 */
+  const [orientation, setOrientation] = useState<SplashOrientation>('pc');
   /** 画布内的浮层（图片选择 / 添加模式菜单）是否展开 */
   const [canvasOverlay, setCanvasOverlay] = useState(false);
 
@@ -140,6 +142,7 @@ export function SplashMaterialDialog({
     if (!open) return;
     setPickerKey(null);
     setCanvasOverlay(false);
+    setOrientation('pc');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -252,6 +255,34 @@ export function SplashMaterialDialog({
                   <p className="mt-1.5 text-[10.5px] text-[#86868B]">留空按素材时长</p>
                 </FieldBlock>
 
+                <FieldBlock title="画布方向" subtitle="横竖屏数据互相独立">
+                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#EDEDF1] p-0.5">
+                    {(
+                      [
+                        { value: 'pc' as const, label: '横屏', hint: 'PC · 1440×900' },
+                        { value: 'mobile' as const, label: '竖屏', hint: '移动 · 390×844' },
+                      ]
+                    ).map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setOrientation(item.value)}
+                        aria-pressed={orientation === item.value}
+                        className={`inline-flex h-8 flex-col items-center justify-center rounded-[10px] text-[12px] font-medium leading-none transition-colors ${
+                          orientation === item.value
+                            ? 'bg-white text-[#1D1D1F] shadow-sm'
+                            : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                        }`}
+                      >
+                        {item.label}
+                        <span className="mt-0.5 text-[9.5px] font-normal text-[#A1A1A6]">
+                          {item.hint}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </FieldBlock>
+
                 {hasBackgroundVideo ? (
                   <div>
                     <p className="text-[11px] text-[#86868B]">开屏音频</p>
@@ -293,6 +324,7 @@ export function SplashMaterialDialog({
                   <SplashCanvasEditor
                     values={values}
                     onChange={onChange}
+                    orientation={orientation}
                     onOverlayChange={setCanvasOverlay}
                   />
                 </Suspense>

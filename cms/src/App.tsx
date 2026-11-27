@@ -236,7 +236,8 @@ export default function App() {
         void handleDroppedImages(dataTransfer);
         return;
       }
-      showToast('请在视频管理或图文管理页面拖入文件', 'warning');
+      // 其他模块（含素材中心）不在此处处理拖拽上传，也不弹提示
+      // 素材中心由页面自身的拖拽逻辑打开上传弹窗
     },
     [activeModule, route.kind, handleDroppedVideos, handleDroppedImages]
   );

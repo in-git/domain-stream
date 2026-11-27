@@ -1677,15 +1677,11 @@ export function CanvasEditor({
     setPickerOpen(true);
   }
 
-  /** 选画布背景图：结果写进画布配置而不是变成组件，同时清掉背景视频（两者互斥） */
+  /** 选画布背景图：结果写进画布配置而不是变成组件（与背景视频并存，视频优先渲染） */
   function pickBackgroundImage() {
     if (pickImage) {
       Promise.resolve(pickImage())
-        .then((url) =>
-          url
-            ? patchCanvas({ backgroundImage: url.trim(), backgroundVideo: '' })
-            : undefined
-        )
+        .then((url) => (url ? patchCanvas({ backgroundImage: url.trim() }) : undefined))
         .catch(() => undefined);
       return;
     }
@@ -1694,7 +1690,7 @@ export function CanvasEditor({
     setPickerOpen(true);
   }
 
-  /** 选画布背景视频：同样写进画布配置，并清掉背景图 */
+  /** 选画布背景视频：同样写进画布配置（与背景图并存，视频优先渲染） */
   function pickBackgroundVideo() {
     setReplacingId(null);
     setPickerTarget('background-video');
@@ -1714,12 +1710,13 @@ export function CanvasEditor({
     closePicker();
     if (!file) return;
     const stored = toOpenUrl(file).replace(/^\/snowy/, '');
+    // 背景：图 / 视频可以同时保留，渲染时视频优先；删除由封面上的删除按钮负责
     if (target === 'background-video') {
-      patchCanvas({ backgroundVideo: stored, backgroundImage: '' });
+      patchCanvas({ backgroundVideo: stored });
       return;
     }
     if (target === 'background-image') {
-      patchCanvas({ backgroundImage: stored, backgroundVideo: '' });
+      patchCanvas({ backgroundImage: stored });
       return;
     }
     void applyImage(stored, replaceId);

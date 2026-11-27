@@ -408,54 +408,6 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
               : 'relative flex flex-col items-center -translate-y-[20dvh] md:translate-y-0'
           }
         >
-        {/* Vector Prism / Aperture Emblem with SVG stroke reveal */}
-        <motion.div
-          initial={{ scale: 0.84, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={SWIFTUI_SMOOTH}
-          className={`mb-7 relative flex items-center justify-center w-20 h-20 rounded-app bg-white border border-black/[0.06] shadow-2xl ${
-            hasVisualMedia ? 'hidden' : ''
-          }`}
-        >
-          <svg
-            viewBox="0 0 64 64"
-            className="w-11 h-11 text-[#1D1D1F]"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <motion.circle
-              cx="32"
-              cy="32"
-              r="21"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 0.3 }}
-              animate={{ pathLength: 1, opacity: 1 }}
-              transition={{ duration: 0.9, ease: APPLE_EASE }}
-            />
-            <motion.path
-              d="M32 15L46.7 40.5H17.3L32 15Z"
-              stroke="currentColor"
-              strokeWidth="2.1"
-              strokeLinejoin="round"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 0.92 }}
-              transition={{ duration: 0.95, delay: 0.18, ease: APPLE_EASE }}
-            />
-            <motion.circle
-              cx="32"
-              cy="32"
-              r="4"
-              fill="var(--app-color-primary)"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 24, delay: 0.48 }}
-            />
-          </svg>
-        </motion.div>
-
         {/* Wordmark with crisp Apple reveal */}
         <motion.h1
           initial={{ opacity: 0, y: 12 }}

@@ -345,7 +345,8 @@ export function FilePicker({
   beforeUpload,
   allowUpload = true,
 }: FilePickerProps) {
-  const [library, setLibrary] = useState<Library>('ALL');
+  // 默认打开素材库：后台挑素材绝大多数来自素材中心，全部文件作为备选
+  const [library, setLibrary] = useState<Library>('MATERIAL');
   const [category, setCategory] = useState('');
   /** 素材分类（通用分类 MATERIAL 模块编码），仅在素材库有分类时展示 */
   const [categoryCode, setCategoryCode] = useState('');

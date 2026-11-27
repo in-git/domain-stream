@@ -319,7 +319,7 @@ export interface CanvasInspectorContext {
   background: string;
   /** 背景图（后端路径），空表示纯色底 */
   backgroundImage: string;
-  /** 背景视频（后端路径），与背景图互斥 */
+  /** 背景视频（后端路径）；与背景图可同时保留，渲染时视频优先 */
   backgroundVideo: string;
   /** 背景素材铺法 */
   backgroundMode: CanvasImageMode;
@@ -384,23 +384,13 @@ export function CanvasNodeInspector({
   onClearBackgroundVideo,
 }: CanvasNodeInspectorProps) {
   const title = node ? `${TYPE_LABELS[node.type]}样式` : '画布配置';
-  /** 背景素材类型：默认按已有素材推断；点另一类时先把当前素材清空（图片 / 视频互斥） */
+  /** 背景素材类型：默认按已有素材推断；切换分段只改当前展示的槽位，不清空素材 */
   const [bgKind, setBgKind] = useState<'image' | 'video'>(backgroundVideo ? 'video' : 'image');
   useEffect(() => {
-    // 上传完成 / 移除 / 切方向后让分段控件跟上实际内容；两边都空时保留用户刚选的那一类
+    // 上传完成 / 删除 / 换方向后让分段控件跟上实际内容；两边都空时保留用户刚选的那一类
     if (backgroundVideo) setBgKind('video');
     else if (backgroundImage) setBgKind('image');
   }, [backgroundVideo, backgroundImage]);
-
-  function changeBgKind(next: 'image' | 'video') {
-    if (next === bgKind) return;
-    setBgKind(next);
-    onCanvasPatch(
-      next === 'video'
-        ? { backgroundVideo: '', backgroundImage: '' }
-        : { backgroundImage: '', backgroundVideo: '' }
-    );
-  }
 
   const fontSizes = FONT_SIZES.includes(node?.type === 'text' ? node.fontSize : -1)
     ? FONT_SIZES
@@ -448,7 +438,7 @@ export function CanvasNodeInspector({
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => changeBgKind(item.value)}
+                  onClick={() => setBgKind(item.value)}
                   aria-pressed={bgKind === item.value}
                   className={`inline-flex h-7 items-center justify-center rounded-md text-[11px] font-medium transition-colors ${
                     bgKind === item.value
@@ -475,19 +465,26 @@ export function CanvasNodeInspector({
                 </p>
               </div>
             ) : (
-              <BackgroundCover
-                label="图片"
-                filled={!!backgroundImage}
-                onPick={onPickBackgroundImage}
-                onRemove={onClearBackgroundImage}
-                cover={
-                  <img
-                    src={previewUrl(backgroundImage)}
-                    alt=""
-                    className="h-[88px] w-full object-cover"
-                  />
-                }
-              />
+              <div className="flex flex-col gap-2">
+                <BackgroundCover
+                  label="图片"
+                  filled={!!backgroundImage}
+                  onPick={onPickBackgroundImage}
+                  onRemove={onClearBackgroundImage}
+                  cover={
+                    <img
+                      src={previewUrl(backgroundImage)}
+                      alt=""
+                      className="h-[88px] w-full object-cover"
+                    />
+                  }
+                />
+                {backgroundVideo && (
+                  <p className="text-[10.5px] leading-relaxed text-[#86868B]">
+                    背景视频优先生效；删除视频后此图片才会作为背景
+                  </p>
+                )}
+              </div>
             )}
           </div>
 

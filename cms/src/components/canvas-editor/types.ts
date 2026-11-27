@@ -85,7 +85,7 @@ export interface CanvasDoc extends CanvasSize {
   background: string;
   /** 背景图（后端存储路径），空表示只用纯色底 */
   backgroundImage?: string;
-  /** 背景视频（后端存储路径），与背景图互斥；编辑器里只取首帧做静态预览，不播放 */
+  /** 背景视频（后端存储路径）；与背景图可同时存在，渲染时视频优先，编辑器里只取首帧做静态预览 */
   backgroundVideo?: string;
   /** 背景素材铺法：原比例 / 拉伸 / 横向拉伸 / 纵向拉伸，图片与视频共用，默认拉伸铺满 */
   backgroundMode?: CanvasImageMode;
