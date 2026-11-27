@@ -86,7 +86,7 @@ export function ImageTextPreview({
         <div className="min-w-0 flex-1">
           <p className="text-[12px] font-medium truncate leading-tight">{authorName}</p>
           <p className="text-[10px] text-[#86868B] truncate leading-tight">
-            {status === 'published' ? '已发布' : '草稿'} · 刚刚
+            {status === 'published' ? '已发布' : '私密'} · 刚刚
           </p>
         </div>
         <button

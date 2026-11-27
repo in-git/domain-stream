@@ -673,7 +673,7 @@ export function ImageTextEditorPage({
                   status === 'draft' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
                 }`}
               >
-                草稿
+                私密
               </button>
             </div>
           </div>

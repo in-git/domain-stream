@@ -167,7 +167,7 @@ export function ArticleManagerView({
               [
                 { key: 'all', label: '全部' },
                 { key: 'published', label: '已发布' },
-                { key: 'draft', label: '草稿' },
+                { key: 'draft', label: '私密' },
               ] as const
             ).map((tab) => (
               <button
@@ -356,7 +356,7 @@ export function ArticleManagerView({
                         item.status === 'published' ? 'text-[#16A34A]' : 'text-[#D97706]'
                       }`}
                     >
-                      {item.status === 'published' ? '已发布' : '草稿'}
+                      {item.status === 'published' ? '已发布' : '私密'}
                     </span>
                   </div>
 
@@ -389,7 +389,7 @@ export function ArticleManagerView({
                       onClick={() => void handleToggleStatus(item)}
                       className="px-2.5 py-1 rounded-lg text-[12px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F2F2F7] transition-colors"
                     >
-                      {item.status === 'published' ? '转草稿' : '发布'}
+                      {item.status === 'published' ? '转私密' : '发布'}
                     </button>
                   )}
                   {canEdit && (

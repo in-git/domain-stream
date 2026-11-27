@@ -461,6 +461,7 @@ interface SnowyPage<T> {
   pages: number;
 }
 
+/** 后端 DRAFT 在界面上显示为「私密」：客户端公开接口只查 PUBLISHED，DRAFT 内容对客户端不可见 */
 function toStatus(s?: string): 'published' | 'draft' {
   return s === 'PUBLISHED' ? 'published' : 'draft';
 }

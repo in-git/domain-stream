@@ -73,7 +73,7 @@ function ArticlePreview({
               status === 'published' ? 'text-[#16A34A]' : 'text-[#D97706]'
             }`}
           >
-            {status === 'published' ? '已发布' : '草稿'}
+            {status === 'published' ? '已发布' : '私密'}
           </span>
         </div>
         <h2
@@ -311,7 +311,7 @@ export function ArticleEditorPage({ item, onSaved, onBack }: ArticleEditorPagePr
                     status === 'draft' ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
                   }`}
                 >
-                  存为草稿
+                  存为私密
                 </button>
               </div>
             </div>

@@ -163,7 +163,7 @@ function ImageTextCard({
               }}
               className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-[#1D1D1F] shadow-xs backdrop-blur-sm hover:bg-white"
             >
-              {item.status === 'published' ? '转草稿' : '发布'}
+              {item.status === 'published' ? '转私密' : '发布'}
             </button>
           )}
           {canEdit && (
@@ -329,7 +329,7 @@ export function ImageTextManagerView({
               [
                 { key: 'all', label: '全部' },
                 { key: 'published', label: '已发布' },
-                { key: 'draft', label: '草稿' },
+                { key: 'draft', label: '私密' },
               ] as const
             ).map((tab) => (
               <button

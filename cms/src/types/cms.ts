@@ -12,6 +12,7 @@ export type ModuleKey =
   | 'config'
   | 'profile';
 
+/** 内容状态；draft 在界面上显示为「私密」——客户端公开接口只查 PUBLISHED，私密内容不可被客户端访问 */
 export type ContentStatus = 'published' | 'draft';
 
 export interface UserProfile {

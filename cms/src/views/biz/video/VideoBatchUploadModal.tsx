@@ -314,7 +314,7 @@ export function VideoBatchUploadModal({
                   checked={status === 'draft'}
                   onChange={() => setStatus('draft')}
                 />
-                草稿
+                私密
               </label>
             </div>
             <button
