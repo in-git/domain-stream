@@ -2,13 +2,24 @@
  * 通用分类弹窗集合：新增/编辑表单、详情、删除确认
  * 供 biz/category/index 使用，UI 风格与私域工作台保持一致。
  */
-import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   ChevronDown,
   ImagePlus,
   Loader2,
+  Pencil,
+  Plus,
   Settings2,
+  Trash2,
   X,
 } from 'lucide-react';
 import { uploadFileWithProgress } from '../../../lib/api.ts';
@@ -21,7 +32,9 @@ import {
   loadCategoryModules,
   useCategoryModules,
   type BizCategory,
+  type CategoryModuleOption,
   type CategoryPayload,
+  type CategoryPermAction,
 } from '../../../lib/category.ts';
 import { formatDateShort } from '../../../lib/format.ts';
 import { SelectField } from '../../../components/SelectField.tsx';
@@ -43,6 +56,7 @@ export function CategoryModal({
   children,
   footer,
   width = 'max-w-2xl',
+  closeOnEscape = true,
 }: {
   title: string;
   subtitle?: string;
@@ -50,14 +64,16 @@ export function CategoryModal({
   children: ReactNode;
   footer?: ReactNode;
   width?: string;
+  closeOnEscape?: boolean;
 }) {
   useEffect(() => {
+    if (!closeOnEscape) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [closeOnEscape, onClose]);
 
   return (
     <div
@@ -215,23 +231,103 @@ function flattenParentOptions(
 }
 
 /* ------------------------------------------------------------------ */
-/* 新增模块（业务字典 CATEGORY_MODULE）                                */
+/* 模块管理（业务字典 CATEGORY_MODULE）                                */
 /* ------------------------------------------------------------------ */
 
-export function CategoryModuleFormDialog({
+/** 浮层右边缘对齐按钮右边缘，向左展开；下方空间不足时翻到上方 */
+function popoverPosition(rect: DOMRect): { top: number; left: number } {
+  const width = 420;
+  const height = 360;
+  const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+  const below = rect.bottom + 8;
+  const top =
+    below + height > window.innerHeight ? Math.max(8, rect.top - height - 8) : below;
+  return { top, left };
+}
+
+export function CategoryModuleManageDialog({
+  categories = [],
+  can,
   onClose,
-  onSuccess,
+  onChanged,
 }: {
+  categories?: BizCategory[];
+  can: (action: CategoryPermAction) => boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onChanged?: (message: string) => void;
 }) {
-  const categoryModules = useCategoryModules();
+  const modules = useCategoryModules();
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [formAnchor, setFormAnchor] = useState<{ top: number; left: number } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
-  const [color, setColor] = useState('blue');
-  const [sortCode, setSortCode] = useState(String(categoryModules.length + 1));
+  const [sortCode, setSortCode] = useState('1');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<CategoryModuleOption | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    void loadCategoryModules(true)
+      .catch(() => [])
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const usageCount = (moduleValue: string) =>
+    categories.filter((item) => (item.module || 'COMMON') === moduleValue).length;
+
+  function openAdd(event: ReactMouseEvent<HTMLButtonElement>) {
+    setEditingId(null);
+    setLabel('');
+    setValue('');
+    setSortCode(String(modules.length + 1));
+    setError(null);
+    setPendingDelete(null);
+    setFormAnchor(popoverPosition(event.currentTarget.getBoundingClientRect()));
+  }
+
+  function openEdit(item: CategoryModuleOption, event: ReactMouseEvent<HTMLButtonElement>) {
+    setEditingId(item.id || null);
+    setLabel(item.label || '');
+    setValue(item.value || '');
+    setSortCode(String(item.sortCode ?? 0));
+    setError(null);
+    setPendingDelete(null);
+    setFormAnchor(popoverPosition(event.currentTarget.getBoundingClientRect()));
+  }
+
+  function closeForm() {
+    setFormAnchor(null);
+    setEditingId(null);
+    setError(null);
+  }
+
+  useEffect(() => {
+    if (!formAnchor) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        closeForm();
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeForm();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [formAnchor]);
 
   async function handleSubmit() {
     const nextLabel = label.trim();
@@ -241,24 +337,51 @@ export function CategoryModuleFormDialog({
     if (!/^[A-Z][A-Z0-9_]*$/.test(nextValue)) {
       return setError('模块标识需以字母开头，只允许大写字母、数字和下划线');
     }
-    if (categoryModules.some((m) => m.label === nextLabel || m.value === nextValue)) {
+    if (
+      modules.some(
+        (m) => m.id !== editingId && (m.label === nextLabel || m.value === nextValue)
+      )
+    ) {
       return setError('模块名称或标识已存在');
     }
     const parsedSort = Number(sortCode);
     if (!Number.isFinite(parsedSort)) return setError('排序需为数字');
 
+    const wasEdit = !!editingId;
     setBusy(true);
     setError(null);
     try {
-      await categoryModuleDictApi.add({
+      const payload = {
         dictLabel: nextLabel,
         dictValue: nextValue,
-        dictColor: color.trim() || 'blue',
+        dictColor: 'default',
         sortCode: Math.trunc(parsedSort),
-      });
+      };
+      if (editingId) await categoryModuleDictApi.edit({ ...payload, id: editingId });
+      else await categoryModuleDictApi.add(payload);
       await loadCategoryModules(true);
-      onSuccess?.();
-      onClose();
+      closeForm();
+      onChanged?.(wasEdit ? '模块已更新' : '模块已新增');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!pendingDelete?.id) {
+      setError('该模块缺少 ID，无法删除');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await categoryModuleDictApi.delete([pendingDelete.id]);
+      await loadCategoryModules(true);
+      setPendingDelete(null);
+      setExpandedId(null);
+      onChanged?.('模块已删除');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -267,77 +390,222 @@ export function CategoryModuleFormDialog({
   }
 
   return (
+    <>
     <CategoryModal
-      title="新增模块"
-      subtitle="新增后可在通用分类的适用模块筛选和表单中选择"
+      title="管理模块"
+      subtitle="维护通用分类的适用模块；修改或删除会影响后续发布时的分类选择"
       onClose={onClose}
-      width="max-w-lg"
+      closeOnEscape={!formAnchor}
+      width="max-w-3xl"
       footer={
-        <>
-          <SecondaryButton onClick={onClose} disabled={busy}>
-            取消
-          </SecondaryButton>
-          <PrimaryButton onClick={() => void handleSubmit()} busy={busy}>
-            保存
-          </PrimaryButton>
-        </>
+        <SecondaryButton onClick={onClose} disabled={busy}>
+          关闭
+        </SecondaryButton>
       }
     >
       <div className="space-y-4">
-        {error && <InlineError>{error}</InlineError>}
-        <div>
-          <label className={LABEL_CLASS}>
-            模块名称 <span className="text-[#D70015]">*</span>
-          </label>
-          <input
-            className={INPUT_CLASS}
-            value={label}
-            onChange={(e) => {
-              setLabel(e.target.value);
-              setError(null);
-            }}
-            placeholder="如：活动"
-            maxLength={40}
-          />
+        {error && !formAnchor && <InlineError>{error}</InlineError>}
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[12px] text-[#86868B]">
+            共 {modules.length} 个模块 · 标识用于分类数据关联，修改需谨慎
+          </p>
+          {can('add') && (
+            <button
+              type="button"
+              onClick={(event) => openAdd(event)}
+              className="h-8 px-3 shrink-0 rounded-lg bg-[#0071E3] hover:bg-[#0077ED] text-white text-[12px] font-medium inline-flex items-center gap-1 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              新增模块
+            </button>
+          )}
         </div>
-        <div>
-          <label className={LABEL_CLASS}>
-            模块标识 <span className="text-[#D70015]">*</span>
-          </label>
-          <input
-            className={INPUT_CLASS}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value.toUpperCase());
-              setError(null);
-            }}
-            placeholder="如：ACTIVITY"
-            maxLength={40}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={LABEL_CLASS}>颜色</label>
-            <input
-              className={INPUT_CLASS}
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              placeholder="blue"
-              maxLength={40}
-            />
+
+        {pendingDelete && (
+          <div className="rounded-xl bg-[#FF3B30]/8 border border-[#FF3B30]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[12px] text-[#D70015] leading-5">
+              确认删除模块「{pendingDelete.label}」？
+              {usageCount(pendingDelete.value || '') > 0 && (
+                <> 已有 {usageCount(pendingDelete.value || '')} 个分类使用该模块，删除后将显示原始标识。</>
+              )}
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <SecondaryButton onClick={() => setPendingDelete(null)} disabled={busy}>
+                取消
+              </SecondaryButton>
+              <PrimaryButton onClick={() => void handleDelete()} busy={busy} danger>
+                确认删除
+              </PrimaryButton>
+            </div>
           </div>
-          <div>
-            <label className={LABEL_CLASS}>排序</label>
-            <input
-              className={INPUT_CLASS}
-              type="number"
-              value={sortCode}
-              onChange={(e) => setSortCode(e.target.value)}
-            />
-          </div>
+        )}
+
+        <div className="rounded-xl border border-[#E5E5EA] overflow-hidden">
+          {loading ? (
+            <div className="py-14 flex flex-col items-center justify-center gap-2 text-[#86868B]">
+              <Loader2 className="w-5 h-5 animate-spin text-[#0071E3]" />
+              <span className="text-[12px]">正在加载模块...</span>
+            </div>
+          ) : modules.length === 0 ? (
+            <div className="py-14 text-center text-[13px] text-[#86868B]">暂无模块，可点击上方新增</div>
+          ) : (
+            modules.map((item) => {
+              const key = item.id || item.value;
+              const expanded = expandedId === key;
+              const used = usageCount(item.value || '');
+              return (
+                <div key={key} className="border-b last:border-b-0 border-[#F2F2F7]">
+                  <div className="flex items-center gap-3 px-4 py-3 hover:bg-[#FAFAFC] transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(expanded ? null : key)}
+                      title="点击查看模块详情"
+                      className="flex flex-1 min-w-0 items-center text-left"
+                    >
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate text-[13px] font-medium text-[#1D1D1F]">
+                          {item.label || item.value}
+                        </span>
+                        <span className="block truncate text-[11px] text-[#86868B]">
+                          标识 {item.value || '-'} · 排序 {item.sortCode ?? '-'} · 已被 {used} 个分类使用
+                        </span>
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {can('edit') && (
+                        <button
+                          type="button"
+                          onClick={(event) => openEdit(item, event)}
+                          aria-label={`编辑 ${item.label}`}
+                          title="编辑"
+                          className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {can('delete') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormAnchor(null);
+                            setError(null);
+                            setPendingDelete(item);
+                          }}
+                          aria-label={`删除 ${item.label}`}
+                          title="删除"
+                          className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {expanded && (
+                    <div className="px-4 pb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+                      <div>
+                        <span className="text-[#86868B]">ID：</span>
+                        <span className="text-[#3A3A3C]">{item.id || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#86868B]">名称：</span>
+                        <span className="text-[#3A3A3C]">{item.label || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#86868B]">排序：</span>
+                        <span className="text-[#3A3A3C]">{item.sortCode ?? '-'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </CategoryModal>
+    {formAnchor &&
+      createPortal(
+        <div
+          ref={popoverRef}
+          role="dialog"
+          aria-label={editingId ? '编辑模块' : '新增模块'}
+          className="fixed z-[60] w-[420px] max-w-[calc(100vw-16px)] rounded-2xl border border-[#E5E5EA] bg-white p-4 shadow-[0_16px_50px_rgba(0,0,0,0.18)] space-y-4"
+          style={{ top: formAnchor.top, left: formAnchor.left }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[13px] font-semibold text-[#1D1D1F]">
+              {editingId ? '编辑模块' : '新增模块'}
+            </h3>
+            <button
+              type="button"
+              onClick={closeForm}
+              disabled={busy}
+              aria-label="关闭表单"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[#86868B] hover:bg-[#F2F2F7] hover:text-[#1D1D1F] disabled:opacity-50"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {error && <InlineError>{error}</InlineError>}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLASS}>
+                模块名称 <span className="text-[#D70015]">*</span>
+              </label>
+              <input
+                className={INPUT_CLASS}
+                value={label}
+                onChange={(e) => {
+                  setLabel(e.target.value);
+                  setError(null);
+                }}
+                placeholder="如：活动"
+                maxLength={40}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLASS}>
+                模块标识 <span className="text-[#D70015]">*</span>
+              </label>
+              <input
+                className={INPUT_CLASS}
+                value={value}
+                onChange={(e) => {
+                  setValue(e.target.value.toUpperCase());
+                  setError(null);
+                }}
+                placeholder="如：ACTIVITY"
+                maxLength={40}
+              />
+            </div>
+            <div className="col-span-2">
+              <label className={LABEL_CLASS}>排序</label>
+              <input
+                className={INPUT_CLASS}
+                type="number"
+                value={sortCode}
+                onChange={(e) => setSortCode(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-[#86868B]">
+            修改模块标识后，已有分类仍保留旧标识，请谨慎操作。
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <SecondaryButton onClick={closeForm} disabled={busy}>
+              取消
+            </SecondaryButton>
+            <PrimaryButton onClick={() => void handleSubmit()} busy={busy}>
+              {editingId ? '保存修改' : '确认新增'}
+            </PrimaryButton>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

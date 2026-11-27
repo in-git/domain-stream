@@ -167,6 +167,36 @@ export async function fetchFileBlob(file: DevFile): Promise<Blob> {
   return res.blob();
 }
 
+/**
+ * 缩略图接口受 sa-token 保护，普通 <img> 不能带 token。
+ * 这里把后端返回的绝对地址统一转成 snowyFetch 可用的接口路径。
+ */
+export function thumbnailFetchPath(raw?: string | null): string {
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    const path = parsed.pathname.replace(/^\/api/, '').replace(/^\/snowy/, '');
+    if (!path.startsWith('/dev/file/thumbnail')) return '';
+    return `${path}${parsed.search}`;
+  } catch {
+    return '';
+  }
+}
+
+/** 带 token 拉取缩略图二进制，失败时抛出可直接展示的错误 */
+export async function fetchThumbnailBlob(file: DevFile): Promise<Blob> {
+  const path = thumbnailFetchPath(file.thumbnail);
+  if (!path) throw new Error('缩略图地址无效');
+  const res = await snowyFetch(path);
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.msg || `缩略图加载失败 (${res.status})`);
+  }
+  if (!res.ok) throw new Error(`缩略图加载失败 (${res.status})`);
+  return res.blob();
+}
+
 /** 上传文件到指定库（本地引擎，返回下载 URL）；上传完成后由调用方刷新列表 */
 export function uploadLibraryFile(
   file: File,

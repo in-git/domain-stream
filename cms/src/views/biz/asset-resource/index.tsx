@@ -1,17 +1,19 @@
 /**
  * 素材资源库
  * ------------------------------------------------------------------
- * 素材来自 Iconify / Bing / Lorem Picsum 等公开源，浏览时只读取元数据与远程 URL，
- * 图片经后端 /biz/asset-resource/media 按需代理预览。
- * 用户勾选后点「加入素材中心」会下载素材并写入系统本地文件库。
+ * 素材通过「网址采集」录入：用户输入网址并选择图片/视频/SVG/图标类型，
+ * 后端下载后写入素材中心，同时在资源库登记元数据。
+ * 图片等资源经 /biz/asset-resource/media 按需代理预览。
  *
  * 页面风格与素材中心、文件中心、留言管理等模块保持一致。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Image as ImageIcon,
   Images,
   LayoutGrid,
@@ -20,47 +22,25 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
-import { assetResourceApi, proxyUrl, type AssetTypeSite, type AssetResource } from '../../../lib/assetResource.ts';
+import { assetResourceApi, proxyUrl, type AssetResource } from '../../../lib/assetResource.ts';
 import { showToast } from '../../../components/AppToast.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 
-const ICON_PAGE_SIZE = 50;
-const WALLPAPER_PAGE_SIZE = 20;
-const COLLECT_COOLDOWN_MS = 5 * 60 * 1000;
-const COLLECT_LAST_AT_KEY = 'asset-resource:last-collect-at';
+const PAGE_SIZE = 20;
 
 type ViewMode = 'grid' | 'list';
+type CollectPhase = 'idle' | 'running' | 'done' | 'error';
 
-/** React 本地存储状态：值持久化到 localStorage，刷新页面后仍保留 */
-function useLocalStorageState<T>(key: string, initialValue: T): readonly [T, (value: T) => void] {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw === null ? initialValue : (JSON.parse(raw) as T);
-    } catch {
-      return initialValue;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // 本地存储不可用时只保留内存状态
-    }
-  }, [key, value]);
-
-  return [value, setValue] as const;
-}
-
-function formatRemain(ms: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
+/** 资源类型选项：用于采集表单、统计卡片和类型筛选 */
+const TYPE_OPTIONS = [
+  { value: 'IMAGE', label: '图片' },
+  { value: 'VIDEO', label: '视频' },
+  { value: 'SVG', label: 'SVG' },
+  { value: 'ICON', label: '图标' },
+];
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败，请稍后重试';
@@ -79,21 +59,24 @@ const ICON_84_STYLE: CSSProperties = {
 };
 
 function typeLabel(type: string): string {
-  if (type === 'ICON') return '图标';
-  if (type === 'WALLPAPER') return '壁纸';
-  return type || '其他';
+  return TYPE_OPTIONS.find((item) => item.value === type)?.label || type || '其他';
 }
 
-export default function AssetResourceView({ permissions }: { permissions?: string[] }) {
-  const canAdd = !!permissions?.includes('bizAssetResourceAdd');
+export default function AssetResourceView() {
+  const canAdd = true;
 
-  const [lastCollectAt, setLastCollectAt] = useLocalStorageState<number>(COLLECT_LAST_AT_KEY, 0);
-  const [now, setNow] = useState(() => Date.now());
   const [collecting, setCollecting] = useState(false);
-  const [collectConfirmOpen, setCollectConfirmOpen] = useState(false);
+  const [collectUrlOpen, setCollectUrlOpen] = useState(false);
+  const [collectUrl, setCollectUrl] = useState('');
+  const [collectType, setCollectType] = useState('IMAGE');
 
-  const [type, setType] = useState('WALLPAPER');
-  const [source, setSource] = useState('');
+  const [collectPanelOpen, setCollectPanelOpen] = useState(false);
+  const [collectPanelCollapsed, setCollectPanelCollapsed] = useState(false);
+  const [collectPhase, setCollectPhase] = useState<CollectPhase>('idle');
+  const [collectedResources, setCollectedResources] = useState<AssetResource[]>([]);
+  const [collectProgress, setCollectProgress] = useState({ index: 0, total: 0, message: '' });
+
+  const [type, setType] = useState('IMAGE');
   const [inMaterial, setInMaterial] = useState('');
   const [search, setSearch] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -105,15 +88,16 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [counts, setCounts] = useState({ icon: 0, wallpaper: 0, added: 0 });
-  const [siteTree, setSiteTree] = useState<AssetTypeSite[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<AssetResource | null>(null);
   const [imageFailed, setImageFailed] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTargets, setDeleteTargets] = useState<AssetResource[]>([]);
   const searchTimerRef = useRef<number | null>(null);
 
-  const pageSize = type === 'WALLPAPER' ? WALLPAPER_PAGE_SIZE : ICON_PAGE_SIZE;
+  const pageSize = PAGE_SIZE;
 
   /** 代理优先，失败后回退远程直链，避免后端代理偶发超时导致空白图 */
   function assetSrc(item: AssetResource, full = false): string {
@@ -134,7 +118,6 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
         current: page,
         size: pageSize,
         type: type || undefined,
-        source: source || undefined,
         inMaterial: inMaterial || undefined,
         keyword: keyword || undefined,
       });
@@ -148,30 +131,22 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, type, source, inMaterial, keyword]);
+  }, [page, pageSize, type, inMaterial, keyword]);
 
   const loadCounts = useCallback(async () => {
     try {
-      const [icon, wallpaper, added] = await Promise.all([
-        assetResourceApi.page({ current: 1, size: 1, type: 'ICON' }),
-        assetResourceApi.page({ current: 1, size: 1, type: 'WALLPAPER' }),
+      const [typeResults, added] = await Promise.all([
+        Promise.all(TYPE_OPTIONS.map((option) =>
+          assetResourceApi.page({ current: 1, size: 1, type: option.value }))),
         assetResourceApi.page({ current: 1, size: 1, inMaterial: 'YES' }),
       ]);
-      setCounts({
-        icon: Number(icon.total || 0),
-        wallpaper: Number(wallpaper.total || 0),
-        added: Number(added.total || 0),
+      const next: Record<string, number> = { ADDED: Number(added.total || 0) };
+      TYPE_OPTIONS.forEach((option, index) => {
+        next[option.value] = Number(typeResults[index].total || 0);
       });
+      setCounts(next);
     } catch {
       // 统计失败不影响主列表
-    }
-  }, []);
-
-  const loadSites = useCallback(async () => {
-    try {
-      setSiteTree(await assetResourceApi.sites());
-    } catch {
-      // 站点统计失败不影响主列表
     }
   }, []);
 
@@ -181,13 +156,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
 
   useEffect(() => {
     void loadCounts();
-    void loadSites();
-  }, [loadCounts, loadSites]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  }, [loadCounts]);
 
   useEffect(() => {
     if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
@@ -199,22 +168,6 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
       if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
     };
   }, [search]);
-
-  const sourceNodes = useMemo(() => {
-    if (type) {
-      return siteTree.find((node) => node.value === type)?.sites || [];
-    }
-    const merged = new Map<string, AssetTypeSite['sites'][number]>();
-    siteTree.forEach((node) => node.sites.forEach((item) => {
-      const existing = merged.get(item.value);
-      if (!existing) {
-        merged.set(item.value, { ...item });
-        return;
-      }
-      existing.assetCount += item.assetCount;
-    }));
-    return [...merged.values()];
-  }, [siteTree, type]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -239,34 +192,59 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
     });
   }
 
-  const collectRemainMs = Math.max(0, lastCollectAt + COLLECT_COOLDOWN_MS - now);
-  const collectDisabled = collecting || collectRemainMs > 0;
-
-  const hasFilter = !!keyword || !!source || !!inMaterial;
+  const hasFilter = !!keyword || !!inMaterial;
 
   function clearFilters() {
     setSearch('');
     setKeyword('');
-    setSource('');
     setInMaterial('');
     setPage(1);
   }
 
-  async function collectAssets() {
-    if (collectRemainMs > 0) {
-      showToast(`请 ${formatRemain(collectRemainMs)} 后再采集`, 'warning');
+  async function collectByUrl() {
+    const url = collectUrl.trim();
+    if (!url) {
+      showToast('请输入资源网址', 'warning');
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      showToast('网址需以 http:// 或 https:// 开头', 'warning');
       return;
     }
     setCollecting(true);
+    setCollectUrlOpen(false);
+    setCollectPanelOpen(true);
+    setCollectPanelCollapsed(false);
+    setCollectPhase('running');
+    setCollectedResources([]);
+    setCollectProgress({ index: 0, total: 0, message: '正在解析网址并采集资源...' });
     try {
-      const summary = await assetResourceApi.collect();
-      showToast(summary || '素材采集完成', 'success');
-      await Promise.all([load(), loadCounts(), loadSites()]);
+      await assetResourceApi.collectUrlStream({ url, type: collectType, limit: 20 }, (event) => {
+        setCollectProgress({ index: event.index, total: event.total, message: event.message });
+        const resource = event.resource;
+        if (event.phase === 'progress' && resource) {
+          setCollectedResources((prev) => prev.some((item) => item.id === resource.id) ? prev : [...prev, resource]);
+        } else if (event.phase === 'done') {
+          setCollectPhase('done');
+          setCollectUrl('');
+          setCollectUrlOpen(false);
+          showToast(event.message || '采集完成', 'success');
+        } else if (event.phase === 'error') {
+          setCollectPhase('error');
+          setCollectUrlOpen(false);
+          showToast(event.message || '采集失败', 'error');
+        }
+      });
+      setType(collectType);
+      setInMaterial('');
+      setPage(1);
+      await Promise.all([load(), loadCounts()]);
     } catch (err) {
+      setCollectPhase('error');
+      setCollectUrlOpen(false);
+      setCollectProgress((prev) => ({ ...prev, message: errorMessage(err) }));
       showToast(errorMessage(err), 'error');
     } finally {
-      // 无论成功失败都进入冷却，避免连续请求公开数据源
-      setLastCollectAt(Date.now());
       setCollecting(false);
     }
   }
@@ -281,7 +259,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
       await assetResourceApi.addToMaterial(ids);
       showToast('已加入素材中心', 'success');
       setPreview(null);
-      await Promise.all([load(), loadCounts(), loadSites()]);
+      await Promise.all([load(), loadCounts()]);
     } catch (err) {
       showToast(errorMessage(err), 'error');
     } finally {
@@ -289,16 +267,49 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
     }
   }
 
+  async function removeResources(ids: string[]) {
+    if (!ids.length) return;
+    setDeleting(true);
+    try {
+      await assetResourceApi.remove(ids);
+      const removed = new Set(ids);
+      setDeleteTargets([]);
+      setSelected(new Set());
+      setCollectedResources((prev) => prev.filter((item) => !removed.has(item.id)));
+      setPreview((prev) => (prev && removed.has(prev.id) ? null : prev));
+      setImageFailed((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      showToast(`已删除 ${ids.length} 个资源`, 'success');
+
+      // 当前页被删空时退回上一页，避免停在空白页
+      if (items.every((item) => removed.has(item.id)) && page > 1) {
+        setPage((p) => Math.max(1, p - 1));
+      } else {
+        await load();
+      }
+      await loadCounts();
+    } catch (err) {
+      showToast(errorMessage(err), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const statCards = [
-    { key: 'ICON', label: '图标', value: counts.icon, icon: ImageIcon, active: type === 'ICON' && inMaterial !== 'YES' },
-    { key: 'WALLPAPER', label: '壁纸', value: counts.wallpaper, icon: ImageIcon, active: type === 'WALLPAPER' && inMaterial !== 'YES' },
-    { key: 'ADDED', label: '已加入素材', value: counts.added, icon: Check, active: inMaterial === 'YES' },
+    ...TYPE_OPTIONS.map((option) => ({
+      key: option.value,
+      label: option.label,
+      value: counts[option.value] || 0,
+      icon: ImageIcon,
+      active: type === option.value && inMaterial !== 'YES',
+    })),
+    { key: 'ADDED', label: '已加入素材', value: counts.ADDED || 0, icon: Check, active: inMaterial === 'YES' },
   ];
 
-  const typeTabs = [
-    { value: 'ICON', label: '图标' },
-    { value: 'WALLPAPER', label: '壁纸' },
-  ];
+  const typeTabs = TYPE_OPTIONS;
 
   return (
     <div className="space-y-5">
@@ -311,10 +322,8 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
             onClick={() => {
               if (stat.key === 'ADDED') {
                 setInMaterial(inMaterial === 'YES' ? '' : 'YES');
-                setSource('');
               } else {
                 setType(stat.key);
-                setSource('');
                 setInMaterial('');
               }
               setPage(1);
@@ -348,7 +357,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索名称、标签或来源..."
+                placeholder="搜索名称、标签或描述..."
                 className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 transition-all"
               />
             </div>
@@ -409,7 +418,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
 
             <button
               type="button"
-              onClick={() => void Promise.all([load(), loadCounts(), loadSites()])}
+              onClick={() => void Promise.all([load(), loadCounts()])}
               disabled={loading}
               title="刷新列表"
               className="h-9 w-9 rounded-xl bg-white border border-[#E5E5EA] flex items-center justify-center text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
@@ -419,17 +428,23 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
 
             <button
               type="button"
-              disabled={collectDisabled}
-              onClick={() => setCollectConfirmOpen(true)}
-              title={collectRemainMs > 0 ? `冷却中，${formatRemain(collectRemainMs)} 后可再次采集` : '从公开数据源发现新素材'}
+              disabled={collecting}
+              onClick={() => setCollectUrlOpen(true)}
+              title="输入网址并选择资源类型进行采集"
               className="h-9 px-4 rounded-xl border border-[#D2D2D7] bg-white text-[#1D1D1F] text-[13px] font-medium inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] transition-colors disabled:opacity-50 disabled:hover:bg-white"
             >
               {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {collecting
-                ? '采集中...'
-                : collectRemainMs > 0
-                  ? `${formatRemain(collectRemainMs)} 后重试`
-                  : '采集素材'}
+              {collecting ? '采集中...' : '网址采集'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCollectPanelOpen((open) => !open)}
+              title="打开采集结果模态框"
+              className="h-9 px-4 rounded-xl border border-[#D2D2D7] bg-white text-[#1D1D1F] text-[13px] font-medium inline-flex items-center gap-2 hover:bg-[#F5F5F7] transition-colors"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${collectPanelOpen ? 'rotate-180' : ''}`} />
+              采集结果{collectedResources.length ? ` (${collectedResources.length})` : ''}
             </button>
 
             {canAdd && (
@@ -443,6 +458,17 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                 加入素材中心{selected.size ? ` (${selected.size})` : ''}
               </button>
             )}
+
+            <button
+              type="button"
+              disabled={busy || deleting || !selected.size}
+              onClick={() => setDeleteTargets(items.filter((item) => selected.has(item.id)))}
+              className="h-9 px-3.5 rounded-xl border border-[#FF3B30]/30 bg-white text-[#D70015] text-[13px] font-medium inline-flex items-center gap-2 hover:bg-[#FF3B30]/8 transition-colors disabled:opacity-50"
+              title="删除选中的资源库记录"
+            >
+              <Trash2 className="w-4 h-4" />
+              删除{selected.size ? ` (${selected.size})` : ''}
+            </button>
           </div>
         </div>
 
@@ -452,7 +478,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
             <button
               key={tab.value}
               type="button"
-              onClick={() => { setType(tab.value); setSource(''); setInMaterial(''); setPage(1); }}
+              onClick={() => { setType(tab.value); setInMaterial(''); setPage(1); }}
               className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
                 type === tab.value
                   ? 'bg-[#0071E3]/10 text-[#0071E3]'
@@ -462,38 +488,6 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
               {tab.label}
             </button>
           ))}
-        </div>
-
-        {/* 站点分类 */}
-        <div className="flex flex-wrap items-center pt-2 border-t border-[#F2F2F7]">
-          <div className="flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              onClick={() => { setSource(''); setPage(1); }}
-              className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
-                source === '' ? 'bg-[#0071E3]/10 text-[#0071E3]' : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
-              }`}
-            >
-              全部站点
-            </button>
-            {sourceNodes.map((node) => (
-              <button
-                key={node.value}
-                type="button"
-                onClick={() => { setSource(node.value); setPage(1); }}
-                title={node.assetCount === 0 ? '该站点暂无资源，可点击「采集素材」后刷新' : undefined}
-                className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
-                  node.assetCount === 0 ? 'opacity-45' : ''
-                } ${
-                  source === node.value
-                    ? 'bg-[#0071E3]/10 text-[#0071E3]'
-                    : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
-                }`}
-              >
-                {node.label} <span className="text-[11px] tabular-nums opacity-60">{node.assetCount}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* 批量选择 */}
@@ -547,10 +541,10 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
         </div>
       )}
 
-      {busy && (
+      {(busy || deleting) && (
         <div className="rounded-xl bg-[#0071E3]/8 border border-[#0071E3]/20 px-4 py-2.5 text-[12px] text-[#0071E3] flex items-center gap-2">
           <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-          正在加入素材中心...
+          {deleting ? '正在删除资源库记录...' : '正在加入素材中心...'}
         </div>
       )}
 
@@ -569,7 +563,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
           <p className="text-[13px] text-[#6E6E73] mt-1">
             {hasFilter
               ? '试试调整搜索词或切换筛选条件'
-              : '点击右上角「采集素材」从公开数据源发现新资源'}
+              : '点击右上角「网址采集」，输入资源网址并选择类型'}
           </p>
           {hasFilter && (
             <button
@@ -581,7 +575,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
             </button>
           )}
         </div>
-      ) : type === 'ICON' ? (
+      ) : type === 'ICON' || type === 'SVG' ? (
         <div className="bg-white rounded-[18px] border border-[#E5E5EA] px-5 py-7">
           <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 xl:grid-cols-10 2xl:grid-cols-12 gap-x-2 gap-y-6">
             {items.map((item) => {
@@ -609,6 +603,16 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                   )}
                   <button
                     type="button"
+                    aria-label={`删除 ${item.title}`}
+                    title="删除"
+                    disabled={deleting}
+                    onClick={() => setDeleteTargets([item])}
+                    className="absolute right-1 bottom-1 z-10 w-5 h-5 rounded-[6px] border border-[#FF3B30]/20 bg-white/90 text-[#D70015] flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white transition-opacity disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setPreview(item)}
                     className="w-[84px] h-[84px] flex items-center justify-center rounded-xl bg-[#F2F2F7] hover:bg-[#E8E8ED] transition-colors"
                     title={item.title}
@@ -627,7 +631,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                     className="mt-2 w-full text-center text-[12px] leading-4 text-[#6E6E73] truncate"
                     title={item.title}
                   >
-                    {item.title || '未命名图标'}
+                    {item.title || '未命名素材'}
                   </div>
                 </div>
               );
@@ -665,12 +669,23 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                   </span>
                 )}
 
+                <button
+                  type="button"
+                  aria-label={`删除 ${item.title}`}
+                  title="删除"
+                  disabled={deleting}
+                  onClick={() => setDeleteTargets([item])}
+                  className="absolute bottom-1.5 right-1.5 z-10 w-6 h-6 rounded-[8px] border border-[#FF3B30]/20 bg-white/90 text-[#D70015] flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white transition-opacity disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+
                 <button type="button" className="block w-full" onClick={() => setPreview(item)}>
                   <div
                     className="aspect-[4/3] flex items-center justify-center overflow-hidden"
                     style={ASSET_BG_STYLE}
                   >
-                    {item.type === 'ICON' ? (
+                    {item.type === 'ICON' || item.type === 'SVG' ? (
                       <div className="w-[84px] h-[84px] flex items-center justify-center shrink-0" style={ASSET_BG_STYLE}>
                         <img
                           src={assetSrc(item)}
@@ -682,6 +697,14 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                           onError={() => handleImageError(item)}
                         />
                       </div>
+                    ) : item.type === 'VIDEO' ? (
+                      <video
+                        src={assetSrc(item)}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <img
                         src={assetSrc(item)}
@@ -699,10 +722,8 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                   <div className="text-[12px] font-medium text-[#1D1D1F] truncate" title={item.title}>
                     {item.title || '未命名素材'}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#86868B]">
-                    <span className="truncate">{item.source}</span>
-                    <span className="w-0.5 h-0.5 rounded-full bg-[#C7C7CC] shrink-0" />
-                    <span className="shrink-0">{typeLabel(item.type)}</span>
+                  <div className="mt-0.5 text-[10px] text-[#86868B]">
+                    {typeLabel(item.type)}
                   </div>
                 </div>
               </div>
@@ -714,7 +735,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
           <div className="hidden sm:grid grid-cols-[32px_minmax(0,3fr)_100px_110px_140px] gap-3 px-4 py-2.5 border-b border-[#F2F2F7] text-[11px] font-medium text-[#86868B]">
             <span />
             <span>素材名称</span>
-            <span>来源</span>
+            <span>类型</span>
             <span>加入状态</span>
             <span className="text-right">操作</span>
           </div>
@@ -738,31 +759,51 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                 </button>
                 <button type="button" onClick={() => setPreview(item)} className="flex items-center gap-2.5 min-w-0 text-left">
                   <span
-                    className={`${item.type === 'ICON' ? 'w-[84px] h-[84px]' : 'w-8 h-8'} rounded-lg flex items-center justify-center shrink-0 overflow-hidden`}
+                    className={`${item.type === 'ICON' || item.type === 'SVG' ? 'w-[84px] h-[84px]' : 'w-8 h-8'} rounded-lg flex items-center justify-center shrink-0 overflow-hidden`}
                     style={ASSET_BG_STYLE}
                   >
-                    <img
-                      src={assetSrc(item)}
-                      alt={item.title}
-                      className={`${item.type === 'ICON' ? 'object-contain' : 'w-8 h-8 object-cover'} rounded-lg`}
-                      style={item.type === 'ICON' ? ICON_84_STYLE : undefined}
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      onError={() => handleImageError(item)}
-                    />
+                    {item.type === 'VIDEO' ? (
+                      <video
+                        src={assetSrc(item)}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="w-8 h-8 object-cover rounded-lg"
+                      />
+                    ) : (
+                      <img
+                        src={assetSrc(item)}
+                        alt={item.title}
+                        className={`${item.type === 'ICON' || item.type === 'SVG' ? 'object-contain' : 'w-8 h-8 object-cover'} rounded-lg`}
+                        style={item.type === 'ICON' || item.type === 'SVG' ? ICON_84_STYLE : undefined}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={() => handleImageError(item)}
+                      />
+                    )}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] text-[#1D1D1F] truncate">{item.title || '未命名素材'}</span>
                     <span className="block text-[11px] text-[#86868B] truncate sm:hidden">
-                      {item.source} · {typeLabel(item.type)}
+                      {typeLabel(item.type)}
                     </span>
                   </span>
                 </button>
-                <span className="hidden sm:block text-[12px] text-[#6E6E73] truncate">{item.source}</span>
+                <span className="hidden sm:block text-[12px] text-[#6E6E73] truncate">{typeLabel(item.type)}</span>
                 <span className="hidden sm:block text-[12px] text-[#6E6E73]">
                   {added ? <span className="text-[#248A3D]">已加入</span> : <span className="text-[#86868B]">未加入</span>}
                 </span>
-                <span className="hidden sm:flex items-center justify-end gap-1">
+                <span className="hidden sm:flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => setDeleteTargets([item])}
+                    className="p-1.5 rounded-lg text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors disabled:opacity-50"
+                    title="删除"
+                    aria-label={`删除 ${item.title}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setPreview(item)}
@@ -818,14 +859,14 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
         </div>
       )}
 
-      {/* 采集确认弹窗 */}
-      {collectConfirmOpen && (
+      {/* 网址采集弹窗 */}
+      {collectUrlOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-          onClick={() => setCollectConfirmOpen(false)}
+          onClick={() => { if (!collecting) setCollectUrlOpen(false); }}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.24)]"
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.24)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">
@@ -833,38 +874,71 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                 <Sparkles className="w-5 h-5 text-[#0071E3]" strokeWidth={1.8} />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="text-[16px] font-semibold text-[#1D1D1F]">确认开始采集素材？</h3>
+                <h3 className="text-[16px] font-semibold text-[#1D1D1F]">按网址采集素材</h3>
                 <p className="mt-1.5 text-[13px] leading-5 text-[#6E6E73]">
-                  点击确认后，系统将自动从公开数据源搜索最新素材。整个过程需要一些时间，请耐心等待，期间请勿关闭页面。
+                  输入图片直链或图片列表网页，选择类型后会自动抽取真实资源并保存到素材资源库。
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setCollectConfirmOpen(false)}
-                className="text-[#86868B] hover:text-[#1D1D1F] shrink-0"
-                aria-label="关闭采集提示"
+                disabled={collecting}
+                onClick={() => setCollectUrlOpen(false)}
+                className="text-[#86868B] hover:text-[#1D1D1F] shrink-0 disabled:opacity-50"
+                aria-label="关闭采集弹窗"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="mt-4 rounded-xl bg-[#F5F5F7] px-3.5 py-2.5 text-[12px] leading-5 text-[#6E6E73]">
-              采集完成后会自动刷新列表；为避免频繁请求公开数据源，5 分钟内无法重复采集。
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#3A3A3C]">
+                  资源网址 <span className="text-[#D70015]">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={collectUrl}
+                  onChange={(e) => setCollectUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !collecting) void collectByUrl(); }}
+                  placeholder="https://bing.wdbyte.com/zh-cn/ 或图片直链"
+                  disabled={collecting}
+                  className="w-full h-10 px-3 rounded-xl border border-[#E5E5EA] bg-[#F5F5F7] text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 disabled:opacity-60 transition-all"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#3A3A3C]">
+                  资源类型 <span className="text-[#D70015]">*</span>
+                </label>
+                <SelectField
+                  ariaLabel="选择资源类型"
+                  value={collectType}
+                  onChange={setCollectType}
+                  options={TYPE_OPTIONS}
+                  className="w-full"
+                />
+              </div>
+              <div className="rounded-xl bg-[#F5F5F7] px-3.5 py-2.5 text-[12px] leading-5 text-[#6E6E73]">
+                网页地址默认采集前 20 张；图片与 SVG 单张最大 50MB，视频最大 500MB。相同图片按资源 ID 去重，重复采集会更新已有记录。
+              </div>
             </div>
+
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setCollectConfirmOpen(false)}
-                className="h-9 px-4 rounded-xl border border-[#D2D2D7] bg-white text-[#1D1D1F] text-[13px] font-medium hover:bg-[#F5F5F7] transition-colors"
+                disabled={collecting}
+                onClick={() => setCollectUrlOpen(false)}
+                className="h-9 px-4 rounded-xl border border-[#D2D2D7] bg-white text-[#1D1D1F] text-[13px] font-medium hover:bg-[#F5F5F7] transition-colors disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 type="button"
-                onClick={() => { setCollectConfirmOpen(false); void collectAssets(); }}
-                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors"
+                disabled={collecting}
+                onClick={() => void collectByUrl()}
+                className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
-                <Sparkles className="w-4 h-4" />
-                确认采集
+                {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {collecting ? '采集中...' : '开始采集'}
               </button>
             </div>
           </div>
@@ -880,7 +954,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
           <div className="max-w-6xl w-full" onClick={(e) => e.stopPropagation()}>
             <div className="rounded-2xl overflow-hidden bg-white flex flex-col md:flex-row min-h-[600px] md:min-h-[70vh]">
               <div className="flex-1 flex items-center justify-center min-h-[380px] md:min-h-[70vh] p-8" style={ASSET_BG_STYLE}>
-                {preview.type === 'ICON' ? (
+                {preview.type === 'ICON' || preview.type === 'SVG' ? (
                   <div className="w-[84px] h-[84px] flex items-center justify-center shrink-0" style={ASSET_BG_STYLE}>
                     <img
                       src={assetSrc(preview, true)}
@@ -891,6 +965,14 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                       onError={() => handleImageError(preview)}
                     />
                   </div>
+                ) : preview.type === 'VIDEO' ? (
+                  <video
+                    src={assetSrc(preview, true)}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-h-[70vh] max-w-full"
+                  />
                 ) : (
                   <img
                     src={assetSrc(preview, true)}
@@ -906,7 +988,7 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                 <h3 className="text-[17px] font-semibold text-[#1D1D1F] break-words">{preview.title}</h3>
                 <p className="text-[12px] text-[#86868B] leading-5">{preview.description}</p>
                 <dl className="text-[12px] space-y-1.5 text-[#6E6E73]">
-                  <div className="flex justify-between gap-3"><dt>来源</dt><dd className="text-right text-[#1D1D1F]">{preview.source}</dd></div>
+                  <div className="flex justify-between gap-3"><dt>资源类型</dt><dd className="text-right text-[#1D1D1F]">{typeLabel(preview.type)}</dd></div>
                   <div className="flex justify-between gap-3"><dt>作者</dt><dd className="text-right text-[#1D1D1F] truncate max-w-[180px]">{preview.author || '未知'}</dd></div>
                   <div className="flex justify-between gap-3"><dt>许可</dt><dd className="text-right text-[#1D1D1F] truncate max-w-[180px]">{preview.license || '未知'}</dd></div>
                 </dl>
@@ -920,6 +1002,156 @@ export default function AssetResourceView({ permissions }: { permissions?: strin
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 采集结果模态框：点击开始采集后自动打开，随 SSE 事件实时追加，可收起，也可由工具栏按钮重新打开 */}
+      {collectPanelOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          onClick={() => { if (!collecting) setCollectPanelOpen(false); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="采集结果"
+            className={`w-full bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.24)] overflow-hidden transition-all ${
+              collectPanelCollapsed ? 'max-w-lg' : 'max-w-2xl'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-12 px-5 flex items-center gap-2 border-b border-[#F2F2F7]">
+              <button
+                type="button"
+                onClick={() => setCollectPanelCollapsed((collapsed) => !collapsed)}
+                aria-label={collectPanelCollapsed ? '展开采集结果' : '收起采集结果'}
+                className="text-[#6E6E73] hover:text-[#1D1D1F] shrink-0"
+              >
+                {collectPanelCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              <span className="text-[14px] font-semibold text-[#1D1D1F]">采集结果</span>
+              {collecting && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0071E3]" />}
+              <span className="text-[11px] text-[#86868B] tabular-nums">
+                {collectedResources.length}/{collectProgress.total || 0}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCollectPanelOpen(false)}
+                aria-label="关闭采集结果模态框"
+                className="ml-auto text-[#86868B] hover:text-[#1D1D1F] shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {!collectPanelCollapsed && (
+              <div className="p-5 space-y-3">
+                {collectPhase === 'running' && (
+                  <div className="h-1.5 rounded-full bg-[#F2F2F7] overflow-hidden">
+                    <div
+                      className="h-full bg-[#0071E3] transition-all"
+                      style={{ width: `${collectProgress.total ? Math.round(collectProgress.index / collectProgress.total * 100) : 0}%` }}
+                    />
+                  </div>
+                )}
+                <p className="text-[12px] text-[#6E6E73]">
+                  {collectProgress.message || '采集结果会在这里实时更新'}
+                </p>
+                <div className="max-h-[55vh] overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {collectedResources.length === 0 ? (
+                    <div className="col-span-full py-12 text-center text-[12px] text-[#86868B]">
+                      {collectPhase === 'running' ? '正在采集，资源入库后会立即显示' : '暂无采集结果'}
+                    </div>
+                  ) : collectedResources.map((resource) => (
+                    <button
+                      key={resource.id}
+                      type="button"
+                      onClick={() => setPreview(resource)}
+                      className="w-full min-w-0 flex items-center gap-2 p-2 rounded-xl bg-[#F5F5F7] hover:bg-[#EDEDF1] text-left transition-colors"
+                    >
+                      <span className="w-10 h-10 rounded-lg bg-[#E5E5EA] overflow-hidden shrink-0 flex items-center justify-center">
+                        {resource.type === 'VIDEO' ? (
+                          <video src={assetSrc(resource)} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                        ) : (
+                          <img
+                            src={assetSrc(resource)}
+                            alt={resource.title}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className={`w-full h-full ${resource.type === 'ICON' || resource.type === 'SVG' ? 'object-contain' : 'object-cover'}`}
+                            onError={() => handleImageError(resource)}
+                          />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-medium text-[#1D1D1F] truncate">{resource.title || '未命名素材'}</span>
+                        <span className="block text-[11px] text-[#86868B]">{typeLabel(resource.type)} · 已入库</span>
+                      </span>
+                      <Check className="w-3.5 h-3.5 text-[#248A3D] shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 删除确认：只删资源库记录，不触碰素材中心文件 */}
+      {deleteTargets.length > 0 && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4"
+          onClick={() => { if (!deleting) setDeleteTargets([]); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="删除确认"
+            className="w-full max-w-md bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.24)] p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="w-9 h-9 rounded-xl bg-[#FF3B30]/10 text-[#D70015] flex items-center justify-center shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold text-[#1D1D1F]">
+                  删除 {deleteTargets.length} 个资源？
+                </h3>
+                <p className="mt-1 text-[12px] text-[#6E6E73]">
+                  仅删除资源库记录，不会删除已加入素材中心的文件。
+                </p>
+              </div>
+            </div>
+            <div className="max-h-32 overflow-y-auto rounded-xl bg-[#F5F5F7] p-3 text-[12px] text-[#3A3A3C] space-y-1">
+              {deleteTargets.slice(0, 8).map((item) => (
+                <div key={item.id} className="truncate" title={item.title}>
+                  {item.title || '未命名素材'}
+                </div>
+              ))}
+              {deleteTargets.length > 8 && (
+                <div className="text-[#86868B]">还有 {deleteTargets.length - 8} 个...</div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteTargets([])}
+                className="h-9 px-4 rounded-xl border border-[#D2D2D7] bg-white text-[#3A3A3C] text-[13px] font-medium hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void removeResources(deleteTargets.map((item) => item.id))}
+                className="h-9 px-4 rounded-xl bg-[#D70015] hover:bg-[#FF3B30] text-white text-[13px] font-medium inline-flex items-center gap-2 disabled:opacity-50 transition-colors"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                确认删除
+              </button>
             </div>
           </div>
         </div>

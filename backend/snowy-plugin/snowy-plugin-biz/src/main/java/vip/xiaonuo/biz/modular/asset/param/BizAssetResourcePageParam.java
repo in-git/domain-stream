@@ -14,11 +14,8 @@ import lombok.Setter;
 @Setter
 public class BizAssetResourcePageParam {
 
-    @Schema(description = "类型：ICON/WALLPAPER")
+    @Schema(description = "资源类型：IMAGE/VIDEO/SVG/ICON")
     private String type;
-
-    @Schema(description = "站点：ICONIFY/BING/PICSUM")
-    private String source;
 
     @Schema(description = "标签")
     private String tag;

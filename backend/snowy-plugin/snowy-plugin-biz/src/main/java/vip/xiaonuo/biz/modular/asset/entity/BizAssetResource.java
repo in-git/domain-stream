@@ -22,13 +22,13 @@ public class BizAssetResource extends CommonEntity {
     @Schema(description = "主键")
     private String id;
 
-    @Schema(description = "来源")
+    @Schema(description = "数据库兼容字段：仅用于隔离网址采集记录")
     private String source;
 
-    @Schema(description = "来源唯一标识")
+    @Schema(description = "数据库兼容字段：网址去重标识")
     private String sourceKey;
 
-    @Schema(description = "类型：ICON/WALLPAPER")
+    @Schema(description = "资源类型：IMAGE/VIDEO/SVG/ICON")
     private String type;
 
     @Schema(description = "标题")

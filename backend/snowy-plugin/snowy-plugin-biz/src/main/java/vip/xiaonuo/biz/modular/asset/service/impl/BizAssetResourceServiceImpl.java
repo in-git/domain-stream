@@ -6,44 +6,47 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import vip.xiaonuo.biz.modular.asset.entity.BizAssetResource;
 import vip.xiaonuo.biz.modular.asset.enums.BizAssetCategoryEnum;
-import vip.xiaonuo.biz.modular.asset.enums.BizAssetSourceEnum;
 import vip.xiaonuo.biz.modular.asset.mapper.BizAssetResourceMapper;
+import vip.xiaonuo.biz.modular.asset.param.BizAssetCollectUrlParam;
 import vip.xiaonuo.biz.modular.asset.param.BizAssetResourcePageParam;
 import vip.xiaonuo.biz.modular.asset.service.BizAssetResourceService;
-import vip.xiaonuo.biz.modular.asset.source.AssetItem;
-import vip.xiaonuo.biz.modular.asset.source.AssetSource;
 import vip.xiaonuo.biz.modular.asset.util.AssetHttpUtil;
 import vip.xiaonuo.biz.modular.asset.util.ByteArrayMultipartFile;
-import vip.xiaonuo.biz.modular.asset.vo.AssetSiteStatVo;
-import vip.xiaonuo.biz.modular.asset.vo.AssetTypeSiteVo;
+import vip.xiaonuo.biz.modular.asset.vo.AssetCollectEventVo;
 import vip.xiaonuo.biz.modular.asset.vo.BizAssetResourceVo;
 import vip.xiaonuo.common.exception.CommonException;
 import vip.xiaonuo.common.page.CommonPageRequest;
 import vip.xiaonuo.dev.api.DevFileApi;
 
+import java.net.URI;
 import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 远端素材资源服务实现：资源浏览不落地，用户加入素材中心时下载到本地文件库
+ * 网址采集素材资源服务实现：采集时写入素材中心，列表按资源类型浏览
  *
  * @author domain-stream
  * @date 2026/11/23
@@ -56,19 +59,23 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     private static final String NO = "NO";
     private static final String ACTIVE = "ACTIVE";
 
-    /** 当前启用的素材来源，列表与站点筛选都只认这些值 */
-    private static final List<String> SOURCE_VALUES = Arrays.stream(BizAssetSourceEnum.values())
-            .map(BizAssetSourceEnum::getValue)
-            .toList();
+    /** 数据库兼容字段值：列表仅展示网址采集的记录 */
+    private static final String COLLECTED_SOURCE = "URL";
 
-    /** 允许代理的远程域名，防止代理接口被当作任意 URL 抓取工具 */
-    private static final List<String> ALLOWED_HOSTS = Arrays.asList(
-            "api.iconify.design",
-            "www.bing.com",
-            "picsum.photos", "fastly.picsum.photos",
-            "wallhaven.cc", "w0.wallhaven.cc", "w1.wallhaven.cc", "th.wallhaven.cc",
-            "img.icons8.com", "api.icons8.com", "search.icons8.com"
-    );
+    /** 网址采集允许的资源类型 */
+    private static final List<String> COLLECT_TYPES = Arrays.asList("IMAGE", "VIDEO", "SVG", "ICON");
+
+    private static final int DEFAULT_COLLECT_LIMIT = 20;
+    private static final int MAX_COLLECT_LIMIT = 50;
+
+    /** 从网页中抽取常见图片/视频直链，Bing 这类 th?id=...jpg&w=3840 链接也能命中 */
+    private static final Pattern MEDIA_URL_PATTERN = Pattern.compile(
+            "https?://[^\"'<>\\s]+?\\.(?:jpg|jpeg|png|webp|gif|bmp|svg|mp4|webm|mov|m4v)(?:[?&][^\"'<>\\s]*)?",
+            Pattern.CASE_INSENSITIVE);
+
+    /** 已知文件后缀 */
+    private static final List<String> KNOWN_SUFFIXES = Arrays.asList(
+            "jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "mp4", "webm", "mov", "m4v");
 
     /** 预览图内存缓存：列表频繁重复请求同一张远程图，缓存可避免反复超时 */
     private final ConcurrentMap<String, byte[]> previewCache = new ConcurrentHashMap<>();
@@ -79,19 +86,13 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     @Resource
     private DevFileApi devFileApi;
 
-    @Autowired
-    private List<AssetSource> assetSources;
-
     @Override
     public Page<BizAssetResourceVo> page(BizAssetResourcePageParam param) {
         LambdaQueryWrapper<BizAssetResource> query = Wrappers.lambdaQuery();
         query.eq(BizAssetResource::getStatus, ACTIVE);
-        query.in(BizAssetResource::getSource, SOURCE_VALUES);
+        query.eq(BizAssetResource::getSource, COLLECTED_SOURCE);
         if (StrUtil.isNotBlank(param.getType())) {
             query.eq(BizAssetResource::getType, param.getType());
-        }
-        if (StrUtil.isNotBlank(param.getSource())) {
-            query.eq(BizAssetResource::getSource, param.getSource());
         }
         if (StrUtil.isNotBlank(param.getInMaterial())) {
             query.eq(BizAssetResource::getInMaterial, param.getInMaterial());
@@ -103,8 +104,7 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
             String keyword = param.getKeyword();
             query.and(w -> w.like(BizAssetResource::getTitle, keyword)
                     .or().like(BizAssetResource::getDescription, keyword)
-                    .or().like(BizAssetResource::getTags, keyword)
-                    .or().like(BizAssetResource::getSourceKey, keyword));
+                    .or().like(BizAssetResource::getTags, keyword));
         }
         query.orderByDesc(BizAssetResource::getCreateTime);
 
@@ -116,54 +116,6 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         }
         result.setRecords(records);
         return result;
-    }
-
-    @Override
-    public List<AssetTypeSiteVo> siteTree() {
-        List<BizAssetResource> all = resourceMapper.selectList(Wrappers.<BizAssetResource>lambdaQuery()
-                .eq(BizAssetResource::getStatus, ACTIVE)
-                .select(BizAssetResource::getType, BizAssetResource::getSource));
-
-        Map<String, TreeSet<String>> sourceSetByType = new LinkedHashMap<>();
-        for (BizAssetSourceEnum source : BizAssetSourceEnum.values()) {
-            sourceSetByType.computeIfAbsent(source.getType(), key -> new TreeSet<>()).add(source.getValue());
-        }
-        for (BizAssetResource row : all) {
-            if (StrUtil.isBlank(row.getType()) || StrUtil.isBlank(row.getSource())) continue;
-            if (!SOURCE_VALUES.contains(row.getSource())) continue;
-            sourceSetByType.computeIfAbsent(row.getType(), key -> new TreeSet<>()).add(row.getSource());
-        }
-
-        List<AssetTypeSiteVo> tree = new ArrayList<>();
-        for (Map.Entry<String, TreeSet<String>> entry : sourceSetByType.entrySet()) {
-            String type = entry.getKey();
-            AssetTypeSiteVo typeNode = new AssetTypeSiteVo();
-            typeNode.setValue(type);
-            typeNode.setLabel(type);
-            typeNode.setAssetCount(count(type, null));
-
-            List<AssetSiteStatVo> sites = new ArrayList<>();
-            for (String source : entry.getValue()) {
-                AssetSiteStatVo siteNode = new AssetSiteStatVo();
-                siteNode.setValue(source);
-                siteNode.setLabel(source);
-                siteNode.setAssetCount(count(type, source));
-                sites.add(siteNode);
-            }
-            typeNode.setSites(sites);
-            tree.add(typeNode);
-        }
-        return tree;
-    }
-
-    private int count(String type, String source) {
-        LambdaQueryWrapper<BizAssetResource> query = Wrappers.lambdaQuery();
-        query.eq(BizAssetResource::getStatus, ACTIVE);
-        query.in(BizAssetResource::getSource, SOURCE_VALUES);
-        if (StrUtil.isNotBlank(type)) query.eq(BizAssetResource::getType, type);
-        if (StrUtil.isNotBlank(source)) query.eq(BizAssetResource::getSource, source);
-        Long count = resourceMapper.selectCount(query);
-        return count == null ? 0 : count.intValue();
     }
 
     @Override
@@ -220,6 +172,19 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         }
     }
 
+    @Override
+    public void delete(List<String> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return;
+        }
+        // MyBatis-Plus 逻辑删除，只清资源库记录，不动已加入素材中心的文件
+        resourceMapper.deleteBatchIds(ids);
+        ids.forEach(id -> {
+            previewCache.remove(id + ":preview");
+            previewCache.remove(id + ":full");
+        });
+    }
+
     /** 判断素材中心文件是否已经是本地文件库记录 */
     private boolean isLocalMaterial(String fileId) {
         if (StrUtil.isBlank(fileId)) {
@@ -233,125 +198,358 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         }
     }
 
-    /**
-     * 清理历史 Bing 重复数据：旧 sourceKey 带市场前缀，同一张壁纸会被存成多条。
-     * 保留已加入素材中心的记录；否则保留最早的一条。
-     */
-    private void deduplicateBing() {
-        List<BizAssetResource> rows = resourceMapper.selectList(Wrappers.<BizAssetResource>lambdaQuery()
-                .eq(BizAssetResource::getSource, BizAssetSourceEnum.BING.getValue()));
-        Map<String, BizAssetResource> keep = new LinkedHashMap<>();
-        for (BizAssetResource row : rows) {
-            String key = normalizeBingKey(row.getSourceKey());
-            if (StrUtil.isBlank(key)) continue;
-            BizAssetResource current = keep.get(key);
-            if (current == null || (!YES.equals(current.getInMaterial()) && YES.equals(row.getInMaterial()))) {
-                keep.put(key, row);
-            }
+    @Override
+    public String collectUrl(BizAssetCollectUrlParam param) {
+        String url = validateCollectUrl(param);
+        String type = normalizeCollectType(param.getType());
+        HttpFetchResult fetched = fetchUrl(url, 60000);
+        if (!isHtml(fetched)) {
+            BizAssetResourceVo vo = saveCollected(url, type, param.getName(), url, fetched);
+            return "采集完成：" + vo.getTitle() + "（" + type + "），已登记到素材资源库，可在列表中手动加入素材中心";
         }
-        for (BizAssetResource row : rows) {
-            String key = normalizeBingKey(row.getSourceKey());
-            BizAssetResource keeper = keep.get(key);
-            if (keeper != null && !keeper.getId().equals(row.getId())) {
-                resourceMapper.deleteById(row);
-            } else if (keeper != null && !key.equals(row.getSourceKey())) {
-                row.setSourceKey(key);
-                resourceMapper.updateById(row);
-            }
-        }
-    }
 
-    private String normalizeBingKey(String sourceKey) {
-        if (StrUtil.isBlank(sourceKey)) return "";
-        return sourceKey.replaceFirst("^bing:[^:]+:", "bing:");
+        List<String> mediaUrls = resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+        if (mediaUrls.isEmpty()) {
+            throw new CommonException("网页中未找到可采集的" + type + "资源");
+        }
+        int success = 0;
+        for (String mediaUrl : mediaUrls) {
+            try {
+                saveCollected(mediaUrl, type, null, url, null);
+                success++;
+            } catch (Exception e) {
+                log.warn("网页资源采集失败：{}，{}", mediaUrl, e.getMessage());
+            }
+        }
+        if (success == 0) {
+            throw new CommonException("网页资源采集失败，请稍后重试");
+        }
+        return "采集完成：从网页发现 " + mediaUrls.size() + " 个资源，成功 " + success + " 个，已登记到素材资源库，可在列表中手动加入素材中心";
     }
 
     @Override
-    public String collectWithConfig(String extJson) {
-        JSONObject config = StrUtil.isBlank(extJson) ? new JSONObject() : JSONUtil.parseObj(extJson);
-        previewCache.clear();
-        deduplicateBing();
-        String sources = config.getStr("sources", String.join(",", SOURCE_VALUES));
-        int added = 0;
-        int updated = 0;
-        int skipped = 0;
-        int okSources = 0;
-        List<String> emptySources = new ArrayList<>();
-        List<String> failedSources = new ArrayList<>();
-        for (String name : sources.split(",")) {
-            AssetSource source = findSource(name.trim());
-            if (source == null) {
-                log.warn("未找到素材来源：{}", name);
-                failedSources.add(name.trim());
-                continue;
+    public void collectUrlStream(BizAssetCollectUrlParam param, Consumer<AssetCollectEventVo> emitter) {
+        try {
+            String url = validateCollectUrl(param);
+            String type = normalizeCollectType(param.getType());
+            HttpFetchResult fetched = fetchUrl(url, 60000);
+            boolean htmlPage = isHtml(fetched);
+            List<String> mediaUrls;
+            if (htmlPage) {
+                mediaUrls = resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+                if (mediaUrls.isEmpty()) {
+                    emit(emitter, "error", 0, 0, "网页中未找到可采集的" + type + "资源", null);
+                    return;
+                }
+            } else {
+                mediaUrls = Collections.singletonList(url);
             }
-            List<AssetItem> items;
-            try {
-                items = source.fetch(config);
-            } catch (Exception e) {
-                log.error("素材来源 {} 发现失败：{}", source.source(), e.getMessage(), e);
-                failedSources.add(name.trim());
-                continue;
-            }
-            if (CollUtil.isEmpty(items)) {
-                skipped++;
-                emptySources.add(name.trim());
-                continue;
-            }
-            okSources++;
-            for (AssetItem item : items) {
+
+            int success = 0;
+            int fail = 0;
+            for (int i = 0; i < mediaUrls.size(); i++) {
+                String mediaUrl = mediaUrls.get(i);
                 try {
-                    BizAssetResource existing = findBySourceKey(item.getSourceKey());
-                    if (existing != null) {
-                        existing.setTitle(item.getTitle());
-                        existing.setDescription(item.getDescription());
-                        existing.setTags(item.getTags());
-                        existing.setLicense(item.getLicense());
-                        existing.setAuthor(item.getAuthor());
-                        existing.setHomepage(item.getHomepage());
-                        existing.setPreviewUrl(item.getPreviewUrl());
-                        existing.setImageUrl(item.getImageUrl());
-                        resourceMapper.updateById(existing);
-                        updated++;
-                    } else {
-                        BizAssetResource entity = new BizAssetResource();
-                        entity.setId(IdWorker.getIdStr());
-                        entity.setSource(item.getSource());
-                        entity.setSourceKey(item.getSourceKey());
-                        entity.setType(item.getType());
-                        entity.setTitle(item.getTitle());
-                        entity.setDescription(item.getDescription());
-                        entity.setTags(item.getTags());
-                        entity.setLicense(item.getLicense());
-                        entity.setAuthor(item.getAuthor());
-                        entity.setHomepage(item.getHomepage());
-                        entity.setPreviewUrl(item.getPreviewUrl());
-                        entity.setImageUrl(item.getImageUrl());
-                        entity.setSuffix(item.getSuffix());
-                        entity.setInMaterial(NO);
-                        entity.setStatus(ACTIVE);
-                        entity.setDownloads(0);
-                        resourceMapper.insert(entity);
-                        added++;
-                    }
+                    BizAssetResourceVo vo = saveCollected(mediaUrl, type, null, url,
+                            htmlPage ? null : fetched);
+                    success++;
+                    emit(emitter, "progress", i + 1, mediaUrls.size(), "已采集：" + vo.getTitle(), vo);
                 } catch (Exception e) {
-                    log.warn("素材 {} 保存失败：{}", item.getSourceKey(), e.getMessage());
+                    fail++;
+                    emit(emitter, "progress", i + 1, mediaUrls.size(),
+                            "第 " + (i + 1) + " 个资源采集失败：" + e.getMessage(), null);
                 }
             }
+            emit(emitter, "done", mediaUrls.size(), mediaUrls.size(),
+                    "采集完成：成功 " + success + " 个，失败 " + fail + " 个", null);
+        } catch (CommonException e) {
+            emit(emitter, "error", 0, 0, e.getMessage(), null);
+        } catch (Exception e) {
+            emit(emitter, "error", 0, 0, "采集失败：" + e.getMessage(), null);
         }
-        StringBuilder summary = new StringBuilder("采集完成，新增 ")
-                .append(added).append(" 条，更新 ").append(updated)
-                .append(" 条；有数据 ").append(okSources).append(" 个站点");
-        if (!emptySources.isEmpty()) {
-            summary.append("，无数据 ").append(emptySources.size())
-                    .append(" 个（").append(String.join("、", emptySources)).append("）");
+    }
+
+    private String validateCollectUrl(BizAssetCollectUrlParam param) {
+        if (param == null || StrUtil.isBlank(param.getUrl())) {
+            throw new CommonException("请输入资源网址");
         }
-        if (!failedSources.isEmpty()) {
-            summary.append("，失败 ").append(failedSources.size())
-                    .append(" 个（").append(String.join("、", failedSources)).append("）");
+        String url = StrUtil.trim(param.getUrl());
+        if (!StrUtil.startWithAnyIgnoreCase(url, "http://", "https://")) {
+            throw new CommonException("资源网址必须以 http:// 或 https:// 开头");
         }
-        log.info("远端素材{}", summary);
-        return summary.toString();
+        return url;
+    }
+
+    private HttpFetchResult fetchUrl(String url, int timeout) {
+        HttpRequest request = HttpRequest.get(url)
+                .header("User-Agent", "Mozilla/5.0 (compatible; domain-stream-asset/1.0)")
+                .header("Accept", "*/*")
+                .setFollowRedirects(true)
+                .timeout(timeout);
+        AssetHttpUtil.applyProxy(request);
+        try (HttpResponse response = request.execute()) {
+            if (!response.isOk()) {
+                throw new CommonException("网址请求失败：" + response.getStatus());
+            }
+            return new HttpFetchResult(response.bodyBytes(),
+                    StrUtil.blankToDefault(response.header("Content-Type"), ""));
+        } catch (CommonException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CommonException("网址内容获取失败：" + e.getMessage());
+        }
+    }
+
+    private boolean isHtml(HttpFetchResult fetched) {
+        String contentType = StrUtil.blankToDefault(fetched.contentType, "").toLowerCase(Locale.ROOT);
+        if (contentType.contains("text/html")) return true;
+        int length = Math.min(fetched.bytes.length, 256);
+        String head = new String(fetched.bytes, 0, length, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
+        return head.contains("<!doctype html") || head.contains("<html");
+    }
+
+    private List<String> resolveMediaUrls(String baseUrl, HttpFetchResult fetched, String type, int limit) {
+        String html = new String(fetched.bytes, StandardCharsets.UTF_8).replace("&amp;", "&");
+        Matcher matcher = MEDIA_URL_PATTERN.matcher(html);
+        Map<String, String> chosen = new LinkedHashMap<>();
+        while (matcher.find()) {
+            String candidate = matcher.group().trim();
+            if (!StrUtil.startWithAnyIgnoreCase(candidate, "http://", "https://")) continue;
+            if (!matchesCollectType(candidate, type)) continue;
+            String key = canonicalMediaKey(candidate);
+            String current = chosen.get(key);
+            if (current == null || mediaScore(candidate) > mediaScore(current)) {
+                chosen.put(key, candidate);
+            }
+        }
+        List<String> result = new ArrayList<>(chosen.values());
+        return result.size() <= limit ? result : new ArrayList<>(result.subList(0, limit));
+    }
+
+    private boolean matchesCollectType(String url, String type) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        if ("VIDEO".equals(type)) {
+            return lower.contains(".mp4") || lower.contains(".webm") || lower.contains(".mov") || lower.contains(".m4v");
+        }
+        if ("SVG".equals(type) || "ICON".equals(type)) {
+            return lower.contains(".svg");
+        }
+        return lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".png")
+                || lower.contains(".webp") || lower.contains(".gif") || lower.contains(".bmp");
+    }
+
+    private String canonicalMediaKey(String url) {
+        try {
+            String query = URI.create(url).getQuery();
+            if (StrUtil.isNotBlank(query)) {
+                for (String part : query.split("&")) {
+                    if (part.startsWith("id=") && part.length() > 3) {
+                        return "id:" + URLDecoder.decode(part.substring(3), StandardCharsets.UTF_8);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 非标准查询串直接按完整网址去重
+        }
+        return url;
+    }
+
+    private int mediaScore(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        int score = 0;
+        if (lower.contains("w=3840") || lower.contains("h=2160")) score += 4;
+        else if (lower.contains("w=2000")) score += 2;
+        if (lower.contains("uhd")) score += 1;
+        return score;
+    }
+
+    private int resolveCollectLimit(Integer rawLimit) {
+        if (rawLimit == null || rawLimit <= 0) return DEFAULT_COLLECT_LIMIT;
+        return Math.min(rawLimit, MAX_COLLECT_LIMIT);
+    }
+
+    private BizAssetResourceVo saveCollected(String url, String type, String customName, String homepage,
+                                              HttpFetchResult prefetched) {
+        HttpFetchResult fetched = prefetched == null ? fetchUrl(url, 60000) : prefetched;
+        byte[] bytes = fetched.bytes;
+        String responseContentType = fetched.contentType;
+        if (bytes.length == 0) {
+            throw new CommonException("网址返回内容为空");
+        }
+        if (isHtml(fetched)) {
+            throw new CommonException("资源地址返回的是网页，不是可下载资源");
+        }
+        long maxBytes = "VIDEO".equals(type) ? 500L * 1024 * 1024 : 50L * 1024 * 1024;
+        if (bytes.length > maxBytes) {
+            throw new CommonException("资源超过大小限制（" + (maxBytes / 1024 / 1024) + "MB）");
+        }
+
+        String suffix = resolveSuffix(url, responseContentType, type);
+        String title = StrUtil.blankToDefault(StrUtil.trim(customName), titleFromAssetUrl(url));
+        // 按规范资源标识去重：同一张 Bing 图的 w=3840 / w=480 地址应视为同一条
+        String sourceKey = "url:" + md5Hex(canonicalMediaKey(url));
+        String legacySourceKey = "url:" + md5Hex(url);
+
+        // 同时兼容历史数据，命中旧地址记录时顺手迁移为新的规范去重键
+        BizAssetResource entity = findBySourceKey(sourceKey, legacySourceKey);
+        boolean created = entity == null;
+        if (created) {
+            entity = new BizAssetResource();
+            entity.setId(IdWorker.getIdStr());
+        }
+        entity.setSource(COLLECTED_SOURCE);
+        entity.setSourceKey(sourceKey);
+        entity.setType(type);
+        entity.setTitle(title);
+        String description = "通过网址采集：" + homepage;
+        if (!url.equals(homepage)) description += "；资源地址：" + url;
+        entity.setDescription(description);
+        entity.setTags(type.toLowerCase(Locale.ROOT) + ",url,采集");
+        entity.setLicense("");
+        entity.setAuthor("");
+        entity.setHomepage(homepage);
+        entity.setPreviewUrl(url);
+        entity.setImageUrl(url);
+        entity.setSuffix(suffix);
+        entity.setInMaterial(NO);
+        entity.setMaterialFileId(null);
+        entity.setStatus(ACTIVE);
+        entity.setDownloads(0);
+        if (created) {
+            resourceMapper.insert(entity);
+        } else {
+            resourceMapper.updateById(entity);
+        }
+        previewCache.clear();
+        return toVo(entity);
+    }
+
+    private String titleFromAssetUrl(String url) {
+        try {
+            String query = URI.create(url).getQuery();
+            if (StrUtil.isNotBlank(query)) {
+                for (String part : query.split("&")) {
+                    if (part.startsWith("id=") && part.length() > 3) {
+                        String decoded = URLDecoder.decode(part.substring(3), StandardCharsets.UTF_8);
+                        int dot = decoded.lastIndexOf('.');
+                        if (dot > 0) decoded = decoded.substring(0, dot);
+                        String name = decoded.replaceFirst("(?i)^OHR\\.", "")
+                                .replaceFirst("(?i)_ZH-CN\\d+_UHD$", "");
+                        return StrUtil.isNotBlank(name) ? name.replace('_', ' ') : titleFromUrl(url);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 回退到通用网址标题推断
+        }
+        return titleFromUrl(url);
+    }
+
+    private void emit(Consumer<AssetCollectEventVo> emitter, String phase, int index, int total,
+                      String message, BizAssetResourceVo resource) {
+        AssetCollectEventVo event = new AssetCollectEventVo();
+        event.setPhase(phase);
+        event.setIndex(index);
+        event.setTotal(total);
+        event.setMessage(message);
+        event.setResource(resource);
+        emitter.accept(event);
+    }
+
+    private static class HttpFetchResult {
+        private final byte[] bytes;
+        private final String contentType;
+
+        private HttpFetchResult(byte[] bytes, String contentType) {
+            this.bytes = bytes;
+            this.contentType = contentType;
+        }
+    }
+
+    private String normalizeCollectType(String rawType) {
+        String type = StrUtil.blankToDefault(StrUtil.trim(rawType), "IMAGE").toUpperCase(Locale.ROOT);
+        if (!COLLECT_TYPES.contains(type)) {
+            throw new CommonException("不支持的资源类型：" + rawType);
+        }
+        return type;
+    }
+
+    private String resolveSuffix(String url, String contentType, String type) {
+        String lowerUrl = url.toLowerCase(Locale.ROOT);
+        String path = lowerUrl;
+        try {
+            path = URI.create(url).getPath().toLowerCase(Locale.ROOT);
+        } catch (Exception ignored) {
+            // 保留原始 URL 字符串继续推断
+        }
+        int slash = path.lastIndexOf('/');
+        if (slash >= 0 && slash < path.length() - 1) {
+            String last = path.substring(slash + 1);
+            int dot = last.lastIndexOf('.');
+            if (dot >= 0 && dot < last.length() - 1) {
+                String ext = last.substring(dot + 1).replaceAll("[^a-z0-9]", "");
+                if (KNOWN_SUFFIXES.contains(ext)) return ext;
+            }
+        }
+        String ct = StrUtil.blankToDefault(contentType, "").toLowerCase(Locale.ROOT);
+        if (ct.contains("svg")) return "svg";
+        if (ct.contains("png")) return "png";
+        if (ct.contains("webp")) return "webp";
+        if (ct.contains("jpeg") || ct.contains("jpg")) return "jpg";
+        if (ct.contains("gif")) return "gif";
+        if (ct.contains("mp4")) return "mp4";
+        if (ct.contains("webm")) return "webm";
+        if (ct.contains("quicktime")) return "mov";
+        return switch (type) {
+            case "VIDEO" -> "mp4";
+            case "SVG", "ICON" -> "svg";
+            default -> "jpg";
+        };
+    }
+
+    private String titleFromUrl(String url) {
+        try {
+            String path = URI.create(url).getPath();
+            String decoded = URLDecoder.decode(path == null ? "" : path, StandardCharsets.UTF_8);
+            int slash = decoded.lastIndexOf('/');
+            String last = slash >= 0 ? decoded.substring(slash + 1) : decoded;
+            if (StrUtil.isNotBlank(last)) {
+                int dot = last.lastIndexOf('.');
+                return dot > 0 ? last.substring(0, dot) : last;
+            }
+        } catch (Exception ignored) {
+            // 回退到来源主机
+        }
+        try {
+            return new URL(url).getHost();
+        } catch (Exception e) {
+            return "网址素材";
+        }
+    }
+
+    private String md5Hex(String input) {
+        try {
+            byte[] digest = MessageDigest.getInstance("MD5").digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b & 0xff));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return Integer.toHexString(input.hashCode());
+        }
+    }
+
+    private String safeFileName(String name) {
+        String safe = StrUtil.blankToDefault(name, "asset").replaceAll("[^a-zA-Z0-9_.-]", "_");
+        if (safe.length() > 60) safe = safe.substring(0, 60);
+        return safe;
+    }
+
+    private String categoryCode(String type) {
+        if ("ICON".equals(type) || "SVG".equals(type)) return BizAssetCategoryEnum.ICON.getValue();
+        if ("VIDEO".equals(type)) return "VIDEO";
+        return BizAssetCategoryEnum.WALLPAPER.getValue();
     }
 
     @Override
@@ -366,7 +564,7 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
             throw new CommonException("素材不存在");
         }
         String url = full ? resource.getImageUrl() : resource.getPreviewUrl();
-        if (StrUtil.isBlank(url) || !isAllowed(url)) {
+        if (StrUtil.isBlank(url) || !COLLECTED_SOURCE.equals(resource.getSource())) {
             throw new CommonException("素材地址不允许访问");
         }
 
@@ -395,7 +593,8 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                 }
             }
         }
-        if (bytes == null || bytes.length > 15 * 1024 * 1024) {
+        long maxBytes = full ? 200L * 1024 * 1024 : 15L * 1024 * 1024;
+        if (bytes == null || bytes.length > maxBytes) {
             throw new CommonException("远程素材超过大小限制");
         }
         if (!full) {
@@ -408,40 +607,41 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     public String contentType(String id) {
         BizAssetResource resource = resourceMapper.selectById(id);
         String suffix = resource == null ? "" : StrUtil.blankToDefault(resource.getSuffix(), "").toLowerCase();
-        if ("svg".equals(suffix)) return "image/svg+xml; charset=utf-8";
-        if ("png".equals(suffix)) return "image/png";
-        if ("webp".equals(suffix)) return "image/webp";
-        if ("jpeg".equals(suffix)) return "image/jpeg";
-        return "image/jpeg";
+        return mimeBySuffix(suffix);
     }
 
-    private AssetSource findSource(String sourceName) {
-        return assetSources.stream().filter(s -> s.source().equalsIgnoreCase(sourceName)).findFirst().orElse(null);
+    private String mimeBySuffix(String suffix) {
+        String value = StrUtil.blankToDefault(suffix, "").toLowerCase(Locale.ROOT);
+        return switch (value) {
+            case "svg" -> "image/svg+xml; charset=utf-8";
+            case "png" -> "image/png";
+            case "webp" -> "image/webp";
+            case "gif" -> "image/gif";
+            case "mp4" -> "video/mp4";
+            case "webm" -> "video/webm";
+            case "mov" -> "video/quicktime";
+            default -> "image/jpeg";
+        };
     }
 
-    private BizAssetResource findBySourceKey(String sourceKey) {
-        if (StrUtil.isBlank(sourceKey)) return null;
-        LambdaQueryWrapper<BizAssetResource> query = Wrappers.lambdaQuery();
-        query.eq(BizAssetResource::getSourceKey, sourceKey).last("limit 1");
-        return resourceMapper.selectOne(query);
-    }
-
-    private boolean isAllowed(String url) {
-        try {
-            URL parsed = new URL(url);
-            String host = parsed.getHost().toLowerCase();
-            if (!"https".equalsIgnoreCase(parsed.getProtocol())) return false;
-            return ALLOWED_HOSTS.stream().anyMatch(host::equals);
-        } catch (Exception e) {
-            return false;
+    private BizAssetResource findBySourceKey(String... sourceKeys) {
+        List<String> keys = new ArrayList<>();
+        for (String key : sourceKeys) {
+            if (StrUtil.isNotBlank(key) && !keys.contains(key)) {
+                keys.add(key);
+            }
         }
+        if (keys.isEmpty()) return null;
+        LambdaQueryWrapper<BizAssetResource> query = Wrappers.lambdaQuery();
+        query.in(BizAssetResource::getSourceKey, keys)
+                .orderByAsc(BizAssetResource::getId)
+                .last("limit 1");
+        return resourceMapper.selectOne(query);
     }
 
     private BizAssetResourceVo toVo(BizAssetResource row) {
         BizAssetResourceVo vo = new BizAssetResourceVo();
         vo.setId(row.getId());
-        vo.setSource(row.getSource());
-        vo.setSourceKey(row.getSourceKey());
         vo.setType(row.getType());
         vo.setTitle(row.getTitle());
         vo.setDescription(row.getDescription());

@@ -830,7 +830,7 @@ export default function App() {
           ) : route.module === 'materials' ? (
             <MaterialCenterView permissions={permissions} />
           ) : route.module === 'assetResource' ? (
-            <AssetResourceView permissions={permissions} />
+            <AssetResourceView />
           ) : route.module === 'config' ? (
             <ConfigView />
           ) : (

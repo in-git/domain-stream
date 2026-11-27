@@ -34,11 +34,13 @@ import {
 } from 'lucide-react';
 import {
   categoryLabel,
+  fetchThumbnailBlob,
   fileCenterApi,
   FILE_CATEGORIES,
   isAudioFile,
   isImageFile,
   isVideoFile,
+  thumbnailFetchPath,
   toOpenUrl,
   uploadMaterial,
   type DevFile,
@@ -102,6 +104,47 @@ function typeLabel(file: DevFile): string {
   return (file.suffix || '').replace('.', '').toUpperCase() || categoryLabel(file.category);
 }
 
+/**
+ * 缩略图接口需要 token，不能直接放进 <img src>。
+ * 先把受保护接口拉成 blob，再换成 object URL；组件卸载时释放。
+ */
+function useThumbSrc(file: DevFile, fallbackUrl: string): string {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = '';
+    setSrc('');
+
+    // 非后端缩略图接口（外链等）保持原样，避免误加 /snowy 前缀
+    if (!thumbnailFetchPath(file.thumbnail)) {
+      setSrc(file.thumbnail || fallbackUrl);
+      return () => {};
+    }
+
+    void fetchThumbnailBlob(file)
+      .then((blob) => {
+        if (cancelled) return;
+        if (!blob.size || (blob.type && !blob.type.startsWith('image/'))) {
+          setSrc(fallbackUrl);
+          return;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(fallbackUrl);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [file.id, file.thumbnail, fallbackUrl]);
+
+  return src;
+}
+
 /* ------------------------------------------------------------------ */
 /* 网格卡片                                                            */
 /* ------------------------------------------------------------------ */
@@ -132,8 +175,12 @@ function MaterialCard({
   const isImage = isImageFile(file);
   const isVideo = isVideoFile(file);
   const media = isImage || isVideo || isAudioFile(file);
-  const cover = file.thumbnail || (isImage ? toOpenUrl(file) : '');
+  const cover = useThumbSrc(file, isImage ? toOpenUrl(file) : '');
   const showCover = !!cover && !thumbFailed;
+
+  useEffect(() => {
+    setThumbFailed(false);
+  }, [file.id]);
 
   return (
     <div
@@ -261,6 +308,38 @@ function MaterialCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/** 表格行缩略图：与网格卡片共用同一套封面地址，失败时回退类型图标 */
+function MaterialTableThumb({ file }: { file: DevFile }) {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const Icon = coverIcon(file);
+  const cover = useThumbSrc(file, isImageFile(file) ? toOpenUrl(file) : '');
+  const showCover = !!cover && !thumbFailed;
+
+  useEffect(() => {
+    setThumbFailed(false);
+  }, [file.id]);
+
+  return (
+    <span
+      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${tileTone(file)}`}
+      style={isImageFile(file) ? IMAGE_TILE_BG : undefined}
+    >
+      {showCover ? (
+        <img
+          src={cover}
+          alt={file.name || '素材'}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setThumbFailed(true)}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <Icon className="w-4 h-4" strokeWidth={1.6} />
+      )}
+    </span>
   );
 }
 
@@ -924,7 +1003,6 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
             <span className="text-right">操作</span>
           </div>
           {visibleRecords.map((file) => {
-            const Icon = coverIcon(file);
             const isSelected = selected.has(file.id);
             return (
               <div
@@ -952,12 +1030,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
                   onClick={() => openFile(file)}
                   className="flex items-center gap-2.5 min-w-0 text-left"
                 >
-                  <span
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tileTone(file)}`}
-                    style={isImageFile(file) ? IMAGE_TILE_BG : undefined}
-                  >
-                    <Icon className="w-4 h-4" strokeWidth={1.6} />
-                  </span>
+                  <MaterialTableThumb file={file} />
                   <span className="min-w-0">
                     <span className="block text-[13px] text-[#1D1D1F] truncate">
                       {file.name || '未命名素材'}

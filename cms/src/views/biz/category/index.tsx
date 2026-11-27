@@ -22,6 +22,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings2,
   Tag,
   Trash2,
   X,
@@ -45,7 +46,7 @@ import {
   CategoryDeleteDialog,
   CategoryDetailDialog,
   CategoryFormDialog,
-  CategoryModuleFormDialog,
+  CategoryModuleManageDialog,
 } from './dialogs.tsx';
 
 const PAGE_SIZE = 10;
@@ -396,14 +397,14 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                   </button>
                 );
               })}
-              {can('add') && (
+              {(can('add') || can('edit') || can('delete')) && (
                 <button
                   type="button"
                   onClick={() => setModuleDialogOpen(true)}
                   className="h-8 px-2.5 rounded-lg text-[12px] font-medium inline-flex items-center gap-1 text-[#0071E3] hover:bg-[#0071E3]/8 transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  新增模块
+                  <Settings2 className="w-3.5 h-3.5" />
+                  管理模块
                 </button>
               )}
             </div>
@@ -638,7 +639,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                         <MediaImage
                           src={item.image || ''}
                           alt={item.name || '分类'}
-                          fallbackLabel={item.name?.slice(0, 1) || '#'}
+                          blankFallback
                           className="w-full h-full object-cover"
                         />
                       </div>
@@ -810,9 +811,11 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
         />
       )}
       {moduleDialogOpen && (
-        <CategoryModuleFormDialog
+        <CategoryModuleManageDialog
+          categories={items}
+          can={can}
           onClose={() => setModuleDialogOpen(false)}
-          onSuccess={() => notify('success', '模块已新增')}
+          onChanged={(message) => notify('success', message)}
         />
       )}
 
