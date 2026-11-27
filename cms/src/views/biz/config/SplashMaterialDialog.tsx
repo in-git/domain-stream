@@ -256,30 +256,46 @@ export function SplashMaterialDialog({
                 </FieldBlock>
 
                 <FieldBlock title="画布方向" subtitle="横竖屏数据互相独立">
-                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#EDEDF1] p-0.5">
+                  <div className="flex flex-col gap-1.5" role="radiogroup" aria-label="画布方向">
                     {(
                       [
-                        { value: 'pc' as const, label: '横屏', hint: 'PC · 1440×900' },
-                        { value: 'mobile' as const, label: '竖屏', hint: '移动 · 390×844' },
+                        { value: 'pc' as const, label: '横屏', hint: 'PC 端 · 1440 × 900' },
+                        { value: 'mobile' as const, label: '竖屏', hint: '移动端 · 390 × 844' },
                       ]
-                    ).map((item) => (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => setOrientation(item.value)}
-                        aria-pressed={orientation === item.value}
-                        className={`inline-flex h-8 flex-col items-center justify-center rounded-[10px] text-[12px] font-medium leading-none transition-colors ${
-                          orientation === item.value
-                            ? 'bg-white text-[#1D1D1F] shadow-sm'
-                            : 'text-[#6E6E73] hover:text-[#1D1D1F]'
-                        }`}
-                      >
-                        {item.label}
-                        <span className="mt-0.5 text-[9.5px] font-normal text-[#A1A1A6]">
-                          {item.hint}
-                        </span>
-                      </button>
-                    ))}
+                    ).map((item) => {
+                      const active = orientation === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => setOrientation(item.value)}
+                          className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                            active
+                              ? 'border-[#0071E3] bg-[#F2F8FF]'
+                              : 'border-[#E5E5EA] bg-white hover:border-[#0071E3]/50'
+                          }`}
+                        >
+                          {/* 单选圆点：选中时实心蓝点 */}
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                              active ? 'border-[#0071E3]' : 'border-[#C7C7CC]'
+                            }`}
+                          >
+                            {active && <span className="h-2 w-2 rounded-full bg-[#0071E3]" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12.5px] font-medium leading-none text-[#1D1D1F]">
+                              {item.label}
+                            </span>
+                            <span className="mt-1 block truncate text-[10.5px] leading-none text-[#86868B]">
+                              {item.hint}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </FieldBlock>
 
