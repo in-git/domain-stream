@@ -529,11 +529,6 @@ export function CanvasNodeInspector({
             </div>
           </div>
 
-          <p className="mt-auto text-[10.5px] leading-relaxed text-[#A1A1A6]">
-            点中画布里的组件
-            <br />
-            即可切换到组件配置
-          </p>
         </div>
       ) : (
         <>
