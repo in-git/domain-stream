@@ -5,7 +5,13 @@
  * 只读接口无需登录；留言提交需携带登录 token，后端按登录态写入 USER_ID。
  * 这里同时负责把后端实体字段映射为前台视图模型。
  */
-import type { ArticleItem, PhotoItem, VideoItem, MessageItem, MessageReply } from '../types/content';
+import type {
+  ArticleItem,
+  PhotoItem,
+  VideoItem,
+  MessageItem,
+  MessageReply,
+} from '../types/content';
 import { isRichHtml, markdownToHtml, richTextToPlain } from './richtext';
 import { getSnowyToken } from './snowyAuth';
 
@@ -682,3 +688,6 @@ export const portalApi = {
       }),
     }),
 };
+
+/* node: 网页模块已按 mac-home 原样迁入 src/views/HomeView/WebListPicker，接口见 src/api/site.ts */
+

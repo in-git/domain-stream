@@ -6,6 +6,7 @@ import {
   MessageCircleHeart,
   Newspaper,
   RefreshCw,
+  Globe,
 } from 'lucide-react';
 import type { SectionId } from '../types/content';
 import { APPLE_EASE } from '../lib/motion';
@@ -20,6 +21,7 @@ export function SectionSkeleton(_props: { section: ContentSection }) {
 const SECTION_META: Record<ContentSection, { label: string; Icon: typeof Film }> = {
   videos: { label: '视频', Icon: Film },
   articles: { label: '文章', Icon: Newspaper },
+  sites: { label: '网页', Icon: Globe },
   gallery: { label: '图文', Icon: Images },
   messages: { label: '留言', Icon: MessageCircleHeart },
 };

@@ -287,4 +287,20 @@ public interface DevFileApi {
      * @date 2026/11/23
      */
     String uploadAssetReturnId(String engine, MultipartFile file, String bizType, String categoryCode);
+
+    /**
+     * 根据文件url删除文件记录
+     *
+     * @author domain-stream
+     * @date 2026/11/27
+     */
+    void deleteByUrl(String url);
+
+    /**
+     * 判断当前默认存储引擎是否为本地存储
+     *
+     * @author domain-stream
+     * @date 2026/11/27
+     */
+    boolean isLocalEngine();
 }

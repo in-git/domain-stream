@@ -17,12 +17,14 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import vip.xiaonuo.common.exception.CommonException;
 import vip.xiaonuo.dev.api.DevConfigApi;
 import vip.xiaonuo.dev.api.DevFileApi;
+import vip.xiaonuo.dev.modular.file.entity.DevFile;
 import vip.xiaonuo.dev.modular.file.enums.DevFileEngineTypeEnum;
 import vip.xiaonuo.dev.modular.file.param.DevFileIdParam;
 import vip.xiaonuo.dev.modular.file.param.DevFileListParam;
@@ -244,5 +246,22 @@ public class DevFileApiProvider implements DevFileApi {
     public String uploadAssetReturnId(String engine, MultipartFile file, String bizType, String categoryCode) {
         String targetEngine = ObjectUtil.isNotEmpty(engine) ? engine : devConfigApi.getValueByKey(SNOWY_SYS_DEFAULT_FILE_ENGINE_KEY);
         return devFileService.uploadReturnId(targetEngine, file, bizType, categoryCode);
+    }
+
+    @Override
+    public void deleteByUrl(String url) {
+        if (StrUtil.isBlank(url)) return;
+        LambdaQueryWrapper<DevFile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DevFile::getDownloadPath, url);
+        devFileService.remove(wrapper);
+    }
+
+    @Override
+    public boolean isLocalEngine() {
+        String defaultEngine = devConfigApi.getValueByKey(SNOWY_SYS_DEFAULT_FILE_ENGINE_KEY);
+        if (StrUtil.isBlank(defaultEngine)) {
+            return true;
+        }
+        return DevFileEngineTypeEnum.LOCAL.getValue().equalsIgnoreCase(defaultEngine);
     }
 }

@@ -16,6 +16,7 @@ interface LeftSidebarProps {
 export const BUILTIN_SECTIONS: readonly string[] = [
   'videos',
   'articles',
+  'sites',
   'gallery',
   'messages',
   'profile',

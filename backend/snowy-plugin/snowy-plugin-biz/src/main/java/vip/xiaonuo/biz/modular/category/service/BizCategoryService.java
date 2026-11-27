@@ -12,7 +12,9 @@
  */
 package vip.xiaonuo.biz.modular.category.service;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,7 +26,9 @@ import vip.xiaonuo.biz.modular.category.param.BizCategoryIdParam;
 import vip.xiaonuo.biz.modular.category.param.BizCategoryPageParam;
 import java.io.Serializable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 通用分类（文章/视频/图文）Service接口
@@ -105,4 +109,32 @@ public interface BizCategoryService extends IService<BizCategory> {
      * @date  2026/11/19 02:04
      */
     void exportData(List<BizCategoryIdParam> bizCategoryIdParamList, HttpServletResponse response) throws IOException;
+
+    /**
+     * 按模块查询分类列表，按 sortCode 升序
+     *
+     * @author domain-stream
+     * @date 2026/11/27
+     */
+    default List<BizCategory> listByModule(String module) {
+        LambdaQueryWrapper<BizCategory> wrapper = new LambdaQueryWrapper<>();
+        if (StrUtil.isNotBlank(module)) {
+            wrapper.eq(BizCategory::getModule, module);
+        }
+        wrapper.orderByAsc(BizCategory::getSortCode);
+        return this.list(wrapper);
+    }
+
+    /**
+     * 按ID集合查询分类列表
+     *
+     * @author domain-stream
+     * @date 2026/11/27
+     */
+    default List<BizCategory> listByIdSet(Set<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return this.listByIds(ids);
+    }
 }

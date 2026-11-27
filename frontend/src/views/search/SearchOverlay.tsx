@@ -41,6 +41,8 @@ const SCOPE: Record<SectionId, RowKind[]> = {
   articles: ['article'],
   gallery: ['graphic'],
   messages: ['message'],
+  // 网页板块使用列表内的搜索框，全局搜索不覆盖站点
+  sites: [],
   // 个人中心和设置页没有专属内容，搜索全部模块
   profile: ['video', 'article', 'graphic', 'message'],
   settings: ['video', 'article', 'graphic', 'message'],
@@ -51,6 +53,7 @@ const SCOPE_LABEL: Record<SectionId, string> = {
   articles: '文章',
   gallery: '图文',
   messages: '留言',
+  sites: '网页',
   profile: '全部内容',
   settings: '全部内容',
 };

@@ -220,6 +220,10 @@ public class ClientUser extends CommonEntity {
     @Schema(description = "排序码")
     private Integer sortCode;
 
+    /** 用户备注文件路径（bucket/key 格式） */
+    @Schema(description = "用户备注文件路径")
+    private String notePath;
+
     /** 扩展信息 */
     @Schema(description = "扩展信息")
     @TableField(insertStrategy = FieldStrategy.ALWAYS, updateStrategy = FieldStrategy.ALWAYS)

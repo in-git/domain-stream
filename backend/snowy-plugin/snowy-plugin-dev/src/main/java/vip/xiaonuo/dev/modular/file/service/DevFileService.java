@@ -12,6 +12,7 @@
  */
 package vip.xiaonuo.dev.modular.file.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -289,4 +290,17 @@ public interface DevFileService extends IService<DevFile> {
      */
     void streamForPlay(String id, String sign, jakarta.servlet.http.HttpServletRequest request,
                        HttpServletResponse response) throws IOException;
+
+    /**
+     * 根据文件url集合批量删除文件记录
+     *
+     * @author domain-stream
+     * @date 2026/11/27
+     */
+    default void deleteByUrls(List<String> urls) {
+        if (urls == null || urls.isEmpty()) return;
+        LambdaQueryWrapper<DevFile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(DevFile::getDownloadPath, urls);
+        this.remove(wrapper);
+    }
 }

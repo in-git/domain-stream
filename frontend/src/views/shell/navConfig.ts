@@ -22,6 +22,7 @@ const SETTINGS_NAV_ITEM: SidebarNavItem = {
 export const DEFAULT_NAV: SidebarNavItem[] = [
   { id: 'videos', moduleKey: 'videos', sectionKey: 'videos', moduleType: 'builtin', label: '视频' },
   { id: 'articles', moduleKey: 'articles', sectionKey: 'articles', moduleType: 'builtin', label: '文章' },
+  { id: 'sites', moduleKey: 'sites', sectionKey: 'sites', moduleType: 'builtin', label: '网页' },
   { id: 'gallery', moduleKey: 'gallery', sectionKey: 'gallery', moduleType: 'builtin', label: '图文' },
   { id: 'messages', moduleKey: 'messages', sectionKey: 'messages', moduleType: 'builtin', label: '留言' },
   { ...SETTINGS_NAV_ITEM },
@@ -55,6 +56,8 @@ function parseModuleType(
   moduleKey: string,
   sectionKey?: string
 ): NavModuleType {
+  // 内置板块以代码为准：CMS 可能把新接入的内置模块仍标成 placeholder，这里强制纠正
+  if ((SECTION_IDS as string[]).includes((sectionKey || moduleKey).trim())) return 'builtin';
   if (value === 'builtin' || value === 'placeholder') return value;
   return inferNavModuleType(moduleKey, sectionKey);
 }
