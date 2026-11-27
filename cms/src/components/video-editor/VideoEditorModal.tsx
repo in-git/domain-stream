@@ -37,6 +37,7 @@ import {
   runVideoEdit,
   type VideoCropRect,
 } from '../../lib/ffmpegClient';
+import type { VideoItem } from '../../types/cms';
 
 const ACCENT = '#0071E3';
 
@@ -84,8 +85,7 @@ function formatClock(seconds: number): string {
 
 interface VideoEditorModalProps {
   open: boolean;
-  /** 视频源：远端地址或本地 blob: 预览地址均可 */
-  item: { title?: string; videoUrl: string } | null;
+  item: Pick<VideoItem, 'id' | 'title' | 'videoUrl'> | null;
   onClose: () => void;
   /** 产物上传完成后回调（新素材 URL），由调用方回填视频记录 */
   onApplied: (newUrl: string) => Promise<void> | void;
@@ -163,7 +163,7 @@ export function VideoEditorModal({ open, item, onClose, onApplied }: VideoEditor
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, item?.videoUrl]);
+  }, [open, item?.id]);
 
   /** 压缩档位换算：目标高度不超过原片高度（只缩不放），CRF 随档位 */
   const activePreset = COMPRESS_PRESETS.find((item) => item.value === preset) ?? COMPRESS_PRESETS[2];

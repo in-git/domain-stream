@@ -69,7 +69,6 @@ import {
   Ungroup,
 } from 'lucide-react';
 import { FilePicker } from '../FilePicker.tsx';
-import { VideoEditorModal } from '../video-editor/VideoEditorModal.tsx';
 import { toOpenUrl, type DevFile } from '../../lib/fileCenter.ts';
 import {
   CanvasNodeInspector,
@@ -170,11 +169,6 @@ export interface CanvasEditorProps {
   snap?: boolean;
   /** 是否显示左侧图层面板，默认显示 */
   layers?: boolean;
-  /**
-   * 选中背景视频后自动进入剪辑弹窗（裁剪 / 调整时长 / 压缩，设置开屏使用）；
-   * 产物作为新文件上传素材库后回填背景视频。不传则选中即直接使用原视频。
-   */
-  editBackgroundVideo?: boolean;
   className?: string;
 }
 
@@ -334,7 +328,6 @@ export function CanvasEditor({
   renderInspector,
   snap = true,
   layers = true,
-  editBackgroundVideo = false,
   className,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -389,8 +382,6 @@ export function CanvasEditor({
   const [pickerTarget, setPickerTarget] = useState<'node' | 'background-image' | 'background-video'>(
     'node'
   );
-  /** 剪辑弹窗的源视频：editBackgroundVideo 开启时，选中背景视频后自动进入 */
-  const [videoEditorSource, setVideoEditorSource] = useState<{ name: string; url: string } | null>(null);
   /** 右键菜单：命中节点 + 菜单在画布容器内的坐标 */
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const rightDownRef = useRef<string | null>(null);
@@ -1087,10 +1078,10 @@ export function CanvasEditor({
     // revision：外部换文档 / 撤销重做时重挂实例
   }, [syncFromCanvas, revision, snap, updateSelection]);
 
-  // 告诉外层弹窗：选择器 / 剪辑弹窗 / 右键菜单打开时 Esc 先由它们自己处理
+  // 告诉外层弹窗：选择器 / 右键菜单打开时 Esc 先由它们自己处理
   useEffect(() => {
-    onOverlayChange?.(pickerOpen || videoEditorSource !== null || menu !== null);
-  }, [pickerOpen, videoEditorSource, menu, onOverlayChange]);
+    onOverlayChange?.(pickerOpen || menu !== null);
+  }, [pickerOpen, menu, onOverlayChange]);
 
   // 右键菜单打开时 Esc 只关菜单
   useEffect(() => {
@@ -1721,11 +1712,6 @@ export function CanvasEditor({
     const stored = toOpenUrl(file).replace(/^\/snowy/, '');
     // 背景：图 / 视频可以同时保留，渲染时视频优先；删除由封面上的删除按钮负责
     if (target === 'background-video') {
-      // 设置开屏：选中视频后先进剪辑弹窗，产物回填背景视频；关闭则用原视频
-      if (editBackgroundVideo) {
-        setVideoEditorSource({ name: file.name || file.objName || '背景视频', url: toOpenUrl(file) });
-        return;
-      }
       patchCanvas({ backgroundVideo: stored });
       return;
     }
@@ -2053,14 +2039,6 @@ export function CanvasEditor({
         accept={pickerTarget === 'background-video' ? 'video' : 'image'}
         title={PICKER_TITLES[pickerTarget]}
         onSelect={handlePicked}
-      />
-
-      {/* 背景视频剪辑弹窗（editBackgroundVideo 开启时）：产物上传素材库后回填背景视频 */}
-      <VideoEditorModal
-        open={videoEditorSource !== null}
-        item={videoEditorSource ? { title: videoEditorSource.name, videoUrl: videoEditorSource.url } : null}
-        onClose={() => setVideoEditorSource(null)}
-        onApplied={(url) => patchCanvas({ backgroundVideo: url.replace(/^\/snowy/, '') })}
       />
     </div>
   );

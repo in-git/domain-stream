@@ -81,7 +81,6 @@ export function SplashCanvasEditor({
           value={doc[orientation]}
           onChange={(next) => handleChange(orientation, next)}
           onOverlayChange={onOverlayChange}
-          editBackgroundVideo
         />
       </div>
     </div>
