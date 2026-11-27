@@ -883,9 +883,7 @@ export default function AssetResourceView() {
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="text-[16px] font-semibold text-[#1D1D1F]">按网址采集素材</h3>
-                <p className="mt-1.5 text-[13px] leading-5 text-[#6E6E73]">
-                  输入图片直链或图片列表网页，选择类型后会自动抽取真实资源并保存到素材资源库。
-                </p>
+             
               </div>
               <button
                 type="button"
@@ -934,10 +932,8 @@ export default function AssetResourceView() {
                   className="mt-0.5 w-4 h-4 accent-[#0071E3] disabled:opacity-50"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[13px] font-medium text-[#1D1D1F]">深度搜索整站内链（默认关闭）</span>
-                  <span className="block mt-0.5 text-[11px] leading-4 text-[#86868B]">
-                    勾选后继续抓取同站页面，页面与资源自动去重，直到站内资源采集完成。
-                  </span>
+                  <span className="block text-[13px] font-medium text-[#1D1D1F]">深度搜索</span>
+                
                 </span>
               </label>
               <div className="rounded-xl bg-[#F5F5F7] px-3.5 py-2.5 text-[12px] leading-5 text-[#6E6E73]">
