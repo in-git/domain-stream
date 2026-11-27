@@ -171,9 +171,17 @@ export function SplashMaterialDialog({
 
   const titleValue = values[TITLE_KEY] || '';
   const durationValue = (values[SPLASH_DURATION_KEY] || '').trim();
-  const audioFilled = !!(values[SPLASH_AUDIO_KEY] || '').trim();
-  // 画布任一方向把背景配成视频时，开屏音频不再叠加：音频入口只对图片背景开放
+  const audioValue = (values[SPLASH_AUDIO_KEY] || '').trim();
+  const audioFilled = !!audioValue;
+  // 已选音频显示文件名（取路径最后一段并解码），未选时保持「未设置」
+  const audioName = audioFilled
+    ? decodeURIComponent(audioValue.split('/').pop() || '') || '已设置'
+    : '未设置';
+  // 画布任一方向把背景配成视频时，开屏音频不再叠加；没选图片背景时音频入口不出现
   const splashCanvasDoc = parseSplashCanvas(values[SPLASH_CANVAS_KEY]);
+  const hasBackgroundImage = Boolean(
+    splashCanvasDoc && (splashCanvasDoc.pc.backgroundImage || splashCanvasDoc.mobile.backgroundImage)
+  );
   const hasBackgroundVideo = Boolean(
     splashCanvasDoc && (splashCanvasDoc.pc.backgroundVideo || splashCanvasDoc.mobile.backgroundVideo)
   );
@@ -306,12 +314,12 @@ export function SplashMaterialDialog({
                       画布背景已使用视频，视频自带声音，不再叠加音频；把背景切回图片后可重新设置
                     </p>
                   </div>
-                ) : (
+                ) : hasBackgroundImage ? (
                   <div className="flex flex-col gap-2">
                     <p className="text-[11px] text-[#86868B]">开屏音频</p>
                     <MediaCard
                       label="音频"
-                      hint={audioFilled ? '已设置' : '未设置'}
+                      hint={audioName}
                       icon={Music}
                       filled={audioFilled}
                       onSelect={() => setPickerKey(SPLASH_AUDIO_KEY)}
@@ -319,7 +327,7 @@ export function SplashMaterialDialog({
                       onRemove={() => onChange(SPLASH_AUDIO_KEY, '')}
                     />
                   </div>
-                )}
+                ) : null}
 
                 <p className="mt-auto flex items-start gap-1.5 text-[10.5px] leading-relaxed text-[#86868B]">
                   <FolderOpen className="mt-0.5 h-3 w-3 shrink-0" />

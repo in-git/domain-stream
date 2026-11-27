@@ -491,25 +491,29 @@ export function CanvasNodeInspector({
           {(backgroundImage || backgroundVideo) && (
             <div>
               <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">铺满方式</span>
-              <div className="grid grid-cols-2 gap-1">
+              <div className="flex gap-1">
                 {CANVAS_IMAGE_MODES.map((mode) => (
-                  <button
+                  <Hint
                     key={mode.value}
-                    type="button"
-                    onClick={() => onCanvasPatch({ backgroundMode: mode.value })}
-                    className={`h-7 rounded-md border text-[11px] transition-colors ${
-                      backgroundMode === mode.value
-                        ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
-                        : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
-                    }`}
+                    label={`${mode.label}：${mode.tip}`}
+                    className="min-w-0 flex-1"
                   >
-                    {mode.label}
-                  </button>
+                    <button
+                      type="button"
+                      aria-label={`${mode.label}：${mode.tip}`}
+                      aria-pressed={backgroundMode === mode.value}
+                      onClick={() => onCanvasPatch({ backgroundMode: mode.value })}
+                      className={`flex h-8 w-full items-center justify-center rounded-md border transition-colors ${
+                        backgroundMode === mode.value
+                          ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
+                          : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
+                      }`}
+                    >
+                      <ModeGlyph mode={mode.value} className="h-4 w-5" />
+                    </button>
+                  </Hint>
                 ))}
               </div>
-              <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#A1A1A6]">
-                等比铺满不变形、裁掉超出部分；拉伸铺满强制变形铺满画布
-              </p>
             </div>
           )}
 
@@ -935,6 +939,37 @@ function TextStyleButton({
         <Icon className="h-3.5 w-3.5" />
       </button>
     </Hint>
+  );
+}
+
+/**
+ * 铺满方式的小示意图：外框代表画布，实心块代表图片的铺法。
+ * 等比铺满撑到框外（被裁切）、原比例完整留边、拉伸铺满贴合画布、
+ * 横/纵向拉伸只撑满一个方向。
+ */
+function ModeGlyph({ mode, className }: { mode: CanvasImageMode; className?: string }) {
+  const shapes: Record<CanvasImageMode, { x: number; y: number; width: number; height: number }> = {
+    cover: { x: -1, y: -1, width: 16, height: 12 },
+    fit: { x: 3.5, y: 2.5, width: 7, height: 5 },
+    stretch: { x: 1.5, y: 1, width: 11, height: 8 },
+    'stretch-x': { x: 1.5, y: 3, width: 11, height: 4 },
+    'stretch-y': { x: 5, y: 1, width: 4, height: 8 },
+  };
+  const shape = shapes[mode];
+  return (
+    <svg viewBox="0 0 14 10" fill="none" className={className} aria-hidden="true">
+      <rect x="1.5" y="1" width="11" height="8" rx="0.5" stroke="currentColor" strokeOpacity="0.45" />
+      <rect
+        x={shape.x}
+        y={shape.y}
+        width={shape.width}
+        height={shape.height}
+        fill="currentColor"
+        fillOpacity="0.25"
+        stroke="currentColor"
+        strokeWidth="0.9"
+      />
+    </svg>
   );
 }
 
