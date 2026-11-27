@@ -112,10 +112,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   const progressFillRef = useRef<HTMLDivElement | null>(null);
   const portrait = usePortrait();
 
-  // 开屏形式：视频 / 封面画布互斥，只生效一种
-  const splashMode = resolveSplashMode(config);
-  // 后台画布文档：按当前屏幕方向取 PC 或移动端那一份；没有则继续走旧版开屏
-  const canvasDoc = splashMode === 'cover' ? parseSplashCanvas(config.splashCanvas) : null;
+  // 开屏不再有「形式」开关：画布配了背景视频就播视频，否则渲染画布组件；
+  // 完全没有画布文档的旧配置才回退到「有视频播视频，否则整屏图片」
+  const canvasDoc = parseSplashCanvas(config.splashCanvas);
   const canvas = canvasDoc ? (portrait ? canvasDoc.mobile : canvasDoc.pc) : null;
   // 背景视频只跟随当前方向的画布，横竖屏各自独立
   const backgroundVideoUrl = canvas?.backgroundVideo
@@ -132,10 +131,11 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   const landscapeImage = rawLandscapeImage || rawPortraitImage;
   const portraitImage = rawPortraitImage || rawLandscapeImage;
 
-  // 视频模式才播视频；封面模式下旧版整屏图片与画布互斥，画布存在时不再重复渲染
-  const videoUrl = splashMode === 'video' ? (portrait ? portraitVideo : landscapeVideo) : '';
+  // 旧版兜底素材：画布一旦保存过就以画布为准，旧字段只在完全没有画布文档时生效
+  const legacyMode = canvas ? null : resolveSplashMode(config);
+  const videoUrl = legacyMode === 'video' ? (portrait ? portraitVideo : landscapeVideo) : '';
   const imageUrl =
-    splashMode === 'cover' && !canvas ? (portrait ? portraitImage : landscapeImage) : '';
+    !videoUrl && legacyMode === 'cover' ? (portrait ? portraitImage : landscapeImage) : '';
   const hasVisualMedia = Boolean(imageUrl || videoUrl);
   // 与 CMS 拖拽预览共用同一套百分比坐标，横屏取第 0 项、竖屏取第 1 项
   const orientationIndex = portrait ? 1 : 0;
@@ -152,9 +152,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   const titleColor = (config.splashTitleColor || '').trim();
   const progressWidth = Number((config.splashProgressWidth || '').trim()) || 0;
   const progressColor = (config.splashProgressColor || '').trim();
-  // 音频只在封面 + 图片背景下播放：视频开屏和画布背景视频都自带声音，不叠加音频
+  // 音频只在图片背景下播放：视频开屏（旧配置）和画布背景视频都自带声音，不叠加音频
   const audioUrl =
-    splashMode === 'video' || backgroundVideoUrl ? '' : publicFileUrl(config.splashAudioUrl);
+    videoUrl || backgroundVideoUrl ? '' : publicFileUrl(config.splashAudioUrl);
   // 后台「开屏时间」优先；未配置时按素材时长（限制在合理区间），再退回默认值
   const configuredSeconds = Number((config.splashDuration || '').trim());
   const configuredDuration =
@@ -217,8 +217,8 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   }, [runDuration, onComplete]);
 
   /**
-   * 视频模式：播放视频本身（视频自带声音），不再叠加音频；
-   * 封面模式：播放图片 / 画布 + 后台配置的音频。两者互斥，只会有一路在响。
+   * 整屏视频（旧配置的「视频开屏」）：播放视频本身（视频自带声音），不叠加音频；
+   * 画布背景视频走画布层，同样自带声音。只会有一路视频 / 音频在响。
    */
   useEffect(() => {
     const video = videoRef.current;

@@ -26,19 +26,16 @@ import {
   Check,
   CopyPlus,
   Film,
-  ImageOff,
-  ImagePlus,
+  FolderOpen,
   Italic,
   Lock,
   LockOpen,
   Maximize2,
-  Replace,
   Strikethrough,
   Trash2,
   Underline,
-  VideoOff,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ColorField } from './ColorField';
 import { Hint } from './Hint';
 import { loadVideoFrame } from './videoFrame';
@@ -234,6 +231,73 @@ function VideoThumb({ src }: { src: string }) {
   return <img src={frame} alt="" className="h-[88px] w-full object-cover" />;
 }
 
+/**
+ * 背景素材封面：点击封面直接打开文件中心替换；右上角悬浮「替换」「删除」
+ * 两个图标按钮（绝对定位在封面上）。未设置时显示虚线上传位。
+ */
+function BackgroundCover({
+  label,
+  cover,
+  filled,
+  onPick,
+  onRemove,
+}: {
+  /** 素材类型名，用于 aria 与 tooltip：图片 / 视频 */
+  label: string;
+  /** 封面内容：图片缩略图或视频首帧 */
+  cover: ReactNode;
+  filled: boolean;
+  onPick: () => void;
+  onRemove: () => void;
+}) {
+  if (!filled) {
+    return (
+      <button
+        type="button"
+        onClick={onPick}
+        aria-label={`选择背景${label}`}
+        className="mt-2 flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#D2D2D7] bg-white text-[#86868B] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
+      >
+        <FolderOpen className="h-4 w-4" />
+      </button>
+    );
+  }
+  return (
+    <div className="relative mt-2 overflow-hidden rounded-lg border border-[#E5E5EA] bg-[#F5F5F7]">
+      <button
+        type="button"
+        onClick={onPick}
+        aria-label={`替换背景${label}`}
+        className="block w-full cursor-pointer"
+      >
+        {cover}
+      </button>
+      <div className="absolute right-1.5 top-1.5 flex gap-1">
+        <Hint label={`替换背景${label}`} className="inline-flex h-6 w-6">
+          <button
+            type="button"
+            onClick={onPick}
+            aria-label={`替换背景${label}`}
+            className="inline-flex h-full w-full items-center justify-center rounded-md bg-white/90 text-[#6E6E73] shadow-sm transition-colors hover:text-[#0071E3]"
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+          </button>
+        </Hint>
+        <Hint label={`删除背景${label}`} className="inline-flex h-6 w-6">
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`删除背景${label}`}
+            className="inline-flex h-full w-full items-center justify-center rounded-md bg-white/90 text-[#CF1322] shadow-sm transition-colors hover:text-[#FF4D4F]"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </Hint>
+      </div>
+    </div>
+  );
+}
+
 function toggleDecoration(
   value: CanvasTextDecoration | undefined,
   part: 'under' | 'strike'
@@ -398,74 +462,32 @@ export function CanvasNodeInspector({
             </div>
 
             {bgKind === 'video' ? (
-              <div className="mt-2 flex flex-col gap-2">
-                <div className="overflow-hidden rounded-lg border border-[#E5E5EA] bg-[#F5F5F7]">
-                  <VideoThumb src={backgroundVideo} />
-                </div>
+              <div className="flex flex-col gap-2">
+                <BackgroundCover
+                  label="视频"
+                  filled={!!backgroundVideo}
+                  onPick={onPickBackgroundVideo}
+                  onRemove={onClearBackgroundVideo}
+                  cover={<VideoThumb src={backgroundVideo} />}
+                />
                 <p className="text-[10.5px] leading-relaxed text-[#86868B]">
                   编辑器里只显示首帧，前台开屏时播放
                 </p>
-                {backgroundVideo ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <IconButton
-                      icon={Replace}
-                      label="替换背景视频"
-                      onClick={onPickBackgroundVideo}
-                      className="h-8 w-full"
-                    />
-                    <IconButton
-                      icon={VideoOff}
-                      label="移除背景视频"
-                      onClick={onClearBackgroundVideo}
-                      danger
-                      className="h-8 w-full"
-                    />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onPickBackgroundVideo}
-                    aria-label="选择背景视频"
-                    className="flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#D2D2D7] bg-white text-[#86868B] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
-                  >
-                    <Film className="h-4 w-4" />
-                  </button>
-                )}
               </div>
-            ) : backgroundImage ? (
-              <div className="mt-2 flex flex-col gap-2">
-                <div className="overflow-hidden rounded-lg border border-[#E5E5EA] bg-[#F5F5F7]">
+            ) : (
+              <BackgroundCover
+                label="图片"
+                filled={!!backgroundImage}
+                onPick={onPickBackgroundImage}
+                onRemove={onClearBackgroundImage}
+                cover={
                   <img
                     src={previewUrl(backgroundImage)}
                     alt=""
                     className="h-[88px] w-full object-cover"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <IconButton
-                    icon={Replace}
-                    label="替换背景图"
-                    onClick={onPickBackgroundImage}
-                    className="h-8 w-full"
-                  />
-                  <IconButton
-                    icon={ImageOff}
-                    label="移除背景图"
-                    onClick={onClearBackgroundImage}
-                    danger
-                    className="h-8 w-full"
-                  />
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onPickBackgroundImage}
-                aria-label="选择背景图"
-                className="mt-2 flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#D2D2D7] bg-white text-[#86868B] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
-              >
-                <ImagePlus className="h-4 w-4" />
-              </button>
+                }
+              />
             )}
           </div>
 
@@ -643,7 +665,7 @@ export function CanvasNodeInspector({
             {node.type === 'image' && (
               <>
                 <IconButton
-                  icon={Replace}
+                  icon={FolderOpen}
                   label="替换图片"
                   onClick={onReplaceImage}
                   className="h-8 w-full"

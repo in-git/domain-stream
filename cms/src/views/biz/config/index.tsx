@@ -40,9 +40,6 @@ import {
   SPLASH_LAYOUT_KEYS,
   SPLASH_MEDIA_KEYS,
   SPLASH_STYLE_KEYS,
-  SPLASH_TYPE_KEY,
-  SPLASH_VIDEO_KEYS,
-  resolveSplashKind,
   type ConfigDraft,
   type ConfigFieldDef,
 } from './schema';
@@ -50,7 +47,7 @@ import { PreviewPanel } from './PreviewPanel';
 import { NavItemsEditor } from './NavItemsEditor';
 import { ContactLinksEditor } from './ContactLinksEditor';
 import { SplashMaterialDialog } from './SplashMaterialDialog';
-import { countCanvasNodes } from './splash-canvas/types';
+import { countCanvasNodes, parseSplashCanvas } from './splash-canvas/types';
 
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -352,31 +349,27 @@ export default function ConfigView() {
           !advancedFields.some((f) => f.key === field.key) &&
           field.key !== SPLASH_DURATION_KEY &&
           field.key !== SPLASH_CANVAS_KEY &&
-          field.key !== SPLASH_TYPE_KEY &&
           !SPLASH_MEDIA_KEYS.includes(field.key) &&
           !SPLASH_LAYOUT_KEYS.includes(field.key) &&
           !SPLASH_STYLE_KEYS.includes(field.key)
       ),
     [basicFields, brandFields, advancedFields]
   );
-  /** 开屏摘要：按类型显示视频情况或画布组件数 */
+  /** 开屏摘要：按画布背景素材类型显示视频或画布组件数 */
   const splashSummary = useMemo(() => {
     const values = draft?.values ?? {};
     const seconds = (values[SPLASH_DURATION_KEY] || '').trim();
     const durationLabel = seconds ? ` · ${seconds} 秒` : '';
-    const kind = resolveSplashKind(values);
-
-    if (kind === 'video') {
-      const videoCount = SPLASH_VIDEO_KEYS.filter((key) => (values[key] || '').trim()).length;
-      const orientation =
-        videoCount >= 2 ? '横屏 + 竖屏' : videoCount === 1 ? '单方向' : '未选择文件';
-      return `视频 · ${orientation}${durationLabel}`;
-    }
 
     const nodeCount = countCanvasNodes(values[SPLASH_CANVAS_KEY]);
     const canvasLabel = nodeCount ? `封面画布 · ${nodeCount} 个组件` : '封面画布 · 未设置';
+    const doc = parseSplashCanvas(values[SPLASH_CANVAS_KEY]);
+    const hasBackgroundVideo = Boolean(
+      doc && (doc.pc.backgroundVideo || doc.mobile.backgroundVideo)
+    );
+    const backgroundLabel = hasBackgroundVideo ? '背景视频 · ' : '';
     const audio = (values[SPLASH_AUDIO_KEY] || '').trim() ? ' · 含音频' : '';
-    return `${canvasLabel}${audio}${durationLabel}`;
+    return `${backgroundLabel}${canvasLabel}${audio}${durationLabel}`;
   }, [draft]);
   /** 当前文件选择器对应的字段与媒体类型 */
   const pickerFieldDef = useMemo(
@@ -447,10 +440,6 @@ export default function ConfigView() {
     setDraft((prev) => {
       if (!prev) return prev;
       const values = { ...prev.values, [key]: value };
-      // 视频自带声音且优先播放，设置视频时清掉音频，避免出现「配了音频却不响」
-      if (value && SPLASH_VIDEO_KEYS.includes(key)) {
-        values[SPLASH_AUDIO_KEY] = '';
-      }
       return { ...prev, values };
     });
   }, []);

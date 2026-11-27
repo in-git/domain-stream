@@ -18,6 +18,7 @@ import {
   SPLASH_TITLE_COLOR_KEY,
   SPLASH_TITLE_POS_KEYS,
   SPLASH_TITLE_SIZE_KEY,
+  SPLASH_VIDEO_KEYS,
   parseSplashPosition,
 } from '../schema';
 import {
@@ -319,6 +320,7 @@ function hasLegacySplashConfig(values: Record<string, string>): boolean {
     ...SPLASH_TITLE_POS_KEYS,
     ...SPLASH_PROGRESS_POS_KEYS,
     ...SPLASH_IMAGE_KEYS,
+    ...SPLASH_VIDEO_KEYS,
     SPLASH_TITLE_SIZE_KEY,
     SPLASH_TITLE_COLOR_KEY,
     SPLASH_PROGRESS_COLOR_KEY,
@@ -338,6 +340,19 @@ function createOrientationDoc(
       width: size.width,
       height: size.height,
       background: SPLASH_CANVAS_BACKGROUND,
+      nodes: [],
+    };
+  }
+  // 旧版「视频开屏」迁移：横屏视频 → PC 画布背景视频，竖屏视频 → 移动画布背景视频。
+  // 开屏形式开关已移除，客户端只按背景素材类型判断渲染。
+  const legacyVideo = (values[SPLASH_VIDEO_KEYS[landscape ? 0 : 1]] || '').trim();
+  if (legacyVideo) {
+    return {
+      width: size.width,
+      height: size.height,
+      background: SPLASH_CANVAS_BACKGROUND,
+      backgroundVideo: legacyVideo,
+      backgroundMode: 'stretch',
       nodes: [],
     };
   }

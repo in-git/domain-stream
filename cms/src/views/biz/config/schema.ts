@@ -144,22 +144,10 @@ export const SPLASH_AUDIO_KEY = 'splashAudioUrl';
  * 开屏画布文档（JSON 字符串）
  * ------------------------------------------------------------------
  * 开屏的主体内容改由「PC / 移动两块独立画布」描述：文本、图片、进度条，
- * 坐标与尺寸存设计像素，客户端换算成百分比渲染。视频与音频仍走上面的素材字段，
- * 作为开屏的背景与声音。
+ * 坐标与尺寸存设计像素，客户端换算成百分比渲染。背景素材（图片 / 视频互斥）
+ * 存在画布文档里，客户端按背景类型决定渲染视频还是组件。
  */
 export const SPLASH_CANVAS_KEY = 'splashCanvas';
-/**
- * 开屏形式：视频 或 封面画布，两者互斥，只能生效一种。
- * 老配置没有该字段时按「配了视频就播视频，否则用画布」推断。
- */
-export const SPLASH_TYPE_KEY = 'splashType';
-export type SplashKind = 'video' | 'cover';
-
-export function resolveSplashKind(values: Record<string, string>): SplashKind {
-  const explicit = (values[SPLASH_TYPE_KEY] || '').trim();
-  if (explicit === 'video' || explicit === 'cover') return explicit;
-  return SPLASH_VIDEO_KEYS.some((key) => (values[key] || '').trim()) ? 'video' : 'cover';
-}
 /** 开屏展示时长（秒），留空则由客户端按素材时长自动判断 */
 export const SPLASH_DURATION_KEY = 'splashDuration';
 export const SPLASH_MEDIA_KEYS: string[] = [
@@ -401,8 +389,6 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   { key: SPLASH_PROGRESS_COLOR_KEY, label: '进度条颜色', defaultValue: '' },
   // 开屏画布：PC / 移动两块独立画布的节点文档，由「设置开屏」弹窗的可视化编辑器写入
   { key: SPLASH_CANVAS_KEY, label: '开屏画布', defaultValue: '' },
-  // 开屏形式：video / cover，由弹窗顶部类型切换写入，不在表单里直接编辑
-  { key: SPLASH_TYPE_KEY, label: '开屏形式', defaultValue: '' },
   {
     key: 'navItems',
     label: '客户端导航',
