@@ -1,28 +1,26 @@
 /**
- * 通用分类弹窗集合：新增/编辑表单、详情、删除确认、Excel 导入
+ * 通用分类弹窗集合：新增/编辑表单、详情、删除确认
  * 供 biz/category/index 使用，UI 风格与私域工作台保持一致。
  */
 import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AlertCircle,
-  CheckCircle2,
   ChevronDown,
-  FileSpreadsheet,
   ImagePlus,
   Loader2,
   Settings2,
-  Upload,
   X,
 } from 'lucide-react';
 import { uploadFileWithProgress } from '../../../lib/api.ts';
+import { categoryModuleDictApi } from '../../../lib/dict.ts';
 import {
-  CATEGORY_MODULES,
   categoryApi,
   categoryModuleLabel,
   categoryStatusLabel,
   generateCategoryCode,
+  loadCategoryModules,
+  useCategoryModules,
   type BizCategory,
-  type CategoryImportResult,
   type CategoryPayload,
 } from '../../../lib/category.ts';
 import { formatDateShort } from '../../../lib/format.ts';
@@ -217,24 +215,158 @@ function flattenParentOptions(
 }
 
 /* ------------------------------------------------------------------ */
+/* 新增模块（业务字典 CATEGORY_MODULE）                                */
+/* ------------------------------------------------------------------ */
+
+export function CategoryModuleFormDialog({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
+  const categoryModules = useCategoryModules();
+  const [label, setLabel] = useState('');
+  const [value, setValue] = useState('');
+  const [color, setColor] = useState('blue');
+  const [sortCode, setSortCode] = useState(String(categoryModules.length + 1));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit() {
+    const nextLabel = label.trim();
+    const nextValue = value.trim().toUpperCase();
+    if (!nextLabel) return setError('请填写模块名称');
+    if (!nextValue) return setError('请填写模块标识');
+    if (!/^[A-Z][A-Z0-9_]*$/.test(nextValue)) {
+      return setError('模块标识需以字母开头，只允许大写字母、数字和下划线');
+    }
+    if (categoryModules.some((m) => m.label === nextLabel || m.value === nextValue)) {
+      return setError('模块名称或标识已存在');
+    }
+    const parsedSort = Number(sortCode);
+    if (!Number.isFinite(parsedSort)) return setError('排序需为数字');
+
+    setBusy(true);
+    setError(null);
+    try {
+      await categoryModuleDictApi.add({
+        dictLabel: nextLabel,
+        dictValue: nextValue,
+        dictColor: color.trim() || 'blue',
+        sortCode: Math.trunc(parsedSort),
+      });
+      await loadCategoryModules(true);
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <CategoryModal
+      title="新增模块"
+      subtitle="新增后可在通用分类的适用模块筛选和表单中选择"
+      onClose={onClose}
+      width="max-w-lg"
+      footer={
+        <>
+          <SecondaryButton onClick={onClose} disabled={busy}>
+            取消
+          </SecondaryButton>
+          <PrimaryButton onClick={() => void handleSubmit()} busy={busy}>
+            保存
+          </PrimaryButton>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {error && <InlineError>{error}</InlineError>}
+        <div>
+          <label className={LABEL_CLASS}>
+            模块名称 <span className="text-[#D70015]">*</span>
+          </label>
+          <input
+            className={INPUT_CLASS}
+            value={label}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              setError(null);
+            }}
+            placeholder="如：活动"
+            maxLength={40}
+          />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>
+            模块标识 <span className="text-[#D70015]">*</span>
+          </label>
+          <input
+            className={INPUT_CLASS}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value.toUpperCase());
+              setError(null);
+            }}
+            placeholder="如：ACTIVITY"
+            maxLength={40}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL_CLASS}>颜色</label>
+            <input
+              className={INPUT_CLASS}
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              placeholder="blue"
+              maxLength={40}
+            />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>排序</label>
+            <input
+              className={INPUT_CLASS}
+              type="number"
+              value={sortCode}
+              onChange={(e) => setSortCode(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+    </CategoryModal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* 新增 / 编辑                                                         */
 /* ------------------------------------------------------------------ */
 
 export function CategoryFormDialog({
   item,
+  initialParentId,
   categories,
   onClose,
   onSubmit,
 }: {
   item: BizCategory | null;
+  /** 新增子级时预置的父分类 ID */
+  initialParentId?: string;
   categories: BizCategory[];
   onClose: () => void;
   onSubmit: (payload: CategoryPayload) => Promise<void>;
 }) {
   const isEdit = !!item;
+  const categoryModules = useCategoryModules();
+  const parentCategory = initialParentId
+    ? categories.find((category) => category.id === initialParentId)
+    : null;
   const [name, setName] = useState(item?.name || '');
   const [image, setImage] = useState(item?.image || '');
-  const [parentId, setParentId] = useState(item?.parentId || '0');
+  const [parentId, setParentId] = useState(item?.parentId || initialParentId || '0');
   // 适用模块为必填项，新建时留空，强制用户显式选择
   const [module, setModule] = useState(item?.module || '');
   const [status, setStatus] = useState(item?.status || 'ENABLE');
@@ -303,8 +435,12 @@ export function CategoryFormDialog({
 
   return (
     <CategoryModal
-      title={isEdit ? '编辑分类' : '新增分类'}
-      subtitle="填写适用模块与名称即可，其余设置可展开「更多选项」调整"
+      title={isEdit ? '编辑分类' : parentCategory ? '新增子分类' : '新增分类'}
+      subtitle={
+        parentCategory
+          ? `将创建在「${parentCategory.name || parentCategory.id}」下，填写适用模块与名称即可`
+          : '填写适用模块与名称即可，其余设置可展开「更多选项」调整'
+      }
       onClose={onClose}
       footer={
         <>
@@ -329,7 +465,7 @@ export function CategoryFormDialog({
             aria-label="适用模块"
             className="flex flex-wrap gap-1.5"
           >
-            {CATEGORY_MODULES.map((m) => {
+            {categoryModules.map((m) => {
               const active = module === m.value;
               return (
                 <button
@@ -540,6 +676,7 @@ export function CategoryDetailDialog({
   categories: BizCategory[];
   onClose: () => void;
 }) {
+  useCategoryModules();
   const [item, setItem] = useState<BizCategory | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -694,137 +831,3 @@ export function CategoryDeleteDialog({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Excel 导入                                                         */
-/* ------------------------------------------------------------------ */
-
-export function CategoryImportDialog({
-  onClose,
-  onImported,
-}: {
-  onClose: () => void;
-  onImported: () => void;
-}) {
-  const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState<CategoryImportResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleTemplate() {
-    setDownloading(true);
-    setError(null);
-    try {
-      await categoryApi.downloadTemplate();
-    } catch (err) {
-      setError(`模板下载失败：${errorMessage(err)}`);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  async function handleImport() {
-    if (!file) return setError('请先选择要导入的 Excel 文件');
-    setBusy(true);
-    setError(null);
-    try {
-      const data = await categoryApi.importData(file);
-      setResult(data);
-      onImported();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <CategoryModal
-      title="导入分类数据"
-      subtitle="使用后端 /biz/category/importData 接口，按模板格式批量新增或更新"
-      onClose={onClose}
-      width="max-w-lg"
-      footer={
-        <>
-          <SecondaryButton onClick={onClose}>关闭</SecondaryButton>
-          <PrimaryButton onClick={() => void handleImport()} busy={busy} disabled={!file || !!result}>
-            <Upload className="w-3.5 h-3.5" />
-            开始导入
-          </PrimaryButton>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        {error && <InlineError>{error}</InlineError>}
-
-        <button
-          type="button"
-          onClick={() => void handleTemplate()}
-          disabled={downloading}
-          className="w-full rounded-xl border border-dashed border-[#C7C7CC] bg-[#FAFAFC] px-4 py-4 flex items-center gap-3 text-left hover:border-[#0071E3]/50 hover:bg-[#0071E3]/4 transition-colors"
-        >
-          <div className="w-10 h-10 rounded-xl bg-[#0071E3]/10 flex items-center justify-center shrink-0">
-            <FileSpreadsheet className="w-5 h-5 text-[#0071E3]" strokeWidth={1.8} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[13px] font-medium text-[#1D1D1F]">
-              {downloading ? '模板生成中...' : '下载导入模板'}
-            </div>
-            <div className="text-[12px] text-[#86868B] mt-0.5">
-              模板列与后端字段一致；填写 ID 为更新，留空 ID 的行将按规则校验
-            </div>
-          </div>
-        </button>
-
-        <div>
-          <label className={LABEL_CLASS} htmlFor="cat-import-file">
-            选择文件（.xlsx / .xls）
-          </label>
-          <input
-            id="cat-import-file"
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] || null);
-              setResult(null);
-              setError(null);
-            }}
-            className="w-full text-[13px] text-[#3A3A3C] file:mr-3 file:h-9 file:px-3 file:rounded-xl file:border-0 file:bg-[#F2F2F7] file:text-[12px] file:font-medium file:text-[#3A3A3C] hover:file:bg-[#E5E5EA]"
-          />
-        </div>
-
-        {result && (
-          <div className="rounded-xl bg-[#F5F5F7] p-4">
-            <div className="flex items-center gap-2 text-[13px] font-medium text-[#1D1D1F]">
-              <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
-              导入完成
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              {[
-                { label: '总条数', value: result.totalCount },
-                { label: '成功', value: result.successCount },
-                { label: '失败', value: result.errorCount },
-              ].map((s) => (
-                <div key={s.label} className="rounded-lg bg-white py-2.5">
-                  <div className="text-[18px] font-semibold tabular-nums text-[#1D1D1F]">
-                    {s.value ?? 0}
-                  </div>
-                  <div className="text-[11px] text-[#86868B]">{s.label}</div>
-                </div>
-              ))}
-            </div>
-            {!!result.errorDetail?.length && (
-              <ul className="mt-3 space-y-1 max-h-32 overflow-y-auto text-[12px] text-[#D70015]">
-                {result.errorDetail.map((d, idx) => (
-                  <li key={idx}>
-                    第 {d.index ?? idx + 1} 行：{d.msg || '导入异常'}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    </CategoryModal>
-  );
-}

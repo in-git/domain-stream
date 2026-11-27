@@ -183,6 +183,15 @@ function num(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+function parseResolution(value: unknown): { width: number; height: number } | null {
+  if (typeof value !== 'string') return null;
+  const match = value.match(/(\d+)\s*[×xX*]\s*(\d+)/);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
 function parseDuration(raw?: string): number {
   if (!raw) return 8;
   const parts = raw.split(':').map((p) => Number(p.trim()));
@@ -357,8 +366,8 @@ export function videoFromPortal(
     likeCount: row.likeCount || 0,
     commentCount: row.commentCount || 0,
     viewCount: num(row.viewCount, 0),
-    width: num(ext.width, 1280),
-    height: num(ext.height, 720),
+    width: num(ext.width, parseResolution(str(ext.resolution))?.width ?? 1280),
+    height: num(ext.height, parseResolution(str(ext.resolution))?.height ?? 720),
     accentTint: str(ext.accentTint, ACCENT_TINTS[index % ACCENT_TINTS.length]),
     motionStyle:
       (MOTION_STYLES.includes(ext.motionStyle as VideoItem['motionStyle'])
@@ -590,6 +599,19 @@ export const visitorApi = {
     durationSec?: number;
   }) =>
     request<boolean>('/biz/visitor/track', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  /** HTTP 心跳兼容接口：WebSocket 不可用时维持调用链，不写库 */
+  heartbeat: (payload: {
+    visitorId: string;
+    sessionId?: string;
+    eventType: 'HEARTBEAT';
+    pageType: string;
+    source?: string;
+    device?: string;
+  }) =>
+    request<boolean>('/biz/visitor/heartbeat', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

@@ -84,6 +84,8 @@ export async function collectDroppedImages(dataTransfer: DataTransfer): Promise<
 export function extractVideoMetadataAndFrame(file: File): Promise<{
   duration: number;
   resolution: string;
+  width: number;
+  height: number;
   coverBlob: Blob | null;
 }> {
   return new Promise((resolve) => {
@@ -94,29 +96,34 @@ export function extractVideoMetadataAndFrame(file: File): Promise<{
     video.playsInline = true;
     video.src = url;
 
-    const finish = (result: { duration: number; resolution: string; coverBlob: Blob | null }) => {
+    const finish = (result: {
+      duration: number;
+      resolution: string;
+      width: number;
+      height: number;
+      coverBlob: Blob | null;
+    }) => {
       URL.revokeObjectURL(url);
       resolve(result);
     };
 
     video.onloadedmetadata = () => {
       const duration = Number.isFinite(video.duration) ? Math.round(video.duration) : 60;
-      const resolution =
-        video.videoWidth && video.videoHeight
-          ? `${video.videoWidth}×${video.videoHeight}`
-          : '1920×1080';
+      const width = video.videoWidth || 1280;
+      const height = video.videoHeight || 720;
+      const resolution = `${width}×${height}`;
       video.currentTime = Math.min(1, duration * 0.1);
 
       video.onseeked = () => {
         try {
           const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth || 1280;
-          canvas.height = video.videoHeight || 720;
+          canvas.width = width;
+          canvas.height = height;
           const context = canvas.getContext('2d');
           if (context) {
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             canvas.toBlob(
-              (blob) => finish({ duration, resolution, coverBlob: blob }),
+              (blob) => finish({ duration, resolution, width, height, coverBlob: blob }),
               'image/jpeg',
               0.85
             );
@@ -125,11 +132,12 @@ export function extractVideoMetadataAndFrame(file: File): Promise<{
         } catch {
           // 浏览器不支持截帧时只保留元数据
         }
-        finish({ duration, resolution, coverBlob: null });
+        finish({ duration, resolution, width, height, coverBlob: null });
       };
     };
 
-    video.onerror = () => finish({ duration: 60, resolution: '1920×1080', coverBlob: null });
+    video.onerror = () =>
+      finish({ duration: 60, resolution: '1920×1080', width: 1920, height: 1080, coverBlob: null });
   });
 }
 

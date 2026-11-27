@@ -41,6 +41,8 @@ interface VideosSectionProps {
   hideMobileTabBar?: boolean;
   mobileChromeVisible?: boolean;
   onChromeVisibilityChange?: (visible: boolean) => void;
+  /** PC 沉浸流真实播放状态：用于播放时收起顶栏、暂停时恢复 */
+  onPlayingChange?: (playing: boolean) => void;
 }
 
 /**
@@ -81,6 +83,7 @@ export function VideosSection({
   hideMobileTabBar = false,
   mobileChromeVisible = false,
   onChromeVisibilityChange,
+  onPlayingChange,
 }: VideosSectionProps) {
   const mode = !active ? (isMini ? 'mini' : 'hidden') : 'immersive';
 
@@ -117,6 +120,7 @@ export function VideosSection({
         onClosePlaylist={onClosePlaylist}
         mobileChromeVisible={mobileChromeVisible}
         onChromeVisibilityChange={onChromeVisibilityChange}
+        onPlayingChange={onPlayingChange}
       />
 
       {active && loading && videos.length === 0 && (

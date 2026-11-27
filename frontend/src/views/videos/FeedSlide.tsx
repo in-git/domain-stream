@@ -182,35 +182,28 @@ export function FeedSlide({
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
-    if (!active) {
-      player.pause();
-      return;
-    }
-    player.playbackRate = playbackRate;
-    player.muted = isMuted;
-    void player.play().catch(() => {});
-    // src 是 active 后才挂载的，源就绪需要一点时间；补一次延迟 play 兜底，
-    // 配合 onCanPlay 里的主动播放，确保首次进入也能正常起播。
-    const retry = window.setTimeout(() => {
-      // 用实时 ref 并做双重校验：120ms 内播放器可能已被卸载（如切到卡片模式），
-      // 此时读取旧实例的 paused 会抛 null 引用异常。
-      const current = playerRef.current;
-      if (!current) return;
-      try {
-        if (current.paused) void current.play().catch(() => {});
-      } catch {
-        // 忽略已销毁播放器的异常
+    try {
+      if (!active) {
+        player.pause();
+        return;
       }
-    }, 120);
-    return () => window.clearTimeout(retry);
+      player.playbackRate = playbackRate;
+      player.muted = isMuted;
+    } catch {
+      // 播放器已卸载，忽略
+    }
   }, [active, video.id, isMuted, playbackRate]);
 
   useEffect(() => {
     if (!mini || !active) return;
     const player = playerRef.current;
     if (!player) return;
-    if (isMuted) void player.play().catch(() => {});
-  }, [mini, active]);
+    try {
+      if (isMuted && player.state.canPlay && player.paused) void player.play().catch(() => {});
+    } catch {
+      // 播放器已卸载，忽略
+    }
+  }, [mini, active, isMuted]);
 
   useEffect(() => {
     if (active) setLoading(true);
@@ -429,17 +422,29 @@ export function FeedSlide({
           }}
           onEnded={() => {
             setPlaying(false);
-            onPlaybackStateChange?.(false);
+            // 自动切下一条时顶栏保持收起，避免切集瞬间闪一下
+            const autoAdvance = !!onVideoEnded && videoMenu?.state.autoLoop !== false;
+            if (!autoAdvance) onPlaybackStateChange?.(false);
             onVideoEnded?.();
           }}
           onCanPlay={() => {
             setLoading(false);
-            // 视频源就绪后立即播放当前 active 项：点选卡片时播放器可能刚挂载，
-            // 依赖 onCanPlay 主动 play 比 effect 里的 play 更可靠。
+            // 只在媒体真正可播放后起播；提前调用 play 会触发 vidstack 的
+            // "media is not ready - wait for can-play" 错误。
             const player = playerRef.current;
-            if (player && player.paused) {
-              player.muted = isMuted;
-              void player.play().catch(() => {});
+            if (!player) return;
+            try {
+              if (!player.state.canPlay || !player.paused) return;
+              // 先静音起播规避浏览器自动播放策略，播放成功后再恢复用户期望的静音状态
+              player.muted = true;
+              void player.play()
+                .then(() => {
+                  const current = playerRef.current;
+                  if (current) current.muted = isMuted;
+                })
+                .catch(() => {});
+            } catch {
+              // 播放器已卸载，忽略
             }
           }}
           onWaiting={() => setLoading(true)}

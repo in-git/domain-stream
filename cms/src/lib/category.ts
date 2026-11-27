@@ -2,28 +2,81 @@
  * 通用分类（BIZ_CATEGORY）接口对接层
  * ------------------------------------------------------------------
  * 后端：vip.xiaonuo.biz.modular.category.controller.BizCategoryController
- * 路由：/biz/category/*（GET page / detail / downloadImportTemplate，
- *       POST add / edit / delete / importData / exportData）
+ * 路由：/biz/category/*（GET page / detail，POST add / edit / delete / exportData）
  * 前端统一经 /snowy 代理访问，与登录态 token 保持一致。
  *
  * 说明：搜索 / 模块 / 状态筛选均通过 page 接口在服务端完成；
  * 列表接口只负责按条件逐页拉取，树形组装仍在组件内完成。
  */
+import { useEffect, useState } from 'react';
+import { categoryModuleDictApi } from './dict.ts';
 import { SnowyAuthError, snowyFetch, snowyRequest } from './snowy.ts';
 
 const BASE = '/biz/category';
 
-/** 适用模块枚举：与 BIZ_CATEGORY.MODULE 字段注释一致 */
-export const CATEGORY_MODULES = [
-  { value: 'ARTICLE', label: '文章' },
-  { value: 'VIDEO', label: '视频' },
-  { value: 'GRAPHIC', label: '图文' },
-  { value: 'IMAGE', label: '图片' },
-  { value: 'MATERIAL', label: '素材' },
-  { value: 'COMMON', label: '通用' },
-] as const;
+/** 适用模块字典项（来自系统业务字典 CATEGORY_MODULE） */
+export interface CategoryModuleOption {
+  id?: string;
+  value: string;
+  label: string;
+  color?: string;
+  sortCode?: number;
+}
 
-export type CategoryModule = (typeof CATEGORY_MODULES)[number]['value'];
+export type CategoryModule = string;
+
+let categoryModuleCache: CategoryModuleOption[] = [];
+let categoryModulePromise: Promise<CategoryModuleOption[]> | null = null;
+const categoryModuleListeners = new Set<() => void>();
+
+function notifyCategoryModulesChanged(): void {
+  categoryModuleListeners.forEach((listener) => listener());
+}
+
+/** 拉取并缓存适用模块字典；并发调用共用同一个 Promise */
+export function loadCategoryModules(force = false): Promise<CategoryModuleOption[]> {
+  if (!force && categoryModulePromise) return categoryModulePromise;
+  categoryModulePromise = categoryModuleDictApi
+    .options()
+    .then((rows) => {
+      categoryModuleCache = rows
+        .map((row) => ({
+          id: row.id,
+          value: row.dictValue || '',
+          label: row.dictLabel || row.dictValue || '',
+          color: row.dictColor,
+          sortCode: row.sortCode ?? 0,
+        }))
+        .filter((item) => !!item.value);
+      notifyCategoryModulesChanged();
+      return categoryModuleCache;
+    })
+    .catch(() => {
+      categoryModulePromise = null;
+      return categoryModuleCache;
+    });
+  return categoryModulePromise;
+}
+
+/** 订阅适用模块字典，字典变化后组件会自动重新渲染 */
+export function useCategoryModules(): CategoryModuleOption[] {
+  const [options, setOptions] = useState<CategoryModuleOption[]>(() => [...categoryModuleCache]);
+  useEffect(() => {
+    let alive = true;
+    const listener = () => {
+      if (alive) setOptions([...categoryModuleCache]);
+    };
+    categoryModuleListeners.add(listener);
+    void loadCategoryModules().then((rows) => {
+      if (alive) setOptions([...rows]);
+    });
+    return () => {
+      alive = false;
+      categoryModuleListeners.delete(listener);
+    };
+  }, []);
+  return options;
+}
 
 /** 状态枚举：与 BIZ_CATEGORY.STATUS 字段注释一致 */
 export const CATEGORY_STATUSES = [
@@ -32,7 +85,8 @@ export const CATEGORY_STATUSES = [
 ] as const;
 
 export function categoryModuleLabel(value?: string): string {
-  return CATEGORY_MODULES.find((m) => m.value === value)?.label || value || '-';
+  if (!value) return '-';
+  return categoryModuleCache.find((m) => m.value === value)?.label || value;
 }
 
 export function categoryStatusLabel(value?: string): string {
@@ -90,14 +144,6 @@ export interface CategoryPage {
   size: number;
   current: number;
   pages: number;
-}
-
-/** importData 返回的统计结果 */
-export interface CategoryImportResult {
-  totalCount: number;
-  successCount: number;
-  errorCount: number;
-  errorDetail?: Array<{ index?: number; success?: boolean; msg?: string }>;
 }
 
 /**
@@ -162,9 +208,7 @@ export type CategoryPermAction =
   | 'add'
   | 'edit'
   | 'delete'
-  | 'import'
-  | 'export'
-  | 'template';
+  | 'export';
 
 const PERM_CODES: Record<CategoryPermAction, string[]> = {
   page: ['bizCategoryPage', '/biz/category/page'],
@@ -172,9 +216,7 @@ const PERM_CODES: Record<CategoryPermAction, string[]> = {
   add: ['bizCategoryAdd', '/biz/category/add'],
   edit: ['bizCategoryEdit', '/biz/category/edit'],
   delete: ['bizCategoryDelete', 'bizCategoryBatchDelete', '/biz/category/delete'],
-  import: ['bizCategoryImport', '/biz/category/importData'],
   export: ['bizCategoryExport', '/biz/category/exportData'],
-  template: ['bizCategoryDownloadTemplate', '/biz/category/downloadImportTemplate'],
 };
 
 /**
@@ -235,18 +277,6 @@ async function saveDownload(res: Response, fallbackName: string): Promise<void> 
   window.setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-async function readJson<T>(res: Response): Promise<T> {
-  const payload = await res.json().catch(() => null);
-  if (!payload) throw new Error(`请求失败 (${res.status})：响应格式异常`);
-  if (payload.code === 401 || res.status === 401) {
-    throw new SnowyAuthError(payload.msg || '登录已失效，请重新登录');
-  }
-  if (payload.code !== 200) {
-    throw new Error(payload.msg || `请求失败 (${res.status})`);
-  }
-  return payload.data as T;
-}
-
 export const categoryApi = {
   /** 分页（后端默认按 SORT_CODE 升序） */
   page(params: {
@@ -289,23 +319,6 @@ export const categoryApi = {
       method: 'POST',
       body: JSON.stringify(ids.map((id) => ({ id }))),
     });
-  },
-
-  /** 下载导入模板 */
-  async downloadTemplate(): Promise<void> {
-    const res = await snowyFetch(`${BASE}/downloadImportTemplate`);
-    await saveDownload(res, `通用分类导入模板_${timestamp()}.xlsx`);
-  },
-
-  /** 导入 Excel（multipart/form-data，字段名为 file） */
-  async importData(file: File): Promise<CategoryImportResult> {
-    const form = new FormData();
-    form.append('file', file);
-    const res = await snowyFetch(`${BASE}/importData`, {
-      method: 'POST',
-      body: form,
-    });
-    return readJson<CategoryImportResult>(res);
   },
 
   /** 导出：传 id 数组导出指定项，传空数组导出全部 */

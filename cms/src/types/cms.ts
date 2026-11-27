@@ -65,6 +65,8 @@ export interface VideoItem {
   isRecommend?: string;
   sortCode?: number;
   remark?: string;
+  /** 后端扩展信息，保存视频真实宽高等元数据 */
+  extJson?: string;
 }
 
 export interface ImageTextItem {

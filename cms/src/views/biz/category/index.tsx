@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CornerDownRight,
   Download,
   Eye,
   FolderTree,
@@ -23,16 +24,15 @@ import {
   Search,
   Tag,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react';
 import {
-  CATEGORY_MODULES,
   categoryApi,
   categoryModuleLabel,
   categoryStatusLabel,
   hasCategoryPerm,
   listAllCategories,
+  useCategoryModules,
   type BizCategory,
   type CategoryPageQuery,
   type CategoryPayload,
@@ -45,7 +45,7 @@ import {
   CategoryDeleteDialog,
   CategoryDetailDialog,
   CategoryFormDialog,
-  CategoryImportDialog,
+  CategoryModuleFormDialog,
 } from './dialogs.tsx';
 
 const PAGE_SIZE = 10;
@@ -54,16 +54,16 @@ const GRID_CLASS =
   'grid grid-cols-[36px_minmax(220px,1.7fr)_110px_92px_64px_120px_132px] gap-3 items-center';
 
 type DialogState =
-  | { kind: 'form'; item: BizCategory | null }
+  | { kind: 'form'; item: BizCategory | null; parentId?: string }
   | { kind: 'detail'; id: string }
   | { kind: 'delete'; items: BizCategory[] }
-  | { kind: 'import' }
   | null;
 
 interface CategoryRow {
   item: BizCategory;
   depth: number;
   hasChildren: boolean;
+  childCount: number;
 }
 
 
@@ -102,14 +102,14 @@ function buildTreeRows(
       if (visited.has(item.id)) return; // 防御脏数据造成的环
       visited.add(item.id);
       const children = childrenOf.get(item.id) || [];
-      rows.push({ item, depth, hasChildren: children.length > 0 });
+      rows.push({ item, depth, hasChildren: children.length > 0, childCount: children.length });
       if (children.length && !collapsed.has(item.id)) walk(children, depth + 1);
     });
   };
   walk((childrenOf.get('__root__') || []).filter((i) => isRoot(i, ids)), 0);
   // 有环或父级链断裂时，兜底把未访问到的节点挂到顶级
   items.filter((i) => !visited.has(i.id)).sort(bySort).forEach((item) => {
-    rows.push({ item, depth: 0, hasChildren: false });
+    rows.push({ item, depth: 0, hasChildren: false, childCount: 0 });
   });
   return rows;
 }
@@ -133,6 +133,7 @@ function toPayload(item: BizCategory): CategoryPayload {
 }
 
 export default function CategoryView({ permissions }: { permissions?: string[] }) {
+  const categoryModules = useCategoryModules();
   const can = useCallback(
     (action: CategoryPermAction) => hasCategoryPerm(permissions, action),
     [permissions]
@@ -147,6 +148,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [moduleDialogOpen, setModuleDialogOpen] = useState(false);
 
   const [exporting, setExporting] = useState(false);
 
@@ -197,6 +199,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
         item,
         depth: 0,
         hasChildren: false,
+        childCount: 0,
       }));
     }
     return buildTreeRows(items, collapsed);
@@ -254,23 +257,17 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
     });
   }
 
-  /** 有子分类的节点 id（用于展开/折叠全部） */
-  const collapsibleIds = useMemo(
-    () => new Set(rows.filter((r) => r.hasChildren).map((r) => r.item.id)),
-    [rows]
-  );
-
-  function expandAll() {
-    setCollapsed(new Set());
-  }
-
-  function collapseAll() {
-    setCollapsed(new Set(collapsibleIds));
-  }
-
   async function handleSave(payload: CategoryPayload) {
     if (payload.id) await categoryApi.edit(payload);
     else await categoryApi.add(payload);
+    // 新建子级后自动展开父节点，保证新增结果立即可见
+    if (!payload.id && payload.parentId && payload.parentId !== '0') {
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        next.delete(payload.parentId as string);
+        return next;
+      });
+    }
     await load();
     setDialog(null);
     notify('success', payload.id ? '分类已更新' : '分类已创建');
@@ -375,7 +372,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
             >
               {[
                 { value: 'all', label: '全部模块' },
-                ...CATEGORY_MODULES.map((m) => ({ value: m.value as string, label: m.label })),
+                ...categoryModules.map((m) => ({ value: m.value, label: m.label })),
                 { value: '', label: '未设置' },
               ].map((m) => {
                 const active = (query.module === '__EMPTY__' ? '' : query.module || 'all') === m.value;
@@ -399,6 +396,16 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                   </button>
                 );
               })}
+              {can('add') && (
+                <button
+                  type="button"
+                  onClick={() => setModuleDialogOpen(true)}
+                  className="h-8 px-2.5 rounded-lg text-[12px] font-medium inline-flex items-center gap-1 text-[#0071E3] hover:bg-[#0071E3]/8 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  新增模块
+                </button>
+              )}
             </div>
           </div>
 
@@ -441,28 +448,6 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isTreeMode && collapsibleIds.size > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={expandAll}
-                disabled={collapsed.size === 0}
-                className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-                展开全部
-              </button>
-              <button
-                type="button"
-                onClick={collapseAll}
-                disabled={collapsed.size === collapsibleIds.size}
-                className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] disabled:opacity-50 transition-colors"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-                折叠全部
-              </button>
-            </>
-          )}
           <button
             type="button"
             onClick={() => void load()}
@@ -472,16 +457,6 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {can('import') && (
-            <button
-              type="button"
-              onClick={() => setDialog({ kind: 'import' })}
-              className="h-9 px-3 rounded-xl bg-white border border-[#E5E5EA] text-[12px] font-medium text-[#3A3A3C] inline-flex items-center gap-1.5 hover:bg-[#F5F5F7] transition-colors"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              导入
-            </button>
-          )}
           {can('add') && (
             <button
               type="button"
@@ -621,10 +596,12 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
               </div>
             ) : (
               <div className="divide-y divide-[#F2F2F7]">
-                {pageRows.map(({ item, depth, hasChildren }) => (
+                {pageRows.map(({ item, depth, hasChildren, childCount }) => (
                   <div
                     key={item.id}
-                    className={`${GRID_CLASS} px-5 py-2.5 text-[13px] hover:bg-[#FAFAFC] transition-colors`}
+                    className={`${GRID_CLASS} px-5 py-2.5 text-[13px] hover:bg-[#FAFAFC] transition-colors ${
+                      depth > 0 ? 'bg-[#FAFAFC]/60' : ''
+                    }`}
                   >
                     <input
                       type="checkbox"
@@ -634,7 +611,13 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                       className="w-3.5 h-3.5 accent-[#0071E3] cursor-pointer"
                     />
 
-                    <div className="flex items-center gap-2 min-w-0" style={{ paddingLeft: depth * 18 }}>
+                    <div
+                      className="relative flex items-center gap-2 min-w-0"
+                      style={{ paddingLeft: depth * 18 }}
+                    >
+                      {depth > 0 && (
+                        <CornerDownRight className="w-3.5 h-3.5 shrink-0 text-[#C7C7CC]" />
+                      )}
                       {!hasFilter && hasChildren ? (
                         <button
                           type="button"
@@ -663,13 +646,16 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                         <button
                           type="button"
                           onClick={() => can('detail') && setDialog({ kind: 'detail', id: item.id })}
-                          className="block max-w-full truncate text-left font-medium text-[#1D1D1F] hover:text-[#0071E3] transition-colors"
+                          className={`block max-w-full truncate text-left hover:text-[#0071E3] transition-colors ${
+                            depth > 0 ? 'text-[#3A3A3C]' : 'font-medium text-[#1D1D1F]'
+                          }`}
                           title={item.description || item.name}
                         >
                           {item.name || '未命名分类'}
                         </button>
                         <div className="text-[11px] text-[#AEAEB2] truncate">
-                          {item.description || (hasChildren ? '包含子分类' : `ID ${item.id}`)}
+                          {item.description ||
+                            (childCount ? `包含 ${childCount} 个子分类` : `ID ${item.id}`)}
                         </div>
                       </div>
                     </div>
@@ -704,6 +690,17 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                     </span>
 
                     <div className="flex items-center justify-end gap-0.5">
+                      {can('add') && (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'form', item: null, parentId: item.id })}
+                          aria-label={`为 ${item.name} 新增子级`}
+                          title="新增子级"
+                          className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      )}
                       {can('detail') && (
                         <button
                           type="button"
@@ -790,7 +787,9 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
       {/* 弹窗 */}
       {dialog?.kind === 'form' && (
         <CategoryFormDialog
+          key={`${dialog.item?.id || 'new'}-${dialog.parentId || 'root'}`}
           item={dialog.item}
+          initialParentId={dialog.parentId}
           categories={items}
           onClose={() => setDialog(null)}
           onSubmit={handleSave}
@@ -810,10 +809,10 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
           onConfirm={() => handleDelete(dialog.items)}
         />
       )}
-      {dialog?.kind === 'import' && (
-        <CategoryImportDialog
-          onClose={() => setDialog(null)}
-          onImported={() => void load()}
+      {moduleDialogOpen && (
+        <CategoryModuleFormDialog
+          onClose={() => setModuleDialogOpen(false)}
+          onSuccess={() => notify('success', '模块已新增')}
         />
       )}
 

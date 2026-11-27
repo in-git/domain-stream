@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { registerCommentLogin } from '../../lib/commentLogin.ts';
 import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
@@ -90,6 +90,10 @@ export function PortalShell({
   const [videoPlaylistOpen, setVideoPlaylistOpen] = useState(false);
   /** 移动端沉浸流清屏：顶部/底部导航默认隐藏，点画面唤出，播放后自动收起 */
   const [videoChromeVisible, setVideoChromeVisible] = useState(false);
+  /** PC 沉浸流顶栏：播放时收起，暂停时带动画恢复，鼠标移动时临时显示 */
+  const [pcChromeVisible, setPcChromeVisible] = useState(true);
+  const [pcVideoPlaying, setPcVideoPlaying] = useState(false);
+  const pcChromeTimerRef = useRef<number | undefined>(undefined);
   /** 搜索结果点击文章时，交给文章板块打开同一个阅读器 */
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
@@ -220,10 +224,59 @@ export function PortalShell({
     }
   }, [isMobileViewport, activeSectionKey, searchQuery]);
 
-  // 离开视频沉浸流或切到卡片模式时，清除临时唤出的导航状态
+  const clearPcChromeTimer = useCallback(() => {
+    if (pcChromeTimerRef.current !== undefined) {
+      window.clearTimeout(pcChromeTimerRef.current);
+      pcChromeTimerRef.current = undefined;
+    }
+  }, []);
+
+  const handlePcPlayingChange = useCallback(
+    (playing: boolean) => {
+      clearPcChromeTimer();
+      setPcVideoPlaying(playing);
+      setPcChromeVisible(!playing);
+    },
+    [clearPcChromeTimer]
+  );
+
+  // PC 沉浸流播放中移动鼠标：临时唤出顶栏，停止移动 3 秒后自动收起
   useEffect(() => {
-    if (activeSectionKey !== 'videos' || videoViewMode !== 'feed') setVideoChromeVisible(false);
-  }, [activeSectionKey, videoViewMode]);
+    if (
+      isMobileViewport ||
+      activeSectionKey !== 'videos' ||
+      videoViewMode !== 'feed' ||
+      !pcVideoPlaying
+    ) {
+      clearPcChromeTimer();
+      return;
+    }
+    const onMouseMove = () => {
+      setPcChromeVisible(true);
+      clearPcChromeTimer();
+      pcChromeTimerRef.current = window.setTimeout(() => {
+        pcChromeTimerRef.current = undefined;
+        setPcChromeVisible(false);
+      }, 3000);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      clearPcChromeTimer();
+    };
+  }, [activeSectionKey, clearPcChromeTimer, isMobileViewport, pcVideoPlaying, videoViewMode]);
+
+  // 离开视频沉浸流或切到卡片模式时，恢复导航状态
+  useEffect(() => {
+    if (activeSectionKey !== 'videos' || videoViewMode !== 'feed') {
+      clearPcChromeTimer();
+      setPcVideoPlaying(false);
+      setVideoChromeVisible(false);
+      setPcChromeVisible(true);
+    }
+  }, [activeSectionKey, clearPcChromeTimer, videoViewMode]);
+
+  useEffect(() => () => clearPcChromeTimer(), [clearPcChromeTimer]);
 
   // 稳定引用：加载失败触发的重渲染不应让 IntersectionObserver 反复重连
   const handleLoadMoreVideos = useCallback(() => void loadMoreVideos(), [loadMoreVideos]);
@@ -246,14 +299,20 @@ export function PortalShell({
 
         <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh] overflow-hidden">
           <AnimatePresence>
-          {!(isMobileViewport &&
-              (activeSectionKey === 'settings' ||
-                (activeSectionKey === 'videos' &&
-                  videoViewMode === 'feed' &&
-                  !videoChromeVisible))) && (
+          {!(
+              (isMobileViewport &&
+                (activeSectionKey === 'settings' ||
+                  (activeSectionKey === 'videos' &&
+                    videoViewMode === 'feed' &&
+                    !videoChromeVisible))) ||
+              (!isMobileViewport &&
+                activeSectionKey === 'videos' &&
+                videoViewMode === 'feed' &&
+                !pcChromeVisible)
+            ) && (
             <MainHeader
               key="main-header"
-              chromeAnimated={isMobileViewport && activeSectionKey === 'videos' && videoViewMode === 'feed'}
+              chromeAnimated={activeSectionKey === 'videos' && videoViewMode === 'feed'}
               searchQuery={searchQuery}
               onChangeSearch={onChangeSearch}
               onOpenSearch={onOpenSearch}
@@ -326,6 +385,7 @@ export function PortalShell({
               }
               mobileChromeVisible={videoChromeVisible}
               onChromeVisibilityChange={setVideoChromeVisible}
+              onPlayingChange={handlePcPlayingChange}
             />
 
             <AnimatePresence mode="wait">

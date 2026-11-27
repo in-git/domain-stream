@@ -478,6 +478,27 @@ function parseDuration(s?: string | null): number {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
+function parseExtObject(extJson?: string | null): Record<string, unknown> {
+  if (!extJson) return {};
+  try {
+    const parsed = typeof extJson === 'string' ? JSON.parse(extJson) : extJson;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function parseResolution(s?: string | null): { width: number; height: number } | null {
+  if (!s) return null;
+  const match = String(s).match(/(\d+)\s*[×xX*]\s*(\d+)/);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+function numberFrom(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
 function parseImages(s?: string | null): string[] {
   if (!s) return [];
   try {
@@ -560,6 +581,9 @@ interface SnowyGraphic {
 }
 
 function videoFromSnowy(v: SnowyVideo): VideoItem {
+  const ext = parseExtObject(v.extJson);
+  const resolutionFromExt = typeof ext.resolution === 'string' ? ext.resolution : '';
+  const size = parseResolution(resolutionFromExt);
   return {
     id: String(v.id || ''),
     title: v.title || '',
@@ -567,9 +591,15 @@ function videoFromSnowy(v: SnowyVideo): VideoItem {
     category: v.category || '',
     videoUrl: v.videoUrl || '',
     coverUrl: v.cover || '',
-    durationSec: parseDuration(v.duration),
-    resolution: '',
-    fileSizeBytes: 0,
+    durationSec: numberFrom(ext.durationSec, parseDuration(v.duration)),
+    resolution:
+      resolutionFromExt ||
+      (numberFrom(ext.width, 0) && numberFrom(ext.height, 0)
+        ? `${numberFrom(ext.width, 0)}×${numberFrom(ext.height, 0)}`
+        : size
+          ? `${size.width}×${size.height}`
+          : ''),
+    fileSizeBytes: numberFrom(ext.fileSizeBytes, 0),
     views: v.viewCount || 0,
     completionRate: 0,
     status: toStatus(v.status),
@@ -585,6 +615,7 @@ function videoFromSnowy(v: SnowyVideo): VideoItem {
     isRecommend: v.isRecommend,
     sortCode: v.sortCode,
     remark: v.remark,
+    extJson: v.extJson || undefined,
   };
 }
 function articleFromSnowy(a: SnowyArticle): ArticleItem {
@@ -779,6 +810,28 @@ function videoPayload(p: Partial<VideoItem>) {
     const s = p.durationSec % 60;
     out.duration = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
+
+  const ext = parseExtObject(p.extJson);
+  const size = parseResolution(p.resolution);
+  let extChanged = false;
+  if (size) {
+    ext.width = size.width;
+    ext.height = size.height;
+    extChanged = true;
+  }
+  if (p.resolution !== undefined) {
+    ext.resolution = p.resolution;
+    extChanged = true;
+  }
+  if (p.durationSec !== undefined) {
+    ext.durationSec = p.durationSec;
+    extChanged = true;
+  }
+  if (p.fileSizeBytes !== undefined) {
+    ext.fileSizeBytes = p.fileSizeBytes;
+    extChanged = true;
+  }
+  if (extChanged) out.extJson = JSON.stringify(ext);
   return out;
 }
 function articlePayload(p: Partial<ArticleItem>) {

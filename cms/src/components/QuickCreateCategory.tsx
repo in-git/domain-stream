@@ -22,6 +22,7 @@ import {
   categoryApi,
   categoryModuleLabel,
   generateCategoryCode,
+  useCategoryModules,
   type BizCategory,
 } from '../lib/category.ts';
 
@@ -65,6 +66,7 @@ export function QuickCreateCategory({
   title = '新建分类',
   hint,
 }: QuickCreateCategoryProps) {
+  useCategoryModules();
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);

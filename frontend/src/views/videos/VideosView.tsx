@@ -72,6 +72,8 @@ interface VideosViewProps {
   mobileChromeVisible?: boolean;
   /** 点击画面唤出导航 / 播放后回到清屏 */
   onChromeVisibilityChange?: (visible: boolean) => void;
+  /** PC 沉浸流真实播放状态：用于播放时收起顶栏、暂停时恢复 */
+  onPlayingChange?: (playing: boolean) => void;
 }
 
 export function VideosView({
@@ -103,6 +105,7 @@ export function VideosView({
   onClosePlaylist,
   mobileChromeVisible = false,
   onChromeVisibilityChange,
+  onPlayingChange,
 }: VideosViewProps) {
   const filterCategories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
   const isMini = mode === 'mini';
@@ -335,6 +338,7 @@ export function VideosView({
     (playing: boolean) => {
       isPlayingRef.current = playing;
       setIsPlaying(playing);
+      if (!isMini && !isHidden && viewMode === 'feed') onPlayingChange?.(playing);
       if (!currentVideo) return;
       if (playing) {
         onPlayVideo?.(currentVideo, { muted: isMuted, playbackRate });
@@ -343,7 +347,7 @@ export function VideosView({
         onStopVideo?.();
       }
     },
-    [currentVideo, isMuted, playbackRate, onPlayVideo, onStopVideo]
+    [currentVideo, isHidden, isMuted, isMini, onPlayVideo, onPlayingChange, onStopVideo, playbackRate, viewMode]
   );
 
   /** 当前视频播完：优先切下一条；最后一条则等待分页加载，无更多时从头继续 */
@@ -752,7 +756,10 @@ export function VideosView({
                 activeIndex={safeIndex}
                 onSelect={playVideoAt}
                 onClose={onClosePlaylist ?? (() => {})}
-                headerFloating={headerFloating}
+                hasMore={hasMoreVideos}
+                loadingMore={loadingMoreVideos}
+                loadMoreError={loadMoreError}
+                onLoadMore={onLoadMoreVideos}
               />
             )}
           </div>

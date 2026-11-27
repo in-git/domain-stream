@@ -22,6 +22,8 @@ let socket: WebSocket | null = null;
 let heartbeatTimer: number | null = null;
 let reconnectTimer: number | null = null;
 let started = false;
+/** WebSocket 建连失败后降级到 HTTP 心跳，避免控制台反复报连接失败 */
+let httpFallback = false;
 
 function randomId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -84,14 +86,23 @@ function stopHeartbeat(): void {
 }
 
 function scheduleReconnect(): void {
-  if (!started || reconnectTimer !== null) return;
+  if (!started || httpFallback || reconnectTimer !== null) return;
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null;
     connect();
   }, RECONNECT_DELAY_MS);
 }
 
+/** WebSocket 不可用时改用 HTTP 心跳，保留调用链但不再反复建连 */
+function startHttpFallback(): void {
+  httpFallback = true;
+  stopHeartbeat();
+  reportHeartbeatToDb();
+  heartbeatTimer = window.setInterval(() => reportHeartbeatToDb(), HEARTBEAT_INTERVAL_MS);
+}
+
 function connect(): void {
+  if (httpFallback) return;
   const identity = getIdentity();
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const query = new URLSearchParams({
@@ -104,20 +115,27 @@ function connect(): void {
   try {
     const ws = new WebSocket(url);
     socket = ws;
+    let failed = false;
     ws.onopen = () => {
+      httpFallback = false;
       startHeartbeat();
       send({ type: 'HEARTBEAT' });
     };
     ws.onclose = () => {
       stopHeartbeat();
       if (socket === ws) socket = null;
+      if (failed) {
+        startHttpFallback();
+        return;
+      }
       scheduleReconnect();
     };
     ws.onerror = () => {
-      // onclose 会负责重连
+      // 浏览器会紧接着触发 onclose，在那里统一降级
+      failed = true;
     };
   } catch {
-    scheduleReconnect();
+    startHttpFallback();
   }
 }
 
@@ -139,6 +157,7 @@ function handleUnload(): void {
 /** 停止访客追踪（关闭连接、清理定时器）。 */
 export function stopVisitorTracking(): void {
   started = false;
+  httpFallback = false;
   stopHeartbeat();
   if (reconnectTimer !== null) {
     window.clearTimeout(reconnectTimer);
@@ -151,6 +170,21 @@ export function stopVisitorTracking(): void {
     closing.close();
   }
   window.removeEventListener('beforeunload', handleUnload);
+}
+
+/** HTTP 心跳上报：WebSocket 不可用时使用，失败静默 */
+function reportHeartbeatToDb(): void {
+  const identity = getIdentity();
+  void visitorApi
+    .heartbeat({
+      visitorId: identity.visitorId,
+      sessionId: identity.sessionId,
+      eventType: 'HEARTBEAT',
+      pageType: 'HOME',
+      source: identity.source,
+      device: identity.device,
+    })
+    .catch(() => {});
 }
 
 /** HTTP 落库上报：失败静默，不影响用户浏览 */
