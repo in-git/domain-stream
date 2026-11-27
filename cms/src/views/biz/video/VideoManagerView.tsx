@@ -9,7 +9,6 @@ import {
   List,
   Play,
   Plus,
-  Scissors,
   Search,
   Square,
   Trash2,
@@ -33,7 +32,6 @@ import { usePublishCategories } from '../../../lib/usePublishCategories.ts';
 import { toPlayableVideoUrl } from '../../../lib/fileCenter.ts';
 import type { VideoPageQuery } from '../../../lib/snowy.ts';
 import { SortOrderButton } from '../../../components/SortOrderButton.tsx';
-import { VideoEditorModal } from '../../../components/video-editor/VideoEditorModal.tsx';
 
 interface VideoManagerViewProps {
   videos: VideoItem[];
@@ -220,16 +218,6 @@ export function VideoManagerView({
   async function handleToggleStatus(item: VideoItem) {
     const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
     await api.updateVideo(item.id, { status: nextStatus });
-    await onRefresh();
-  }
-
-  /** 剪辑弹窗目标与产物回填：新文件地址写入 videoUrl，原文件保留 */
-  const [editorTarget, setEditorTarget] = useState<VideoItem | null>(null);
-
-  async function handleEditorApplied(newUrl: string) {
-    if (!editorTarget) return;
-    await api.updateVideo(editorTarget.id, { videoUrl: newUrl });
-    setEditorTarget(null);
     await onRefresh();
   }
 
@@ -537,15 +525,6 @@ export function VideoManagerView({
                     {canEdit && (
                       <button
                         type="button"
-                        onClick={() => setEditorTarget(item)}
-                        className="px-2 py-1 rounded-lg text-[12px] font-medium text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F5F5F7] transition-colors whitespace-nowrap"
-                      >
-                        剪辑
-                      </button>
-                    )}
-                    {canEdit && (
-                      <button
-                        type="button"
                         onClick={() => void handleToggleStatus(item)}
                         className="px-2 py-1 rounded-lg text-[12px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors whitespace-nowrap"
                       >
@@ -680,15 +659,6 @@ export function VideoManagerView({
                         {canEdit && (
                           <button
                             type="button"
-                            onClick={() => setEditorTarget(item)}
-                            className="px-2.5 py-1 rounded-lg text-[12px] text-[#0071E3] hover:bg-[#0071E3]/8 font-medium"
-                          >
-                            剪辑
-                          </button>
-                        )}
-                        {canEdit && (
-                          <button
-                            type="button"
                             onClick={() => onOpen('edit', item.id)}
                             className="px-2.5 py-1 rounded-lg text-[12px] text-[#0071E3] hover:bg-[#0071E3]/8 font-medium"
                           >
@@ -725,14 +695,6 @@ export function VideoManagerView({
         onClose={() => setPendingDelete([])}
       />
     )}
-
-    {/* 视频剪辑弹窗：裁剪 / 调整时长 / 压缩，产物回填 videoUrl */}
-    <VideoEditorModal
-      open={editorTarget !== null}
-      item={editorTarget}
-      onClose={() => setEditorTarget(null)}
-      onApplied={handleEditorApplied}
-    />
     </>
   );
 }
