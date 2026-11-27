@@ -25,6 +25,7 @@ import type { ContentStatus, VideoItem } from '../../../types/cms.ts';
 import { CategorySelect } from '../../../components/CategorySelect.tsx';
 import { MediaImage } from '../../../components/MediaImage.tsx';
 import { PageShell } from '../../../components/PageShell.tsx';
+import { VideoEditorModal } from '../../../components/video-editor/VideoEditorModal.tsx';
 import {
   EditorWorkspace,
   type PreviewDevice,
@@ -176,6 +177,8 @@ export function VideoEditorPage({
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [formError, setFormError] = useState('');
+  /** 剪辑弹窗的源视频：用户选择视频后自动打开，产物回填为待上传文件 */
+  const [editorSource, setEditorSource] = useState<{ file: File; url: string } | null>(null);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -196,7 +199,8 @@ export function VideoEditorPage({
   useEffect(() => {
     if (!initialVideoFile || consumedInitialFileRef.current === initialVideoFile) return;
     consumedInitialFileRef.current = initialVideoFile;
-    void handleVideoFile(initialVideoFile).finally(() => onInitialFileConsumed?.());
+    // 外部流程带入的文件不自动弹剪辑窗（用户已在别处选择过）
+    void handleVideoFile(initialVideoFile, false).finally(() => onInitialFileConsumed?.());
   }, [initialVideoFile, onInitialFileConsumed]);
 
   /** 生成本地预览地址并登记，便于替换/卸载时释放 */
@@ -261,7 +265,7 @@ export function VideoEditorPage({
     }
   }
 
-  async function handleVideoFile(file: File) {
+  async function handleVideoFile(file: File, openEditor = true) {
     if (!file.type.startsWith('video/')) {
       setFormError('请选择 MP4、MOV 或 WebM 格式的视频文件');
       return;
@@ -277,14 +281,17 @@ export function VideoEditorPage({
 
     // 只做本地暂存与本地解析，不上传
     releaseLocalPreview(videoPreviewUrl);
+    const previewUrl = trackLocalPreview(file);
     setVideoFile(file);
-    setVideoPreviewUrl(trackLocalPreview(file));
+    setVideoPreviewUrl(previewUrl);
     setVideoFileName(file.name);
     setFileSizeBytes(file.size);
     // 新选择的视频会替换旧的远端地址，避免保存时误用历史文件
     setVideoUrl('');
     // 选择本地视频后自动打开预览窗口
     setPreviewOpen(true);
+    // 用户主动选择视频后自动进入剪辑弹窗（裁剪 / 调整时长 / 压缩），关闭即跳过用原片
+    if (openEditor) setEditorSource({ file, url: previewUrl });
 
     try {
       const meta = await extractVideoMetadataAndFrame(file);
@@ -477,7 +484,13 @@ export function VideoEditorPage({
     onBack();
   }
 
+  /** 剪辑产物直接作为新的待上传文件，复用选择逻辑（截封面、解析时长分辨率） */
+  async function handleEditorProcessed({ blob, fileName }: { blob: Blob; fileName: string }) {
+    await handleVideoFile(new File([blob], fileName, { type: 'video/mp4' }), false);
+  }
+
   return (
+    <>
     <EditorWorkspace
       title={item ? '编辑视频信息' : '上传新视频'}
       onBack={onBack}
@@ -696,6 +709,15 @@ export function VideoEditorPage({
         />
       )}
     />
+
+    {/* 视频剪辑弹窗：选择视频后自动打开，产物替换为待上传文件；关闭则跳过剪辑用原片 */}
+    <VideoEditorModal
+      open={editorSource !== null}
+      item={editorSource ? { title: editorSource.file.name, videoUrl: editorSource.url } : null}
+      onClose={() => setEditorSource(null)}
+      onProcessed={handleEditorProcessed}
+    />
+    </>
   );
 }
 
