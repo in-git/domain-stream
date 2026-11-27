@@ -4,11 +4,12 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { A11y, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperClass } from 'swiper';
 import 'swiper/css';
-import { Check, ChevronLeft, ChevronRight, Heart, MessageCircle, Star, X } from 'lucide-react';
+import { Check, ChevronDown, Heart, MessageCircle, Star, X } from 'lucide-react';
 import type { PhotoItem } from '../types/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../lib/motion';
 import { ResilientImage } from './ResilientImage';
 import { CommentPanel } from './CommentPanel.tsx';
+import { Tooltip } from './Tooltip';
 import { useCommentEnabled } from '../lib/systemInfo.ts';
 
 interface NoteDetailProps {
@@ -66,8 +67,9 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
     if (!note) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowLeft') goRelative(-1);
-      if (event.key === 'ArrowRight') goRelative(1);
+      // 上下轮播：方向键跟随轮播方向
+      if (event.key === 'ArrowUp') goRelative(-1);
+      if (event.key === 'ArrowDown') goRelative(1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -123,21 +125,23 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
             exit={{ opacity: 0, scale: 0.99 }}
             transition={SWIFTUI_SMOOTH}
             onClick={(event) => event.stopPropagation()}
-            className="relative h-[100dvh] w-screen max-w-none rounded-none bg-black sm:h-[min(97vh,1120px)] sm:w-full sm:max-w-[min(1680px,98vw)] sm:rounded-app sm:bg-app-card sm:ring-1 sm:ring-white/10 sm:dark:bg-app-card overflow-hidden flex flex-col md:flex-row shadow-[0_48px_160px_rgba(0,0,0,0.65)] will-change-transform"
+            // 移动端绝对定位贴顶（top-0）：部分浏览器的 dvh 计算会让 flex 居中方案留下顶部空隙
+            className="absolute inset-x-0 top-0 flex h-[100dvh] w-screen flex-col md:flex-row sm:relative sm:h-[min(97vh,1120px)] sm:w-full sm:max-w-[min(1680px,98vw)] sm:rounded-app sm:bg-app-card sm:ring-1 sm:ring-white/10 sm:dark:bg-app-card overflow-hidden shadow-[0_48px_160px_rgba(0,0,0,0.65)] will-change-transform"
           >
             {renderHeader(true)}
 
-            {/* 左：Swiper 图片轮播
-                图片完整自适应显示在容器内，宽高都不超出容器；移动端容器全屏 */}
+            {/* 左：Swiper 图片轮播（上下滑动切换）
+                图片完整自适应显示在容器内，宽高都不超出容器；移动端容器全屏贴顶 */}
             <div className="relative flex h-full w-full shrink-0 flex-col overflow-hidden bg-black md:h-full md:w-[68%]">
               <div className="relative min-h-0 flex-1">
                 <Swiper
                   key={note.id}
                   modules={[A11y, Mousewheel]}
+                  direction="vertical"
                   loop={note.images.length > 1}
                   speed={300}
                   threshold={10}
-                  mousewheel={{ forceToAxis: false, releaseOnEdges: true, thresholdDelta: 12 }}
+                  mousewheel={{ forceToAxis: true, sensitivity: 1, thresholdDelta: 16 }}
                   touchStartPreventDefault={false}
                   onSwiper={(swiper) => {
                     swiperRef.current = swiper;
@@ -160,25 +164,60 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   ))}
                 </Swiper>
 
+                {/* 右侧操作栏：与视频沉浸流同款（喜欢 / 收藏竖排悬浮） */}
+                <div className="absolute bottom-20 right-3 z-20 flex flex-col items-center gap-4 text-white sm:right-5 md:bottom-[110px]">
+                  <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
+                    <div className="flex flex-col items-center">
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.84 }}
+                        transition={SWIFTUI_BOUNCY}
+                        onClick={onToggleLike}
+                        aria-label={liked ? '取消喜欢' : '喜欢'}
+                        aria-pressed={liked}
+                        className={`flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+                          liked
+                            ? 'border-[#FF2C55]/60 bg-[#FF2C55]/25 text-[#FF2C55]'
+                            : 'border-white/15 bg-black/45 text-white hover:bg-black/65'
+                        }`}
+                      >
+                        <Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />
+                      </motion.button>
+                      <span className="mt-0.5 text-[11px] font-medium tabular-nums">
+                        {note.likeCount || 0}
+                      </span>
+                    </div>
+                  </Tooltip>
+                  <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.84 }}
+                      transition={SWIFTUI_BOUNCY}
+                      onClick={onToggleSave}
+                      aria-label={saved ? '取消收藏' : '收藏'}
+                      aria-pressed={saved}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+                        saved
+                          ? 'border-app-favorite/60 bg-app-favorite/25 text-app-favorite'
+                          : 'border-white/15 bg-black/45 text-white hover:bg-black/65'
+                      }`}
+                    >
+                      <Star className={`h-5 w-5 ${saved ? 'fill-current' : ''}`} />
+                    </motion.button>
+                  </Tooltip>
+                </div>
+
+                {/* 底部向下滑动提示（上下轮播引导） */}
                 {note.images.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => goRelative(-1)}
-                      aria-label="上一张"
-                      className="absolute left-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/70 md:h-14 md:w-14"
+                  <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2">
+                    <motion.div
+                      animate={{ y: [0, 7, 0] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white/90 ring-1 ring-white/15 backdrop-blur-md"
                     >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => goRelative(1)}
-                      aria-label="下一张"
-                      className="absolute right-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/70 md:h-14 md:w-14"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </>
+                      <ChevronDown className="h-5 w-5" />
+                    </motion.div>
+                  </div>
                 )}
               </div>
 
@@ -273,49 +312,19 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                 </div>
               )}
 
-              <div className="shrink-0 flex h-14 items-center justify-around border-t border-transparent bg-transparent px-4 text-white md:h-16 md:justify-start md:gap-2 md:border-app-border md:bg-transparent md:px-7 md:text-app-text md:dark:border-app-border md:dark:text-app-text">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.88 }}
-                  transition={SWIFTUI_BOUNCY}
-                  onClick={onToggleLike}
-                  aria-pressed={liked}
-                  className={`flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] transition-colors ${
-                    liked
-                      ? 'text-[#FF6B7E] bg-[#FF2E4D]/15 md:text-[#FF2E4D]'
-                      : 'text-white/85 hover:bg-white/10 md:text-app-muted md:hover:bg-black/[0.04] md:dark:text-app-muted'
-                  }`}
-                >
-                  <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
-                  {note.likeCount || 0}
-                </motion.button>
-
-                <button
-                  type="button"
-                  onClick={onToggleSave}
-                  aria-pressed={saved}
-                  className={`flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] transition-colors ${
-                    saved
-                      ? 'text-app-favorite bg-app-favorite/20 md:bg-app-favorite/12 md:text-app-favorite'
-                      : 'text-white/85 hover:bg-white/10 md:text-app-muted md:hover:bg-black/[0.04] md:dark:text-app-muted'
-                  }`}
-                >
-                  <Star className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-                  {note.favoriteCount ?? 0}
-                </button>
-
+              {/* 移动端底部操作栏：喜欢 / 收藏已移到图片区右侧竖排栏，这里只留评论入口 */}
+              <div className="flex h-14 shrink-0 items-center justify-around bg-transparent px-4 text-white md:hidden">
                 {commentsEnabled && (
                   <button
                     type="button"
                     onClick={() => setCommentOpen(true)}
                     aria-label="查看评论"
-                    className="flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] text-white/85 hover:bg-white/10 transition-colors md:hidden"
+                    className="flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] text-white/85 hover:bg-white/10 transition-colors"
                   >
                     <MessageCircle className="w-4 h-4" />
                     {note.commentCount ?? 0}
                   </button>
                 )}
-
               </div>
             </div>
           </motion.div>
