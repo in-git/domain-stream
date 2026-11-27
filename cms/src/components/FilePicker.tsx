@@ -318,6 +318,13 @@ function PickerCard({
             <Check className="w-3 h-3" strokeWidth={3} />
           </span>
         )}
+        {/* 文件标题：绝对定位在缩略图左上角，过长截断，给右上角选中勾留出空间 */}
+        <span
+          title={file.name || file.objName}
+          className="absolute top-1.5 left-1.5 max-w-[calc(100%-44px)] truncate px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none"
+        >
+          {file.name || file.objName || file.id}
+        </span>
         <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none">
           {file.bizType === 'MATERIAL' ? '素材' : '文件'}
         </span>
@@ -327,10 +334,6 @@ function PickerCard({
           </span>
         )}
       </div>
-
-      <p className="mt-1.5 px-0.5 text-[11px] text-[#1D1D1F] truncate" title={file.name || file.objName}>
-        {file.name || file.objName || file.id}
-      </p>
     </div>
   );
 }
@@ -434,7 +437,7 @@ export function FilePicker({
       setSearch('');
       setCategory('');
       setCategoryCode('');
-      setLibrary('ALL');
+      setLibrary('MATERIAL');
       setPage(1);
     }
   }, [open]);
