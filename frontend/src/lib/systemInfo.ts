@@ -11,6 +11,8 @@ const FALLBACK_TITLE = '私域';
 
 let info: PublicSystemInfo = { siteName: FALLBACK_TITLE, title: FALLBACK_TITLE, config: {} };
 let loaded = false;
+/** 请求是否已有结果（成功或失败），用于开屏等场景判断「配置是否已就绪」 */
+let settled = false;
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -28,6 +30,10 @@ function snapshot(): PublicSystemInfo {
 
 function snapshotLoaded(): boolean {
   return loaded;
+}
+
+function snapshotSettled(): boolean {
+  return settled;
 }
 
 /**
@@ -154,9 +160,13 @@ export async function loadSystemInfo(): Promise<void> {
     document.title = info.title;
     applyFavicon(publicFileUrl(info.config.faviconUrl));
     applyClientTheme(info.config);
+    settled = true;
     emit();
   } catch {
+    // 失败也标记为已结束：开屏按默认时长继续，不让用户一直等配置
     loaded = false;
+    settled = true;
+    emit();
   }
 }
 
@@ -168,6 +178,11 @@ export function useSystemInfo(): PublicSystemInfo {
 /** 系统信息是否已从后端加载完成 */
 export function useSystemInfoLoaded(): boolean {
   return useSyncExternalStore(subscribe, snapshotLoaded, () => false);
+}
+
+/** 系统信息请求是否已有结果（成功或失败均可），开屏计时以此为准 */
+export function useSystemInfoSettled(): boolean {
+  return useSyncExternalStore(subscribe, snapshotSettled, () => false);
 }
 
 /** CLIENT_CONFIG.allowComment 为 NO/FALSE/0 时关闭评论；缺失时默认允许 */

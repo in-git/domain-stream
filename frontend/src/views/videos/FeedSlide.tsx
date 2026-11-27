@@ -83,6 +83,8 @@ interface FeedSlideProps {
   captionToBody?: boolean;
   /** 首页沉浸流传入后启用 PC 右键 / 移动端长按控制菜单 */
   videoMenu?: VideoMenuConfig;
+  /** 所属模块被切走时为 true：不渲染评论抽屉等 portal 浮层 */
+  moduleHidden?: boolean;
 }
 
 /** 沉浸刷看的单屏播放器；PC 与移动端共用同一播放器实例，避免重建造成卡顿。 */
@@ -120,6 +122,7 @@ export function FeedSlide({
   showFullscreen = true,
   captionToBody = false,
   videoMenu,
+  moduleHidden = false,
 }: FeedSlideProps) {
   const commentsEnabled = useCommentEnabled();
   const playerRef = useRef<MediaPlayerInstance | null>(null);
@@ -390,7 +393,7 @@ export function FeedSlide({
           poster={video.cover}
           title={video.title}
           playsInline
-          loop={!!videoMenu?.state.singleLoop || !onVideoEnded}
+          loop={videoMenu?.state.loopMode === 'single' || !onVideoEnded}
           src={source}
           posterLoad="eager"
           muted={isMuted}
@@ -423,7 +426,7 @@ export function FeedSlide({
           onEnded={() => {
             setPlaying(false);
             // 自动切下一条时顶栏保持收起，避免切集瞬间闪一下
-            const autoAdvance = !!onVideoEnded && videoMenu?.state.autoLoop !== false;
+            const autoAdvance = !!onVideoEnded && videoMenu?.state.loopMode !== 'single';
             if (!autoAdvance) onPlaybackStateChange?.(false);
             onVideoEnded?.();
           }}
@@ -616,23 +619,33 @@ export function FeedSlide({
                   {formatTime(currentTime)}
                 </span>
               )}
-              <div className="relative flex-1 min-w-0 flex items-center h-4">
-                <div className="relative w-full h-[2px] rounded-full bg-white/25 overflow-hidden">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-white/90"
-                    style={{ width: `${Math.min(100, (progressValue / progressMax) * 100)}%` }}
+              <div className="flex-1 min-w-0">
+                {/* 播放模式：进度条上方显示 已播放时间 / 总时长 */}
+                {!mini && (
+                  <div className="mb-1.5 flex items-center gap-1 text-[11px] font-mono-tabular text-white/85">
+                    <span className="tabular-nums">{formatTime(progressValue)}</span>
+                    <span className="text-white/40">/</span>
+                    <span className="tabular-nums text-white/60">{formatTime(progressMax)}</span>
+                  </div>
+                )}
+                <div className="relative flex items-center h-4">
+                  <div className="relative w-full h-[2px] rounded-full bg-white/25 overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-white/90"
+                      style={{ width: `${Math.min(100, (progressValue / progressMax) * 100)}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={progressMax}
+                    step={0.05}
+                    value={progressValue}
+                    onChange={(e) => onSeek(Number(e.target.value))}
+                    aria-label="播放进度"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
                 </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={progressMax}
-                  step={0.05}
-                  value={progressValue}
-                  onChange={(e) => onSeek(Number(e.target.value))}
-                  aria-label="播放进度"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
               </div>
               {mini && (
                 <span className="w-8 text-[10px] font-mono-tabular text-white/65 text-right">
@@ -648,7 +661,7 @@ export function FeedSlide({
       <CommentPanel
         drawer
         portalToBody
-        open={commentOpen && !mini}
+        open={commentOpen && !mini && !moduleHidden}
         targetType="VIDEO"
         targetId={video.id}
         onClose={() => setCommentOpen(false)}

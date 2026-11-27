@@ -69,6 +69,7 @@ export default function AssetResourceView() {
   const [collectUrlOpen, setCollectUrlOpen] = useState(false);
   const [collectUrl, setCollectUrl] = useState('');
   const [collectType, setCollectType] = useState('IMAGE');
+  const [deepSearch, setDeepSearch] = useState(false);
 
   const [collectPanelOpen, setCollectPanelOpen] = useState(false);
   const [collectPanelCollapsed, setCollectPanelCollapsed] = useState(false);
@@ -217,24 +218,31 @@ export default function AssetResourceView() {
     setCollectPanelCollapsed(false);
     setCollectPhase('running');
     setCollectedResources([]);
-    setCollectProgress({ index: 0, total: 0, message: '正在解析网址并采集资源...' });
+    setCollectProgress({
+      index: 0,
+      total: 0,
+      message: deepSearch ? '正在深度搜索整站内链并采集资源...' : '正在解析网址并采集资源...',
+    });
     try {
-      await assetResourceApi.collectUrlStream({ url, type: collectType, limit: 20 }, (event) => {
-        setCollectProgress({ index: event.index, total: event.total, message: event.message });
-        const resource = event.resource;
-        if (event.phase === 'progress' && resource) {
-          setCollectedResources((prev) => prev.some((item) => item.id === resource.id) ? prev : [...prev, resource]);
-        } else if (event.phase === 'done') {
-          setCollectPhase('done');
-          setCollectUrl('');
-          setCollectUrlOpen(false);
-          showToast(event.message || '采集完成', 'success');
-        } else if (event.phase === 'error') {
-          setCollectPhase('error');
-          setCollectUrlOpen(false);
-          showToast(event.message || '采集失败', 'error');
+      await assetResourceApi.collectUrlStream(
+        { url, type: collectType, limit: deepSearch ? undefined : 20, deepSearch },
+        (event) => {
+          setCollectProgress({ index: event.index, total: event.total, message: event.message });
+          const resource = event.resource;
+          if (event.phase === 'progress' && resource) {
+            setCollectedResources((prev) => prev.some((item) => item.id === resource.id) ? prev : [...prev, resource]);
+          } else if (event.phase === 'done') {
+            setCollectPhase('done');
+            setCollectUrl('');
+            setCollectUrlOpen(false);
+            showToast(event.message || '采集完成', 'success');
+          } else if (event.phase === 'error') {
+            setCollectPhase('error');
+            setCollectUrlOpen(false);
+            showToast(event.message || '采集失败', 'error');
+          }
         }
-      });
+      );
       setType(collectType);
       setInMaterial('');
       setPage(1);
@@ -917,8 +925,23 @@ export default function AssetResourceView() {
                   className="w-full"
                 />
               </div>
+              <label className="flex items-start gap-2 rounded-xl border border-[#E5E5EA] px-3.5 py-3 cursor-pointer hover:bg-[#F5F5F7] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={deepSearch}
+                  onChange={(e) => setDeepSearch(e.target.checked)}
+                  disabled={collecting}
+                  className="mt-0.5 w-4 h-4 accent-[#0071E3] disabled:opacity-50"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-[#1D1D1F]">深度搜索整站内链（默认关闭）</span>
+                  <span className="block mt-0.5 text-[11px] leading-4 text-[#86868B]">
+                    勾选后继续抓取同站页面，页面与资源自动去重，直到站内资源采集完成。
+                  </span>
+                </span>
+              </label>
               <div className="rounded-xl bg-[#F5F5F7] px-3.5 py-2.5 text-[12px] leading-5 text-[#6E6E73]">
-                网页地址默认采集前 20 张；图片与 SVG 单张最大 50MB，视频最大 500MB。相同图片按资源 ID 去重，重复采集会更新已有记录。
+                未勾选深度搜索时，网页地址默认采集前 20 张；图片与 SVG 单张最大 50MB，视频最大 500MB。相同图片按资源 ID 去重，重复采集会更新已有记录。
               </div>
             </div>
 

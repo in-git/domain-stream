@@ -5,12 +5,12 @@ import type { VideoItem } from '../../types/content';
 import { EmptyState } from '../../components/PortalStates';
 import { VideoFeedPlayer } from './VideoFeedPlayer';
 import { ImmersiveModal } from '../../components/ImmersiveModal';
-import { DesktopGridCategories, DesktopVideoGrid } from './DesktopView';
+import { DesktopGridCategories, DesktopGridSkeleton, DesktopVideoGrid } from './DesktopView';
 import { MobileGridCategories, MobileVideoGrid } from './MobileView';
 import { PlaylistPanel } from './PlaylistPanel';
 import { DEFAULT_CATEGORIES, formatTime, type ViewMode } from './shared';
 import { useSystemInfo } from '../../lib/systemInfo';
-import type { VideoMenuConfig } from './videoMenuTypes';
+import type { VideoLoopMode, VideoMenuConfig } from './videoMenuTypes';
 
 /** 迷你播放器尺寸（与下方 sm 断点样式一致），用于拖拽边界计算 */
 const MINI_SIZE = { width: 240, height: 135 };
@@ -36,6 +36,8 @@ interface VideosViewProps {
   onCategoryChange: (category: string) => void;
   hasMoreVideos?: boolean;
   loadingMoreVideos?: boolean;
+  /** 首屏加载中：卡片模式显示骨架，而不是「暂无数据」 */
+  loadingVideos?: boolean;
   /** 加载更多失败：暂停自动触底，改为显示手动重试入口 */
   loadMoreError?: string;
   onLoadMoreVideos?: () => void;
@@ -85,6 +87,7 @@ export function VideosView({
   loadingMoreVideos = false,
   loadMoreError,
   onLoadMoreVideos,
+  loadingVideos = false,
   savedIds,
   likedIds,
   searchQuery = '',
@@ -148,9 +151,8 @@ export function VideosView({
   /** 真实起播状态：只有正在播放的视频才具备离页续播资格 */
   const isPlayingRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  /** 菜单控制：播完自动切下一条 / 单条循环 */
-  const [autoLoop, setAutoLoop] = useState(true);
-  const [singleLoop, setSingleLoop] = useState(false);
+  /** 菜单控制的循环模式：单条循环 / 自动连播（单选） */
+  const [loopMode, setLoopMode] = useState<VideoLoopMode>('auto');
   /** 播完最后一条时等待下一页加载，加载完成后自动切到下一条 */
   const pendingAutoAdvanceRef = useRef(false);
   /** 用 ref 读取当前形态，避免 onPause 闭包拿到切换前的旧 mode */
@@ -238,9 +240,12 @@ export function VideosView({
     };
   }, [mode, isMini, isHidden, viewMode, currentVideo?.title, siteTitle]);
 
+  /** 后端记录的视频时长：首页进度条的总时长以它为准 */
+  const backendDuration = currentVideo?.durationSeconds ?? 0;
+
   useEffect(() => {
     setCurrentTime(0);
-    setDuration(currentVideo?.durationSeconds ?? 0);
+    setDuration(backendDuration);
     isPlayingRef.current = false;
     setIsPlaying(false);
   }, [currentVideo?.id]);
@@ -350,10 +355,10 @@ export function VideosView({
     [currentVideo, isHidden, isMuted, isMini, onPlayVideo, onPlayingChange, onStopVideo, playbackRate, viewMode]
   );
 
-  /** 当前视频播完：优先切下一条；最后一条则等待分页加载，无更多时从头继续 */
+  /** 当前视频播完：自动连播切下一条；单条循环停在当前视频 */
   const handleVideoEnded = useCallback(() => {
-    if (!autoLoop) {
-      // 自动循环关闭：停在末尾，不再切下一条
+    if (loopMode === 'single') {
+      // 单条循环由播放器自身 loop 处理，这里兜底：停在末尾不切下一条
       safePause(getActivePlayer());
       setIsPlaying(false);
       return;
@@ -390,7 +395,7 @@ export function VideosView({
     }
     swiper.slideTo(0);
   }, [
-    autoLoop,
+    loopMode,
     currentVideo,
     filteredVideos.length,
     safeIndex,
@@ -620,8 +625,7 @@ export function VideosView({
     mode === 'immersive' && viewMode === 'feed' && !isMini && !isHidden
       ? {
           state: {
-            autoLoop,
-            singleLoop,
+            loopMode,
             isPlaying,
             isMuted,
             playbackRate,
@@ -630,8 +634,7 @@ export function VideosView({
             canNext: safeIndex < filteredVideos.length - 1 || hasMoreVideos,
           },
           actions: {
-            toggleAutoLoop: () => setAutoLoop((value) => !value),
-            toggleSingleLoop: () => setSingleLoop((value) => !value),
+            setLoopMode,
             togglePlay: togglePlayback,
             toggleMute: handleToggleMute,
             setRate: setPlaybackRate,
@@ -684,13 +687,13 @@ export function VideosView({
 
       {/* PC 沉浸模式的分类条已移至顶栏（见 MainHeader），与搜索框同排；此处不再渲染 */}
 
-      {!isMini && viewMode === 'feed' && filteredVideos.length === 0 && (
+      {!isMini && viewMode === 'feed' && !loadingVideos && filteredVideos.length === 0 && (
         <div className={`flex items-center justify-center bg-black ${headerFloating ? 'h-[100dvh]' : 'h-[calc(100dvh-3.5rem)]'}`}>
           <EmptyState className="w-fit px-10 py-16" title="暂无数据" onDark />
         </div>
       )}
 
-      {!isMini && viewMode === 'grid' && filteredVideos.length === 0 && (
+      {!isMini && viewMode === 'grid' && !loadingVideos && filteredVideos.length === 0 && (
         <EmptyState title="暂无数据" />
       )}
 
@@ -725,7 +728,10 @@ export function VideosView({
                 onSetRate: setPlaybackRate,
                 onSeek: seekTo,
                 onTimeUpdate: setCurrentTime,
-                onDurationChange: setDuration,
+                // 总时长以后端记录为准；后端没记录时才退回播放器解析到的时长
+                onDurationChange: (value) => {
+                  if (!backendDuration) setDuration(value);
+                },
                 onRegisterPlayer: registerPlayer,
                 onPlaybackStateChange: handlePlaybackStateChange,
                 onVideoEnded: handleVideoEnded,
@@ -744,6 +750,7 @@ export function VideosView({
               onMiniExpand={onMiniExpand}
               captionToBody={!isMini && !isHidden && viewMode === 'feed' && !isFullscreen}
               videoMenu={videoMenu}
+              moduleHidden={isHidden}
             />
 
             {/* PC 播放列表侧边栏：点击分类条右侧列表图标展开 */}
@@ -767,40 +774,58 @@ export function VideosView({
       )}
 
       {/* 卡片模式网格：PC / 移动端各自模块，触底加载由主入口统一持有 */}
-      {!isMini && viewMode === 'grid' && visibleVideos.length > 0 && (
+      {!isMini && viewMode === 'grid' && (visibleVideos.length > 0 || loadingVideos) && (
         <div className="px-2 sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
-          <DesktopVideoGrid
-            videos={visibleVideos}
-            likedIds={likedIds}
-            savedIds={savedIds}
-            onToggleLike={onToggleLike}
-            onToggleSave={onToggleSave}
-            onOpen={openVideoAt}
-          />
-          <MobileVideoGrid
-            videos={visibleVideos}
-            likedIds={likedIds}
-            savedIds={savedIds}
-            onToggleLike={onToggleLike}
-            onToggleSave={onToggleSave}
-            onOpen={openVideoAt}
-          />
-          {hasMoreVideos ? (
-            <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-6">
-              {loadMoreError && (
-                <p className="text-[12px] text-red-400">加载失败：{loadMoreError}</p>
+          {visibleVideos.length > 0 ? (
+            <>
+              <DesktopVideoGrid
+                videos={visibleVideos}
+                likedIds={likedIds}
+                savedIds={savedIds}
+                onToggleLike={onToggleLike}
+                onToggleSave={onToggleSave}
+                onOpen={openVideoAt}
+              />
+              <MobileVideoGrid
+                videos={visibleVideos}
+                likedIds={likedIds}
+                savedIds={savedIds}
+                onToggleLike={onToggleLike}
+                onToggleSave={onToggleSave}
+                onOpen={openVideoAt}
+              />
+              {hasMoreVideos ? (
+                <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-6">
+                  {loadMoreError && (
+                    <p className="text-[12px] text-red-400">加载失败：{loadMoreError}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onLoadMoreVideos?.()}
+                    disabled={loadingMoreVideos}
+                    className="rounded-full bg-white/10 px-5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20 disabled:opacity-50"
+                  >
+                    {loadingMoreVideos ? '加载中…' : loadMoreError ? '重试加载' : '加载更多'}
+                  </button>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-[12px] text-white/50">没有更多了</p>
               )}
-              <button
-                type="button"
-                onClick={() => onLoadMoreVideos?.()}
-                disabled={loadingMoreVideos}
-                className="rounded-full bg-white/10 px-5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20 disabled:opacity-50"
-              >
-                {loadingMoreVideos ? '加载中…' : loadMoreError ? '重试加载' : '加载更多'}
-              </button>
-            </div>
+            </>
           ) : (
-            <p className="py-6 text-center text-[12px] text-white/50">没有更多了</p>
+            <>
+              {/* 首屏加载中：PC 网格与移动端瀑布流各自铺骨架 */}
+              <DesktopGridSkeleton />
+              <MobileVideoGrid
+                videos={[]}
+                loading
+                likedIds={likedIds}
+                savedIds={savedIds}
+                onToggleLike={onToggleLike}
+                onToggleSave={onToggleSave}
+                onOpen={openVideoAt}
+              />
+            </>
           )}
         </div>
       )}
@@ -821,13 +846,25 @@ export function VideosView({
       )}
     </section>
 
-    {/* 移动端沉浸播放：进度条固定在底部导航栏正上方 2px */}
-    {!isMini && viewMode === 'feed' && currentVideo && !isFullscreen && (
+    {/* 移动端沉浸播放：进度条固定在底部导航栏正上方 2px；切到其他模块时整体隐藏 */}
+    {!isMini && !isHidden && viewMode === 'feed' && currentVideo && !isFullscreen && (
       <div
         className={`pointer-events-none fixed left-0 right-0 z-40 px-4 md:hidden ${
           mobileChromeVisible ? 'bottom-[calc(3rem+2px)]' : 'bottom-2'
         }`}
       >
+        {/* 播放时间 / 总时长：左下角，仅播放中显示；暂停与拖动时淡出，避免和进度气泡重叠 */}
+        <div
+          className={`mb-1 flex items-center justify-start gap-1 text-[11px] font-mono-tabular text-white/80 transition-opacity duration-150 ${
+            isPlaying && !seeking ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <span className="tabular-nums">{formatTime(currentTime)}</span>
+          <span className="text-white/40">/</span>
+          <span className="tabular-nums text-white/60">
+            {formatTime(duration || currentVideo.durationSeconds || 0)}
+          </span>
+        </div>
         {/* 点击区比原 h-4 高 10px（h-[26px]），实际进度条按住时加高到 6px，松手还原 */}
         <div className="pointer-events-auto relative flex h-[26px] items-end">
           {seeking && (

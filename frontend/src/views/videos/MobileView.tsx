@@ -4,6 +4,7 @@ import type { VideoItem } from '../../types/content';
 import { SWIFTUI_SMOOTH } from '../../lib/motion';
 import { ResilientImage } from '../../components/ResilientImage';
 import type { CategoryBarProps, VideoGridProps } from './shared';
+import { VideoWaterfall } from './VideoWaterfall';
 
 /* ------------------------------------------------------------------ *
  * 卡片模式：移动端吸顶分类 chip 条
@@ -79,68 +80,24 @@ function MobileBanner({ video, onOpen }: { video: VideoItem; onOpen: () => void 
 }
 
 /* ------------------------------------------------------------------ *
- * 卡片模式：移动端网格卡片（标题在封面下方）
+ * 卡片模式：移动端瀑布流（与 PC 侧边栏共用 VideoWaterfall）
  * ------------------------------------------------------------------ */
-interface MobileGridCardProps {
-  video: VideoItem;
-  index: number;
-  onOpen: () => void;
-}
-
-function MobileGridCard({ video, index, onOpen }: MobileGridCardProps) {
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...SWIFTUI_SMOOTH, delay: index * 0.03 }}
-      className="min-w-0"
-    >
-      <div className="group overflow-hidden rounded-app">
-        <div className="relative overflow-hidden">
-          <button
-            type="button"
-            onClick={onOpen}
-            aria-label={`播放 ${video.title}`}
-            className="block w-full text-left focus-visible:outline-none"
-          >
-            <ResilientImage
-              src={video.cover}
-              alt={video.title}
-              fallbackTitle={video.title}
-              className="w-full aspect-[16/9] transition-transform duration-500 ease-out group-hover:scale-[1.03]"
-            />
-          </button>
-          <span className="absolute left-2 top-2 px-2 py-0.5 rounded-full bg-black/45 text-[10px] font-medium text-white backdrop-blur-sm">
-            {video.category}
-          </span>
-        </div>
-        <div className="px-2 py-2">
-          <h3 className="text-[12px] leading-snug text-app-text line-clamp-2">{video.title}</h3>
-        </div>
-      </div>
-    </motion.article>
-  );
-}
-
 export function MobileVideoGrid({
   videos,
-  likedIds,
-  savedIds,
   onOpen,
-}: VideoGridProps) {
+  loading = false,
+}: VideoGridProps & { loading?: boolean }) {
   return (
     <div className="sm:hidden">
       {videos.length > 0 && <MobileBanner video={videos[0]} onOpen={() => onOpen(videos[0])} />}
-      <div className="grid grid-cols-2 gap-2">
-        {videos.slice(1).map((video, idx) => (
-          <MobileGridCard
-            key={`${video.id}-${idx}`}
-            video={video}
-            index={idx + 1}
-            onOpen={() => onOpen(video)}
-          />
-        ))}
-      </div>
+      <VideoWaterfall
+        videos={videos.slice(1)}
+        loading={loading}
+        onSelect={onOpen}
+        columns={2}
+        gap={8}
+        skeletonCount={8}
+      />
     </div>
   );
 }

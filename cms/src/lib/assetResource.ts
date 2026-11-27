@@ -73,7 +73,7 @@ export const assetResourceApi = {
     });
   },
   async collectUrlStream(
-    payload: { url: string; type: string; name?: string; limit?: number },
+    payload: { url: string; type: string; name?: string; limit?: number; deepSearch?: boolean },
     onEvent: (event: AssetCollectEvent) => void
   ): Promise<void> {
     const response = await snowyFetch(`${BASE}/collect-url/stream`, {

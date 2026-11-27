@@ -1,29 +1,266 @@
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+  type SyntheticEvent,
+} from 'react';
 import { motion } from 'motion/react';
 import { APPLE_EASE, SWIFTUI_SMOOTH } from '../lib/motion';
-import { useSystemInfo } from '../lib/systemInfo';
+import { publicFileUrl, useSystemInfo, useSystemInfoSettled } from '../lib/systemInfo';
+import {
+  parseSplashCanvas,
+  resolveSplashMode,
+  type SplashImageMode,
+  type SplashNode,
+  type SplashOrientationDoc,
+  type SplashTextNode,
+} from '../lib/splashCanvas';
+
+const DEFAULT_SPLASH_DURATION = 1850;
+const MIN_MEDIA_DURATION = 2200;
+const MAX_MEDIA_DURATION = 8000;
+/** 等系统配置的最长时间：超时仍用默认时长开跑，避免接口异常时开屏卡死 */
+const CONFIG_WAIT_TIMEOUT = 1200;
+
+/** 标题 / 进度条的默认位置（百分比：x 为水平中心、y 为顶边） */
+const DEFAULT_POSITIONS = {
+  title: { x: 50, y: 38 },
+  progress: { x: 50, y: 62 },
+};
+
+/** 与后台「设置开屏素材」对应：横屏 / 竖屏各一套位置 */
+const POSITION_KEYS = {
+  title: ['splashTitlePosLandscape', 'splashTitlePosPortrait'],
+  progress: ['splashProgressPosLandscape', 'splashProgressPosPortrait'],
+};
+
+interface SplashPosition {
+  x: number;
+  y: number;
+}
+
+/** 解析 CMS 里拖拽好的百分比位置；缺失或脏数据回退到默认位置 */
+function readPosition(raw: string | undefined, fallback: SplashPosition): SplashPosition {
+  const value = (raw || '').trim();
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value) as Partial<SplashPosition>;
+    const x = Number(parsed.x);
+    const y = Number(parsed.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      return { x: Math.min(100, Math.max(0, x)), y: Math.min(100, Math.max(0, y)) };
+    }
+  } catch {
+    // 非法 JSON 直接回退
+  }
+  return fallback;
+}
+
+/** 开屏素材按屏幕方向取横屏或竖屏版本 */
+function usePortrait(): boolean {
+  const [portrait, setPortrait] = useState(
+    () => typeof window !== 'undefined' && window.innerHeight > window.innerWidth
+  );
+  useEffect(() => {
+    function sync() {
+      setPortrait(window.innerHeight > window.innerWidth);
+    }
+    window.addEventListener('resize', sync);
+    window.addEventListener('orientationchange', sync);
+    return () => {
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('orientationchange', sync);
+    };
+  }, []);
+  return portrait;
+}
+
+/** 用户第一次交互的事件：浏览器只允许在这些事件之后播放带声音的媒体 */
+const GESTURE_EVENTS = ['pointerdown', 'keydown', 'touchstart'] as const;
+
+/**
+ * 自动播放被浏览器拦截时的补偿：注册一次性交互监听，用户一操作就立刻恢复播放。
+ * 返回清理函数，组件卸载或换素材时要把监听一并移除。
+ */
+function resumeAfterGesture(resume: () => void): () => void {
+  const cleanup = () => {
+    GESTURE_EVENTS.forEach((name) => window.removeEventListener(name, handler, true));
+  };
+  const handler = () => {
+    cleanup();
+    resume();
+  };
+  GESTURE_EVENTS.forEach((name) => window.addEventListener(name, handler, true));
+  return cleanup;
+}
 
 interface SplashScreenProps {
   onComplete: () => void;
 }
 
 export function SplashScreen({ onComplete }: SplashScreenProps) {
-  const { title } = useSystemInfo();
-  const [progress, setProgress] = useState(0);
+  const { title, config } = useSystemInfo();
+  const systemInfoSettled = useSystemInfoSettled();
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  /** 进度条填充层：用 rAF 直接改宽度，避免每帧重渲染整个开屏 */
+  const progressFillRef = useRef<HTMLDivElement | null>(null);
+  const portrait = usePortrait();
+
+  // 开屏形式：视频 / 封面画布互斥，只生效一种
+  const splashMode = resolveSplashMode(config);
+  // 后台画布文档：按当前屏幕方向取 PC 或移动端那一份；没有则继续走旧版开屏
+  const canvasDoc = splashMode === 'cover' ? parseSplashCanvas(config.splashCanvas) : null;
+  const canvas = canvasDoc ? (portrait ? canvasDoc.mobile : canvasDoc.pc) : null;
+
+  // 兼容旧配置与单方向配置：缺哪个方向就沿用另一个方向的素材
+  const rawLandscapeVideo = publicFileUrl(config.splashVideoLandscapeUrl || config.splashVideoUrl);
+  const rawPortraitVideo = publicFileUrl(config.splashVideoPortraitUrl);
+  const rawLandscapeImage = publicFileUrl(config.splashImageLandscapeUrl || config.splashImageUrl);
+  const rawPortraitImage = publicFileUrl(config.splashImagePortraitUrl);
+  const landscapeVideo = rawLandscapeVideo || rawPortraitVideo;
+  const portraitVideo = rawPortraitVideo || rawLandscapeVideo;
+  const landscapeImage = rawLandscapeImage || rawPortraitImage;
+  const portraitImage = rawPortraitImage || rawLandscapeImage;
+
+  // 视频模式才播视频；封面模式下旧版整屏图片与画布互斥，画布存在时不再重复渲染
+  const videoUrl = splashMode === 'video' ? (portrait ? portraitVideo : landscapeVideo) : '';
+  const imageUrl =
+    splashMode === 'cover' && !canvas ? (portrait ? portraitImage : landscapeImage) : '';
+  const hasVisualMedia = Boolean(imageUrl || videoUrl);
+  // 与 CMS 拖拽预览共用同一套百分比坐标，横屏取第 0 项、竖屏取第 1 项
+  const orientationIndex = portrait ? 1 : 0;
+  const titlePos = readPosition(
+    config[POSITION_KEYS.title[orientationIndex]],
+    DEFAULT_POSITIONS.title
+  );
+  const progressPos = readPosition(
+    config[POSITION_KEYS.progress[orientationIndex]],
+    DEFAULT_POSITIONS.progress
+  );
+  // 后台「设置开屏素材 → 样式」里调整过的字号 / 颜色 / 进度条宽度，留空沿用默认样式
+  const titleSize = Number((config.splashTitleFontSize || '').trim()) || 0;
+  const titleColor = (config.splashTitleColor || '').trim();
+  const progressWidth = Number((config.splashProgressWidth || '').trim()) || 0;
+  const progressColor = (config.splashProgressColor || '').trim();
+  // 音频只在封面模式下播放，视频开屏不叠加音频
+  const audioUrl = splashMode === 'video' ? '' : publicFileUrl(config.splashAudioUrl);
+  // 后台「开屏时间」优先；未配置时按素材时长（限制在合理区间），再退回默认值
+  const configuredSeconds = Number((config.splashDuration || '').trim());
+  const configuredDuration =
+    Number.isFinite(configuredSeconds) && configuredSeconds > 0 ? configuredSeconds * 1000 : 0;
+
+  // 配置还没回来时不要开跑：否则会先用默认 1.85s 开始，等配置到达又重新计时，
+  // 进度条会回跳，整体时长也和后台配置不一致。最多等 1.2s 兜底，避免接口异常时卡住开屏。
+  const [configTimedOut, setConfigTimedOut] = useState(false);
+  useEffect(() => {
+    if (systemInfoSettled) return;
+    const timer = window.setTimeout(() => setConfigTimedOut(true), CONFIG_WAIT_TIMEOUT);
+    return () => window.clearTimeout(timer);
+  }, [systemInfoSettled]);
+  const configSettled = systemInfoSettled || configTimedOut;
+
+  /**
+   * 本次开屏的持续时间：配置就绪后只取一次并锁定，
+   * 后面素材元数据（video/audio 的 duration）再变化也不会重启计时，
+   * 保证进度条和关闭时机都用后端返回的开屏时间。
+   */
+  const [runDuration, setRunDuration] = useState(0);
+  useEffect(() => {
+    if (!configSettled || runDuration) return;
+    setRunDuration(
+      // 后端给了开屏时间就严格按它走，不再二次夹取，保证进度条时长与配置一致
+      configuredDuration
+        ? configuredDuration
+        : mediaDuration
+          ? Math.min(Math.max(mediaDuration, MIN_MEDIA_DURATION), MAX_MEDIA_DURATION)
+          : DEFAULT_SPLASH_DURATION
+    );
+  }, [configSettled, configuredDuration, mediaDuration, runDuration]);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setProgress(38), 160);
-    const t2 = setTimeout(() => setProgress(78), 620);
-    const t3 = setTimeout(() => setProgress(100), 1180);
-    const done = setTimeout(() => onComplete(), 1850);
+    if (!runDuration) return;
+    // 进度条与开屏时间同步：按后端给的持续时间匀速走满，结束时正好 100%
+    const start = performance.now();
+    let raf = 0;
+    if (progressFillRef.current) progressFillRef.current.style.width = '0%';
+
+    const tick = (now: number) => {
+      const ratio = Math.min(1, (now - start) / runDuration);
+      if (progressFillRef.current) progressFillRef.current.style.width = `${ratio * 100}%`;
+      if (ratio < 1) raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    const done = window.setTimeout(() => {
+      // 开屏结束立刻停掉媒体，否则淡出的 0.5s 里音频还会继续响
+      videoRef.current?.pause();
+      audioRef.current?.pause();
+      onComplete();
+    }, runDuration);
 
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(done);
+      cancelAnimationFrame(raf);
+      window.clearTimeout(done);
     };
-  }, [onComplete]);
+  }, [runDuration, onComplete]);
+
+  /**
+   * 视频模式：播放视频本身（视频自带声音），不再叠加音频；
+   * 封面模式：播放图片 / 画布 + 后台配置的音频。两者互斥，只会有一路在响。
+   */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    let stopGesture = () => {};
+    // 优先带声音播放；被自动播放策略拦截时先静音保证画面，用户首次交互后再恢复声音
+    video.muted = false;
+    void video.play().catch(() => {
+      video.muted = true;
+      void video.play().catch(() => {});
+      stopGesture = resumeAfterGesture(() => {
+        video.muted = false;
+        void video.play().catch(() => {});
+      });
+    });
+    return () => {
+      stopGesture();
+      video.pause();
+    };
+  }, [videoUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    let stopGesture = () => {};
+    void audio.play().catch(() => {
+      // 被拦截时等用户第一次交互再补播，否则音频永远不会响
+      stopGesture = resumeAfterGesture(() => {
+        void audio.play().catch(() => {});
+      });
+    });
+    return () => {
+      stopGesture();
+      audio.pause();
+    };
+  }, [audioUrl]);
+
+  useEffect(() => {
+    return () => {
+      videoRef.current?.pause();
+      audioRef.current?.pause();
+    };
+  }, []);
+
+  function handleMediaMetadata(event: SyntheticEvent<HTMLMediaElement>) {
+    const seconds = event.currentTarget.duration;
+    if (Number.isFinite(seconds) && seconds > 0) {
+      setMediaDuration((current) => Math.max(current, Math.round(seconds * 1000)));
+    }
+  }
 
   return (
     <motion.div
@@ -38,21 +275,104 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#000000] text-app-text select-none overflow-hidden"
       aria-label="应用加载中"
     >
-      {/* Subtle Apple-grade radial ambient illumination behind emblem */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 0.45, scale: 1.15 }}
-        transition={{ duration: 1.4, ease: APPLE_EASE }}
-        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-radial from-app-primary/25 via-[#5E5CE6]/10 to-transparent blur-3xl -translate-y-[20dvh] md:translate-y-0"
-      />
+      {/* 开屏素材：视频优先，其次图片；音频单独播放 */}
+      {videoUrl ? (
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          onLoadedMetadata={handleMediaMetadata}
+          className="absolute inset-0 w-full h-full object-cover"
+          aria-hidden="true"
+        />
+      ) : imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : null}
+      {hasVisualMedia && !canvas && (
+        <div
+          className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/10 to-black/75"
+          aria-hidden="true"
+        />
+      )}
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          autoPlay
+          onLoadedMetadata={handleMediaMetadata}
+          className="hidden"
+        />
+      )}
 
-      <div className="relative flex flex-col items-center -translate-y-[20dvh] md:translate-y-0">
+      {/* Subtle Apple-grade radial ambient illumination behind emblem */}
+      {!hasVisualMedia && !canvas && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 0.45, scale: 1.15 }}
+          transition={{ duration: 1.4, ease: APPLE_EASE }}
+          className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-radial from-app-primary/25 via-[#5E5CE6]/10 to-transparent blur-3xl -translate-y-[20dvh] md:translate-y-0"
+        />
+      )}
+
+      {/* 后台画布：文本 / 图片 / 进度条按设计像素换算成百分比铺满屏幕 */}
+      {canvas && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{
+            backgroundColor: videoUrl ? undefined : canvas.background,
+            // 组件勾选「超出画布」时允许溢出画布；旧配置的画布级 contained 继续兼容
+            overflow:
+              canvas.contained === false || canvas.nodes.some((node) => node.overflow === true)
+                ? 'visible'
+                : 'hidden',
+          }}
+        >
+          {/* 背景图铺在最底层，铺法跟后台画布配置一致；单独一层裁切，保证任何铺法都不超出画布 */}
+          {canvas.backgroundImage ? (
+            <div className="absolute inset-0 overflow-hidden">
+              <img
+                src={publicFileUrl(canvas.backgroundImage)}
+                alt=""
+                aria-hidden="true"
+                style={backgroundImageStyle(canvas.backgroundMode)}
+              />
+            </div>
+          ) : null}
+          {canvas.nodes.map((node) => (
+            <CanvasNode
+              key={node.id}
+              node={node}
+              canvas={canvas}
+              fillRef={progressFillRef}
+            />
+          ))}
+        </div>
+      )}
+
+      {!canvas && (
+        <div
+          className={
+            hasVisualMedia
+              ? 'pointer-events-none absolute inset-0 z-10'
+              : 'relative flex flex-col items-center -translate-y-[20dvh] md:translate-y-0'
+          }
+        >
         {/* Vector Prism / Aperture Emblem with SVG stroke reveal */}
         <motion.div
           initial={{ scale: 0.84, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={SWIFTUI_SMOOTH}
-          className="mb-7 relative flex items-center justify-center w-20 h-20 rounded-app bg-white border border-black/[0.06] shadow-2xl"
+          className={`mb-7 relative flex items-center justify-center w-20 h-20 rounded-app bg-white border border-black/[0.06] shadow-2xl ${
+            hasVisualMedia ? 'hidden' : ''
+          }`}
         >
           <svg
             viewBox="0 0 64 64"
@@ -98,53 +418,197 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...SWIFTUI_SMOOTH, delay: 0.18 }}
-          className="text-3xl font-semibold tracking-tight text-white"
+          style={{
+            ...(hasVisualMedia
+              ? { left: `${titlePos.x}%`, top: `${titlePos.y}%`, x: '-50%' }
+              : {}),
+            ...(titleSize ? { fontSize: `${titleSize}px` } : {}),
+            ...(titleColor ? { color: titleColor } : {}),
+          }}
+          className={
+            hasVisualMedia
+              ? 'absolute max-w-3xl text-3xl font-semibold tracking-tight text-white drop-shadow-lg md:text-5xl'
+              : 'text-3xl font-semibold tracking-tight text-white'
+          }
         >
           {title}
         </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 0.68, y: 0 }}
-          transition={{ ...SWIFTUI_SMOOTH, delay: 0.3 }}
-          className="mt-2 text-xs tracking-[0.18em] text-app-subtle"
-        >
-          影像 · 文章 · 视觉志
-        </motion.p>
 
         {/* Apple macOS-inspired ultra-thin boot progress bar */}
         <motion.div
           initial={{ opacity: 0, scaleX: 0.85 }}
           animate={{ opacity: 1, scaleX: 1 }}
           transition={{ duration: 0.4, delay: 0.25, ease: APPLE_EASE }}
-          className="mt-10 w-44 h-[3px] rounded-full bg-white/15 overflow-hidden"
+          style={{
+            ...(hasVisualMedia
+              ? { left: `${progressPos.x}%`, top: `${progressPos.y}%`, x: '-50%' }
+              : {}),
+            ...(progressWidth ? { width: `${progressWidth}px` } : {}),
+          }}
+          className={
+            hasVisualMedia
+              ? 'absolute h-[3px] w-44 rounded-full bg-white/15 overflow-hidden'
+              : 'mt-10 w-44 h-[3px] rounded-full bg-white/15 overflow-hidden'
+          }
           role="progressbar"
-          aria-valuenow={progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
+          aria-label="开屏加载进度"
         >
-          <motion.div
+          <div
+            ref={progressFillRef}
             className="h-full rounded-full bg-app-card"
-            initial={{ width: '0%' }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.55, ease: APPLE_EASE }}
+            style={{ width: '0%', backgroundColor: progressColor || undefined }}
           />
         </motion.div>
-      </div>
+        </div>
+      )}
 
       {/* Discreet skip control */}
       <motion.button
         type="button"
-        onClick={onComplete}
+        onClick={() => {
+          videoRef.current?.pause();
+          audioRef.current?.pause();
+          onComplete();
+        }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 0.65 }}
         whileHover={{ opacity: 1 }}
         whileTap={{ scale: 0.96 }}
         transition={{ delay: 0.45 }}
-        className="absolute bottom-8 px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app"
+        className={`absolute z-20 ${
+          hasVisualMedia ? 'top-5 right-5' : 'bottom-8'
+        } px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app`}
       >
         跳过开屏
       </motion.button>
     </motion.div>
+  );
+}
+
+/** 文本装饰：Leafer 的取值转成 CSS */
+function textDecorationCss(decoration: SplashTextNode['decoration']): string {
+  if (decoration === 'under') return 'underline';
+  if (decoration === 'delete') return 'line-through';
+  if (decoration === 'under-delete') return 'underline line-through';
+  return 'none';
+}
+
+/** 背景图铺法：与后台「原比例 / 拉伸 / 横向拉伸 / 纵向拉伸」一一对应 */
+function backgroundImageStyle(mode: SplashImageMode = 'stretch'): CSSProperties {  const base: CSSProperties = { position: 'absolute', left: 0, top: 0 };
+  if (mode === 'fit') {
+    return { ...base, width: '100%', height: '100%', objectFit: 'contain' };
+  }
+  if (mode === 'stretch-x') {
+    return { ...base, width: '100%', height: 'auto', top: '50%', transform: 'translateY(-50%)' };
+  }
+  if (mode === 'stretch-y') {
+    return { ...base, height: '100%', width: 'auto', left: '50%', transform: 'translateX(-50%)' };
+  }
+  return { ...base, width: '100%', height: '100%', objectFit: 'fill' };
+}
+
+interface CanvasNodeProps {
+  node: SplashNode;
+  canvas: SplashOrientationDoc;
+  fillRef: RefObject<HTMLDivElement | null>;
+}
+
+/**
+ * 画布节点渲染
+ * ------------------------------------------------------------------
+ * 后台存的是设计像素（PC 1440×900 / 移动 390×844），这里统一换算成百分比：
+ * 位置和尺寸用 % 交给容器，字号、圆角这类绝对单位按画布宽度折算成 vw，
+ * 保证任何屏幕宽度下视觉比例都与后台画布一致。
+ */
+function CanvasNode({ node, canvas, fillRef }: CanvasNodeProps) {
+  const left = `${(node.x / canvas.width) * 100}%`;
+  const top = `${(node.y / canvas.height) * 100}%`;
+  const width = `${(node.width / canvas.width) * 100}%`;
+  const height = `${(node.height / canvas.height) * 100}%`;
+  const scaled = (value: number) => `${(value / canvas.width) * 100}vw`;
+
+  if (node.type === 'text') {
+    const justify =
+      node.align === 'left' ? 'flex-start' : node.align === 'right' ? 'flex-end' : 'center';
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          left,
+          top,
+          width,
+          height,
+          // 围绕左上角旋转，和后台 Leafer 画布的旋转轴心一致
+          transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+          transformOrigin: '0 0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: justify,
+          color: node.color,
+          fontSize: scaled(node.fontSize),
+          fontWeight: node.fontWeight,
+          fontStyle: node.italic ? 'italic' : 'normal',
+          textDecoration: textDecorationCss(node.decoration),
+          lineHeight: 1.4,
+          textAlign: node.align,
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'break-word',
+          textShadow: '0 2px 12px rgba(0, 0, 0, 0.35)',
+        }}
+      >
+        {node.text}
+      </div>
+    );
+  }
+
+  if (node.type === 'image') {
+    return (
+      <img
+        src={publicFileUrl(node.url)}
+        alt=""
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left,
+          top,
+          width,
+          height,
+          transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+          transformOrigin: '0 0',
+          objectFit: 'fill',
+          borderRadius: scaled(node.radius),
+          opacity: node.opacity,
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      role="progressbar"
+      aria-label="开屏加载进度"
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width,
+        height,
+        transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+        transformOrigin: '0 0',
+        borderRadius: scaled(node.radius),
+        backgroundColor: node.trackColor,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        ref={fillRef}
+        style={{
+          width: '0%',
+          height: '100%',
+          borderRadius: scaled(node.radius),
+          backgroundColor: node.fillColor,
+        }}
+      />
+    </div>
   );
 }

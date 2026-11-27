@@ -1,17 +1,12 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
+import { Gauge, Repeat, RotateCcw, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
 import {
-  Check,
-  Repeat,
-  Repeat1,
-  RotateCcw,
-  Volume2,
-  VolumeX,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
-import { VIDEO_PLAYBACK_RATES, type VideoMenuConfig } from './videoMenuTypes';
+  VIDEO_LOOP_MODES,
+  VIDEO_PLAYBACK_RATES,
+  type VideoMenuConfig,
+} from './videoMenuTypes';
 
 interface VideoLongPressMenuProps {
   open: boolean;
@@ -19,35 +14,70 @@ interface VideoLongPressMenuProps {
   onClose: () => void;
 }
 
-interface SheetRowProps {
-  icon: LucideIcon;
-  label: string;
-  hint?: string;
-  checked?: boolean;
-  onClick: () => void;
+/** 倍速文案：整数补一位小数（1.0 / 2.0），其余保持原值（0.75 / 1.5） */
+function formatRate(rate: number): string {
+  return Number.isInteger(rate) ? rate.toFixed(1) : String(rate);
 }
 
-/** 抖音式列表行：左侧图标、中间文字、右侧状态 */
-function SheetRow({ icon: Icon, label, hint, checked, onClick }: SheetRowProps) {
+/** 行内分段选项：选中项主色加粗，选项之间用细竖线分隔 */
+function InlineOptions<T extends string | number>({
+  ariaLabel,
+  options,
+  value,
+  onChange,
+}: {
+  ariaLabel: string;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
   return (
-    <button
-      type="button"
-      role="menuitemcheckbox"
-      aria-checked={checked ?? false}
-      onClick={onClick}
-      className="flex min-h-12 w-full items-center gap-2 border-b border-white/5 px-1 text-left transition-colors last:border-b-0 active:bg-white/5"
-    >
-      <Icon className={`h-[18px] w-[18px] shrink-0 ${checked ? 'text-app-primary' : 'text-white/75'}`} />
-      <span className={`flex-1 text-[14px] ${checked ? 'text-white' : 'text-white/85'}`}>
-        {label}
-      </span>
-      {hint && <span className="shrink-0 text-[12px] text-white/45">{hint}</span>}
-      {checked && <Check className="h-4 w-4 shrink-0 text-app-primary" />}
-    </button>
+    <div role="radiogroup" aria-label={ariaLabel} className="flex items-center">
+      {options.map((option, index) => {
+        const checked = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            onClick={() => onChange(option.value)}
+            className={`h-8 whitespace-nowrap px-2 text-[13px] tabular-nums transition-colors ${
+              index > 0 ? 'border-l border-black/10' : ''
+            } ${checked ? 'font-medium text-app-primary' : 'text-[#1D1D1F]/55'}`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-/** 移动端视频长按菜单：底部列表面板，不提供全屏、上下切换和播放按钮 */
+/** 行首描边图标 */
+function RowIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon className="h-5 w-5 shrink-0 text-[#1D1D1F]" strokeWidth={1.6} />;
+}
+
+/** iOS 风格开关：纯展示，点击由整行承担 */
+function Toggle({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`relative inline-flex h-[26px] w-[46px] shrink-0 items-center rounded-full transition-colors ${
+        on ? 'bg-app-primary' : 'bg-black/15'
+      }`}
+    >
+      <span
+        className={`absolute h-[22px] w-[22px] rounded-full bg-white shadow-sm transition-transform ${
+          on ? 'translate-x-[22px]' : 'translate-x-[2px]'
+        }`}
+      />
+    </span>
+  );
+}
+
+/** 移动端视频长按菜单：白色底部面板，只保留倍速、循环、静音、重新播放 */
 export function VideoLongPressMenu({ open, config, onClose }: VideoLongPressMenuProps) {
   useEffect(() => {
     if (!open) return;
@@ -68,7 +98,7 @@ export function VideoLongPressMenu({ open, config, onClose }: VideoLongPressMenu
 
   return createPortal(
     <div className="fixed inset-0 z-[130] flex items-end" onPointerDown={onClose}>
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/65" />
       <motion.div
         role="menu"
         aria-label="视频控制"
@@ -77,73 +107,71 @@ export function VideoLongPressMenu({ open, config, onClose }: VideoLongPressMenu
         transition={{ type: 'spring', damping: 30, stiffness: 320 }}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
-        className="relative max-h-[75dvh] w-full overflow-y-auto rounded-t-2xl border-t border-white/10 bg-[#1C1C1E]/97 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 text-white shadow-2xl"
+        className="relative max-h-[75dvh] w-full overflow-y-auto rounded-t-2xl bg-white pb-[calc(env(safe-area-inset-bottom)+12px)] text-[#1D1D1F] shadow-2xl"
       >
-        <div className="mb-2 flex items-center justify-between px-1">
-          <h3 className="text-[14px] font-medium">视频控制</h3>
+        {/* 顶部拖拽指示条 */}
+        <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-black/15" />
+
+        <div className="mt-3 border-t border-black/[0.06]">
+          {/* 倍速 */}
+          <div className="flex min-h-14 items-center gap-3 px-4">
+            <RowIcon icon={Gauge} />
+            <span className="text-[15px]">倍速</span>
+            <div className="ml-auto">
+              <InlineOptions
+                ariaLabel="播放倍速"
+                options={VIDEO_PLAYBACK_RATES.map((rate) => ({
+                  value: rate,
+                  label: formatRate(rate),
+                }))}
+                value={state.playbackRate}
+                onChange={(rate) => run(() => actions.setRate(rate))}
+              />
+            </div>
+          </div>
+
+          {/* 循环模式 */}
+          <div className="flex min-h-14 items-center gap-3 border-t border-black/[0.06] px-4">
+            <RowIcon icon={Repeat} />
+            <span className="text-[15px]">循环</span>
+            <div className="ml-auto">
+              <InlineOptions
+                ariaLabel="循环模式"
+                options={VIDEO_LOOP_MODES.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                value={state.loopMode}
+                onChange={(mode) => run(() => actions.setLoopMode(mode))}
+              />
+            </div>
+          </div>
+
+          {/* 静音 */}
           <button
             type="button"
-            aria-label="关闭菜单"
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/80"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="px-1">
-          <SheetRow
-            icon={Repeat}
-            label="自动循环"
-            hint={state.autoLoop ? '开' : '关'}
-            checked={state.autoLoop}
-            onClick={() => run(actions.toggleAutoLoop)}
-          />
-          <SheetRow
-            icon={Repeat1}
-            label="单条循环"
-            hint={state.singleLoop ? '开' : '关'}
-            checked={state.singleLoop}
-            onClick={() => run(actions.toggleSingleLoop)}
-          />
-          <SheetRow
-            icon={state.isMuted ? VolumeX : Volume2}
-            label="静音"
-            hint={state.isMuted ? '开' : '关'}
-            checked={state.isMuted}
+            role="menuitemcheckbox"
+            aria-checked={state.isMuted}
             onClick={() => run(actions.toggleMute)}
-          />
-          <SheetRow
-            icon={RotateCcw}
-            label="重新播放"
-            onClick={() => run(actions.replay)}
-          />
-        </div>
+            className="flex min-h-14 w-full items-center gap-3 border-t border-black/[0.06] px-4 text-left transition-colors active:bg-black/[0.03]"
+          >
+            <RowIcon icon={state.isMuted ? VolumeX : Volume2} />
+            <span className="text-[15px]">静音</span>
+            <span className="ml-auto flex items-center">
+              <Toggle on={state.isMuted} />
+            </span>
+          </button>
 
-        <p className="mb-1 mt-3 px-2 text-[12px] text-white/45">播放倍速</p>
-        <div className="px-1">
-          {VIDEO_PLAYBACK_RATES.map((rate) => (
-            <button
-              key={rate}
-              type="button"
-              role="menuitemradio"
-              aria-checked={state.playbackRate === rate}
-              onClick={() => run(() => actions.setRate(rate))}
-              className="flex min-h-12 w-full items-center gap-2 border-b border-white/5 px-1 text-left transition-colors last:border-b-0 active:bg-white/5"
-            >
-              <span className="w-[18px] shrink-0" />
-              <span
-                className={`flex-1 text-[14px] tabular-nums ${
-                  state.playbackRate === rate ? 'text-white' : 'text-white/85'
-                }`}
-              >
-                {rate}x
-              </span>
-              {state.playbackRate === rate && (
-                <Check className="h-4 w-4 shrink-0 text-app-primary" />
-              )}
-            </button>
-          ))}
+          {/* 重新播放 */}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => run(actions.replay)}
+            className="flex min-h-14 w-full items-center gap-3 border-t border-black/[0.06] px-4 text-left transition-colors active:bg-black/[0.03]"
+          >
+            <RowIcon icon={RotateCcw} />
+            <span className="text-[15px]">重新播放</span>
+          </button>
         </div>
       </motion.div>
     </div>,

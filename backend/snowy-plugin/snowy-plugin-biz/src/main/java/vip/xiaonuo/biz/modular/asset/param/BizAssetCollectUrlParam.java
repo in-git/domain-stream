@@ -23,6 +23,9 @@ public class BizAssetCollectUrlParam {
     @Schema(description = "自定义名称，为空则从网址推断")
     private String name;
 
-    @Schema(description = "网页采集时最多采集的资源数，默认20，最大50")
+    @Schema(description = "网页采集时最多采集的资源数，默认20，最大50；深度搜索时忽略此限制")
     private Integer limit;
+
+    @Schema(description = "是否深度搜索整站内链，默认false")
+    private Boolean deepSearch;
 }

@@ -9,8 +9,26 @@ import {
   Tablet,
   Wifi,
 } from 'lucide-react';
+import {
+  DevicePreview,
+  SCREEN_PRESETS,
+  ScreenPresetPicker,
+  presetScreenSize,
+  type ScreenPreset,
+} from './DevicePreview.tsx';
 
 export type PreviewDevice = 'desktop' | 'tablet' | 'mobile';
+
+/** 通用设备模拟器的默认屏幕：沿用原先的桌面预览 */
+const DEFAULT_PREVIEW_PRESET =
+  SCREEN_PRESETS.find((preset) => preset.id === 'desktop-1440') ?? SCREEN_PRESETS[0];
+
+/** 按模拟屏幕宽度决定预览用哪套排版（对应客户端 768 / 1024 断点） */
+function previewDeviceOf(screenWidth: number): PreviewDevice {
+  if (screenWidth < 768) return 'mobile';
+  if (screenWidth < 1024) return 'tablet';
+  return 'desktop';
+}
 
 const DEVICES: Array<{
   key: PreviewDevice;
@@ -120,6 +138,8 @@ interface EditorWorkspaceProps {
   /** 预览开关（可选受控）：外部传入时由外部控制，如视频上传成功后自动打开 */
   previewOpen?: boolean;
   onPreviewOpenChange?: (open: boolean) => void;
+  /** 用通用设备模拟器（真机外框 + 屏幕预设）替代内置的桌面/平板/手机三档预览 */
+  deviceSimulator?: boolean;
 }
 
 /** 全宽编辑工作区：默认左侧编辑 + 右侧实时预览；提供 info 时为三栏 */
@@ -133,8 +153,12 @@ export function EditorWorkspace({
   info,
   previewOpen,
   onPreviewOpenChange,
+  deviceSimulator = false,
 }: EditorWorkspaceProps) {
   const [device, setDevice] = useState<PreviewDevice>('desktop');
+  /** 通用设备模拟器的屏幕与朝向 */
+  const [preset, setPreset] = useState<ScreenPreset>(DEFAULT_PREVIEW_PRESET);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   // 默认打开预览窗口，编辑时即时看到效果
   const [internalShowPreview, setInternalShowPreview] = useState(true);
   // 受控优先：外部传 previewOpen 时由外部决定，否则用内部 state
@@ -144,6 +168,7 @@ export function EditorWorkspace({
     onPreviewOpenChange?.(open);
   };
   const current = DEVICES.find((d) => d.key === device) || DEVICES[0];
+  const simulatorDevice = previewDeviceOf(presetScreenSize(preset, orientation).width);
   const hasInfo = info !== undefined && info !== null;
 
   return (
@@ -218,39 +243,62 @@ export function EditorWorkspace({
         <section className="bg-white rounded-[18px] border border-[#E5E5EA] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col min-h-0 lg:h-full">
           <div className="px-5 sm:px-6 py-3 border-b border-[#F2F2F7] flex flex-wrap items-center justify-between gap-2 shrink-0">
             <span className="text-[13px] font-semibold text-[#1D1D1F]">实时预览</span>
-            <div className="flex items-center p-0.5 bg-[#F2F2F7] rounded-[10px]">
-              {DEVICES.map((item) => {
-                const Icon = item.icon;
-                const active = device === item.key;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setDevice(item.key)}
-                    title={`${item.label}预览`}
-                    className={`h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px] font-medium transition-all ${
-                      active ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {deviceSimulator ? (
+              <ScreenPresetPicker
+                value={preset}
+                onChange={setPreset}
+                orientation={orientation}
+                onOrientationChange={setOrientation}
+                className="w-[240px] max-w-full shrink-0"
+              />
+            ) : (
+              <div className="flex items-center p-0.5 bg-[#F2F2F7] rounded-[10px]">
+                {DEVICES.map((item) => {
+                  const Icon = item.icon;
+                  const active = device === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setDevice(item.key)}
+                      title={`${item.label}预览`}
+                      className={`h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px] font-medium transition-all ${
+                        active ? 'bg-white text-[#1D1D1F] shadow-xs' : 'text-[#6E6E73]'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="p-4 bg-[#EFEFF2] flex-1 min-h-0 flex flex-col items-center gap-3 overflow-hidden">
-            <div
-              className="transition-[width] duration-200 flex-1 min-h-0"
-              style={{ width: current.width, maxWidth: '100%' }}
-            >
-              <DeviceFrame device={device}>{preview(device)}</DeviceFrame>
+          {deviceSimulator ? (
+            <div className="flex-1 min-h-0 overflow-hidden bg-[#EFEFF2] p-3">
+              <DevicePreview
+                preset={preset}
+                orientation={orientation}
+                padding={12}
+                url="domain-stream.cn"
+              >
+                <div className="h-full overflow-y-auto bg-white">{preview(simulatorDevice)}</div>
+              </DevicePreview>
             </div>
-            <div className="text-center text-[11px] text-[#86868B] tabular-nums shrink-0">
-              {current.hint}
+          ) : (
+            <div className="p-4 bg-[#EFEFF2] flex-1 min-h-0 flex flex-col items-center gap-3 overflow-hidden">
+              <div
+                className="transition-[width] duration-200 flex-1 min-h-0"
+                style={{ width: current.width, maxWidth: '100%' }}
+              >
+                <DeviceFrame device={device}>{preview(device)}</DeviceFrame>
+              </div>
+              <div className="text-center text-[11px] text-[#86868B] tabular-nums shrink-0">
+                {current.hint}
+              </div>
             </div>
-          </div>
+          )}
         </section>
         )}
       </div>

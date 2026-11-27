@@ -12,9 +12,11 @@ import {
   AlertCircle,
   AtSign,
   ChevronDown,
+  Film,
   Image as ImageIcon,
   ListOrdered,
   Loader2,
+  Music,
   Palette,
   RefreshCw,
   RotateCcw,
@@ -32,12 +34,23 @@ import {
   CONFIG_FIELDS,
   configSwitchOn,
   draftFromItems,
+  SPLASH_AUDIO_KEY,
+  SPLASH_CANVAS_KEY,
+  SPLASH_DURATION_KEY,
+  SPLASH_LAYOUT_KEYS,
+  SPLASH_MEDIA_KEYS,
+  SPLASH_STYLE_KEYS,
+  SPLASH_TYPE_KEY,
+  SPLASH_VIDEO_KEYS,
+  resolveSplashKind,
   type ConfigDraft,
   type ConfigFieldDef,
 } from './schema';
 import { PreviewPanel } from './PreviewPanel';
 import { NavItemsEditor } from './NavItemsEditor';
 import { ContactLinksEditor } from './ContactLinksEditor';
+import { SplashMaterialDialog } from './SplashMaterialDialog';
+import { countCanvasNodes } from './splash-canvas/types';
 
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -169,6 +182,54 @@ function FieldControl({
     );
   }
 
+  if (field.control === 'media') {
+    const mediaKind = field.mediaAccept ?? 'image';
+    const mediaLabel =
+      mediaKind === 'video' ? '视频' : mediaKind === 'audio' ? '音频' : '图片';
+    const MediaIcon = mediaKind === 'video' ? Film : mediaKind === 'audio' ? Music : ImageIcon;
+    const showImagePreview = mediaKind === 'image' && value && !previewFailed;
+
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPick}
+          title={`选择开屏${mediaLabel}`}
+          className="relative w-14 h-14 rounded-xl border border-dashed border-[#C7C7CC] bg-[#FAFAFC] flex items-center justify-center shrink-0 overflow-hidden hover:border-[#0071E3] transition-colors"
+        >
+          {showImagePreview ? (
+            <img
+              src={previewUrl(value)}
+              alt="开屏图片预览"
+              className="w-full h-full object-contain"
+              onError={() => setPreviewFailed(true)}
+            />
+          ) : (
+            <MediaIcon className="w-5 h-5 text-[#C7C7CC]" />
+          )}
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] text-[#1D1D1F] truncate" title={value || undefined}>
+            {value ? `已选择开屏${mediaLabel}` : `未选择开屏${mediaLabel}`}
+          </p>
+        </div>
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange('');
+              setPreviewFailed(false);
+            }}
+            className="p-1.5 rounded-lg text-[#86868B] hover:bg-[#FFF1F0] hover:text-[#CF1322]"
+            title="清除"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (field.control === 'upload') {
     return (
       <div className="flex items-center gap-3">
@@ -201,11 +262,10 @@ function FieldControl({
             {uploading ? '正在转换并上传...' : value ? '已上传（点击左侧图标可更换）' : '未设置'}
           </p>
           <p className="mt-0.5 text-[11px] text-[#86868B]">
-            上传自动转 WebP，或
             <button
               type="button"
               onClick={onPick}
-              className="ml-0.5 text-[#0071E3] hover:underline"
+              className="text-[#0071E3] hover:underline"
             >
               从文件库选择
             </button>
@@ -251,6 +311,8 @@ export default function ConfigView() {
   const [tab, setTab] = useState<'basic' | 'theme' | 'nav' | 'contact'>('basic');
   /** 底部折叠区：地址与备案信息默认收起，展开才可见 */
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  /** 开屏素材在独立弹窗中设置 */
+  const [splashDialogOpen, setSplashDialogOpen] = useState(false);
 
   /** 主题配置字段：单独 Tab 维护 */
   const themeFields = useMemo(
@@ -287,10 +349,49 @@ export default function ConfigView() {
       basicFields.filter(
         (field) =>
           !brandFields.some((f) => f.key === field.key) &&
-          !advancedFields.some((f) => f.key === field.key)
+          !advancedFields.some((f) => f.key === field.key) &&
+          field.key !== SPLASH_DURATION_KEY &&
+          field.key !== SPLASH_CANVAS_KEY &&
+          field.key !== SPLASH_TYPE_KEY &&
+          !SPLASH_MEDIA_KEYS.includes(field.key) &&
+          !SPLASH_LAYOUT_KEYS.includes(field.key) &&
+          !SPLASH_STYLE_KEYS.includes(field.key)
       ),
     [basicFields, brandFields, advancedFields]
   );
+  /** 开屏摘要：按类型显示视频情况或画布组件数 */
+  const splashSummary = useMemo(() => {
+    const values = draft?.values ?? {};
+    const seconds = (values[SPLASH_DURATION_KEY] || '').trim();
+    const durationLabel = seconds ? ` · ${seconds} 秒` : '';
+    const kind = resolveSplashKind(values);
+
+    if (kind === 'video') {
+      const videoCount = SPLASH_VIDEO_KEYS.filter((key) => (values[key] || '').trim()).length;
+      const orientation =
+        videoCount >= 2 ? '横屏 + 竖屏' : videoCount === 1 ? '单方向' : '未选择文件';
+      return `视频 · ${orientation}${durationLabel}`;
+    }
+
+    const nodeCount = countCanvasNodes(values[SPLASH_CANVAS_KEY]);
+    const canvasLabel = nodeCount ? `封面画布 · ${nodeCount} 个组件` : '封面画布 · 未设置';
+    const audio = (values[SPLASH_AUDIO_KEY] || '').trim() ? ' · 含音频' : '';
+    return `${canvasLabel}${audio}${durationLabel}`;
+  }, [draft]);
+  /** 当前文件选择器对应的字段与媒体类型 */
+  const pickerFieldDef = useMemo(
+    () => CONFIG_FIELDS.find((field) => field.key === pickerField) ?? null,
+    [pickerField]
+  );
+  const pickerAccept = pickerFieldDef?.mediaAccept ?? 'image';
+  const pickerTitle =
+    pickerAccept === 'video'
+      ? '选择开屏视频'
+      : pickerAccept === 'audio'
+        ? '选择开屏音频'
+        : '选择图片';
+  const pickerBeforeUpload = pickerAccept === 'image' ? convertToWebp : undefined;
+
   /** 参与当前 Tab 的字段，用于判断是否有未保存改动 */
   const tabFields =
     tab === 'nav'
@@ -343,9 +444,15 @@ export default function ConfigView() {
   }, [draft, original]);
 
   const setFieldValue = useCallback((key: string, value: string) => {
-    setDraft((prev) =>
-      prev ? { ...prev, values: { ...prev.values, [key]: value } } : prev
-    );
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const values = { ...prev.values, [key]: value };
+      // 视频自带声音且优先播放，设置视频时清掉音频，避免出现「配了音频却不响」
+      if (value && SPLASH_VIDEO_KEYS.includes(key)) {
+        values[SPLASH_AUDIO_KEY] = '';
+      }
+      return { ...prev, values };
+    });
   }, []);
 
   async function handleSave() {
@@ -410,9 +517,6 @@ export default function ConfigView() {
           <div className="min-w-0">
             <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
             <span className="ml-2 text-[11px] font-mono text-[#C7C7CC]">{field.key}</span>
-            {field.description && (
-              <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
-            )}
           </div>
           {isSwitch && <FieldControl
             field={field}
@@ -540,9 +644,6 @@ export default function ConfigView() {
                 <div key={field.key}>
                   <div className="mb-3">
                     <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
-                    {field.description && (
-                      <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
-                    )}
                   </div>
                   <ContactLinksEditor
                     value={draft.values[field.key] ?? ''}
@@ -557,9 +658,6 @@ export default function ConfigView() {
                 <div key={field.key}>
                   <div className="mb-3">
                     <span className="text-[13px] font-medium text-[#1D1D1F]">{field.label}</span>
-                    {field.description && (
-                      <p className="mt-0.5 text-[12px] text-[#86868B]">{field.description}</p>
-                    )}
                   </div>
                   <NavItemsEditor
                     value={draft.values[field.key] ?? ''}
@@ -592,6 +690,21 @@ export default function ConfigView() {
                   </div>
                 </div>
               )}
+
+              {/* 开屏设置：视频 + 双画布在弹窗中编辑，这里只展示摘要 */}
+              <div className="border-t border-[#F0F0F2] px-5 py-4 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-[#1D1D1F]">开屏设置</p>
+                  <p className="mt-0.5 text-[11px] text-[#86868B] truncate">{splashSummary}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSplashDialogOpen(true)}
+                  className="shrink-0 h-9 px-3.5 rounded-xl border border-[#D2D2D7] bg-white text-[13px] text-[#1D1D1F] hover:border-[#0071E3] hover:text-[#0071E3] transition-colors"
+                >
+                  设置开屏
+                </button>
+              </div>
 
               {/* 地址与备案信息：底部折叠，展开才看到 */}
               {advancedFields.length > 0 && (
@@ -629,14 +742,21 @@ export default function ConfigView() {
       <FilePicker
         open={pickerField !== null}
         onClose={() => setPickerField(null)}
-        accept="image"
-        title="选择图片"
-        beforeUpload={convertToWebp}
+        accept={pickerAccept}
+        title={pickerTitle}
+        beforeUpload={pickerBeforeUpload}
         onSelect={(files: DevFile[]) => {
           if (!pickerField || !files[0]) return;
           // 文件选择器返回带 /snowy 的地址，存纯后端路径供 frontend 使用
           setFieldValue(pickerField, toOpenUrl(files[0]).replace(/^\/snowy/, ''));
         }}
+      />
+
+      <SplashMaterialDialog
+        open={splashDialogOpen}
+        values={draft?.values ?? {}}
+        onChange={setFieldValue}
+        onClose={() => setSplashDialogOpen(false)}
       />
     </div>
   );

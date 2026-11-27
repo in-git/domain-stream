@@ -19,6 +19,7 @@ import type { PageConfigItem } from '../../../lib/pageConfig.ts';
  * - color   颜色选择（值存 #RRGGBB）
  * - number  数字输入（值存数字字符串，如 8）
  * - navList 侧边栏导航列表（值是 JSON 数组字符串，由专用编辑器维护）
+ * - media   图片/视频/音频素材（从文件选择器选择）
  */
 export type ConfigControl =
   | 'text'
@@ -27,17 +28,21 @@ export type ConfigControl =
   | 'color'
   | 'number'
   | 'navList'
-  | 'contactList';
+  | 'contactList'
+  | 'media';
+
+/** 开屏素材允许的媒体类型 */
+export type MediaAccept = 'image' | 'video' | 'audio';
 
 export interface ConfigFieldDef {
   /** JSON 中的属性名（回写数据库时使用） */
   key: string;
   /** 页面上显示的中文名 */
   label: string;
-  /** 属性说明 */
-  description?: string;
   /** 编辑控件类型，默认 text */
   control?: ConfigControl;
+  /** media 控件的媒体类型，默认 image */
+  mediaAccept?: MediaAccept;
   /** 数据库中还没有该属性时的初始值 */
   defaultValue: string;
   placeholder?: string;
@@ -115,33 +120,159 @@ export function stringifyContactLinks(items: ContactLink[]): string {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* 开屏素材                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 开屏视频：横屏（PC）/ 竖屏（移动端）各一个，作为画布下层背景播放。
+ * 音频不区分钟伴，作为开屏声音播放。
+ *
+ * 图片不再单独配置：图片是画布里的组件（splashCanvas），旧的 splashImage*
+ * 字段只用于兼容历史配置，不再出现在设置面板里。
+ */
+export const SPLASH_VIDEO_KEYS: string[] = [
+  'splashVideoLandscapeUrl',
+  'splashVideoPortraitUrl',
+];
+export const SPLASH_IMAGE_KEYS: string[] = [
+  'splashImageLandscapeUrl',
+  'splashImagePortraitUrl',
+];
+export const SPLASH_AUDIO_KEY = 'splashAudioUrl';
+/**
+ * 开屏画布文档（JSON 字符串）
+ * ------------------------------------------------------------------
+ * 开屏的主体内容改由「PC / 移动两块独立画布」描述：文本、图片、进度条，
+ * 坐标与尺寸存设计像素，客户端换算成百分比渲染。视频与音频仍走上面的素材字段，
+ * 作为开屏的背景与声音。
+ */
+export const SPLASH_CANVAS_KEY = 'splashCanvas';
+/**
+ * 开屏形式：视频 或 封面画布，两者互斥，只能生效一种。
+ * 老配置没有该字段时按「配了视频就播视频，否则用画布」推断。
+ */
+export const SPLASH_TYPE_KEY = 'splashType';
+export type SplashKind = 'video' | 'cover';
+
+export function resolveSplashKind(values: Record<string, string>): SplashKind {
+  const explicit = (values[SPLASH_TYPE_KEY] || '').trim();
+  if (explicit === 'video' || explicit === 'cover') return explicit;
+  return SPLASH_VIDEO_KEYS.some((key) => (values[key] || '').trim()) ? 'video' : 'cover';
+}
+/** 开屏展示时长（秒），留空则由客户端按素材时长自动判断 */
+export const SPLASH_DURATION_KEY = 'splashDuration';
+export const SPLASH_MEDIA_KEYS: string[] = [
+  ...SPLASH_VIDEO_KEYS,
+  ...SPLASH_IMAGE_KEYS,
+  SPLASH_AUDIO_KEY,
+];
+
+/**
+ * 旧版开屏标题 / 进度条的位置（百分比 JSON）
+ * ------------------------------------------------------------------
+ * 开屏改由画布文档 splashCanvas 描述后，这些位置只用于「首次打开画布时
+ * 迁移成初始节点」，不再出现在设置面板里，也不再直接影响渲染。
+ */
+export const SPLASH_TITLE_POS_KEYS = [
+  'splashTitlePosLandscape',
+  'splashTitlePosPortrait',
+];
+export const SPLASH_PROGRESS_POS_KEYS = [
+  'splashProgressPosLandscape',
+  'splashProgressPosPortrait',
+];
+export const SPLASH_LAYOUT_KEYS: string[] = [
+  ...SPLASH_TITLE_POS_KEYS,
+  ...SPLASH_PROGRESS_POS_KEYS,
+];
+
+/**
+ * 旧版开屏标题 / 进度条的样式：字号、颜色、进度条宽度。
+ * 同样只用于迁移初始画布；画布节点自己有完整的样式字段。
+ */
+export const SPLASH_TITLE_SIZE_KEY = 'splashTitleFontSize';
+export const SPLASH_TITLE_COLOR_KEY = 'splashTitleColor';
+export const SPLASH_PROGRESS_WIDTH_KEY = 'splashProgressWidth';
+export const SPLASH_PROGRESS_COLOR_KEY = 'splashProgressColor';
+export const SPLASH_STYLE_KEYS: string[] = [
+  SPLASH_TITLE_SIZE_KEY,
+  SPLASH_TITLE_COLOR_KEY,
+  SPLASH_PROGRESS_WIDTH_KEY,
+  SPLASH_PROGRESS_COLOR_KEY,
+];
+
+/** 样式留空时的默认值（客户端与预览对齐；标题宽度大屏时更大） */
+export const SPLASH_DEFAULT_STYLES = {
+  titleSize: 48,
+  progressWidth: 176,
+  titleColor: '#FFFFFF',
+  progressColor: '#FFFFFF',
+};
+export interface SplashPosition {
+  /** 相对屏幕宽度的百分比（元素水平中心） */
+  x: number;
+  /** 相对屏幕高度的百分比（元素顶边） */
+  y: number;
+}
+
+/** 默认位置：标题在上、进度条在下，都在屏幕中间区域 */
+export const SPLASH_DEFAULT_POSITIONS: Record<'title' | 'progress', SplashPosition> = {
+  title: { x: 50, y: 38 },
+  progress: { x: 50, y: 62 },
+};
+
+/** 解析位置配置；缺省或脏数据回退到默认位置 */
+export function parseSplashPosition(raw: string | undefined, fallback: SplashPosition): SplashPosition {
+  const value = (raw || '').trim();
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value) as Partial<SplashPosition>;
+    const x = Number(parsed.x);
+    const y = Number(parsed.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      return {
+        x: Math.min(100, Math.max(0, x)),
+        y: Math.min(100, Math.max(0, y)),
+      };
+    }
+  } catch {
+    // 非法 JSON 直接回退
+  }
+  return fallback;
+}
+
+/** 序列化位置，保留一位小数，避免百分比出现长尾 */
+export function stringifySplashPosition(position: SplashPosition): string {
+  return JSON.stringify({
+    x: Math.round(position.x * 10) / 10,
+    y: Math.round(position.y * 10) / 10,
+  });
+}
+
 /** 客户端可配置属性清单 —— 新增属性只改这里 */
 export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'title',
     label: '网页标题',
-    description: '浏览器标签页与站点顶部显示的名称',
     defaultValue: '私域',
     placeholder: '请输入网页标题',
   },
   {
     key: 'faviconUrl',
     label: '网页图标（favicon）',
-    description: '浏览器标签页图标',
     control: 'upload',
     defaultValue: '',
   },
   {
     key: 'logoUrl',
     label: '网页 Logo',
-    description: '侧边栏与登录页品牌图标',
     control: 'upload',
     defaultValue: '',
   },
   {
     key: 'themeColor',
     label: '高亮色',
-    description: '按钮、链接与焦点状态的高亮色',
     control: 'color',
     defaultValue: '#0071E3',
     presets: THEME_COLOR_PRESETS,
@@ -149,7 +280,6 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'themeRadius',
     label: '圆角（px）',
-    description: '全局圆角，留空回退为 8px',
     control: 'number',
     defaultValue: '8',
     placeholder: '8',
@@ -157,35 +287,30 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'clientUrl',
     label: '客户端地址',
-    description: '前台客户端站点的访问地址，如：https://www.example.com',
     defaultValue: '',
     placeholder: '请输入客户端地址',
   },
   {
     key: 'contactLinks',
     label: '联系方式',
-    description: '各大社交平台的链接',
     control: 'contactList',
     defaultValue: stringifyContactLinks(DEFAULT_CONTACT_LINKS),
   },
   {
     key: 'cmsUrl',
     label: 'CMS 地址',
-    description: '本内容管理后台的访问地址，如：https://cms.example.com',
     defaultValue: '',
     placeholder: '请输入 CMS 地址',
   },
   {
     key: 'adminUrl',
     label: '开发后台地址',
-    description: '后端服务/开发后台的访问地址，如：https://api.example.com',
     defaultValue: '',
     placeholder: '请输入开发后台地址',
   },
   {
     key: 'icpNo',
     label: 'ICP 备案号',
-    description: '显示在客户端侧边栏底部，如：粤ICP备12345678号',
     defaultValue: '',
     placeholder: '请输入 ICP 备案号，留空则不显示',
     aliases: ['备案信息', '备案号'],
@@ -193,7 +318,6 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'policeNo',
     label: '公安备案号',
-    description: '显示在 ICP 备案号下方，如：粤公网安备44030002000000号',
     defaultValue: '',
     placeholder: '请输入公安备案号，留空则不显示',
     aliases: ['公安备案信息', '公安备案号'],
@@ -201,15 +325,87 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
   {
     key: 'allowComment',
     label: '是否允许评论',
-    description: '各个模块的评论总开关',
     control: 'switch',
     defaultValue: 'YES',
     aliases: ['enableComment', 'commentEnabled'],
   },
   {
+    key: 'splashDuration',
+    label: '开屏时间（秒）',
+    control: 'number',
+    defaultValue: '3',
+    placeholder: '3',
+  },
+  {
+    key: 'splashVideoLandscapeUrl',
+    label: '横屏视频',
+    control: 'media',
+    mediaAccept: 'video',
+    defaultValue: '',
+    aliases: ['splashVideoUrl'],
+  },
+  {
+    key: 'splashVideoPortraitUrl',
+    label: '竖屏视频',
+    control: 'media',
+    mediaAccept: 'video',
+    defaultValue: '',
+  },
+  {
+    key: 'splashImageLandscapeUrl',
+    label: '横屏图片',
+    control: 'media',
+    mediaAccept: 'image',
+    defaultValue: '',
+    aliases: ['splashImageUrl'],
+  },
+  {
+    key: 'splashImagePortraitUrl',
+    label: '竖屏图片',
+    control: 'media',
+    mediaAccept: 'image',
+    defaultValue: '',
+  },
+  {
+    key: 'splashAudioUrl',
+    label: '开屏音频',
+    control: 'media',
+    mediaAccept: 'audio',
+    defaultValue: '',
+  },
+  // 以下 6 个旧版位置不渲染成表单，仅用于首次打开画布时迁移初始节点
+  {
+    key: SPLASH_TITLE_POS_KEYS[0],
+    label: '标题位置（横屏）',
+    defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.title),
+  },
+  {
+    key: SPLASH_TITLE_POS_KEYS[1],
+    label: '标题位置（竖屏）',
+    defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.title),
+  },
+  {
+    key: SPLASH_PROGRESS_POS_KEYS[0],
+    label: '进度条位置（横屏）',
+    defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.progress),
+  },
+  {
+    key: SPLASH_PROGRESS_POS_KEYS[1],
+    label: '进度条位置（竖屏）',
+    defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.progress),
+  },
+  // 以下 4 个旧版样式不渲染成表单，仅用于首次打开画布时迁移初始节点
+  { key: SPLASH_TITLE_SIZE_KEY, label: '标题字号', defaultValue: '' },
+  { key: SPLASH_TITLE_COLOR_KEY, label: '标题颜色', defaultValue: '' },
+  { key: SPLASH_PROGRESS_WIDTH_KEY, label: '进度条宽度', defaultValue: '' },
+  { key: SPLASH_PROGRESS_COLOR_KEY, label: '进度条颜色', defaultValue: '' },
+  // 开屏画布：PC / 移动两块独立画布的节点文档，由「设置开屏」弹窗的可视化编辑器写入
+  { key: SPLASH_CANVAS_KEY, label: '开屏画布', defaultValue: '' },
+  // 开屏形式：video / cover，由弹窗顶部类型切换写入，不在表单里直接编辑
+  { key: SPLASH_TYPE_KEY, label: '开屏形式', defaultValue: '' },
+  {
     key: 'navItems',
     label: '客户端导航',
-    description: 'PC 侧边栏与移动端底部导航共用的模块与顺序，可新增、排序与显隐；改完保存后刷新客户端生效',
     control: 'navList',
     defaultValue: '',
   },

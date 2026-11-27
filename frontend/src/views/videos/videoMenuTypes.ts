@@ -1,9 +1,10 @@
+/** 循环模式：单条循环（播完从头重播）或自动连播（播完切下一条） */
+export type VideoLoopMode = 'single' | 'auto';
+
 /** 视频控制菜单的展示状态（PC 右键菜单与移动端长按菜单共用） */
 export interface VideoMenuState {
-  /** 播完自动切下一条；关闭后停在当前视频末尾 */
-  autoLoop: boolean;
-  /** 单条视频循环播放；开启后不会自动切下一条 */
-  singleLoop: boolean;
+  /** 循环模式，单选项 */
+  loopMode: VideoLoopMode;
   isPlaying: boolean;
   isMuted: boolean;
   playbackRate: number;
@@ -14,8 +15,7 @@ export interface VideoMenuState {
 
 /** 视频控制菜单可执行的动作 */
 export interface VideoMenuActions {
-  toggleAutoLoop: () => void;
-  toggleSingleLoop: () => void;
+  setLoopMode: (mode: VideoLoopMode) => void;
   togglePlay: () => void;
   toggleMute: () => void;
   setRate: (rate: number) => void;
@@ -31,3 +31,13 @@ export interface VideoMenuConfig {
 }
 
 export const VIDEO_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2] as const;
+
+/** 循环模式选项，菜单里渲染成单选组 */
+export const VIDEO_LOOP_MODES: ReadonlyArray<{
+  value: VideoLoopMode;
+  label: string;
+  hint: string;
+}> = [
+  { value: 'single', label: '单条循环', hint: '播完从头重播' },
+  { value: 'auto', label: '自动连播', hint: '播完切下一条' },
+];

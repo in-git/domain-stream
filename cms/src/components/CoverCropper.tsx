@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import ReactCrop, {
   centerCrop,
@@ -51,20 +51,33 @@ interface CropArea {
 interface CoverCropperProps {
   /** 待裁剪的原始文件；为 null 时不渲染 */
   file: File | null;
-  /** 初始宽高比，默认 16 / 9 */
-  aspect?: number;
+  /** 宽高比，支持 16 / 9 或 '16:9' 这类写法，默认 16 / 9 */
+  aspect?: number | string;
   /** 初始输出图片宽度（px），高度按比例计算；预设比例有自己的推荐宽度 */
   outputWidth?: number;
   /** 可选比例；不传则使用 MEDIA_CROP_RATIOS */
   ratios?: CropRatio[];
   /** 是否显示比例切换面板 */
   showRatios?: boolean;
+  /** 锁定比例：隐藏比例面板，裁剪框只能按 aspect 缩放 */
+  lockRatio?: boolean;
   heading?: string;
   /** 确认按钮文案，默认「使用此图片」 */
   confirmText?: string;
   onCancel: () => void;
   /** 裁剪完成回调，返回 Promise 时会保持按钮 loading 直到完成 */
   onComplete: (file: File) => void | Promise<void>;
+}
+
+/** 把 16 / 9、'16:9'、'16/9' 统一解析成宽高比 */
+export function parseCropAspect(value: number | string | undefined, fallback = 16 / 9): number {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : fallback;
+  const raw = (value || '').trim();
+  if (!raw) return fallback;
+  const parts = raw.split(/[:：/x×]/).map((part) => Number(part.trim()));
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return parts[0] / parts[1];
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -152,11 +165,13 @@ export function CoverCropper({
   outputWidth = 1440,
   ratios,
   showRatios = true,
+  lockRatio = false,
   heading,
   confirmText,
   onCancel,
   onComplete,
 }: CoverCropperProps) {
+  const fixedAspect = useMemo(() => parseCropAspect(aspect), [aspect]);
   const ratioOptions = useMemo(
     () => (ratios && ratios.length > 0 ? ratios : MEDIA_CROP_RATIOS),
     [ratios]
@@ -164,7 +179,7 @@ export function CoverCropper({
 
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [activeRatio, setActiveRatio] = useState<CropRatio>(() =>
-    resolveInitialRatio(aspect, outputWidth, ratioOptions)
+    resolveInitialRatio(fixedAspect, outputWidth, ratioOptions)
   );
   const [crop, setCrop] = useState<Crop | undefined>(undefined);
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
@@ -185,17 +200,22 @@ export function CoverCropper({
     const base = baseDisplayRef.current;
     if (!base.width || !base.height) return;
 
+    // 源图比例已与目标比例一致时铺满整图，避免默认 80% 裁掉边缘
+    const sameAspect =
+      !ratio.free && Math.abs(base.width / base.height - ratio.aspect) / ratio.aspect < 0.01;
     const initial: PixelCrop = ratio.free
       ? centerCrop(
           { unit: 'px', width: base.width * 0.7, height: base.height * 0.7 },
           base.width,
           base.height
         )
-      : centerCrop(
-          makeAspectCrop({ unit: 'px', width: base.width * 0.8 }, ratio.aspect, base.width, base.height),
-          base.width,
-          base.height
-        );
+      : sameAspect
+        ? { unit: 'px', x: 0, y: 0, width: base.width, height: base.height }
+        : centerCrop(
+            makeAspectCrop({ unit: 'px', width: base.width * 0.8 }, ratio.aspect, base.width, base.height),
+            base.width,
+            base.height
+          );
     setZoom(1);
     zoomRef.current = 1;
     setCrop(initial);
@@ -205,8 +225,8 @@ export function CoverCropper({
 
   // 外部初始比例变化时同步到当前选中的比例
   useEffect(() => {
-    setActiveRatio(resolveInitialRatio(aspect, outputWidth, ratioOptions));
-  }, [aspect, outputWidth, ratioOptions]);
+    setActiveRatio(resolveInitialRatio(fixedAspect, outputWidth, ratioOptions));
+  }, [fixedAspect, outputWidth, ratioOptions]);
 
   useEffect(() => {
     if (!file) {
@@ -388,7 +408,7 @@ export function CoverCropper({
   return createPortal(
     <div
       data-cropper-root
-      className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-[100020] flex items-center justify-center bg-black/40 p-3 sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) cancel();
       }}
@@ -397,17 +417,20 @@ export function CoverCropper({
         role="dialog"
         aria-modal="true"
         aria-label={heading || '裁剪图片'}
-        className="relative flex h-full max-h-[880px] w-full max-w-[1160px] flex-col overflow-hidden rounded-[24px] border border-white/15 bg-[#0B0D10] text-white shadow-[0_32px_100px_rgba(0,0,0,0.75)] sm:rounded-[28px]"
+        className="relative flex h-full max-h-[860px] w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl border border-[#E5E5EA] bg-white text-[#1D1D1F] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
       >
-        <header className="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-white/12 bg-[#0A0C0F] px-5 py-4 sm:px-7 sm:py-5">
-          <div className="flex min-w-0 items-center gap-3.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
-              <CropIcon className="h-5 w-5" strokeWidth={1.8} />
+        <header className="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-[#F0F0F2] px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#0071E3]">
+              <CropIcon className="h-[18px] w-[18px]" strokeWidth={1.8} />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-[17px] font-semibold tracking-tight text-white sm:text-[20px]">
+              <h2 className="truncate text-[16px] font-semibold text-[#1D1D1F]">
                 {heading || '裁剪图片'}
               </h2>
+              <p className="mt-0.5 text-[11px] text-[#86868B]">
+                拖动裁剪框选择区域，滚轮或滑杆缩放
+              </p>
             </div>
           </div>
           <button
@@ -415,17 +438,25 @@ export function CoverCropper({
             onClick={cancel}
             disabled={processing}
             aria-label="关闭裁剪弹窗"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#86868B] transition-colors hover:bg-[#F5F5F7] hover:text-[#1D1D1F] disabled:opacity-40"
           >
             <X className="h-[18px] w-[18px]" />
           </button>
         </header>
 
         <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-          <div className="relative h-[44vh] min-h-[280px] shrink-0 bg-[#181B21] sm:h-[48vh] lg:h-auto lg:min-h-0 lg:flex-1">
+          <div className="relative h-[44vh] min-h-[280px] shrink-0 bg-[#F5F5F7] sm:h-[48vh] lg:h-auto lg:min-h-0 lg:flex-1">
             <div
               ref={viewportRef}
               className="flex h-full w-full items-center justify-center overflow-hidden p-3 sm:p-5"
+              style={
+                {
+                  '--rc-border-color': '#FFFFFF',
+                  '--rc-drag-handle-bg-colour': '#0071E3',
+                  '--rc-drag-handle-size': '14px',
+                  '--rc-focus-color': '#0071E3',
+                } as CSSProperties
+              }
             >
               <ReactCrop
                 crop={crop}
@@ -451,21 +482,19 @@ export function CoverCropper({
             </div>
 
             {processing && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
-                <Loader2 className="h-7 w-7 animate-spin text-white" />
-                <span className="text-[13px] font-medium text-white/80">正在生成裁剪图片...</span>
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/85 backdrop-blur-sm">
+                <Loader2 className="h-7 w-7 animate-spin text-[#0071E3]" />
+                <span className="text-[13px] font-medium text-[#6E6E73]">正在生成裁剪图片...</span>
               </div>
             )}
           </div>
 
-          <aside className="w-full shrink-0 border-t border-white/12 bg-[#12151A] px-5 py-5 sm:px-7 sm:py-6 lg:w-[330px] lg:overflow-y-auto lg:border-l lg:border-t-0">
-            {showRatios && (
-              <section className="mb-7 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <aside className="w-full shrink-0 border-t border-[#F0F0F2] bg-[#FAFAFC] px-4 py-4 lg:w-[320px] lg:overflow-y-auto lg:border-l lg:border-t-0">
+            {showRatios && !lockRatio && (
+              <section className="mb-5 rounded-xl border border-[#E5E5EA] bg-white p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                    裁剪比例
-                  </h3>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white">
+                  <h3 className="text-[11px] text-[#86868B]">裁剪比例</h3>
+                  <span className="rounded-md bg-[#F5F5F7] px-2 py-0.5 text-[11px] text-[#6E6E73]">
                     当前 {ratioLabel}
                   </span>
                 </div>
@@ -485,33 +514,33 @@ export function CoverCropper({
                         type="button"
                         onClick={() => selectRatio(ratio)}
                         aria-pressed={active}
-                        className={`group flex min-w-0 items-center gap-2.5 rounded-2xl border px-2.5 py-2.5 text-left transition ${
+                        className={`group flex min-w-0 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors ${
                           active
-                            ? 'border-white/60 bg-white/10'
-                            : 'border-white/10 bg-transparent hover:border-white/25 hover:bg-white/5'
+                            ? 'border-[#0071E3] bg-[#0071E3]/10'
+                            : 'border-[#E5E5EA] bg-white hover:border-[#C7C7CC]'
                         }`}
                       >
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center">
                           <span
                             style={previewStyle}
                             className={`rounded-[3px] border ${
-                              active ? 'border-white bg-white/10' : 'border-white/35 bg-white/5'
+                              active ? 'border-[#0071E3] bg-[#0071E3]/10' : 'border-[#C7C7CC] bg-white'
                             }`}
                           />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span
                             className={`block truncate text-[12px] font-medium ${
-                              active ? 'text-white' : 'text-white/75'
+                              active ? 'text-[#0071E3]' : 'text-[#1D1D1F]'
                             }`}
                           >
                             {ratio.label}
                           </span>
-                          <span className="block truncate text-[10px] text-white/40">
+                          <span className="block truncate text-[10px] text-[#86868B]">
                             {ratio.description}
                           </span>
                         </span>
-                        {active && <Check className="h-3.5 w-3.5 shrink-0 text-white" />}
+                        {active && <Check className="h-3.5 w-3.5 shrink-0 text-[#0071E3]" />}
                       </button>
                     );
                   })}
@@ -519,15 +548,22 @@ export function CoverCropper({
               </section>
             )}
 
-            <section className="mb-7 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            {lockRatio && (
+              <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-[#E5E5EA] bg-white px-3 py-2.5">
+                <span className="text-[11px] text-[#86868B]">固定比例</span>
+                <span className="rounded-md bg-[#F5F5F7] px-2 py-0.5 text-[11px] text-[#6E6E73]">
+                  {ratioLabel}
+                </span>
+              </div>
+            )}
+
+            <section className="mb-5 rounded-xl border border-[#E5E5EA] bg-white p-3">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                  缩放
-                </h3>
-                <span className="text-[12px] tabular-nums text-white/60">{zoom.toFixed(2)}×</span>
+                <h3 className="text-[11px] text-[#86868B]">缩放</h3>
+                <span className="text-[12px] tabular-nums text-[#6E6E73]">{zoom.toFixed(2)}×</span>
               </div>
               <div className="flex items-center gap-3">
-                <Minus className="h-3.5 w-3.5 shrink-0 text-white/45" />
+                <Minus className="h-3.5 w-3.5 shrink-0 text-[#86868B]" />
                 <input
                   type="range"
                   min={1}
@@ -536,26 +572,26 @@ export function CoverCropper({
                   value={zoom}
                   onChange={(e) => applyZoom(Number(e.target.value))}
                   aria-label="缩放"
-                  className="h-1.5 flex-1 cursor-pointer accent-white"
+                  className="h-1.5 flex-1 cursor-pointer accent-[#0071E3]"
                 />
-                <Plus className="h-3.5 w-3.5 shrink-0 text-white/45" />
+                <Plus className="h-3.5 w-3.5 shrink-0 text-[#86868B]" />
               </div>
               <button
                 type="button"
                 onClick={resetCrop}
-                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 text-[11px] font-medium text-white/60 transition hover:bg-white/10 hover:text-white"
+                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#D2D2D7] bg-white px-2.5 text-[12px] text-[#1D1D1F] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 重置位置与缩放
               </button>
             </section>
 
-            <div className="rounded-xl border border-white/10 bg-[#0A0C0F] px-3.5 py-2.5 text-[11px] text-white/50">
+            <div className="rounded-lg border border-[#E5E5EA] bg-white px-3 py-2 text-[11px] text-[#86868B]">
               {sizeLabel} px · WebP
             </div>
 
             {error && (
-              <div className="mt-3 flex items-start gap-1.5 rounded-xl bg-white/10 px-3 py-2.5 text-[12px] text-white">
+              <div className="mt-3 flex items-start gap-1.5 rounded-lg border border-[#FFCCC7] bg-[#FFF1F0] px-3 py-2 text-[12px] text-[#CF1322]">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -563,13 +599,13 @@ export function CoverCropper({
           </aside>
         </div>
 
-        <footer className="relative z-10 flex shrink-0 justify-end border-t border-white/12 bg-[#080A0D] px-5 py-4 sm:px-7">
+        <footer className="relative z-10 flex shrink-0 justify-end border-t border-[#F0F0F2] bg-white px-5 py-4">
           <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={cancel}
               disabled={processing}
-              className="h-10 rounded-xl border border-white/10 bg-transparent px-5 text-[13px] font-medium text-white/70 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+              className="h-10 rounded-xl border border-[#D2D2D7] bg-white px-5 text-[13px] text-[#1D1D1F] transition-colors hover:border-[#0071E3] hover:text-[#0071E3] disabled:opacity-50"
             >
               取消
             </button>
@@ -577,7 +613,7 @@ export function CoverCropper({
               type="button"
               onClick={() => void handleConfirm()}
               disabled={processing || !completedCrop}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-5 text-[13px] font-semibold text-black transition hover:bg-white/85 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0071E3] px-5 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ED] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {processing && <Loader2 className="h-4 w-4 animate-spin" />}
               {processing ? '正在处理...' : confirmText || '使用此图片'}

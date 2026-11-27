@@ -43,7 +43,7 @@ export function createPendingFileFromDataUri(dataUri: string, fileName: string):
   if (!matched) return null;
   const [, mime = 'image/jpeg', isBase64, payload] = matched;
   try {
-    let bytes: Uint8Array;
+    let bytes: Uint8Array<ArrayBuffer>;
     if (isBase64) {
       const binary = atob(payload);
       bytes = new Uint8Array(binary.length);

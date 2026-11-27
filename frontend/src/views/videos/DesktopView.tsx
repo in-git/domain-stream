@@ -181,3 +181,20 @@ export function DesktopVideoGrid({
     </div>
   );
 }
+
+/** 首屏加载中的骨架：列数与卡片比例和真实网格一致 */
+export function DesktopGridSkeleton({ count = 10 }: { count?: number }) {
+  return (
+    <div className="hidden grid-cols-2 gap-2 sm:gap-1.5 md:grid md:grid-cols-3 md:gap-2 lg:gap-3 xl:grid-cols-4 xl:gap-4 2xl:grid-cols-5 2xl:gap-4">
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          aria-hidden="true"
+          className="w-full animate-pulse rounded-app bg-white/10"
+          style={{ aspectRatio: '16 / 9' }}
+        />
+      ))}
+    </div>
+  );
+}
+

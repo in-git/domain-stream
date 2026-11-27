@@ -98,6 +98,7 @@ export function VideosSection({
         onCategoryChange={onCategoryChange}
         hasMoreVideos={hasMoreVideos}
         loadingMoreVideos={loadingMoreVideos}
+        loadingVideos={loading}
         loadMoreError={loadMoreError}
         onLoadMoreVideos={onLoadMoreVideos}
         savedIds={savedIds}
@@ -123,7 +124,8 @@ export function VideosSection({
         onPlayingChange={onPlayingChange}
       />
 
-      {active && loading && videos.length === 0 && (
+      {/* 首屏骨架：卡片模式由网格自己铺骨架，这里只覆盖沉浸流 */}
+      {active && loading && videos.length === 0 && viewMode !== 'grid' && (
         <div className="absolute inset-0 z-20 bg-app-surface dark:bg-[#0A0A0C]">
           <SectionSkeleton section="videos" />
         </div>

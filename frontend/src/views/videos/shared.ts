@@ -23,6 +23,12 @@ export function formatTime(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+/** 限制高宽比，避免极端比例把某一列拉得过长或过短 */
+export function clampAspectRatio(ratio: number, min: number, max: number): number {
+  if (!Number.isFinite(ratio) || ratio <= 0) return min;
+  return Math.min(max, Math.max(min, ratio));
+}
+
 /** PC 与移动端分类条共用的入参 */
 export interface CategoryBarProps {
   categories: string[];

@@ -2,6 +2,7 @@ package vip.xiaonuo.biz.modular.asset.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.img.ImgUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
@@ -11,6 +12,10 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import vip.xiaonuo.biz.modular.asset.entity.BizAssetResource;
@@ -32,13 +37,17 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
@@ -68,9 +77,30 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     private static final int DEFAULT_COLLECT_LIMIT = 20;
     private static final int MAX_COLLECT_LIMIT = 50;
 
+    /** 深度搜索保护上限：防止站内链接形成环路或站点过大时无限抓取 */
+    private static final int DEEP_MAX_PAGES = 500;
+    private static final int DEEP_MAX_MEDIA = 2000;
+    private static final int DEEP_PAGE_TIMEOUT = 20000;
+
+    /** 页面中需要继续跟踪的链接 */
+    private static final Pattern HREF_PATTERN = Pattern.compile(
+            "<a\\b[^>]*\\bhref\\s*=\\s*[\"']([^\"']+)[\"']",
+            Pattern.CASE_INSENSITIVE);
+
+    /** 这些后缀是资源或静态文件，不再当成可继续爬取的页面 */
+    private static final List<String> NON_PAGE_SUFFIXES = Arrays.asList(
+            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg", ".ico",
+            ".mp4", ".webm", ".mov", ".m4v", ".mp3", ".wav",
+            ".css", ".js", ".json", ".xml", ".pdf", ".zip", ".rar", ".doc", ".docx");
+
     /** 从网页中抽取常见图片/视频直链，Bing 这类 th?id=...jpg&w=3840 链接也能命中 */
     private static final Pattern MEDIA_URL_PATTERN = Pattern.compile(
             "https?://[^\"'<>\\s]+?\\.(?:jpg|jpeg|png|webp|gif|bmp|svg|mp4|webm|mov|m4v)(?:[?&][^\"'<>\\s]*)?",
+            Pattern.CASE_INSENSITIVE);
+
+    /** 页面中的相对资源路径，按当前页面地址解析成绝对 URL 后再入库 */
+    private static final Pattern RELATIVE_MEDIA_PATTERN = Pattern.compile(
+            "[\"']((?!/{2}|https?:)[^\"']+?\\.(?:jpg|jpeg|png|webp|gif|bmp|svg|mp4|webm|mov|m4v)(?:[?&][^\"']*)?)[\"']",
             Pattern.CASE_INSENSITIVE);
 
     /** 已知文件后缀 */
@@ -144,13 +174,23 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                         ? BizAssetCategoryEnum.ICON.getValue()
                         : BizAssetCategoryEnum.WALLPAPER.getValue();
                 String suffix = StrUtil.blankToDefault(resource.getSuffix(), "jpg");
+                byte[] uploadBytes = bytes;
+                String uploadSuffix = suffix;
+                String uploadContentType = contentType(resource.getId());
+                // 采集图片统一转 WebP 后再落素材中心；GIF/SVG/WebP 保持原样
+                if (isConvertibleImageSuffix(suffix)) {
+                    uploadBytes = convertToWebP(bytes);
+                    uploadSuffix = "webp";
+                    uploadContentType = "image/webp";
+                }
+
                 String safeKey = StrUtil.blankToDefault(resource.getSourceKey(), IdWorker.getIdStr())
                         .replaceAll("[^a-zA-Z0-9_-]", "_");
-                String fileName = safeKey + StrUtil.DOT + suffix;
+                String fileName = safeKey + StrUtil.DOT + uploadSuffix;
 
                 String fileId = devFileApi.uploadAssetReturnId(
                         null,
-                        new ByteArrayMultipartFile(bytes, "file", fileName, contentType(resource.getId())),
+                        new ByteArrayMultipartFile(uploadBytes, "file", fileName, uploadContentType),
                         "MATERIAL",
                         categoryCode);
 
@@ -169,6 +209,39 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         }
         if (fail > 0) {
             log.warn("加入素材中心完成，成功 {} 条，失败 {} 条", success, fail);
+        }
+    }
+
+    /** 只有会丢失动图/矢量信息的格式不转换，普通位图统一转 WebP */
+    private boolean isConvertibleImageSuffix(String suffix) {
+        String lower = StrUtil.blankToDefault(suffix, "").toLowerCase(Locale.ROOT);
+        return "jpg".equals(lower) || "jpeg".equals(lower) || "png".equals(lower) || "bmp".equals(lower);
+    }
+
+    /** 用 ImageIO 的 WebP Writer 编码，失败时保持原图入库流程不被静默吞掉 */
+    private byte[] convertToWebP(byte[] bytes) {
+        try {
+            BufferedImage source = ImgUtil.toBufferedImage(ImgUtil.toImage(bytes));
+            // webp-imageio 不支持 TYPE_CUSTOM，重绘成标准 INT 类型后再编码
+            int imageType = source.getColorModel().hasAlpha()
+                    ? BufferedImage.TYPE_INT_ARGB
+                    : BufferedImage.TYPE_INT_RGB;
+            BufferedImage image = new BufferedImage(source.getWidth(), source.getHeight(), imageType);
+            Graphics2D graphics = image.createGraphics();
+            try {
+                graphics.drawImage(source, 0, 0, null);
+            } finally {
+                graphics.dispose();
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            if (!ImageIO.write(image, "webp", out)) {
+                throw new CommonException("WebP 编码器不支持当前图像类型");
+            }
+            return out.toByteArray();
+        } catch (CommonException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CommonException("图片转 WebP 失败：" + e.getMessage());
         }
     }
 
@@ -208,7 +281,11 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
             return "采集完成：" + vo.getTitle() + "（" + type + "），已登记到素材资源库，可在列表中手动加入素材中心";
         }
 
-        List<String> mediaUrls = resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+        boolean deep = isDeepSearch(param);
+        DeepCollectResult deepResult = deep ? resolveDeepMediaUrls(url, fetched, type, null) : null;
+        List<String> mediaUrls = deep
+                ? deepResult.mediaUrls
+                : resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
         if (mediaUrls.isEmpty()) {
             throw new CommonException("网页中未找到可采集的" + type + "资源");
         }
@@ -224,7 +301,8 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         if (success == 0) {
             throw new CommonException("网页资源采集失败，请稍后重试");
         }
-        return "采集完成：从网页发现 " + mediaUrls.size() + " 个资源，成功 " + success + " 个，已登记到素材资源库，可在列表中手动加入素材中心";
+        String deepInfo = deepResult == null ? "" : "，深度搜索扫描 " + deepResult.scannedPages + " 个页面";
+        return "采集完成：从网页发现 " + mediaUrls.size() + " 个资源" + deepInfo + "，成功 " + success + " 个，已登记到素材资源库，可在列表中手动加入素材中心";
     }
 
     @Override
@@ -234,9 +312,16 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
             String type = normalizeCollectType(param.getType());
             HttpFetchResult fetched = fetchUrl(url, 60000);
             boolean htmlPage = isHtml(fetched);
+            boolean deep = isDeepSearch(param);
+            DeepCollectResult deepResult = null;
             List<String> mediaUrls;
             if (htmlPage) {
-                mediaUrls = resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+                if (deep) {
+                    deepResult = resolveDeepMediaUrls(url, fetched, type, emitter);
+                    mediaUrls = deepResult.mediaUrls;
+                } else {
+                    mediaUrls = resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+                }
                 if (mediaUrls.isEmpty()) {
                     emit(emitter, "error", 0, 0, "网页中未找到可采集的" + type + "资源", null);
                     return;
@@ -260,8 +345,9 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                             "第 " + (i + 1) + " 个资源采集失败：" + e.getMessage(), null);
                 }
             }
+            String deepInfo = deepResult == null ? "" : "，深度搜索扫描 " + deepResult.scannedPages + " 个页面";
             emit(emitter, "done", mediaUrls.size(), mediaUrls.size(),
-                    "采集完成：成功 " + success + " 个，失败 " + fail + " 个", null);
+                    "采集完成：成功 " + success + " 个，失败 " + fail + " 个" + deepInfo, null);
         } catch (CommonException e) {
             emit(emitter, "error", 0, 0, e.getMessage(), null);
         } catch (Exception e) {
@@ -309,21 +395,43 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     }
 
     private List<String> resolveMediaUrls(String baseUrl, HttpFetchResult fetched, String type, int limit) {
-        String html = new String(fetched.bytes, StandardCharsets.UTF_8).replace("&amp;", "&");
-        Matcher matcher = MEDIA_URL_PATTERN.matcher(html);
         Map<String, String> chosen = new LinkedHashMap<>();
-        while (matcher.find()) {
-            String candidate = matcher.group().trim();
-            if (!StrUtil.startWithAnyIgnoreCase(candidate, "http://", "https://")) continue;
-            if (!matchesCollectType(candidate, type)) continue;
-            String key = canonicalMediaKey(candidate);
-            String current = chosen.get(key);
-            if (current == null || mediaScore(candidate) > mediaScore(current)) {
-                chosen.put(key, candidate);
-            }
-        }
+        collectMediaUrls(baseUrl, fetched, type, chosen);
         List<String> result = new ArrayList<>(chosen.values());
         return result.size() <= limit ? result : new ArrayList<>(result.subList(0, limit));
+    }
+
+    /** 把当前页面里的资源按规范 ID 收集到 chosen，高分地址（如 4K）会替换低分地址 */
+    private void collectMediaUrls(String baseUrl, HttpFetchResult fetched, String type, Map<String, String> chosen) {
+        String html = new String(fetched.bytes, StandardCharsets.UTF_8).replace("&amp;", "&");
+        Matcher absolute = MEDIA_URL_PATTERN.matcher(html);
+        while (absolute.find()) {
+            offerMediaUrl(baseUrl, absolute.group().trim(), type, chosen);
+        }
+        Matcher relative = RELATIVE_MEDIA_PATTERN.matcher(html);
+        while (relative.find()) {
+            offerMediaUrl(baseUrl, relative.group(1).trim(), type, chosen);
+        }
+    }
+
+    /** 相对路径按页面地址解析成绝对 URL，再按规范 ID 去重入库 */
+    private void offerMediaUrl(String baseUrl, String candidate, String type, Map<String, String> chosen) {
+        if (StrUtil.isBlank(candidate)) return;
+        String url = candidate;
+        if (!StrUtil.startWithAnyIgnoreCase(url, "http://", "https://")) {
+            try {
+                url = URI.create(baseUrl).resolve(url).toString();
+            } catch (Exception e) {
+                return;
+            }
+        }
+        if (!StrUtil.startWithAnyIgnoreCase(url, "http://", "https://")) return;
+        if (!matchesCollectType(url, type)) return;
+        String key = canonicalMediaKey(url);
+        String current = chosen.get(key);
+        if (current == null || mediaScore(url) > mediaScore(current)) {
+            chosen.put(key, url);
+        }
     }
 
     private boolean matchesCollectType(String url, String type) {
@@ -340,18 +448,29 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
 
     private String canonicalMediaKey(String url) {
         try {
-            String query = URI.create(url).getQuery();
+            URI uri = URI.create(url);
+            String query = uri.getQuery();
             if (StrUtil.isNotBlank(query)) {
+                List<String> parts = new ArrayList<>();
                 for (String part : query.split("&")) {
                     if (part.startsWith("id=") && part.length() > 3) {
                         return "id:" + URLDecoder.decode(part.substring(3), StandardCharsets.UTF_8);
                     }
+                    // 追踪参数不影响图片身份，去掉后可以避免同一资源被重复采集
+                    String lower = part.toLowerCase(Locale.ROOT);
+                    if (lower.startsWith("utm_") || lower.startsWith("fbclid=") || lower.startsWith("gclid=")) {
+                        continue;
+                    }
+                    parts.add(part);
                 }
+                return uri.getScheme() + "://" + uri.getAuthority() + uri.getPath()
+                        + (parts.isEmpty() ? "" : "?" + String.join("&", parts));
             }
+            return uri.getScheme() + "://" + uri.getAuthority() + uri.getPath();
         } catch (Exception ignored) {
             // 非标准查询串直接按完整网址去重
+            return url;
         }
-        return url;
     }
 
     private int mediaScore(String url) {
@@ -366,6 +485,133 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     private int resolveCollectLimit(Integer rawLimit) {
         if (rawLimit == null || rawLimit <= 0) return DEFAULT_COLLECT_LIMIT;
         return Math.min(rawLimit, MAX_COLLECT_LIMIT);
+    }
+
+    private boolean isDeepSearch(BizAssetCollectUrlParam param) {
+        return param != null && Boolean.TRUE.equals(param.getDeepSearch());
+    }
+
+    /**
+     * 深度搜索：从入口页开始按站内链接广度优先抓取。
+     * 页面按规范化 URL 去重，资源按规范资源 ID 去重，同一资源只保留质量最高的地址。
+     */
+    private DeepCollectResult resolveDeepMediaUrls(String startUrl, HttpFetchResult firstPage,
+                                                   String type, Consumer<AssetCollectEventVo> emitter) {
+        Queue<String> queue = new ArrayDeque<>();
+        Set<String> visitedPages = new HashSet<>();
+        Set<String> queuedPages = new HashSet<>();
+        Map<String, String> chosen = new LinkedHashMap<>();
+
+        queue.add(startUrl);
+        queuedPages.add(canonicalPageKey(startUrl));
+
+        int scanned = 0;
+        while (!queue.isEmpty() && scanned < DEEP_MAX_PAGES && chosen.size() < DEEP_MAX_MEDIA) {
+            String pageUrl = queue.poll();
+            if (!visitedPages.add(canonicalPageKey(pageUrl))) {
+                continue;
+            }
+            HttpFetchResult page = scanned == 0 ? firstPage : fetchUrlQuietly(pageUrl);
+            if (page == null || !isHtml(page)) {
+                continue;
+            }
+
+            collectMediaUrls(pageUrl, page, type, chosen);
+            for (String link : extractInternalLinks(pageUrl, page)) {
+                String key = canonicalPageKey(link);
+                if (!visitedPages.contains(key) && queuedPages.add(key)) {
+                    queue.add(link);
+                }
+            }
+            scanned++;
+            if (emitter != null) {
+                emit(emitter, "progress", 0, 0,
+                        "深度搜索：已扫描 " + scanned + " 个页面，发现 " + chosen.size() + " 个资源", null);
+            }
+        }
+        return new DeepCollectResult(new ArrayList<>(chosen.values()), scanned);
+    }
+
+    /** 内链抓取失败不能中断整站采集 */
+    private HttpFetchResult fetchUrlQuietly(String url) {
+        try {
+            return fetchUrl(url, DEEP_PAGE_TIMEOUT);
+        } catch (Exception e) {
+            log.warn("深度搜索页面抓取失败：{}，{}", url, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 只跟踪同站 http/https 页面链接，排除静态资源和锚点 */
+    private List<String> extractInternalLinks(String baseUrl, HttpFetchResult fetched) {
+        URI base;
+        try {
+            base = URI.create(baseUrl);
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+        String host = StrUtil.blankToDefault(base.getHost(), "").toLowerCase(Locale.ROOT);
+        if (StrUtil.isBlank(host)) {
+            return Collections.emptyList();
+        }
+
+        String html = new String(fetched.bytes, StandardCharsets.UTF_8).replace("&amp;", "&");
+        Matcher matcher = HREF_PATTERN.matcher(html);
+        List<String> links = new ArrayList<>();
+        while (matcher.find()) {
+            String href = matcher.group(1).trim();
+            if (StrUtil.isBlank(href) || href.startsWith("#")) continue;
+            String lower = href.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("javascript:") || lower.startsWith("mailto:")
+                    || lower.startsWith("tel:") || lower.startsWith("data:")) {
+                continue;
+            }
+            try {
+                URI resolved = base.resolve(href);
+                String scheme = StrUtil.blankToDefault(resolved.getScheme(), "").toLowerCase(Locale.ROOT);
+                if (!"http".equals(scheme) && !"https".equals(scheme)) continue;
+                if (!host.equals(StrUtil.blankToDefault(resolved.getHost(), "").toLowerCase(Locale.ROOT))) continue;
+                String path = StrUtil.blankToDefault(resolved.getPath(), "").toLowerCase(Locale.ROOT);
+                if (hasNonPageSuffix(path)) continue;
+                links.add(resolved.toString());
+            } catch (Exception ignored) {
+                // 非法 href 直接跳过
+            }
+        }
+        return links;
+    }
+
+    private boolean hasNonPageSuffix(String path) {
+        for (String suffix : NON_PAGE_SUFFIXES) {
+            if (path.endsWith(suffix)) return true;
+        }
+        return false;
+    }
+
+    /** 页面 URL 去重键：忽略锚点与常见追踪参数，保留分页等有效查询参数 */
+    private String canonicalPageKey(String rawUrl) {
+        try {
+            URI uri = URI.create(rawUrl);
+            String query = uri.getQuery();
+            if (StrUtil.isNotBlank(query)) {
+                List<String> parts = new ArrayList<>();
+                for (String part : query.split("&")) {
+                    String lower = part.toLowerCase(Locale.ROOT);
+                    if (lower.startsWith("utm_") || lower.startsWith("fbclid=") || lower.startsWith("gclid=")) {
+                        continue;
+                    }
+                    parts.add(part);
+                }
+                query = parts.isEmpty() ? "" : String.join("&", parts);
+            }
+            String scheme = StrUtil.blankToDefault(uri.getScheme(), "http").toLowerCase(Locale.ROOT);
+            String host = StrUtil.blankToDefault(uri.getHost(), "").toLowerCase(Locale.ROOT);
+            String path = StrUtil.blankToDefault(uri.getPath(), "/");
+            return scheme + "://" + host + (uri.getPort() > 0 ? ":" + uri.getPort() : "")
+                    + path + (StrUtil.isNotBlank(query) ? "?" + query : "");
+        } catch (Exception e) {
+            return rawUrl;
+        }
     }
 
     private BizAssetResourceVo saveCollected(String url, String type, String customName, String homepage,
@@ -454,6 +700,17 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         event.setMessage(message);
         event.setResource(resource);
         emitter.accept(event);
+    }
+
+    /** 深度搜索结果：资源地址 + 实际扫描的页面数 */
+    private static class DeepCollectResult {
+        private final List<String> mediaUrls;
+        private final int scannedPages;
+
+        private DeepCollectResult(List<String> mediaUrls, int scannedPages) {
+            this.mediaUrls = mediaUrls;
+            this.scannedPages = scannedPages;
+        }
     }
 
     private static class HttpFetchResult {

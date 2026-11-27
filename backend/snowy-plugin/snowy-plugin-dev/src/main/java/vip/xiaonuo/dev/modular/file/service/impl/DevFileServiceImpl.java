@@ -1200,6 +1200,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
                 || ImgUtil.IMAGE_TYPE_JPEG.equals(fileSuffix)
                 || ImgUtil.IMAGE_TYPE_BMP.equals(fileSuffix)
                 || ImgUtil.IMAGE_TYPE_PNG.equals(fileSuffix)
+                || "webp".equals(fileSuffix)
                 || ImgUtil.IMAGE_TYPE_PSD.equals(fileSuffix);
     }
 

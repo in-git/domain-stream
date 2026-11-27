@@ -34,17 +34,16 @@ import {
 } from 'lucide-react';
 import {
   categoryLabel,
-  fetchThumbnailBlob,
   fileCenterApi,
   FILE_CATEGORIES,
   isAudioFile,
   isImageFile,
   isVideoFile,
-  thumbnailFetchPath,
   toOpenUrl,
   uploadMaterial,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
+import { useFileThumbSrc } from '../../../lib/useFileThumb.ts';
 import { formatDateTime } from '../../../lib/format.ts';
 import { FileDeleteDialog, FilePreviewDialog } from '../file/dialogs.tsx';
 import { absoluteFileUrl, copyText, MaterialDetailDialog } from './dialogs.tsx';
@@ -104,47 +103,6 @@ function typeLabel(file: DevFile): string {
   return (file.suffix || '').replace('.', '').toUpperCase() || categoryLabel(file.category);
 }
 
-/**
- * 缩略图接口需要 token，不能直接放进 <img src>。
- * 先把受保护接口拉成 blob，再换成 object URL；组件卸载时释放。
- */
-function useThumbSrc(file: DevFile, fallbackUrl: string): string {
-  const [src, setSrc] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl = '';
-    setSrc('');
-
-    // 非后端缩略图接口（外链等）保持原样，避免误加 /snowy 前缀
-    if (!thumbnailFetchPath(file.thumbnail)) {
-      setSrc(file.thumbnail || fallbackUrl);
-      return () => {};
-    }
-
-    void fetchThumbnailBlob(file)
-      .then((blob) => {
-        if (cancelled) return;
-        if (!blob.size || (blob.type && !blob.type.startsWith('image/'))) {
-          setSrc(fallbackUrl);
-          return;
-        }
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setSrc(fallbackUrl);
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [file.id, file.thumbnail, fallbackUrl]);
-
-  return src;
-}
-
 /* ------------------------------------------------------------------ */
 /* 网格卡片                                                            */
 /* ------------------------------------------------------------------ */
@@ -175,7 +133,7 @@ function MaterialCard({
   const isImage = isImageFile(file);
   const isVideo = isVideoFile(file);
   const media = isImage || isVideo || isAudioFile(file);
-  const cover = useThumbSrc(file, isImage ? toOpenUrl(file) : '');
+  const cover = useFileThumbSrc(file, isImage ? toOpenUrl(file) : '');
   const showCover = !!cover && !thumbFailed;
 
   useEffect(() => {
@@ -315,7 +273,7 @@ function MaterialCard({
 function MaterialTableThumb({ file }: { file: DevFile }) {
   const [thumbFailed, setThumbFailed] = useState(false);
   const Icon = coverIcon(file);
-  const cover = useThumbSrc(file, isImageFile(file) ? toOpenUrl(file) : '');
+  const cover = useFileThumbSrc(file, isImageFile(file) ? toOpenUrl(file) : '');
   const showCover = !!cover && !thumbFailed;
 
   useEffect(() => {

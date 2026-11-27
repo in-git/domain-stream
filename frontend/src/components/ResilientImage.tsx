@@ -17,6 +17,8 @@ interface ResilientImageProps {
   placeholderClassName?: string;
   /** 图片加载失败时的兜底背景 */
   fallbackClassName?: string;
+  /** 图片加载完成后回报原始尺寸，用于按封面比例撑开卡片 */
+  onLoadSize?: (size: { width: number; height: number }) => void;
 }
 
 export function ResilientImage({
@@ -31,6 +33,7 @@ export function ResilientImage({
   fit = 'cover',
   placeholderClassName = 'bg-[#EAEAEF] dark:bg-[#242426]',
   fallbackClassName = 'bg-gradient-to-br from-[#ECEEF2] to-[#DFE3EA] dark:from-[#1C1C1E] dark:to-[#2C2C2E]',
+  onLoadSize,
 }: ResilientImageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -70,7 +73,13 @@ export function ResilientImage({
           // 兜底：即使外部传入 draggable，也阻止默认拖拽行为
           if (!draggable) event.preventDefault();
         }}
-        onLoad={() => setIsLoaded(true)}
+        onLoad={(event) => {
+          setIsLoaded(true);
+          onLoadSize?.({
+            width: event.currentTarget.naturalWidth,
+            height: event.currentTarget.naturalHeight,
+          });
+        }}
         onError={() => setHasError(true)}
         className={`w-full h-full max-w-full max-h-full transition-opacity duration-500 ease-out ${
           fit === 'contain' ? 'object-contain' : 'object-cover'

@@ -55,6 +55,8 @@ interface VideoFeedPlayerProps {
   captionToBody?: boolean;
   /** 传入后启用右键/长按控制菜单；模态框不传 */
   videoMenu?: VideoMenuConfig;
+  /** 所属模块被切走（如切到图文/设置）时为 true，暂停渲染评论抽屉等浮层 */
+  moduleHidden?: boolean;
 }
 
 /**
@@ -82,6 +84,7 @@ export function VideoFeedPlayer({
   chromeVisible = true,
   captionToBody = false,
   videoMenu,
+  moduleHidden = false,
 }: VideoFeedPlayerProps) {
   const { activeIndex, isMuted, playbackRate, currentTime, duration } = state;
 
@@ -138,6 +141,7 @@ export function VideoFeedPlayer({
             showFullscreen={showFullscreen}
             captionToBody={captionToBody}
             videoMenu={videoMenu}
+            moduleHidden={moduleHidden}
           />
         </SwiperSlide>
       ))}

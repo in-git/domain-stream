@@ -481,6 +481,7 @@ export function VideoEditorPage({
     <EditorWorkspace
       title={item ? '编辑视频信息' : '上传新视频'}
       onBack={onBack}
+      deviceSimulator
       previewOpen={previewOpen}
       onPreviewOpenChange={setPreviewOpen}
       actions={

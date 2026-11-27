@@ -6,8 +6,6 @@ import {
   Minimize,
   Pause,
   Play,
-  Repeat,
-  Repeat1,
   RotateCcw,
   SkipBack,
   SkipForward,
@@ -15,7 +13,12 @@ import {
   VolumeX,
   type LucideIcon,
 } from 'lucide-react';
-import { VIDEO_PLAYBACK_RATES, type VideoMenuConfig } from './videoMenuTypes';
+import { MenuSegments } from './MenuSegments';
+import {
+  VIDEO_LOOP_MODES,
+  VIDEO_PLAYBACK_RATES,
+  type VideoMenuConfig,
+} from './videoMenuTypes';
 
 interface VideoContextMenuProps {
   open: boolean;
@@ -83,7 +86,7 @@ export function VideoContextMenu({ open, x, y, config, onClose }: VideoContextMe
     onClose();
   };
   const menuWidth = 232;
-  const menuHeight = 396;
+  const menuHeight = 400;
   const left = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - menuHeight - 8));
 
@@ -94,23 +97,21 @@ export function VideoContextMenu({ open, x, y, config, onClose }: VideoContextMe
         aria-label="视频控制"
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
-        style={{ left, top, width: menuWidth }}
-        className="absolute overflow-hidden rounded-app border border-white/10 bg-[#1C1C1E]/95 p-1.5 text-white shadow-2xl backdrop-blur-xl"
+        style={{ left, top, width: menuWidth, maxHeight: 'calc(100vh - 16px)' }}
+        className="absolute overflow-x-hidden overflow-y-auto rounded-app border border-white/10 bg-[#1C1C1E]/95 p-1.5 text-white shadow-2xl backdrop-blur-xl"
       >
-        <MenuRow
-          icon={Repeat}
-          label="自动循环"
-          hint={state.autoLoop ? '开' : '关'}
-          active={state.autoLoop}
-          onClick={() => run(actions.toggleAutoLoop)}
-        />
-        <MenuRow
-          icon={Repeat1}
-          label="单条循环"
-          hint={state.singleLoop ? '开' : '关'}
-          active={state.singleLoop}
-          onClick={() => run(actions.toggleSingleLoop)}
-        />
+        <div className="px-1.5 pb-1 pt-1">
+          <p className="mb-1.5 text-[11px] text-white/45">循环模式</p>
+          <MenuSegments
+            ariaLabel="循环模式"
+            options={VIDEO_LOOP_MODES.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            value={state.loopMode}
+            onChange={(mode) => run(() => actions.setLoopMode(mode))}
+          />
+        </div>
 
         <div className="my-1 h-px bg-white/10" />
 
@@ -132,51 +133,32 @@ export function VideoContextMenu({ open, x, y, config, onClose }: VideoContextMe
 
         <div className="my-1 h-px bg-white/10" />
 
-        <div className="flex gap-1.5 px-1.5 py-1">
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!state.canPrev}
-            onClick={() => run(actions.prev)}
-            className="flex flex-1 items-center justify-center gap-1 rounded-app bg-white/5 py-1.5 text-[12px] text-white/85 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:text-white/25"
-          >
-            <SkipBack className="h-3.5 w-3.5" />
-            上一个
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!state.canNext}
-            onClick={() => run(actions.next)}
-            className="flex flex-1 items-center justify-center gap-1 rounded-app bg-white/5 py-1.5 text-[12px] text-white/85 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:text-white/25"
-          >
-            下一个
-            <SkipForward className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <MenuRow
+          icon={SkipBack}
+          label="上一个"
+          disabled={!state.canPrev}
+          onClick={() => run(actions.prev)}
+        />
+        <MenuRow
+          icon={SkipForward}
+          label="下一个"
+          disabled={!state.canNext}
+          onClick={() => run(actions.next)}
+        />
 
         <div className="my-1 h-px bg-white/10" />
 
-        <div className="px-2.5 pb-1 pt-1">
+        <div className="px-1.5 pb-1 pt-1">
           <p className="mb-1.5 text-[11px] text-white/45">播放倍速</p>
-          <div className="flex flex-wrap gap-1">
-            {VIDEO_PLAYBACK_RATES.map((rate) => (
-              <button
-                key={rate}
-                type="button"
-                role="menuitemradio"
-                aria-checked={state.playbackRate === rate}
-                onClick={() => run(() => actions.setRate(rate))}
-                className={`rounded-full px-2 py-1 text-[11px] tabular-nums transition-colors ${
-                  state.playbackRate === rate
-                    ? 'bg-app-primary text-white'
-                    : 'bg-white/10 text-white/75 hover:bg-white/20'
-                }`}
-              >
-                {rate}x
-              </button>
-            ))}
-          </div>
+          <MenuSegments
+            ariaLabel="播放倍速"
+            options={VIDEO_PLAYBACK_RATES.map((rate) => ({
+              value: rate,
+              label: `${rate}x`,
+            }))}
+            value={state.playbackRate}
+            onChange={(rate) => run(() => actions.setRate(rate))}
+          />
         </div>
 
         <div className="my-1 h-px bg-white/10" />

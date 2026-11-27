@@ -593,6 +593,7 @@ export function ImageTextEditorPage({
       <EditorWorkspace
       title={item ? '编辑图文内容' : '上传并编排图文'}
       onBack={onBack}
+      deviceSimulator
       actions={
         <>
           <button

@@ -22,7 +22,7 @@
  *
  * 返回的文件对象可用 fileCenter.ts 的 toOpenUrl / toStreamUrl 得到可访问地址。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check,
   ChevronLeft,
@@ -48,10 +48,12 @@ import {
   isImageFile,
   isVideoFile,
   toOpenUrl,
+  toPlayableVideoUrl,
   uploadLibraryFile,
   type DevFile,
 } from '../lib/fileCenter.ts';
 import { categoryApi, type BizCategory } from '../lib/category.ts';
+import { useFileThumbSrc } from '../lib/useFileThumb.ts';
 
 type Library = 'ALL' | 'USER' | 'MATERIAL';
 /** 预设类型 / MIME 类型 / 扩展名（如 .png）均可作为 accept 项 */
@@ -141,6 +143,21 @@ function matchesAccept(file: DevFile, accept: FileAccept | FileAccept[] | undefi
   return rules.some((rule) => matchesOne(file, rule));
 }
 
+/** 单一预设类型可直接交给后端按 category 过滤；MIME/扩展名等仍在前端兜底 */
+const ACCEPT_CATEGORY: Record<string, string> = {
+  image: 'IMAGE',
+  video: 'VIDEO',
+  audio: 'AUDIO',
+  document: 'DOC',
+};
+
+function acceptCategory(accept: FileAccept | FileAccept[] | undefined): string {
+  if (!accept) return '';
+  const rules = Array.isArray(accept) ? accept : [accept];
+  if (rules.length !== 1) return '';
+  return ACCEPT_CATEGORY[(rules[0] || '').toLowerCase()] || '';
+}
+
 /** 把 accept 转成 <input type=file> 的 accept 属性值（预设映射为 MIME 前缀） */
 function acceptForInput(accept: FileAccept | FileAccept[] | undefined): string | undefined {
   if (!accept) return undefined;
@@ -157,6 +174,39 @@ function acceptForInput(accept: FileAccept | FileAccept[] | undefined): string |
     .join(',');
 }
 
+/** 图片 / 视频分辨率缓存：同一个文件翻页回来只量一次 */
+const mediaSizeCache = new Map<string, string>();
+
+function rememberMediaSize(key: string, width: number, height: number): string {
+  if (!key || !width || !height) return '';
+  const text = `${width}×${height}`;
+  mediaSizeCache.set(key, text);
+  return text;
+}
+
+/**
+ * 图片分辨率：缩略图会被压缩，尺寸不准，所以用原图量；
+ * 视频由卡片里的 <video> 读元数据，不额外发请求。
+ */
+function useImageSize(file: DevFile): string {
+  const key = file.id || file.objName || file.fileKey || '';
+  const [size, setSize] = useState(() => mediaSizeCache.get(key) ?? '');
+  useEffect(() => {
+    if (!key || mediaSizeCache.has(key) || !isImageFile(file)) return;
+    let cancelled = false;
+    const image = new window.Image();
+    image.onload = () => {
+      const text = rememberMediaSize(key, image.naturalWidth, image.naturalHeight);
+      if (!cancelled && text) setSize(text);
+    };
+    image.src = toOpenUrl(file);
+    return () => {
+      cancelled = true;
+    };
+  }, [key, file]);
+  return size;
+}
+
 /** 单张文件卡片 */
 function PickerCard({
   file,
@@ -170,17 +220,46 @@ function PickerCard({
   onConfirm: () => void;
 }) {
   const [thumbFailed, setThumbFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const Icon = coverIcon(file);
-  const cover = file.thumbnail || (isImageFile(file) ? toOpenUrl(file) : '');
+  const isVideo = isVideoFile(file);
+  const mediaKey = file.id || file.objName || file.fileKey || '';
+  const imageSize = useImageSize(file);
+  const [videoSize, setVideoSize] = useState(() => mediaSizeCache.get(mediaKey) ?? '');
+  const mediaSize = imageSize || videoSize;
+  // 缩略图接口需要 token，交给 hook 拉 blob；图片卡片回退到原图
+  const cover = useFileThumbSrc(file, isImageFile(file) ? toOpenUrl(file) : '');
   const showCover = !!cover && !thumbFailed;
+  // 视频卡片用 <video> 渲染，缩略图作 poster；鼠标悬停时播放预览
+  const videoUrl = isVideo ? toPlayableVideoUrl(toOpenUrl(file)) : '';
+
+  function playPreview() {
+    const video = videoRef.current;
+    if (!video) return;
+    // 元数据未就绪时设置 currentTime 会抛 InvalidStateError，先判断 readyState
+    if (video.readyState >= 1) video.currentTime = 0;
+    void video.play().catch(() => {
+      /* 浏览器拒绝自动播放时保持静帧 */
+    });
+  }
+
+  function stopPreview() {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    if (video.readyState >= 1) video.currentTime = 0;
+  }
 
   return (
     <div
       role="button"
       tabIndex={0}
-      title={`${file.name || file.objName || file.id}${file.sizeInfo ? ` · ${file.sizeInfo}` : ''}`}
+      title={`${file.name || file.objName || file.id}${file.sizeInfo ? ` · ${file.sizeInfo}` : ''}${mediaSize ? ` · ${mediaSize}` : ''}`}
       onClick={onToggle}
       onDoubleClick={onConfirm}
+      onMouseEnter={isVideo ? playPreview : undefined}
+      onMouseLeave={isVideo ? stopPreview : undefined}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -196,7 +275,27 @@ function PickerCard({
           showCover ? 'bg-gradient-to-br from-[#F7F7F9] to-[#EDEDF1]' : tileTone(file)
         } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'}`}
       >
-        {showCover ? (
+        {isVideo && !videoFailed ? (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            poster={showCover ? cover : undefined}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onError={() => setVideoFailed(true)}
+            onLoadedMetadata={(event) => {
+              const text = rememberMediaSize(
+                mediaKey,
+                event.currentTarget.videoWidth,
+                event.currentTarget.videoHeight
+              );
+              if (text) setVideoSize(text);
+            }}
+            className="w-full h-full object-cover"
+          />
+        ) : showCover ? (
           <img
             src={cover}
             alt={file.name || '文件'}
@@ -222,6 +321,11 @@ function PickerCard({
         <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none">
           {file.bizType === 'MATERIAL' ? '素材' : '文件'}
         </span>
+        {mediaSize && (
+          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none tabular-nums">
+            {mediaSize}
+          </span>
+        )}
       </div>
 
       <p className="mt-1.5 px-0.5 text-[11px] text-[#1D1D1F] truncate" title={file.name || file.objName}>
@@ -248,57 +352,45 @@ export function FilePicker({
   const [materialCategories, setMaterialCategories] = useState<BizCategory[]>([]);
   const [search, setSearch] = useState('');
   const [files, setFiles] = useState<DevFile[]>([]);
+  const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
+  /** 已加载过的文件，翻页后仍能确认之前选中的文件 */
+  const fileCache = useRef<Map<string, DevFile>>(new Map());
+
+  /** accept 限定单一类型时直接走后端分类过滤，前端不再显示冲突的类型筛选 */
+  const lockedCategory = acceptCategory(accept);
+  const effectiveCategory = lockedCategory || category;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const params = {
-        category: category || undefined,
+      // 服务端分页：一次只取当前页，全部文件不传 bizType 由后端合并排序
+      const result = await fileCenterApi.page({
+        current: page,
+        size: PAGE_SIZE,
+        category: effectiveCategory || undefined,
+        categoryCode: library === 'MATERIAL' && categoryCode ? categoryCode : undefined,
+        bizType: library === 'ALL' ? undefined : library,
         searchKey: search.trim() || undefined,
-      };
-      const libraries: Array<'USER' | 'MATERIAL'> =
-        library === 'ALL' ? ['USER', 'MATERIAL'] : [library];
-      // 逐页拉取，避免一次性请求大分页
-      const fetchLibrary = async (bizType: 'USER' | 'MATERIAL') => {
-        const rows: DevFile[] = [];
-        // 素材分类只对素材库生效，用户文件没有该维度的分类
-        const categoryCodeParam =
-          bizType === 'MATERIAL' && categoryCode ? categoryCode : undefined;
-        for (let current = 1; ; current++) {
-          const page = await fileCenterApi.page({
-            ...params,
-            categoryCode: categoryCodeParam,
-            bizType,
-            current,
-            size: 20,
-          });
-          const records = page?.records || [];
-          rows.push(...records);
-          if (records.length < 20 || rows.length >= (page?.total ?? rows.length)) break;
-          if (current >= 500) break;
-        }
-        return rows;
-      };
-      const results = await Promise.all(libraries.map(fetchLibrary));
-      let all: DevFile[] = results.flat();
-      all = all.filter((file) => matchesAccept(file, accept));
-      all.sort((a, b) => (b.createTime || '').localeCompare(a.createTime || ''));
-      setFiles(all);
-      setPage(1);
+      });
+      const records = (result?.records || []).filter((file) => matchesAccept(file, accept));
+      records.forEach((file) => fileCache.current.set(file.id, file));
+      setFiles(records);
+      setTotal(result?.total ?? records.length);
     } catch (err) {
       setFiles([]);
+      setTotal(0);
       setError(err instanceof Error ? err.message : '文件加载失败');
     } finally {
       setLoading(false);
     }
-  }, [library, category, categoryCode, search, accept, reloadToken]);
+  }, [page, effectiveCategory, library, categoryCode, search, accept, reloadToken]);
 
   /** 加载素材模块的通用分类（逐页拉全量），无分类时筛选行不展示 */
   useEffect(() => {
@@ -342,14 +434,11 @@ export function FilePicker({
       setCategory('');
       setCategoryCode('');
       setLibrary('ALL');
+      setPage(1);
     }
   }, [open]);
 
-  const totalPages = Math.max(1, Math.ceil(files.length / PAGE_SIZE));
-  const visibleFiles = useMemo(
-    () => files.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [files, page]
-  );
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -359,7 +448,9 @@ export function FilePicker({
   }
 
   function confirmSelection() {
-    const chosen = files.filter((file) => selected.includes(file.id));
+    const chosen = selected
+      .map((id) => fileCache.current.get(id))
+      .filter((file): file is DevFile => Boolean(file));
     if (!chosen.length) return;
     onSelect(chosen);
     onClose();
@@ -373,11 +464,16 @@ export function FilePicker({
       const target = beforeUpload ? await beforeUpload(picked) : picked;
       const bizType: 'USER' | 'MATERIAL' = library === 'MATERIAL' ? 'MATERIAL' : 'USER';
       const { url } = await uploadLibraryFile(target, bizType);
+      // 新文件是最新的，回到第一页展示并刷新
+      setPage(1);
       setReloadToken((value) => value + 1);
       // 上传完成后尝试按地址选中新文件
       const fresh = await fileCenterApi.page({ size: 1, bizType, searchKey: picked.name });
       const uploaded = fresh.records?.find((file) => toOpenUrl(file) === url);
-      if (uploaded) setSelected((prev) => (multiple ? [...prev, uploaded.id] : [uploaded.id]));
+      if (uploaded) {
+        fileCache.current.set(uploaded.id, uploaded);
+        setSelected((prev) => (multiple ? [...prev, uploaded.id] : [uploaded.id]));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     } finally {
@@ -388,7 +484,7 @@ export function FilePicker({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4 py-4">
+    <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/50 px-4 py-4">
       <div className="w-full max-w-[min(1440px,96vw)] h-[min(94vh,1000px)] flex flex-col bg-white rounded-2xl shadow-[0_40px_120px_rgba(0,0,0,0.45)] border border-[#E5E5EA] overflow-hidden">
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E5EA]">
@@ -422,6 +518,7 @@ export function FilePicker({
                   setLibrary(tab.value);
                   // 素材分类只在素材库维度有效，切到其他库时清空避免结果为空
                   if (tab.value !== 'MATERIAL') setCategoryCode('');
+                  setPage(1);
                 }}
                 className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${
                   library === tab.value
@@ -438,7 +535,10 @@ export function FilePicker({
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#86868B]" />
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="搜索文件名"
               className="h-8 w-40 pl-7 pr-2 rounded-lg border border-[#D2D2D7] bg-white text-[12px] outline-none focus:border-[#0071E3]"
             />
@@ -473,33 +573,38 @@ export function FilePicker({
           )}
         </div>
 
-        {/* 文件类型单选组 */}
-        <div
-          role="radiogroup"
-          aria-label="按文件类型筛选"
-          className="flex flex-wrap items-center gap-1.5 px-5 py-2.5 border-b border-[#E5E5EA] bg-white"
-        >
-          <span className="mr-1 text-[12px] text-[#86868B]">文件类型</span>
-          {[{ value: '', label: '全部' }, ...FILE_CATEGORIES].map((item) => {
-            const active = category === item.value;
-            return (
-              <button
-                key={item.value || 'all'}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => setCategory(item.value)}
-                className={`h-7 px-2.5 rounded-lg text-[12px] transition-colors ${
-                  active
-                    ? 'bg-[#0071E3]/10 text-[#0071E3] font-medium'
-                    : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* 文件类型单选组：accept 已限定类型时隐藏，避免出现互相冲突的筛选 */}
+        {!lockedCategory && (
+          <div
+            role="radiogroup"
+            aria-label="按文件类型筛选"
+            className="flex flex-wrap items-center gap-1.5 px-5 py-2.5 border-b border-[#E5E5EA] bg-white"
+          >
+            <span className="mr-1 text-[12px] text-[#86868B]">文件类型</span>
+            {[{ value: '', label: '全部' }, ...FILE_CATEGORIES].map((item) => {
+              const active = category === item.value;
+              return (
+                <button
+                  key={item.value || 'all'}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => {
+                    setCategory(item.value);
+                    setPage(1);
+                  }}
+                  className={`h-7 px-2.5 rounded-lg text-[12px] transition-colors ${
+                    active
+                      ? 'bg-[#0071E3]/10 text-[#0071E3] font-medium'
+                      : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* 素材分类单选组：仅在选择素材库且存在素材分类时出现 */}
         {library === 'MATERIAL' && materialCategories.length > 0 && (
@@ -518,7 +623,10 @@ export function FilePicker({
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  onClick={() => setCategoryCode(value)}
+                  onClick={() => {
+                    setCategoryCode(value);
+                    setPage(1);
+                  }}
                   className={`h-7 px-2.5 rounded-lg text-[12px] transition-colors ${
                     active
                       ? 'bg-[#0071E3]/10 text-[#0071E3] font-medium'
@@ -545,14 +653,14 @@ export function FilePicker({
               <Loader2 className="w-4 h-4 animate-spin" />
               正在加载文件...
             </div>
-          ) : visibleFiles.length === 0 ? (
+          ) : files.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-20 text-[13px] text-[#86868B]">
               <ImageIcon className="w-8 h-8 text-[#C7C7CC]" />
               没有符合条件的文件
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
-              {visibleFiles.map((file) => (
+              {files.map((file) => (
                 <PickerCard
                   key={file.id}
                   file={file}
@@ -571,7 +679,7 @@ export function FilePicker({
         {/* 底部 */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-[#E5E5EA] bg-[#FAFAFC]">
           <div className="flex items-center gap-3 text-[12px] text-[#6E6E73]">
-            <span>共 {files.length} 个文件</span>
+            <span>共 {total} 个文件</span>
             <span className="text-[#0071E3]">已选 {selected.length}</span>
             {totalPages > 1 && (
               <span className="flex items-center gap-1">
