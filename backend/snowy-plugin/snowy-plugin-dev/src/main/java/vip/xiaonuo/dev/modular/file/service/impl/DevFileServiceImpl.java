@@ -30,6 +30,7 @@ import cn.hutool.crypto.digest.HMac;
 import cn.hutool.crypto.digest.HmacAlgorithm;
 import cn.hutool.http.ContentType;
 import cn.hutool.http.HttpUtil;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -533,6 +534,31 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         LambdaUpdateWrapper<DevFile> updateWrapper = Wrappers.lambdaUpdate();
         updateWrapper.in(DevFile::getId, ids)
                 .set(DevFile::getCategoryCode, categoryCode);
+        this.update(updateWrapper);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void updateInfo(String id, String name, String resolution) {
+        DevFile devFile = this.queryEntity(id);
+        if (StrUtil.isBlank(name)) {
+            throw new CommonException("标题不能为空");
+        }
+        JSONObject extJson;
+        try {
+            extJson = JSONUtil.parseObj(StrUtil.blankToDefault(devFile.getExtJson(), "{}"));
+        } catch (Exception e) {
+            extJson = new JSONObject();
+        }
+        if (StrUtil.isBlank(resolution)) {
+            extJson.remove("resolution");
+        } else {
+            extJson.set("resolution", resolution.trim());
+        }
+        LambdaUpdateWrapper<DevFile> updateWrapper = Wrappers.lambdaUpdate();
+        updateWrapper.eq(DevFile::getId, id)
+                .set(DevFile::getName, name.trim())
+                .set(DevFile::getExtJson, extJson.isEmpty() ? null : extJson.toString());
         this.update(updateWrapper);
     }
 

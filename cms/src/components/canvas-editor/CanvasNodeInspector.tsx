@@ -2,14 +2,14 @@
  * 画布属性面板（默认实现）
  * ------------------------------------------------------------------
  * 固定在画布右侧、始终显示，按选中状态切换两份配置：
- *   没有选中组件 → 画布配置（尺寸、底色、背景图、背景图铺法、拖拽平移）
+ *   没有选中组件 → 画布配置（尺寸、底色、背景素材、背景铺法、拖拽平移）
  *   选中组件     → 组件配置（文本 / 图片 / 进度条 + 该组件的交互开关）
  * 交互开关（旋转 / 调整宽高 / 倾斜 / 超出画布）属于组件，跟着选中组件走。
  * 点中画布空白处会取消选中，面板自然回到画布配置。
  *
  * 几何尺寸交给画布上的拖拽手柄，这里只调样式；旋转角度可以用「角度」输入精确设定，
  * 字号用下拉框 + A− / A+ 微调，加粗 / 斜体 / 下划线 / 删除线用图标开关（B / I / U / S），
- * 底部三个图标分别是创建副本 / 锁定图层 / 删除组件。所有操作按钮只放图标，含义交给 title 提示。
+ * 底部三个图标分别是创建副本 / 锁定图层 / 删除组件。所有操作按钮只放图标，含义交给 tooltip 提示。
  * 调用方可以通过 CanvasEditor 的 renderInspector 整个替换掉这块面板。
  */
 import {
@@ -25,6 +25,7 @@ import {
   Bold,
   Check,
   CopyPlus,
+  Film,
   ImageOff,
   ImagePlus,
   Italic,
@@ -35,9 +36,12 @@ import {
   Strikethrough,
   Trash2,
   Underline,
+  VideoOff,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ColorField } from './ColorField';
+import { Hint } from './Hint';
+import { loadVideoFrame } from './videoFrame';
 import {
   CANVAS_IMAGE_MODES,
   previewUrl,
@@ -101,21 +105,22 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-[11px] font-medium text-[#6E6E73]">{label}</span>
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={checked}
-        aria-label={label}
-        title={hint}
-        onClick={() => onChange(!checked)}
-        className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-          checked
-            ? 'border-[#0071E3] bg-[#0071E3] text-white'
-            : 'border-[#D2D2D7] bg-white text-transparent'
-        }`}
-      >
-        <Check className="h-3 w-3" strokeWidth={3} />
-      </button>
+      <Hint label={hint} className="inline-flex shrink-0">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={label}
+          onClick={() => onChange(!checked)}
+          className={`inline-flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+            checked
+              ? 'border-[#0071E3] bg-[#0071E3] text-white'
+              : 'border-[#D2D2D7] bg-white text-transparent'
+          }`}
+        >
+          <Check className="h-3 w-3" strokeWidth={3} />
+        </button>
+      </Hint>
     </div>
   );
 }
@@ -133,32 +138,33 @@ function ToggleChip({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-      title={hint}
-      onClick={() => onChange(!checked)}
-      className="flex min-w-0 flex-col items-center gap-1 py-0.5 outline-none"
-    >
-      <span
-        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${
-          checked
-            ? 'border-[#0071E3] bg-[#0071E3] text-white'
-            : 'border-[#C7C7CC] bg-white text-transparent hover:border-[#0071E3]'
-        }`}
+    <Hint label={hint} className="min-w-0">
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className="flex w-full flex-col items-center gap-1 py-0.5 outline-none"
       >
-        <Check className="h-2.5 w-2.5" strokeWidth={3} />
-      </span>
-      <span
-        className={`w-full truncate text-center text-[10px] leading-none transition-colors ${
-          checked ? 'text-[#1D1D1F]' : 'text-[#6E6E73]'
-        }`}
-      >
-        {label}
-      </span>
-    </button>
+        <span
+          className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${
+            checked
+              ? 'border-[#0071E3] bg-[#0071E3] text-white'
+              : 'border-[#C7C7CC] bg-white text-transparent hover:border-[#0071E3]'
+          }`}
+        >
+          <Check className="h-2.5 w-2.5" strokeWidth={3} />
+        </span>
+        <span
+          className={`w-full truncate text-center text-[10px] leading-none transition-colors ${
+            checked ? 'text-[#1D1D1F]' : 'text-[#6E6E73]'
+          }`}
+        >
+          {label}
+        </span>
+      </button>
+    </Hint>
   );
 }
 
@@ -200,6 +206,34 @@ function decorationState(value: CanvasTextDecoration | undefined): {
   };
 }
 
+/** 背景视频缩略图：抽首帧当静态图，抽不出来（编码不支持等）就显示胶片占位 */
+function VideoThumb({ src }: { src: string }) {
+  const [frame, setFrame] = useState('');
+  useEffect(() => {
+    if (!src) {
+      setFrame('');
+      return;
+    }
+    let alive = true;
+    setFrame('');
+    void loadVideoFrame(src).then((next) => {
+      if (alive && next) setFrame(next.url);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [src]);
+
+  if (!src || !frame) {
+    return (
+      <div className="flex h-[88px] w-full items-center justify-center bg-[#F5F5F7] text-[#C7C7CC]">
+        <Film className="h-5 w-5" />
+      </div>
+    );
+  }
+  return <img src={frame} alt="" className="h-[88px] w-full object-cover" />;
+}
+
 function toggleDecoration(
   value: CanvasTextDecoration | undefined,
   part: 'under' | 'strike'
@@ -221,7 +255,9 @@ export interface CanvasInspectorContext {
   background: string;
   /** 背景图（后端路径），空表示纯色底 */
   backgroundImage: string;
-  /** 背景图铺法 */
+  /** 背景视频（后端路径），与背景图互斥 */
+  backgroundVideo: string;
+  /** 背景素材铺法 */
   backgroundMode: CanvasImageMode;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布 */
   allowPan: boolean;
@@ -240,10 +276,11 @@ export interface CanvasInspectorContext {
   onAlign?: (mode: CanvasAlignMode) => void;
   /** 精确设置旋转角度（度），以元素视觉中心为轴 */
   onRotate?: (deg: number) => void;
-  /** 画布级配置：底色 / 背景图 / 背景图铺法 / 拖拽平移开关 */
+  /** 画布级配置：底色 / 背景图 / 背景视频 / 背景铺法 / 拖拽平移开关 */
   onCanvasPatch: (patch: {
     background?: string;
     backgroundImage?: string;
+    backgroundVideo?: string;
     backgroundMode?: CanvasImageMode;
     allowPan?: boolean;
   }) => void;
@@ -251,6 +288,8 @@ export interface CanvasInspectorContext {
   onFitView?: () => void;
   onPickBackgroundImage: () => void;
   onClearBackgroundImage: () => void;
+  onPickBackgroundVideo: () => void;
+  onClearBackgroundVideo: () => void;
 }
 
 export type CanvasNodeInspectorProps = CanvasInspectorContext;
@@ -261,6 +300,7 @@ export function CanvasNodeInspector({
   canvasHeight,
   background,
   backgroundImage,
+  backgroundVideo,
   backgroundMode,
   allowPan,
   selectedCount = 0,
@@ -276,8 +316,28 @@ export function CanvasNodeInspector({
   onFitView,
   onPickBackgroundImage,
   onClearBackgroundImage,
+  onPickBackgroundVideo,
+  onClearBackgroundVideo,
 }: CanvasNodeInspectorProps) {
   const title = node ? `${TYPE_LABELS[node.type]}样式` : '画布配置';
+  /** 背景素材类型：默认按已有素材推断；点另一类时先把当前素材清空（图片 / 视频互斥） */
+  const [bgKind, setBgKind] = useState<'image' | 'video'>(backgroundVideo ? 'video' : 'image');
+  useEffect(() => {
+    // 上传完成 / 移除 / 切方向后让分段控件跟上实际内容；两边都空时保留用户刚选的那一类
+    if (backgroundVideo) setBgKind('video');
+    else if (backgroundImage) setBgKind('image');
+  }, [backgroundVideo, backgroundImage]);
+
+  function changeBgKind(next: 'image' | 'video') {
+    if (next === bgKind) return;
+    setBgKind(next);
+    onCanvasPatch(
+      next === 'video'
+        ? { backgroundVideo: '', backgroundImage: '' }
+        : { backgroundImage: '', backgroundVideo: '' }
+    );
+  }
+
   const fontSizes = FONT_SIZES.includes(node?.type === 'text' ? node.fontSize : -1)
     ? FONT_SIZES
     : [...FONT_SIZES, node?.type === 'text' ? node.fontSize : 0]
@@ -313,9 +373,67 @@ export function CanvasNodeInspector({
           </div>
 
           <div>
-            <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">背景图</span>
-            {backgroundImage ? (
-              <div className="flex flex-col gap-2">
+            <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">背景素材</span>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#F0F0F3] p-0.5">
+              {(
+                [
+                  { value: 'image' as const, label: '图片' },
+                  { value: 'video' as const, label: '视频' },
+                ]
+              ).map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => changeBgKind(item.value)}
+                  aria-pressed={bgKind === item.value}
+                  className={`inline-flex h-7 items-center justify-center rounded-md text-[11px] font-medium transition-colors ${
+                    bgKind === item.value
+                      ? 'bg-white text-[#1D1D1F] shadow-sm'
+                      : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            {bgKind === 'video' ? (
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="overflow-hidden rounded-lg border border-[#E5E5EA] bg-[#F5F5F7]">
+                  <VideoThumb src={backgroundVideo} />
+                </div>
+                <p className="text-[10.5px] leading-relaxed text-[#86868B]">
+                  编辑器里只显示首帧，前台开屏时播放
+                </p>
+                {backgroundVideo ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <IconButton
+                      icon={Replace}
+                      label="替换背景视频"
+                      onClick={onPickBackgroundVideo}
+                      className="h-8 w-full"
+                    />
+                    <IconButton
+                      icon={VideoOff}
+                      label="移除背景视频"
+                      onClick={onClearBackgroundVideo}
+                      danger
+                      className="h-8 w-full"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onPickBackgroundVideo}
+                    aria-label="选择背景视频"
+                    className="flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#D2D2D7] bg-white text-[#86868B] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
+                  >
+                    <Film className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ) : backgroundImage ? (
+              <div className="mt-2 flex flex-col gap-2">
                 <div className="overflow-hidden rounded-lg border border-[#E5E5EA] bg-[#F5F5F7]">
                   <img
                     src={previewUrl(backgroundImage)}
@@ -343,16 +461,15 @@ export function CanvasNodeInspector({
               <button
                 type="button"
                 onClick={onPickBackgroundImage}
-                title="选择背景图"
                 aria-label="选择背景图"
-                className="flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#D2D2D7] bg-white text-[#86868B] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
+                className="mt-2 flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#D2D2D7] bg-white text-[#86868B] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
               >
                 <ImagePlus className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          {backgroundImage && (
+          {(backgroundImage || backgroundVideo) && (
             <div>
               <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">铺满方式</span>
               <div className="grid grid-cols-2 gap-1">
@@ -428,15 +545,16 @@ export function CanvasNodeInspector({
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-medium text-[#6E6E73]">字号</span>
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onPatch({ fontSize: stepFontSize(node.fontSize, -1) })}
-                      aria-label="减小字号"
-                      title="减小字号"
-                      className="h-7 w-7 rounded-md border border-[#E5E5EA] bg-white text-[11px] leading-none text-[#6E6E73] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
-                    >
-                      A−
-                    </button>
+                    <Hint label="减小字号" className="inline-flex h-7 w-7">
+                      <button
+                        type="button"
+                        onClick={() => onPatch({ fontSize: stepFontSize(node.fontSize, -1) })}
+                        aria-label="减小字号"
+                        className="inline-flex h-full w-full items-center justify-center rounded-md border border-[#E5E5EA] bg-white text-[11px] leading-none text-[#6E6E73] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
+                      >
+                        A−
+                      </button>
+                    </Hint>
                     <select
                       value={node.fontSize}
                       onChange={(event) => onPatch({ fontSize: Number(event.target.value) })}
@@ -449,15 +567,16 @@ export function CanvasNodeInspector({
                         </option>
                       ))}
                     </select>
-                    <button
-                      type="button"
-                      onClick={() => onPatch({ fontSize: stepFontSize(node.fontSize, 1) })}
-                      aria-label="增大字号"
-                      title="增大字号"
-                      className="h-7 w-7 rounded-md border border-[#E5E5EA] bg-white text-[11px] leading-none text-[#6E6E73] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
-                    >
-                      A+
-                    </button>
+                    <Hint label="增大字号" className="inline-flex h-7 w-7">
+                      <button
+                        type="button"
+                        onClick={() => onPatch({ fontSize: stepFontSize(node.fontSize, 1) })}
+                        aria-label="增大字号"
+                        className="inline-flex h-full w-full items-center justify-center rounded-md border border-[#E5E5EA] bg-white text-[11px] leading-none text-[#6E6E73] transition-colors hover:border-[#0071E3] hover:text-[#0071E3]"
+                      >
+                        A+
+                      </button>
+                    </Hint>
                   </div>
                 </div>
 
@@ -781,23 +900,24 @@ function TextStyleButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={label}
-      aria-label={label}
-      className={`inline-flex h-7 items-center justify-center rounded-md transition-colors ${
-        active ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
-      }`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-    </button>
+    <Hint label={label} className="inline-flex h-7">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        aria-label={label}
+        className={`inline-flex h-full w-full items-center justify-center rounded-md transition-colors ${
+          active ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+        }`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </button>
+    </Hint>
   );
 }
 
 /**
- * 操作按钮：只放图标，含义交给 title / aria-label 提示。
+ * 操作按钮：只放图标，含义交给 tooltip / aria-label 提示。
  * 危险操作（删除、移除）用红色描边，当前生效的开关用高亮色。
  */
 function IconButton({
@@ -818,23 +938,24 @@ function IconButton({
   className?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      className={`inline-flex items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:border-[#F2F2F7] disabled:text-[#C7C7CC] ${
-        active
-          ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
-          : danger
-            ? 'border-[#FFCCC7] bg-[#FFF1F0] text-[#CF1322] hover:border-[#FF4D4F]'
-            : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
-      } ${className ?? ''}`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-    </button>
+    <Hint label={label} className={`inline-flex ${className ?? ''}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        aria-pressed={active}
+        className={`inline-flex h-full w-full items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:border-[#F2F2F7] disabled:text-[#C7C7CC] ${
+          active
+            ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
+            : danger
+              ? 'border-[#FFCCC7] bg-[#FFF1F0] text-[#CF1322] hover:border-[#FF4D4F]'
+              : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
+        }`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </button>
+    </Hint>
   );
 }
 

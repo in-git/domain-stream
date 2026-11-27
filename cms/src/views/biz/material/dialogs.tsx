@@ -2,10 +2,11 @@
  * 素材中心弹窗：素材详情 + 引用代码复制
  * 预览播放 / 删除确认复用文件中心（同一套 DEV_FILE 接口与交互）。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Check, Copy, Download, ExternalLink, Film, ImageOff, Music } from 'lucide-react';
-import { CategoryModal } from '../category/dialogs.tsx';
+import { CategoryModal, PrimaryButton, SecondaryButton } from '../category/dialogs.tsx';
 import {
+  fileResolution,
   isAudioFile,
   isImageFile,
   isVideoFile,
@@ -126,6 +127,7 @@ export function MaterialDetailDialog({
     ['素材分类', file.category || '-'],
     ['文件后缀', file.suffix ? file.suffix.toUpperCase() : '-'],
     ['文件大小', file.sizeInfo || '-'],
+    ...(fileResolution(file) ? [['分辨率', fileResolution(file)] as [string, string]] : []),
     ['存储引擎', file.engine || '-'],
     ['上传时间', file.createTime ? formatDateTime(file.createTime) : '-'],
     ['素材 ID', file.id],
@@ -257,6 +259,110 @@ export function MaterialDetailDialog({
         )}
         {copyError && <p className="mt-2 text-[12px] text-[#D70015]">{copyError}</p>}
       </div>
+    </CategoryModal>
+  );
+}
+
+const EDIT_INPUT_CLASS =
+  'w-full h-9 px-3 rounded-xl bg-[#F5F5F7] border border-transparent text-[13px] text-[#1D1D1F] placeholder:text-[#AEAEB2] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 focus:border-[#0071E3]/30 transition-all';
+const EDIT_LABEL_CLASS = 'block text-[12px] font-medium text-[#3A3A3C] mb-1.5';
+
+interface MaterialEditDialogProps {
+  file: DevFile;
+  onClose: () => void;
+  onSubmit: (payload: { name: string; resolution: string }) => Promise<void>;
+}
+
+/** 编辑素材信息：标题与分辨率（分辨率留空则回退为自动读取） */
+export function MaterialEditDialog({ file, onClose, onSubmit }: MaterialEditDialogProps) {
+  const [name, setName] = useState(file.name || '');
+  const [resolution, setResolution] = useState(fileResolution(file));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function save() {
+    const nextName = name.trim();
+    if (!nextName) {
+      setError('素材标题不能为空');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onSubmit({ name: nextName, resolution: resolution.trim() });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败，请稍后重试');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <CategoryModal
+      title="编辑素材信息"
+      subtitle={file.name || '素材'}
+      onClose={onClose}
+      width="max-w-lg"
+      footer={
+        <>
+          <SecondaryButton onClick={onClose} disabled={busy}>
+            取消
+          </SecondaryButton>
+          <PrimaryButton onClick={() => void save()} busy={busy}>
+            保存
+          </PrimaryButton>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          void save();
+        }}
+        className="space-y-4"
+      >
+        <div>
+          <label className={EDIT_LABEL_CLASS}>标题</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={255}
+            autoFocus
+            placeholder="请输入素材标题"
+            className={EDIT_INPUT_CLASS}
+          />
+        </div>
+
+        <div>
+          <label className={EDIT_LABEL_CLASS}>分辨率</label>
+          <input
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value)}
+            maxLength={32}
+            placeholder="如 1920×1080"
+            className={EDIT_INPUT_CLASS}
+          />
+          <p className="mt-1 text-[11px] text-[#86868B]">留空则按文件自动读取</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-[#F5F5F7] px-3 py-2">
+            <div className="text-[11px] text-[#86868B]">文件大小</div>
+            <div className="mt-0.5 text-[12px] text-[#1D1D1F] tabular-nums">
+              {file.sizeInfo || '-'}
+            </div>
+          </div>
+          <div className="rounded-xl bg-[#F5F5F7] px-3 py-2">
+            <div className="text-[11px] text-[#86868B]">文件格式</div>
+            <div className="mt-0.5 text-[12px] text-[#1D1D1F] uppercase">
+              {(file.suffix || '').replace('.', '') || file.category || '-'}
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <p className="rounded-xl bg-[#FF3B30]/8 px-3 py-2 text-[12px] text-[#D70015]">{error}</p>
+        )}
+      </form>
     </CategoryModal>
   );
 }

@@ -32,12 +32,14 @@ import {
 import { toOpenUrl, toPlayableVideoUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import {
   SPLASH_AUDIO_KEY,
+  SPLASH_CANVAS_KEY,
   SPLASH_DURATION_KEY,
   SPLASH_TYPE_KEY,
   SPLASH_VIDEO_KEYS,
   resolveSplashKind,
   type SplashKind,
 } from './schema';
+import { parseSplashCanvas } from './splash-canvas/types';
 
 const SplashCanvasEditor = lazy(() => import('./splash-canvas'));
 
@@ -227,6 +229,11 @@ export function SplashMaterialDialog({
   const landscapeFilled = !!(values[SPLASH_VIDEO_KEYS[0]] || '').trim();
   const portraitFilled = !!(values[SPLASH_VIDEO_KEYS[1]] || '').trim();
   const audioFilled = !!(values[SPLASH_AUDIO_KEY] || '').trim();
+  // 画布任一方向把背景配成视频时，开屏音频不再叠加：音频入口只对图片背景开放
+  const splashCanvasDoc = parseSplashCanvas(values[SPLASH_CANVAS_KEY]);
+  const hasBackgroundVideo = Boolean(
+    splashCanvasDoc && (splashCanvasDoc.pc.backgroundVideo || splashCanvasDoc.mobile.backgroundVideo)
+  );
 
   const videoKey = SPLASH_VIDEO_KEYS[videoSlot === 'landscape' ? 0 : 1];
   const fallbackVideoKey = SPLASH_VIDEO_KEYS[videoSlot === 'landscape' ? 1 : 0];
@@ -382,6 +389,13 @@ export function SplashMaterialDialog({
                       onUpload={() => setPickerKey(SPLASH_VIDEO_KEYS[1])}
                       onRemove={() => onChange(SPLASH_VIDEO_KEYS[1], '')}
                     />
+                  </div>
+                ) : hasBackgroundVideo ? (
+                  <div>
+                    <p className="text-[11px] text-[#86868B]">开屏音频</p>
+                    <p className="mt-2 text-[10.5px] leading-relaxed text-[#A1A1A6]">
+                      画布背景已使用视频，视频自带声音，不再叠加音频；把背景切回图片后可重新设置
+                    </p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">

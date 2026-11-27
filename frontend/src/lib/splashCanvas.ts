@@ -70,7 +70,9 @@ export interface SplashOrientationDoc {
   background: string;
   /** 背景图（后端路径），空表示纯色底 */
   backgroundImage?: string;
-  /** 背景图铺法，缺省按拉伸铺满 */
+  /** 背景视频（后端路径），与背景图互斥；有视频时不再叠加开屏音频 */
+  backgroundVideo?: string;
+  /** 背景素材铺法，缺省按拉伸铺满 */
   backgroundMode?: SplashImageMode;
   /** 是否把元素限制在画布内（旧版画布级配置，现按组件存 overflow，这里保留兼容） */
   contained?: boolean;
@@ -173,6 +175,9 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
   const row = raw as Record<string, unknown>;
   doc.background = color(row.background, '#000000');
   doc.backgroundImage = typeof row.backgroundImage === 'string' ? row.backgroundImage.trim() : '';
+  doc.backgroundVideo = typeof row.backgroundVideo === 'string' ? row.backgroundVideo.trim() : '';
+  // 两种背景素材互斥：脏数据里同时存在时视频优先，忽略背景图
+  if (doc.backgroundVideo) doc.backgroundImage = '';
   doc.backgroundMode =
     row.backgroundMode === 'fit' ||
     row.backgroundMode === 'stretch-x' ||

@@ -26,6 +26,7 @@ import {
   List,
   Loader2,
   Music,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -35,18 +36,20 @@ import {
 import {
   categoryLabel,
   fileCenterApi,
+  fileResolution,
   FILE_CATEGORIES,
   isAudioFile,
   isImageFile,
   isVideoFile,
   toOpenUrl,
+  toPlayableVideoUrl,
   uploadMaterial,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
 import { useFileThumbSrc } from '../../../lib/useFileThumb.ts';
 import { formatDateTime } from '../../../lib/format.ts';
 import { FileDeleteDialog, FilePreviewDialog } from '../file/dialogs.tsx';
-import { absoluteFileUrl, copyText, MaterialDetailDialog } from './dialogs.tsx';
+import { absoluteFileUrl, copyText, MaterialDetailDialog, MaterialEditDialog } from './dialogs.tsx';
 import { UploadDialog, type UploadSubmitPayload } from './UploadDialog.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
@@ -73,6 +76,7 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
 type DialogState =
   | { kind: 'preview'; file: DevFile }
   | { kind: 'detail'; file: DevFile }
+  | { kind: 'edit'; file: DevFile }
   | { kind: 'delete'; files: DevFile[] }
   | null;
 
@@ -103,6 +107,38 @@ function typeLabel(file: DevFile): string {
   return (file.suffix || '').replace('.', '').toUpperCase() || categoryLabel(file.category);
 }
 
+/** 分辨率缓存：同一素材翻页回来只量一次 */
+const mediaSizeCache = new Map<string, string>();
+
+function mediaKey(file: DevFile): string {
+  return file.id || file.objName || file.fileKey || '';
+}
+
+/** 图片分辨率：用原图量；视频在卡片里的 video 元数据回调中记录 */
+function useFileResolution(file: DevFile): string {
+  const stored = fileResolution(file);
+  const key = mediaKey(file);
+  const [auto, setAuto] = useState(() => mediaSizeCache.get(key) ?? '');
+
+  useEffect(() => {
+    if (stored || auto || !key || !isImageFile(file)) return;
+    let cancelled = false;
+    const image = new window.Image();
+    image.onload = () => {
+      if (!image.naturalWidth || !image.naturalHeight) return;
+      const text = `${image.naturalWidth}×${image.naturalHeight}`;
+      mediaSizeCache.set(key, text);
+      if (!cancelled) setAuto(text);
+    };
+    image.src = toOpenUrl(file);
+    return () => {
+      cancelled = true;
+    };
+  }, [key, stored, auto, file]);
+
+  return stored || auto;
+}
+
 /* ------------------------------------------------------------------ */
 /* 网格卡片                                                            */
 /* ------------------------------------------------------------------ */
@@ -115,6 +151,7 @@ interface CardProps {
   onDetail: (file: DevFile) => void;
   onCopy: (file: DevFile) => void;
   onDelete: (file: DevFile) => void;
+  onEdit?: (file: DevFile) => void;
   canDelete: boolean;
 }
 
@@ -126,26 +163,53 @@ function MaterialCard({
   onDetail,
   onCopy,
   onDelete,
+  onEdit,
   canDelete,
 }: CardProps) {
   const [thumbFailed, setThumbFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const Icon = coverIcon(file);
   const isImage = isImageFile(file);
   const isVideo = isVideoFile(file);
   const media = isImage || isVideo || isAudioFile(file);
   const cover = useFileThumbSrc(file, isImage ? toOpenUrl(file) : '');
   const showCover = !!cover && !thumbFailed;
+  const [videoSize, setVideoSize] = useState(() => mediaSizeCache.get(mediaKey(file)) ?? '');
+  const resolution = useFileResolution(file) || videoSize;
+  const videoUrl = isVideo ? toPlayableVideoUrl(toOpenUrl(file)) : '';
 
   useEffect(() => {
     setThumbFailed(false);
+    setVideoFailed(false);
+    setVideoPlaying(false);
   }, [file.id]);
+
+  function playPreview() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.readyState >= 1) video.currentTime = 0;
+    void video.play().catch(() => {
+      /* 浏览器拒绝播放时保持封面 */
+    });
+  }
+
+  function stopPreview() {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    if (video.readyState >= 1) video.currentTime = 0;
+  }
 
   return (
     <div
-      title={media ? '双击预览素材' : '双击查看详情'}
+      title={`${file.name || '素材'} · ${media ? '双击预览' : '双击查看详情'}`}
       tabIndex={0}
       onClick={() => onToggleSelect(file.id)}
       onDoubleClick={() => onOpen(file)}
+      onMouseEnter={isVideo ? playPreview : undefined}
+      onMouseLeave={isVideo ? stopPreview : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -162,7 +226,31 @@ function MaterialCard({
         } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
         style={isImage ? IMAGE_TILE_BG : undefined}
       >
-        {showCover ? (
+        {isVideo && videoUrl && !videoFailed ? (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            poster={showCover ? cover : undefined}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget;
+              if (!video.videoWidth || !video.videoHeight) return;
+              const text = `${video.videoWidth}×${video.videoHeight}`;
+              mediaSizeCache.set(mediaKey(file), text);
+              setVideoSize(text);
+            }}
+            onPlay={() => setVideoPlaying(true)}
+            onPause={() => setVideoPlaying(false)}
+            onError={() => {
+              setVideoFailed(true);
+              setVideoPlaying(false);
+            }}
+            className="w-full h-full object-cover"
+          />
+        ) : showCover ? (
           <img
             src={cover}
             alt={file.name || '素材'}
@@ -171,7 +259,7 @@ function MaterialCard({
             onError={() => setThumbFailed(true)}
             className="w-full h-full object-cover"
           />
-        ) : (
+        ) : isVideo ? null : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
             <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
             <span className="text-[9px] font-medium uppercase tracking-wide opacity-70">
@@ -180,7 +268,25 @@ function MaterialCard({
           </div>
         )}
 
-        {isVideo && (
+        {/* 四角信息：标题 / 分辨率 / 文件大小 */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/55 via-black/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
+        <div className="pointer-events-none absolute left-7 right-1.5 top-1.5 flex items-start justify-between gap-1.5">
+          <span
+            className="min-w-0 truncate text-[11px] font-medium leading-4 text-white drop-shadow-sm"
+            title={file.name}
+          >
+            {file.name || '未命名素材'}
+          </span>
+          <span className="shrink-0 max-w-[55%] truncate rounded-[5px] bg-black/45 px-1 py-0.5 text-[9px] font-medium leading-none text-white/90 tabular-nums">
+            {resolution || typeLabel(file)}
+          </span>
+        </div>
+        <span className="pointer-events-none absolute bottom-1.5 left-1.5 text-[10px] font-medium leading-none text-white/85 tabular-nums drop-shadow-sm">
+          {file.sizeInfo || '-'}
+        </span>
+
+        {isVideo && !videoPlaying && (
           <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="w-10 h-10 rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm text-white flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.28)] transition-transform group-hover:scale-105">
               <Film className="w-4 h-4" />
@@ -241,6 +347,17 @@ function MaterialCard({
           >
             <Info className="w-3.5 h-3.5" />
           </button>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(file)}
+              aria-label={`编辑 ${file.name}`}
+              title="编辑信息"
+              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
           {canDelete && (
             <button
               type="button"
@@ -252,17 +369,6 @@ function MaterialCard({
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
-        </div>
-      </div>
-
-      <div className="mt-1.5 px-0.5 min-w-0">
-        <div className="text-[12px] font-medium text-[#1D1D1F] truncate" title={file.name}>
-          {file.name || '未命名素材'}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#86868B]">
-          <span className="truncate">{file.sizeInfo || '-'}</span>
-          <span className="w-0.5 h-0.5 rounded-full bg-[#C7C7CC] shrink-0" />
-          <span className="shrink-0">{typeLabel(file)}</span>
         </div>
       </div>
     </div>
@@ -339,6 +445,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
   const hasConfiguredPerms = perms.some((code) => code.startsWith('bizMaterial'));
   const canUpload = !hasConfiguredPerms || perms.includes('bizMaterialAdd');
   const canDelete = !hasConfiguredPerms || perms.includes('bizMaterialDelete');
+  const canEdit = !hasConfiguredPerms || perms.includes('bizMaterialEdit');
 
   const notify = useCallback(
     (kind: 'success' | 'error', text: string) => showToast(text, kind === 'error' ? 'danger' : 'success'),
@@ -946,6 +1053,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
               onDetail={(target) => setDialog({ kind: 'detail', file: target })}
               onCopy={(target) => void copyFileLink(target)}
               onDelete={(target) => setDialog({ kind: 'delete', files: [target] })}
+              onEdit={canEdit ? (target) => setDialog({ kind: 'edit', file: target }) : undefined}
               canDelete={canDelete}
             />
           ))}
@@ -1027,6 +1135,17 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
                   >
                     <Info className="w-3.5 h-3.5" />
                   </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setDialog({ kind: 'edit', file })}
+                      aria-label={`编辑 ${file.name}`}
+                      title="编辑信息"
+                      className="p-1.5 rounded-lg text-[#6E6E73] hover:text-[#0071E3] hover:bg-[#F5F5F7] transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {toOpenUrl(file) && (
                     <a
                       href={toOpenUrl(file)}
@@ -1102,6 +1221,18 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
               ? () => setDialog({ kind: 'delete', files: [dialog.file] })
               : undefined
           }
+        />
+      )}
+      {dialog?.kind === 'edit' && (
+        <MaterialEditDialog
+          file={dialog.file}
+          onClose={() => setDialog(null)}
+          onSubmit={async (payload) => {
+            await fileCenterApi.updateInfo({ id: dialog.file.id, ...payload });
+            setDialog(null);
+            notify('success', '素材信息已更新');
+            await load();
+          }}
         />
       )}
       {dialog?.kind === 'delete' && (

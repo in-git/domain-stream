@@ -49,6 +49,17 @@ export function isImageFile(file: DevFile): boolean {
   return file.category === 'IMAGE' || IMAGE_SUFFIXES.includes(suffixOf(file));
 }
 
+/** 素材编辑时保存的分辨率（extJson.resolution），没有则返回空 */
+export function fileResolution(file: DevFile): string {
+  if (!file.extJson) return '';
+  try {
+    const ext = JSON.parse(file.extJson) as { resolution?: unknown };
+    return typeof ext.resolution === 'string' ? ext.resolution.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
 /** DEV_FILE 实体（后端字段为驼峰） */
 export interface DevFile {
   id: string;
@@ -261,6 +272,14 @@ export const fileCenterApi = {
     return snowyRequest<void>(`${BASE}/updateBizType?bizType=${bizType}`, {
       method: 'POST',
       body: JSON.stringify(ids.map((id) => ({ id }))),
+    });
+  },
+
+  /** 编辑素材信息（标题、分辨率） */
+  updateInfo(payload: { id: string; name: string; resolution?: string }): Promise<void> {
+    return snowyRequest<void>(`${BASE}/updateInfo`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 

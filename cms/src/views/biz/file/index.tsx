@@ -24,6 +24,7 @@ import {
   Images,
   Loader2,
   Music,
+  Pause,
   Play,
   RefreshCw,
   Search,
@@ -86,6 +87,9 @@ interface FileCardProps {
   onDelete: (file: DevFile) => void;
 }
 
+/** 当前正在播放的卡片音频，切换播放时先暂停上一个 */
+let activeAudio: HTMLAudioElement | null = null;
+
 /** 苹果文件 App 风格素材卡片：大封面 + 名称/大小，悬浮操作，双击打开 */
 function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }: FileCardProps) {
   /** 加载失败的地址，缩略图失败后自动回退到原图 */
@@ -94,6 +98,7 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
   const Icon = coverIcon(file);
   const isMedia = isVideoFile(file) || isAudioFile(file) || isImageFile(file);
   const isVideo = isVideoFile(file);
+  const isAudio = isAudioFile(file);
   const thumbnail = file.thumbnail || '';
   const originalUrl = isImageFile(file) ? toOpenUrl(file) : '';
   const cover =
@@ -108,6 +113,29 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoUrl = toStreamUrl(file) || toOpenUrl(file);
   const darkCover = isVideo || showCover || (isVideo && hovered && !!videoUrl);
+
+  /** 音频卡片内联播放：同一时间只允许一个音频在播 */
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioUrl = isAudio ? toStreamUrl(file) || toOpenUrl(file) : '';
+
+  useEffect(() => {
+    setAudioPlaying(false);
+  }, [file.id]);
+
+  function toggleAudio() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      if (activeAudio && activeAudio !== audio) activeAudio.pause();
+      activeAudio = audio;
+      void audio.play().catch(() => {
+        /* 浏览器拒绝播放时保持静止 */
+      });
+    } else {
+      audio.pause();
+    }
+  }
 
   useEffect(() => {
     if (!isVideo) return;
@@ -169,7 +197,7 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
             {isVideo ? (
               <Film className="absolute w-20 h-20 text-white/10" strokeWidth={1} />
-            ) : (
+            ) : isAudio ? null : (
               <>
                 <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
                 <span className="text-[9px] font-medium uppercase tracking-wide opacity-70">
@@ -186,6 +214,37 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
               <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
             </span>
           </span>
+        )}
+
+        {isAudio && audioUrl && (
+          <>
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              preload="metadata"
+              onPlay={() => setAudioPlaying(true)}
+              onPause={() => setAudioPlaying(false)}
+              onEnded={() => setAudioPlaying(false)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleAudio();
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
+              aria-label={`${audioPlaying ? '暂停' : '播放'} ${file.name || '音频'}`}
+              title={audioPlaying ? '暂停' : '播放'}
+              className="absolute inset-0 m-auto z-10 w-11 h-11 rounded-full bg-white/90 backdrop-blur-sm ring-1 ring-black/5 text-[#0071E3] shadow-[0_4px_14px_rgba(0,0,0,0.18)] flex items-center justify-center hover:scale-105 transition-transform"
+            >
+              {audioPlaying ? (
+                <Pause className="w-4.5 h-4.5 fill-current" />
+              ) : (
+                <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
+              )}
+            </button>
+          </>
         )}
 
         {/* 四角信息：左下名称、右下大小与格式，绝对定位覆盖在封面上 */}

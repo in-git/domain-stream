@@ -44,4 +44,5 @@ export {
 } from './CanvasNodeInspector';
 export { CanvasLayerPanel, type CanvasLayerPanelProps } from './CanvasLayerPanel';
 export { ColorField } from './ColorField';
+export { Hint } from './Hint';
 export * from './types';

@@ -75,7 +75,9 @@ import {
   type CanvasInspectorContext,
 } from './CanvasNodeInspector';
 import { CanvasLayerPanel } from './CanvasLayerPanel';
+import { Hint } from './Hint';
 import { snapMove } from './snap';
+import { loadVideoFrame } from './videoFrame';
 import {
   createCanvasGroupId,
   createCanvasNodeId,
@@ -137,6 +139,13 @@ let clipboardNodes: CanvasNode[] = [];
 export type CanvasToolKey = 'text' | 'image' | 'progress';
 
 const DEFAULT_TOOLS: CanvasToolKey[] = ['text', 'image', 'progress'];
+
+/** 内置文件选择器的标题：按当前挑选目标区分 */
+const PICKER_TITLES = {
+  node: '选择画布图片',
+  'background-image': '选择背景图',
+  'background-video': '选择背景视频',
+} as const;
 
 export interface CanvasEditorProps {
   /** 画布文档；作为初始值使用，外部换成另一份文档时整块重挂 */
@@ -342,6 +351,7 @@ export function CanvasEditor({
     height: number;
     background: string;
     backgroundImage: string;
+    backgroundVideo: string;
     backgroundMode: CanvasImageMode;
     /** 画布视图交互开关：是否允许空格 + 拖动平移 */
     allowPan: boolean;
@@ -350,6 +360,7 @@ export function CanvasEditor({
     height: value.height,
     background: value.background,
     backgroundImage: (value.backgroundImage || '').trim(),
+    backgroundVideo: (value.backgroundVideo || '').trim(),
     backgroundMode: value.backgroundMode ?? 'stretch',
     allowPan: value.allowPan !== false,
   });
@@ -367,8 +378,10 @@ export function CanvasEditor({
   const [pickerOpen, setPickerOpen] = useState(false);
   /** 打开文件选择器时的目标：null 表示新增，否则是待替换的图片节点 */
   const [replacingId, setReplacingId] = useState<string | null>(null);
-  /** 选择器是在给画布挑背景图，而不是给组件换图 */
-  const [pickingBackground, setPickingBackground] = useState(false);
+  /** 打开选择器时在挑什么：组件图片 / 画布背景图 / 画布背景视频 */
+  const [pickerTarget, setPickerTarget] = useState<'node' | 'background-image' | 'background-video'>(
+    'node'
+  );
   /** 右键菜单：命中节点 + 菜单在画布容器内的坐标 */
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const rightDownRef = useRef<string | null>(null);
@@ -460,18 +473,25 @@ export function CanvasEditor({
     setRevision((current) => current + 1);
   }, [applyNodes]);
 
-  /** 画布级配置（底色 / 背景图 / 拖拽平移开关）：直接改根节点，不重建画布、不打断缩放 */
+  /** 画布级配置（底色 / 背景图 / 背景视频 / 拖拽平移开关）：直接改根节点，不重建画布、不打断缩放 */
   const patchCanvas = useCallback(
     (
       patch: Partial<
-        Pick<CanvasDoc, 'background' | 'backgroundImage' | 'backgroundMode' | 'allowPan'>
+        Pick<
+          CanvasDoc,
+          'background' | 'backgroundImage' | 'backgroundVideo' | 'backgroundMode' | 'allowPan'
+        >
       >
     ) => {
       metaRef.current = { ...metaRef.current, ...patch };
       if (patch.background !== undefined) {
         rootRef.current?.set({ fill: metaRef.current.background });
       }
-      if (patch.backgroundImage !== undefined || patch.backgroundMode !== undefined) {
+      if (
+        patch.backgroundImage !== undefined ||
+        patch.backgroundVideo !== undefined ||
+        patch.backgroundMode !== undefined
+      ) {
         backgroundSyncRef.current?.();
       }
       onChangeRef.current({ ...metaRef.current, nodes: nodesRef.current });
@@ -528,6 +548,7 @@ export function CanvasEditor({
       value.height === meta.height &&
       value.background === meta.background &&
       (value.backgroundImage || '').trim() === meta.backgroundImage &&
+      (value.backgroundVideo || '').trim() === meta.backgroundVideo &&
       (value.backgroundMode ?? 'stretch') === meta.backgroundMode &&
       (value.allowPan !== false) === meta.allowPan
     ) {
@@ -538,6 +559,7 @@ export function CanvasEditor({
       height: value.height,
       background: value.background,
       backgroundImage: (value.backgroundImage || '').trim(),
+      backgroundVideo: (value.backgroundVideo || '').trim(),
       backgroundMode: value.backgroundMode ?? 'stretch',
       allowPan: value.allowPan !== false,
     };
@@ -707,8 +729,9 @@ export function CanvasEditor({
       root.add(element);
     });
 
-    // 背景图：始终压在所有节点下面，不可选中、不参与吸附
-    // 用一层裁切框把背景图限制在画布内：横向 / 纵向拉伸时图片会超出画布，溢出部分不该露出来
+    // 背景素材：始终压在所有节点下面，不可选中、不参与吸附
+    // 用一层裁切框把素材限制在画布内：横向 / 纵向拉伸时会超出画布，溢出部分不该露出来
+    // 背景视频在编辑器里不播放，抽首帧当静态图铺进来，真实播放交给前台
     const backgroundFrame = new Box({
       x: 0,
       y: 0,
@@ -720,9 +743,10 @@ export function CanvasEditor({
     });
     let backgroundElement: LeaferImage | null = null;
     const syncBackground = () => {
-      const { backgroundImage, backgroundMode } = metaRef.current;
-      const url = (backgroundImage || '').trim();
-      if (!url) {
+      const { backgroundImage, backgroundVideo, backgroundMode } = metaRef.current;
+      const imageUrl = (backgroundImage || '').trim();
+      const videoUrl = (backgroundVideo || '').trim();
+      if (!imageUrl && !videoUrl) {
         if (backgroundElement) {
           backgroundElement.remove();
           backgroundElement = null;
@@ -743,14 +767,41 @@ export function CanvasEditor({
         root.add(backgroundFrame, 0);
       }
       const element = backgroundElement;
-      element.set({ url: previewUrl(url) });
       const canvas = { width: metaRef.current.width, height: metaRef.current.height };
+      /** 按素材原始比例铺进画布，规则与前台 CSS 的 object-fit 一致 */
+      const applyBox = (natural: CanvasSize) => {
+        if (natural.width <= 0 || natural.height <= 0) return;
+        if (backgroundMode === 'stretch') {
+          element.set({ visible: true, x: 0, y: 0, ...canvas });
+          return;
+        }
+        element.set({ visible: true, ...imageBoxFor(backgroundMode, natural, canvas) });
+      };
+
+      if (videoUrl) {
+        // 换素材期间先藏起来，避免上一张图残留在画布上
+        element.set({ visible: false });
+        void loadVideoFrame(videoUrl).then((frame) => {
+          if (backgroundElement !== element) return;
+          if (metaRef.current.backgroundVideo !== videoUrl) return;
+          // 抽帧失败（编码不支持 / 跨域）就只留画布底色，不影响其它编辑
+          if (!frame) {
+            element.set({ visible: false, url: '' });
+            return;
+          }
+          element.set({ url: frame.url });
+          applyBox({ width: frame.width, height: frame.height });
+        });
+        return;
+      }
+
+      element.set({ visible: true, url: previewUrl(imageUrl) });
       if (backgroundMode === 'stretch') {
         element.set({ x: 0, y: 0, ...canvas });
         return;
       }
-      void loadNaturalSize(previewUrl(url)).then((natural) => {
-        if (backgroundElement !== element || metaRef.current.backgroundImage !== backgroundImage) {
+      void loadNaturalSize(previewUrl(imageUrl)).then((natural) => {
+        if (backgroundElement !== element || metaRef.current.backgroundImage !== imageUrl) {
           return;
         }
         element.set(imageBoxFor(backgroundMode, natural, canvas));
@@ -1245,7 +1296,8 @@ export function CanvasEditor({
       elementsRef.current.set(node.id, element);
       if (root) {
         // 置底：有背景图时压在背景图上面，没有背景图就放到最底层
-        const bottomIndex = metaRef.current.backgroundImage ? 1 : 0;
+        const bottomIndex =
+          metaRef.current.backgroundImage || metaRef.current.backgroundVideo ? 1 : 0;
         root.add(element, position === 'bottom' ? bottomIndex : undefined);
         raiseGuides();
       }
@@ -1344,7 +1396,8 @@ export function CanvasEditor({
       const others = nodesRef.current.filter((node) => !targetSet.has(node.id));
       const next = direction === 'top' ? [...others, ...selected] : [...selected, ...others];
       // 置底要压在背景图上面：有背景图时从索引 1 开始，否则从最底层开始
-      const bottomIndex = metaRef.current.backgroundImage ? 1 : 0;
+      const bottomIndex =
+        metaRef.current.backgroundImage || metaRef.current.backgroundVideo ? 1 : 0;
       editor.cancel();
       next.forEach((node, index) => {
         const element = elementsRef.current.get(node.id);
@@ -1619,39 +1672,54 @@ export function CanvasEditor({
         .catch(() => undefined);
       return;
     }
-    setPickingBackground(false);
+    setPickerTarget('node');
     setReplacingId(replaceId);
     setPickerOpen(true);
   }
 
-  /** 选画布背景图：复用同一个图片来源，结果写进画布配置而不是变成组件 */
+  /** 选画布背景图：结果写进画布配置而不是变成组件，同时清掉背景视频（两者互斥） */
   function pickBackgroundImage() {
     if (pickImage) {
       Promise.resolve(pickImage())
-        .then((url) => (url ? patchCanvas({ backgroundImage: url.trim() }) : undefined))
+        .then((url) =>
+          url
+            ? patchCanvas({ backgroundImage: url.trim(), backgroundVideo: '' })
+            : undefined
+        )
         .catch(() => undefined);
       return;
     }
     setReplacingId(null);
-    setPickingBackground(true);
+    setPickerTarget('background-image');
+    setPickerOpen(true);
+  }
+
+  /** 选画布背景视频：同样写进画布配置，并清掉背景图 */
+  function pickBackgroundVideo() {
+    setReplacingId(null);
+    setPickerTarget('background-video');
     setPickerOpen(true);
   }
 
   function closePicker() {
     setPickerOpen(false);
     setReplacingId(null);
-    setPickingBackground(false);
+    setPickerTarget('node');
   }
 
   function handlePicked(files: DevFile[]) {
     const file = files[0];
     const replaceId = replacingId;
-    const forBackground = pickingBackground;
+    const target = pickerTarget;
     closePicker();
     if (!file) return;
     const stored = toOpenUrl(file).replace(/^\/snowy/, '');
-    if (forBackground) {
-      patchCanvas({ backgroundImage: stored });
+    if (target === 'background-video') {
+      patchCanvas({ backgroundVideo: stored, backgroundImage: '' });
+      return;
+    }
+    if (target === 'background-image') {
+      patchCanvas({ backgroundImage: stored, backgroundVideo: '' });
       return;
     }
     void applyImage(stored, replaceId);
@@ -1675,6 +1743,7 @@ export function CanvasEditor({
     canvasHeight: metaRef.current.height,
     background: metaRef.current.background,
     backgroundImage: metaRef.current.backgroundImage,
+    backgroundVideo: metaRef.current.backgroundVideo,
     backgroundMode: metaRef.current.backgroundMode,
     allowPan: metaRef.current.allowPan,
     selectedCount: selectedIds.length,
@@ -1701,6 +1770,8 @@ export function CanvasEditor({
     onFitView: () => resetViewRef.current?.(),
     onPickBackgroundImage: pickBackgroundImage,
     onClearBackgroundImage: () => patchCanvas({ backgroundImage: '' }),
+    onPickBackgroundVideo: pickBackgroundVideo,
+    onClearBackgroundVideo: () => patchCanvas({ backgroundVideo: '' }),
   };
 
   const inspector =
@@ -1968,8 +2039,8 @@ export function CanvasEditor({
       <FilePicker
         open={pickerOpen}
         onClose={closePicker}
-        accept="image"
-        title={pickingBackground ? '选择背景图' : '选择画布图片'}
+        accept={pickerTarget === 'background-video' ? 'video' : 'image'}
+        title={PICKER_TITLES[pickerTarget]}
         onSelect={handlePicked}
       />
     </div>
@@ -2036,16 +2107,17 @@ function FloatingButton({
   title?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title ?? label}
-      aria-label={label}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#1D1D1F] transition-colors hover:bg-[#F0F0F3] disabled:cursor-not-allowed disabled:text-[#C7C7CC] disabled:hover:bg-transparent"
-    >
-      <Icon className="h-4 w-4" />
-    </button>
+    <Hint label={title ?? label} className="inline-flex h-9 w-9">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        className="inline-flex h-full w-full items-center justify-center rounded-full text-[#1D1D1F] transition-colors hover:bg-[#F0F0F3] disabled:cursor-not-allowed disabled:text-[#C7C7CC] disabled:hover:bg-transparent"
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+    </Hint>
   );
 }
 

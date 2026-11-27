@@ -104,6 +104,8 @@ function normalizeOrientation(
     height: size.height,
     background: readColor(doc.background, SPLASH_CANVAS_BACKGROUND),
     backgroundImage: (doc.backgroundImage || '').trim(),
+    // 背景图 / 背景视频互斥，同一份文档里只会留一个
+    backgroundVideo: (doc.backgroundVideo || '').trim(),
     backgroundMode: readMode(doc.backgroundMode),
     // 画布级只保留视图交互：拖拽平移默认开，关掉时才写进 JSON
     allowPan: doc.allowPan === false ? false : undefined,
@@ -266,6 +268,7 @@ function parseOrientation(
   const row = raw as Record<string, unknown>;
   base.background = readColor(row.background, SPLASH_CANVAS_BACKGROUND);
   base.backgroundImage = typeof row.backgroundImage === 'string' ? row.backgroundImage.trim() : '';
+  base.backgroundVideo = typeof row.backgroundVideo === 'string' ? row.backgroundVideo.trim() : '';
   base.backgroundMode = readMode(row.backgroundMode);
   // 画布级只保留视图交互：拖拽平移
   base.allowPan = row.allowPan === false ? false : undefined;

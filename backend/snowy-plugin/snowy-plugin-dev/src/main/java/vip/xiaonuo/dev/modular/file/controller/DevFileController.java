@@ -32,6 +32,7 @@ import vip.xiaonuo.dev.modular.file.param.DevFileDownloadParam;
 import vip.xiaonuo.dev.modular.file.param.DevFileIdParam;
 import vip.xiaonuo.dev.modular.file.param.DevFileListParam;
 import vip.xiaonuo.dev.modular.file.param.DevFilePageParam;
+import vip.xiaonuo.dev.modular.file.param.DevFileUpdateInfoParam;
 import vip.xiaonuo.dev.modular.file.param.DevFileUrlListParam;
 import vip.xiaonuo.dev.modular.file.service.DevFileService;
 
@@ -199,6 +200,22 @@ public class DevFileController {
     public CommonResult<String> updateBizType(@RequestBody @Valid @NotEmpty List<DevFileIdParam> devFileIdParamList,
                                               @RequestParam("bizType") String bizType) {
         devFileService.updateBizType(devFileIdParamList.stream().map(DevFileIdParam::getId).toList(), bizType);
+        return CommonResult.ok();
+    }
+
+    /**
+     * 编辑素材信息（标题、分辨率）
+     *
+     * @author domain-stream
+     * @date 2026/11/28
+     **/
+    @Operation(summary = "编辑素材信息")
+    @CommonLog("编辑素材信息")
+    @PostMapping("/dev/file/updateInfo")
+    public CommonResult<String> updateInfo(@RequestBody @Valid DevFileUpdateInfoParam devFileUpdateInfoParam) {
+        devFileService.updateInfo(devFileUpdateInfoParam.getId(),
+                devFileUpdateInfoParam.getName(),
+                devFileUpdateInfoParam.getResolution());
         return CommonResult.ok();
     }
 

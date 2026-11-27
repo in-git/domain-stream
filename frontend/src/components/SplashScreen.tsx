@@ -105,6 +105,8 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   const systemInfoSettled = useSystemInfoSettled();
   const [mediaDuration, setMediaDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  /** 画布背景视频（封面模式下的动态背景），与开屏音频互斥 */
+  const backgroundVideoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   /** 进度条填充层：用 rAF 直接改宽度，避免每帧重渲染整个开屏 */
   const progressFillRef = useRef<HTMLDivElement | null>(null);
@@ -115,6 +117,10 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   // 后台画布文档：按当前屏幕方向取 PC 或移动端那一份；没有则继续走旧版开屏
   const canvasDoc = splashMode === 'cover' ? parseSplashCanvas(config.splashCanvas) : null;
   const canvas = canvasDoc ? (portrait ? canvasDoc.mobile : canvasDoc.pc) : null;
+  // 背景视频只跟随当前方向的画布，横竖屏各自独立
+  const backgroundVideoUrl = canvas?.backgroundVideo
+    ? publicFileUrl(canvas.backgroundVideo)
+    : '';
 
   // 兼容旧配置与单方向配置：缺哪个方向就沿用另一个方向的素材
   const rawLandscapeVideo = publicFileUrl(config.splashVideoLandscapeUrl || config.splashVideoUrl);
@@ -146,8 +152,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   const titleColor = (config.splashTitleColor || '').trim();
   const progressWidth = Number((config.splashProgressWidth || '').trim()) || 0;
   const progressColor = (config.splashProgressColor || '').trim();
-  // 音频只在封面模式下播放，视频开屏不叠加音频
-  const audioUrl = splashMode === 'video' ? '' : publicFileUrl(config.splashAudioUrl);
+  // 音频只在封面 + 图片背景下播放：视频开屏和画布背景视频都自带声音，不叠加音频
+  const audioUrl =
+    splashMode === 'video' || backgroundVideoUrl ? '' : publicFileUrl(config.splashAudioUrl);
   // 后台「开屏时间」优先；未配置时按素材时长（限制在合理区间），再退回默认值
   const configuredSeconds = Number((config.splashDuration || '').trim());
   const configuredDuration =
@@ -196,8 +203,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
 
     raf = requestAnimationFrame(tick);
     const done = window.setTimeout(() => {
-      // 开屏结束立刻停掉媒体，否则淡出的 0.5s 里音频还会继续响
+      // 开屏结束立刻停掉媒体，否则淡出的 0.5s 里音频 / 视频还会继续响
       videoRef.current?.pause();
+      backgroundVideoRef.current?.pause();
       audioRef.current?.pause();
       onComplete();
     }, runDuration);
@@ -248,9 +256,30 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     };
   }, [audioUrl]);
 
+  /** 画布背景视频：带声音自动播放，被拦截就静音保画面，用户首次交互后恢复声音 */
+  useEffect(() => {
+    const video = backgroundVideoRef.current;
+    if (!video) return;
+    let stopGesture = () => {};
+    video.muted = false;
+    void video.play().catch(() => {
+      video.muted = true;
+      void video.play().catch(() => {});
+      stopGesture = resumeAfterGesture(() => {
+        video.muted = false;
+        void video.play().catch(() => {});
+      });
+    });
+    return () => {
+      stopGesture();
+      video.pause();
+    };
+  }, [backgroundVideoUrl]);
+
   useEffect(() => {
     return () => {
       videoRef.current?.pause();
+      backgroundVideoRef.current?.pause();
       audioRef.current?.pause();
     };
   }, []);
@@ -336,7 +365,21 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           }}
         >
           {/* 背景图铺在最底层，铺法跟后台画布配置一致；单独一层裁切，保证任何铺法都不超出画布 */}
-          {canvas.backgroundImage ? (
+          {canvas.backgroundVideo ? (
+            // 背景视频与背景图互斥：有视频时整层换成视频，铺法复用同一套样式
+            <div className="absolute inset-0 overflow-hidden">
+              <video
+                ref={backgroundVideoRef}
+                src={publicFileUrl(canvas.backgroundVideo)}
+                autoPlay
+                muted
+                loop
+                playsInline
+                style={backgroundImageStyle(canvas.backgroundMode)}
+                aria-hidden="true"
+              />
+            </div>
+          ) : canvas.backgroundImage ? (
             <div className="absolute inset-0 overflow-hidden">
               <img
                 src={publicFileUrl(canvas.backgroundImage)}
@@ -467,6 +510,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         type="button"
         onClick={() => {
           videoRef.current?.pause();
+          backgroundVideoRef.current?.pause();
           audioRef.current?.pause();
           onComplete();
         }}

@@ -18,6 +18,7 @@ import {
   Type,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Hint } from './Hint';
 import type { CanvasNode } from './types';
 
 export interface CanvasLayerPanelProps {
@@ -126,50 +127,53 @@ export function CanvasLayerPanel({
                     groupActive ? 'bg-[#F2F8FF]' : 'hover:bg-[#F5F5F7]'
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggleCollapsed(groupId)}
-                    title={isCollapsed ? '展开组' : '折叠组'}
-                    aria-label={isCollapsed ? '展开组' : '折叠组'}
-                    className="inline-flex h-6 w-5 shrink-0 items-center justify-center rounded text-[#86868B] transition-colors hover:text-[#1D1D1F]"
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(members[0].id)}
-                    title={`选中整组（${members.length} 个图层）`}
-                    className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[11.5px] transition-colors ${
-                      groupActive ? 'text-[#0071E3]' : 'text-[#1D1D1F]'
-                    }`}
-                  >
-                    <GroupIcon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">组</span>
-                    <span className="shrink-0 text-[10.5px] tabular-nums text-[#A1A1A6]">
-                      {members.length}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleLock(members.map((member) => member.id))}
-                    title={groupLocked ? '解锁整组' : '锁定整组'}
-                    aria-label={groupLocked ? '解锁整组' : '锁定整组'}
-                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors ${
-                      groupLocked
-                        ? 'text-[#0071E3]'
-                        : 'text-[#C7C7CC] opacity-0 group-hover:opacity-100 hover:text-[#1D1D1F]'
-                    }`}
-                  >
-                    {groupLocked ? (
-                      <Lock className="h-3 w-3" />
-                    ) : (
-                      <LockOpen className="h-3 w-3" />
-                    )}
-                  </button>
+                  <Hint label={isCollapsed ? '展开组' : '折叠组'} className="inline-flex h-6 w-5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(groupId)}
+                      aria-label={isCollapsed ? '展开组' : '折叠组'}
+                      className="inline-flex h-full w-full items-center justify-center rounded text-[#86868B] transition-colors hover:text-[#1D1D1F]"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                    </button>
+                  </Hint>
+                  <Hint label={`选中整组（${members.length} 个图层）`} className="flex min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => onSelect(members[0].id)}
+                      className={`flex w-full min-w-0 items-center gap-1.5 py-1.5 text-left text-[11.5px] transition-colors ${
+                        groupActive ? 'text-[#0071E3]' : 'text-[#1D1D1F]'
+                      }`}
+                    >
+                      <GroupIcon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">组</span>
+                      <span className="shrink-0 text-[10.5px] tabular-nums text-[#A1A1A6]">
+                        {members.length}
+                      </span>
+                    </button>
+                  </Hint>
+                  <Hint label={groupLocked ? '解锁整组' : '锁定整组'} className="inline-flex h-6 w-6 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onToggleLock(members.map((member) => member.id))}
+                      aria-label={groupLocked ? '解锁整组' : '锁定整组'}
+                      className={`inline-flex h-full w-full items-center justify-center rounded transition-colors ${
+                        groupLocked
+                          ? 'text-[#0071E3]'
+                          : 'text-[#C7C7CC] opacity-0 group-hover:opacity-100 hover:text-[#1D1D1F]'
+                      }`}
+                    >
+                      {groupLocked ? (
+                        <Lock className="h-3 w-3" />
+                      ) : (
+                        <LockOpen className="h-3 w-3" />
+                      )}
+                    </button>
+                  </Hint>
                 </div>
 
                 {!isCollapsed &&
@@ -209,33 +213,38 @@ function LayerRow({ node, active, indented, onSelect, onToggleLock }: LayerRowPr
         active ? 'bg-[#F2F8FF]' : 'hover:bg-[#F5F5F7]'
       }`}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        disabled={node.locked}
-        title={node.locked ? '图层已锁定，解锁后可选中' : layerLabel(node)}
-        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[11.5px] transition-colors disabled:cursor-not-allowed ${
-          indented ? 'pl-7' : 'pl-1.5'
-        } ${
-          active ? 'text-[#0071E3]' : node.locked ? 'text-[#A1A1A6]' : 'text-[#1D1D1F]'
-        }`}
+      <Hint
+        label={node.locked ? '图层已锁定，解锁后可选中' : layerLabel(node)}
+        className="flex min-w-0 flex-1"
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{layerLabel(node)}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onToggleLock}
-        title={node.locked ? '解锁图层' : '锁定图层'}
-        aria-label={node.locked ? '解锁图层' : '锁定图层'}
-        className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors ${
-          node.locked
-            ? 'text-[#0071E3]'
-            : 'text-[#C7C7CC] opacity-0 group-hover:opacity-100 hover:text-[#1D1D1F]'
-        }`}
-      >
-        {node.locked ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
-      </button>
+        <button
+          type="button"
+          onClick={onSelect}
+          disabled={node.locked}
+          className={`flex w-full min-w-0 items-center gap-1.5 py-1.5 text-left text-[11.5px] transition-colors disabled:cursor-not-allowed ${
+            indented ? 'pl-7' : 'pl-1.5'
+          } ${
+            active ? 'text-[#0071E3]' : node.locked ? 'text-[#A1A1A6]' : 'text-[#1D1D1F]'
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{layerLabel(node)}</span>
+        </button>
+      </Hint>
+      <Hint label={node.locked ? '解锁图层' : '锁定图层'} className="inline-flex h-6 w-6 shrink-0">
+        <button
+          type="button"
+          onClick={onToggleLock}
+          aria-label={node.locked ? '解锁图层' : '锁定图层'}
+          className={`inline-flex h-full w-full items-center justify-center rounded transition-colors ${
+            node.locked
+              ? 'text-[#0071E3]'
+              : 'text-[#C7C7CC] opacity-0 group-hover:opacity-100 hover:text-[#1D1D1F]'
+          }`}
+        >
+          {node.locked ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
+        </button>
+      </Hint>
     </div>
   );
 }
