@@ -31,12 +31,12 @@ export interface CanvasSize {
 }
 
 /** 图片填充方式：决定图片加入画布时的初始框（之后仍可自由拖拽缩放） */
-export const CANVAS_IMAGE_MODES: { value: CanvasImageMode; label: string; tip: string }[] = [
-  { value: 'cover', label: '等比铺满', tip: '等比放大撑满画布，不变形，超出部分被裁掉' },
-  { value: 'fit', label: '原比例', tip: '等比缩放到完整显示，不变形，可能留边' },
-  { value: 'stretch', label: '拉伸铺满', tip: '强制变形铺满整个画布，可能拉伸变形' },
-  { value: 'stretch-x', label: '横向拉伸', tip: '宽度撑满画布，高度等比缩放并垂直居中' },
-  { value: 'stretch-y', label: '纵向拉伸', tip: '高度撑满画布，宽度等比缩放并水平居中' },
+export const CANVAS_IMAGE_MODES: { value: CanvasImageMode; label: string }[] = [
+  { value: 'cover', label: '等比铺满' },
+  { value: 'fit', label: '原比例' },
+  { value: 'stretch', label: '拉伸铺满' },
+  { value: 'stretch-x', label: '横向拉伸' },
+  { value: 'stretch-y', label: '纵向拉伸' },
 ];
 
 /** 所有节点共用的几何与状态字段 */

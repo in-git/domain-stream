@@ -495,12 +495,12 @@ export function CanvasNodeInspector({
                 {CANVAS_IMAGE_MODES.map((mode) => (
                   <Hint
                     key={mode.value}
-                    label={`${mode.label}：${mode.tip}`}
+                    label={mode.label}
                     className="min-w-0 flex-1"
                   >
                     <button
                       type="button"
-                      aria-label={`${mode.label}：${mode.tip}`}
+                      aria-label={mode.label}
                       aria-pressed={backgroundMode === mode.value}
                       onClick={() => onCanvasPatch({ backgroundMode: mode.value })}
                       className={`flex h-8 w-full items-center justify-center rounded-md border transition-colors ${
