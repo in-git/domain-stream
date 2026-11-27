@@ -37,6 +37,7 @@ import {
   runVideoEdit,
   type VideoCropRect,
 } from '../../lib/ffmpegClient';
+import type { VideoItem } from '../../types/cms';
 
 const ACCENT = '#0071E3';
 
@@ -84,18 +85,15 @@ function formatClock(seconds: number): string {
 
 interface VideoEditorModalProps {
   open: boolean;
-  /** 视频源：远端地址或本地 blob: 预览地址均可 */
-  item: { title?: string; videoUrl: string } | null;
+  item: Pick<VideoItem, 'id' | 'title' | 'videoUrl'> | null;
   onClose: () => void;
-  /** 产物上传完成后回调（新素材 URL），由调用方回填视频记录；与 onProcessed 二选一 */
-  onApplied?: (newUrl: string) => Promise<void> | void;
-  /** 不上传模式：处理产物（mp4 Blob）直接交回调用方（如替换「待上传文件」） */
-  onProcessed?: (result: { blob: Blob; fileName: string }) => Promise<void> | void;
+  /** 产物上传完成后回调（新素材 URL），由调用方回填视频记录 */
+  onApplied: (newUrl: string) => Promise<void> | void;
 }
 
 type Phase = 'editing' | 'processing' | 'uploading' | 'done';
 
-export function VideoEditorModal({ open, item, onClose, onApplied, onProcessed }: VideoEditorModalProps) {
+export function VideoEditorModal({ open, item, onClose, onApplied }: VideoEditorModalProps) {
   /** 源文件二进制：打开时一次性拉到内存，处理时直接喂给 wasm */
   const [sourceBlob, setSourceBlob] = useState<Blob | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -165,7 +163,7 @@ export function VideoEditorModal({ open, item, onClose, onApplied, onProcessed }
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, item?.videoUrl]);
+  }, [open, item?.id]);
 
   /** 压缩档位换算：目标高度不超过原片高度（只缩不放），CRF 随档位 */
   const activePreset = COMPRESS_PRESETS.find((item) => item.value === preset) ?? COMPRESS_PRESETS[2];
@@ -351,24 +349,15 @@ export function VideoEditorModal({ open, item, onClose, onApplied, onProcessed }
           },
         }
       );
-      const baseName = (item.title || 'video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'video';
-      const fileName = `${baseName}-edited.mp4`;
-      // 直接回交模式：产物作为 File 交回调用方（如替换表单里的「待上传文件」）
-      if (onProcessed) {
-        setPhase('done');
-        setStageText('完成');
-        await onProcessed({ blob, fileName });
-        onClose();
-        return;
-      }
       setPhase('uploading');
       setProgress(0);
       setStageText('正在上传新文件到素材库…');
-      const file = new File([blob], fileName, { type: 'video/mp4' });
+      const baseName = (item.title || 'video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'video';
+      const file = new File([blob], `${baseName}-edited.mp4`, { type: 'video/mp4' });
       const { url } = await uploadLibraryFile(file, 'MATERIAL', (percent) => setProgress(percent / 100));
       setPhase('done');
       setStageText('完成');
-      await onApplied?.(url);
+      await onApplied(url);
       onClose();
     } catch (err) {
       setPhase('editing');
