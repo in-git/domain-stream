@@ -147,11 +147,13 @@ export interface PortalMessage {
 }
 
 /**
- * 把 CMS 保存的文件地址转换为可播放的流式地址。
- * CMS 存的是 /snowy/dev/file/download?id=...&sign=...（强制下载且不支持 Range），
- * 这里改为前端代理下的 /api/public/file/stream?id=...&sign=...（支持 Range）。
+ * 把 CMS 存储的文件地址统一转换为公开流式地址。
+ * CMS 存的是 /dev/file/download?id=...&sign=... 或 /snowy/dev/file/download?id=...&sign=...
+ * （强制下载且不支持 Range，且前端代理下两种前缀都无法直接访问），
+ * 这里统一改为前端代理下的 /api/public/file/stream?id=...&sign=...（支持 Range）。
+ * 视频、音频、图片封面 / 图集地址都走这一个转换。
  */
-function toPlayableUrl(raw?: string): string {
+function toPublicMediaUrl(raw?: string): string {
   if (!raw) return '';
   try {
     const u = new URL(raw, window.location.origin);
@@ -367,8 +369,8 @@ export function videoFromPortal(
     resolution: str(ext.resolution, '4K'),
     director: str(ext.director, row.createUser || ''),
     date: formatYearMonth(row.publishTime || row.createTime),
-    cover: row.cover || str(ext.cover),
-    src: toPlayableUrl(row.videoUrl) || toPlayableUrl(str(ext.src)),
+    cover: toPublicMediaUrl(row.cover) || toPublicMediaUrl(str(ext.cover)),
+    src: toPublicMediaUrl(row.videoUrl) || toPublicMediaUrl(str(ext.src)),
     likeCount: row.likeCount || 0,
     commentCount: row.commentCount || 0,
     viewCount: num(row.viewCount, 0),
@@ -417,7 +419,7 @@ export function articleFromPortal(
     likes: row.likeCount || 0,
     commentCount: row.commentCount || 0,
     sortTime: sortTimestamp(row.publishTime || row.createTime),
-    cover: row.cover || str(ext.cover),
+    cover: toPublicMediaUrl(row.cover) || toPublicMediaUrl(str(ext.cover)),
     quote: str(ext.quote, paragraphs[0] || plain.slice(0, 80) || row.summary || ''),
     paragraphs: paragraphs.length ? paragraphs : [plain || row.summary || row.title || ''],
     content: rawContent ? (html ? rawContent : markdownToHtml(rawContent)) : undefined,
@@ -438,13 +440,15 @@ export function graphicsToPhotos(
       try {
         const parsed: unknown = JSON.parse(row.images);
         if (Array.isArray(parsed)) {
-          images = parsed.filter((item): item is string => typeof item === 'string' && !!item);
+          images = parsed
+            .filter((item): item is string => typeof item === 'string' && !!item)
+            .map((item) => toPublicMediaUrl(item));
         }
       } catch {
         images = [];
       }
     }
-    if (!images.length && row.cover) images = [row.cover];
+    if (!images.length && row.cover) images = [toPublicMediaUrl(row.cover)];
     const rawCategory = row.category || '';
     const album =
       categoryNames?.get(rawCategory) ||
