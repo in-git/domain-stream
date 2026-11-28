@@ -110,7 +110,8 @@ function qs(params: Record<string, unknown> = {}): string {
 }
 
 /** 把小诺返回的 URL 规范化为走 cms 代理的相对地址（去 /api 前缀，挂到 /snowy） */
-function normalizeFileUrl(raw?: string): string {
+/** 把后端存储路径补上 /snowy 代理前缀（cms 页面里的 <img>/<video> 都要用它才能命中后端） */
+export function normalizeFileUrl(raw?: string): string {
   if (!raw) return '';
   try {
     const u = new URL(raw, window.location.origin);

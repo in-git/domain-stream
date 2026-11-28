@@ -18,7 +18,7 @@ import {
 import { api } from '../../../lib/api.ts';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
 import { MediaImage } from '../../../components/MediaImage.tsx';
-import { deleteFilesByUrls } from '../../../lib/fileCenter.ts';
+import { deleteFilesByUrls, normalizeFileUrl } from '../../../lib/fileCenter.ts';
 import { hasModulePerm } from '../../../lib/menu.ts';
 import {
   formatDateShort,
@@ -77,7 +77,7 @@ function VideoCardPreview({
   return (
     <div className="relative aspect-video bg-black overflow-hidden">
       <MediaImage
-        src={coverUrl}
+        src={normalizeFileUrl(coverUrl)}
         alt={`${title} 封面`}
         fallbackLabel={title}
         className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
@@ -617,7 +617,7 @@ export function VideoManagerView({
                       <div className="flex items-center gap-3 min-w-[240px]">
                         <div className="relative w-20 h-11 rounded-lg overflow-hidden bg-[#F2F2F7] shrink-0">
                           <MediaImage
-                            src={item.coverUrl}
+                            src={normalizeFileUrl(item.coverUrl)}
                             alt={`${item.title} 封面`}
                             fallbackLabel={item.title}
                             className="w-full h-full object-cover"

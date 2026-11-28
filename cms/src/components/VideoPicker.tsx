@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Clapperboard, Film, Loader2, RefreshCw, Search, X } from 'lucide-react';
 import { api } from '../lib/api.ts';
+import { normalizeFileUrl } from '../lib/fileCenter.ts';
 import { usePublishCategories } from '../lib/usePublishCategories.ts';
 import { formatDuration } from '../lib/format.ts';
 import { MediaImage } from './MediaImage.tsx';
@@ -269,7 +270,7 @@ export function VideoPicker({ open, onClose, onSelect, multiple = false, title =
                       }`}
                     >
                       <MediaImage
-                        src={video.coverUrl}
+                        src={normalizeFileUrl(video.coverUrl)}
                         alt={video.title}
                         fallbackLabel="视频"
                         className="w-full h-full object-cover"
