@@ -57,7 +57,6 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             <motion.section
               initial={{ opacity: 0, x: -24 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className="hidden max-w-2xl text-white lg:block"
             >
               <p className="text-[12px] font-semibold uppercase tracking-[0.32em] text-white/55">

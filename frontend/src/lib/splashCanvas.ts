@@ -470,7 +470,38 @@ export function parseSplashCanvas(raw?: string): SplashCanvasDoc | null {
   if (!row.pc && !row.mobile) return null;
   const pc = parseOrientation(row.pc, 'pc');
   const mobile = parseOrientation(row.mobile, 'mobile');
-  return { pc, mobile };
+  return ensureSkipNode({ pc, mobile });
+}
+
+/** 系统固定「跳过开屏」文本：横竖屏都保证存在，后台缺省时补一个左上角节点 */
+function skipTextNode(orientation: 'pc' | 'mobile', size: { width: number; height: number }): SplashTextNode {
+  const fontSize = orientation === 'pc' ? 16 : 13;
+  const width = Math.max(fontSize * 5, Math.round(size.width * (orientation === 'pc' ? 0.12 : 0.24)));
+  return {
+    id: 'sys-skip',
+    type: 'text',
+    fixed: 'skip',
+    text: '跳过开屏',
+    x: 16,
+    y: 24,
+    width,
+    height: 28,
+    fontSize,
+    fontWeight: 500,
+    color: '#FFFFFF',
+    align: 'left',
+  };
+}
+
+function ensureSkipNode(doc: SplashCanvasDoc): SplashCanvasDoc {
+  const withSkip = (orientation: 'pc' | 'mobile', target: SplashOrientationDoc) =>
+    target.nodes.some((node) => node.type === 'text' && node.fixed === 'skip')
+      ? target
+      : { ...target, nodes: [...target.nodes, skipTextNode(orientation, target)] };
+  return {
+    pc: withSkip('pc', doc.pc),
+    mobile: withSkip('mobile', doc.mobile),
+  };
 }
 
 export type SplashMode = 'video' | 'cover';

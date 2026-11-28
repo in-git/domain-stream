@@ -9,7 +9,6 @@ import type { PhotoItem } from '../types/content';
 import { SWIFTUI_BOUNCY, SWIFTUI_SMOOTH } from '../lib/motion';
 import { ResilientImage } from './ResilientImage';
 import { CommentPanel } from './CommentPanel.tsx';
-import { Tooltip } from './Tooltip';
 import { useCommentEnabled } from '../lib/systemInfo.ts';
 
 interface NoteDetailProps {
@@ -164,49 +163,6 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                   ))}
                 </Swiper>
 
-                {/* 右侧操作栏：与视频沉浸流同款（喜欢 / 收藏竖排悬浮） */}
-                <div className="absolute bottom-20 right-3 z-20 flex flex-col items-center gap-4 text-white sm:right-5 md:bottom-[110px]">
-                  <Tooltip label={liked ? '取消喜欢' : '喜欢'} side="left">
-                    <div className="flex flex-col items-center">
-                      <motion.button
-                        type="button"
-                        whileTap={{ scale: 0.84 }}
-                        transition={SWIFTUI_BOUNCY}
-                        onClick={onToggleLike}
-                        aria-label={liked ? '取消喜欢' : '喜欢'}
-                        aria-pressed={liked}
-                        className={`flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
-                          liked
-                            ? 'border-[#FF2C55]/60 bg-[#FF2C55]/25 text-[#FF2C55]'
-                            : 'border-white/15 bg-black/45 text-white hover:bg-black/65'
-                        }`}
-                      >
-                        <Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />
-                      </motion.button>
-                      <span className="mt-0.5 text-[11px] font-medium tabular-nums">
-                        {note.likeCount || 0}
-                      </span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip label={saved ? '取消收藏' : '收藏'} side="left">
-                    <motion.button
-                      type="button"
-                      whileTap={{ scale: 0.84 }}
-                      transition={SWIFTUI_BOUNCY}
-                      onClick={onToggleSave}
-                      aria-label={saved ? '取消收藏' : '收藏'}
-                      aria-pressed={saved}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
-                        saved
-                          ? 'border-app-favorite/60 bg-app-favorite/25 text-app-favorite'
-                          : 'border-white/15 bg-black/45 text-white hover:bg-black/65'
-                      }`}
-                    >
-                      <Star className={`h-5 w-5 ${saved ? 'fill-current' : ''}`} />
-                    </motion.button>
-                  </Tooltip>
-                </div>
-
                 {/* 底部向下滑动提示（上下轮播引导） */}
                 {note.images.length > 1 && (
                   <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2">
@@ -299,6 +255,49 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                 </p>
               </div>
 
+              {/* PC 互动栏：点赞 / 收藏 / 评论数，与评论栏同列 */}
+              <div className="hidden shrink-0 items-center gap-2 border-t border-app-border px-7 py-3 md:flex dark:border-app-border">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.92 }}
+                  transition={SWIFTUI_BOUNCY}
+                  onClick={onToggleLike}
+                  aria-label={liked ? '取消喜欢' : '喜欢'}
+                  aria-pressed={liked}
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors ${
+                    liked
+                      ? 'border-[#FF2C55]/40 bg-[#FF2C55]/10 text-[#FF2C55]'
+                      : 'border-app-border text-app-muted hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                  }`}
+                >
+                  <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />
+                  <span className="tabular-nums">{note.likeCount || 0}</span>
+                </motion.button>
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.92 }}
+                  transition={SWIFTUI_BOUNCY}
+                  onClick={onToggleSave}
+                  aria-label={saved ? '取消收藏' : '收藏'}
+                  aria-pressed={saved}
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors ${
+                    saved
+                      ? 'border-app-favorite/40 bg-app-favorite/10 text-app-favorite'
+                      : 'border-app-border text-app-muted hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                  }`}
+                >
+                  <Star className={`h-4 w-4 ${saved ? 'fill-current' : ''}`} />
+                  <span className="tabular-nums">{note.favoriteCount || 0}</span>
+                </motion.button>
+                {commentsEnabled && (
+                  <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] text-app-subtle">
+                    <MessageCircle className="h-4 w-4" />
+                    评论
+                    <span className="tabular-nums">{note.commentCount ?? 0}</span>
+                  </span>
+                )}
+              </div>
+
               {/* PC 端图文右侧评论栏 */}
               {commentsEnabled && (
                 <div className="hidden md:flex md:min-h-0 md:flex-1 md:border-t md:border-app-border md:dark:border-app-border">
@@ -312,8 +311,36 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                 </div>
               )}
 
-              {/* 移动端底部操作栏：喜欢 / 收藏已移到图片区右侧竖排栏，这里只留评论入口 */}
-              <div className="flex h-14 shrink-0 items-center justify-around bg-transparent px-4 text-white md:hidden">
+              {/* 移动端底部互动栏：点赞 / 收藏 / 评论放在一起 */}
+              <div className="flex h-14 shrink-0 items-center justify-around gap-2 bg-gradient-to-t from-black/60 via-black/20 to-transparent px-4 text-white md:hidden">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.92 }}
+                  transition={SWIFTUI_BOUNCY}
+                  onClick={onToggleLike}
+                  aria-label={liked ? '取消喜欢' : '喜欢'}
+                  aria-pressed={liked}
+                  className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] transition-colors ${
+                    liked ? 'text-[#FF2C55]' : 'text-white/85 hover:bg-white/10'
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
+                  <span className="tabular-nums">{note.likeCount || 0}</span>
+                </motion.button>
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.92 }}
+                  transition={SWIFTUI_BOUNCY}
+                  onClick={onToggleSave}
+                  aria-label={saved ? '取消收藏' : '收藏'}
+                  aria-pressed={saved}
+                  className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] transition-colors ${
+                    saved ? 'text-app-favorite' : 'text-white/85 hover:bg-white/10'
+                  }`}
+                >
+                  <Star className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+                  <span className="tabular-nums">{note.favoriteCount || 0}</span>
+                </motion.button>
                 {commentsEnabled && (
                   <button
                     type="button"
@@ -322,7 +349,7 @@ export function NoteDetail({ note, liked, saved, onToggleLike, onToggleSave, onC
                     className="flex items-center gap-1.5 px-3 h-9 rounded-full text-[12px] text-white/85 hover:bg-white/10 transition-colors"
                   >
                     <MessageCircle className="w-4 h-4" />
-                    {note.commentCount ?? 0}
+                    <span className="tabular-nums">{note.commentCount ?? 0}</span>
                   </button>
                 )}
               </div>

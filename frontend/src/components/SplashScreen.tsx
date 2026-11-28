@@ -112,7 +112,7 @@ interface SplashScreenProps {
 export function SplashScreen({ onComplete }: SplashScreenProps) {
   const { title, config } = useSystemInfo();
   const systemInfoSettled = useSystemInfoSettled();
-  // 配置真正加载成功后才展示旧版标题，避免加载期间先闪出默认标题「私域」
+  // 配置真正加载成功后才展示旧版标题，避免加载期间先闪出未配置的标题
   const systemInfoLoaded = useSystemInfoLoaded();
   const [mediaDuration, setMediaDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -402,7 +402,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         </div>
       )}
 
-      {!canvas && systemInfoLoaded && (
+      {!canvas && systemInfoLoaded && title.trim() && (
         <div
           className={
             hasVisualMedia
@@ -474,9 +474,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         className={
           skipNode
             ? 'absolute z-20 flex items-center justify-center p-0 text-app-subtle transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app'
-            : `absolute z-20 ${
-                hasVisualMedia ? 'top-5 right-5' : 'bottom-8'
-              } px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app`
+            : `absolute z-20 top-5 left-5 px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app`
         }
       >
         {skipNode?.text || '跳过开屏'}

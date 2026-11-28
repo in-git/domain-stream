@@ -7,9 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import { portalApi, type PublicSystemInfo } from './api';
 
-const FALLBACK_TITLE = '私域';
-
-let info: PublicSystemInfo = { siteName: FALLBACK_TITLE, title: FALLBACK_TITLE, config: {} };
+let info: PublicSystemInfo = { siteName: '', title: '', config: {} };
 let loaded = false;
 /** 请求是否已有结果（成功或失败），用于开屏等场景判断「配置是否已就绪」 */
 let settled = false;
@@ -195,11 +193,11 @@ export async function loadSystemInfo(): Promise<void> {
   try {
     const data = await portalApi.systemInfo();
     info = {
-      siteName: data.siteName || FALLBACK_TITLE,
-      title: data.title || data.siteName || FALLBACK_TITLE,
+      siteName: data.siteName || '',
+      title: data.title || data.siteName || '',
       config: normalizePortalConfig(data.config ?? {}),
     };
-    document.title = info.title;
+    if (info.title) document.title = info.title;
     applyFavicon(publicFileUrl(info.config.faviconUrl));
     applyClientTheme(info.config);
     settled = true;

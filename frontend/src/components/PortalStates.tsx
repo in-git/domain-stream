@@ -115,10 +115,7 @@ export function EmptyState({
   onDark?: boolean;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: APPLE_EASE }}
+    <div
       className={`bg-transparent border-0 shadow-none text-center ${compact ? 'px-5 py-10' : 'px-6 py-20'} ${className}`}
     >
       {Icon && (
@@ -154,7 +151,7 @@ export function EmptyState({
         </p>
       )}
       {action && <div className="mt-5">{action}</div>}
-    </motion.div>
+    </div>
   );
 }
 

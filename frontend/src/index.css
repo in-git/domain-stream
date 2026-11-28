@@ -26,8 +26,10 @@
 
     /* 背景保持原有黑白主题；高亮色独立配置，不随明暗模式切换 */
     --app-color-bg: #FFFFFF;
-    --app-color-header: #EDEDF0;
-    --app-color-filter: #F5F5F7;
+    /* 顶栏：Apple systemGray5 */
+    --app-color-header: #E5E5EA;
+    /* 分类条：Apple systemBackground */
+    --app-color-filter: #FFFFFF;
     --app-color-surface: #F5F5F7;
     --app-color-card: #FFFFFF;
     --app-color-text: #1D1D1F;
@@ -43,8 +45,10 @@
 
   .dark {
     --app-color-bg: #000000;
-    --app-color-header: #1C1C1E;
-    --app-color-filter: #242426;
+    /* 顶栏：Apple systemGray5（深色） */
+    --app-color-header: #2C2C2E;
+    /* 分类条：Apple systemBackground（深色） */
+    --app-color-filter: #000000;
     --app-color-surface: #161618;
     --app-color-card: #161618;
     --app-color-text: #F5F5F7;

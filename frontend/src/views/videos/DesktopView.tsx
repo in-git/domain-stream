@@ -19,7 +19,7 @@ export function DesktopGridCategories({
   onBackToFeed,
 }: DesktopGridCategoriesProps) {
   return (
-    <div className="sticky top-14 z-10 hidden bg-app-surface/95 px-2 backdrop-blur-xl dark:bg-black/95 sm:block sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
+    <div className="sticky top-14 z-10 hidden border-b border-app-border bg-app-filter/95 px-2 backdrop-blur-xl sm:block sm:px-1.5 md:px-2 lg:px-3 xl:px-4 2xl:px-4">
       <div className="flex items-center gap-2 py-2 sm:gap-1.5 sm:py-1.5 md:gap-2 md:py-2 lg:gap-3 lg:py-3 xl:gap-4 xl:py-4 2xl:gap-4 2xl:py-4">
         <div
           role="tablist"

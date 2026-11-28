@@ -172,6 +172,16 @@ export function toOpenUrl(file: DevFile): string {
 }
 
 /**
+ * 是否需要带 token 拉取：只有 /dev/file 的下载 / 缩略图接口且没有签名时，
+ * 普通 <img>/<video> 直连会被登录态拦截。带 sign 的公开地址和资源库代理可直接访问。
+ */
+export function requiresAuthDownload(url?: string): boolean {
+  if (!url) return false;
+  if (!url.includes('/dev/file/download') && !url.includes('/dev/file/thumbnail')) return false;
+  return !url.includes('sign=');
+}
+
+/**
  * 选择素材时统一取原图地址：
  * - 历史数据的 downloadPath 可能指向缩略图接口，这里纠正为 download
  * - 资源库代理地址缺省补 full=true，避免拿到预览图

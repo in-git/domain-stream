@@ -20,8 +20,6 @@ interface MainHeaderProps {
   solidBlack?: boolean;
   /** 移动端首页：顶栏搜索旁显示视图切换按钮 */
   showViewToggle?: boolean;
-  /** 文章板块使用页面底色，与分类筛选区、卡片区域区分 */
-  sectionBackground?: 'default' | 'page';
   /** PC 沉浸模式：顶栏悬浮在视频上方，不占文档流位置 */
   pcImmersive?: boolean;
   /** 移动端视频沉浸流：导航显隐使用过渡动画 */
@@ -46,7 +44,6 @@ export function MainHeader({
   overlay = false,
   solidBlack = false,
   showViewToggle = false,
-  sectionBackground = 'default',
   pcImmersive = false,
   chromeAnimated = false,
   viewMode = 'feed',
@@ -74,9 +71,7 @@ export function MainHeader({
       ? 'sticky top-0 z-30 border-b border-white/10 bg-black/55 backdrop-blur-xl'
       : overlay
         ? 'fixed inset-x-0 top-0 z-30 bg-black/55 backdrop-blur-xl md:sticky md:z-20 md:border-b md:border-app-border dark:md:border-white/[0.08] md:bg-app-surface/85 dark:md:bg-[#0A0A0C]/85 md:backdrop-blur-xl'
-        : sectionBackground === 'page'
-          ? 'sticky top-0 z-20 border-b border-app-border bg-app-header backdrop-blur-xl'
-          : 'sticky top-0 z-20 border-b border-app-border bg-app-surface/85 dark:bg-app-bg/85 backdrop-blur-xl';
+        : 'sticky top-0 z-20 border-b border-app-border bg-app-header/90 backdrop-blur-xl';
 
   const iconClass = pcImmersive || solidBlack || overlay
     ? 'text-white hover:bg-white/15'
@@ -145,7 +140,7 @@ export function MainHeader({
             className={`w-full h-9 pl-9 pr-[4.5rem] rounded-full border focus:border-app-primary/40 focus:outline-none transition-colors text-xs sm:text-sm ${
               pcImmersive
                 ? 'border-white/15 bg-white/15 backdrop-blur-md text-white placeholder:text-white/60 focus:bg-white/25'
-                : 'border-app-border bg-app-bg dark:border-white/10 dark:bg-app-filter focus:bg-app-bg dark:focus:bg-app-filter text-app-text placeholder:text-app-muted'
+                : 'border-app-border bg-app-filter dark:border-white/10 text-app-text placeholder:text-app-muted'
             }`}
           />
           {draft && (

@@ -32,7 +32,7 @@ import {
   type DevFile,
 } from '../lib/fileCenter.ts';
 import { useFileThumbSrc } from '../lib/useFileThumb.ts';
-import { FileMedia } from './FileMedia.tsx';
+import { FileMedia, fetchTypedFileBlob } from './FileMedia.tsx';
 
 export interface FileCardAction {
   key: string;
@@ -120,7 +120,82 @@ export function FileCard({
     (value, index, list) => !!value && list.indexOf(value) === index && value !== failedSrc
   );
   const cover = coverCandidates[0] || '';
-  const showCover = isImage && !!cover;
+
+  /** 卡片进入视口后才开始预加载原图：先用缩略图顶上，加载完成再替换 */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
+  const [originalSrc, setOriginalSrc] = useState('');
+  const [originalFailed, setOriginalFailed] = useState(false);
+  const originalBlobRef = useRef('');
+
+  useEffect(() => {
+    if (inView) return;
+    const element = rootRef.current;
+    if (!element) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setInView(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '240px' }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [inView]);
+
+  useEffect(() => {
+    setOriginalSrc('');
+    setOriginalFailed(false);
+    if (originalBlobRef.current) {
+      URL.revokeObjectURL(originalBlobRef.current);
+      originalBlobRef.current = '';
+    }
+  }, [file.id, src]);
+
+  useEffect(() => {
+    if (!inView || !isImage || originalFailed || !originalUrl || !cover || cover === originalUrl) return;
+    let alive = true;
+    const probe = new Image();
+    probe.referrerPolicy = 'no-referrer';
+    probe.onload = () => {
+      if (alive) setOriginalSrc(originalUrl);
+    };
+    // 授权文件直连会被登录态拦截，退回带 token 拉取 blob 再显示
+    probe.onerror = () => {
+      if (!alive) return;
+      void fetchTypedFileBlob(file)
+        .then((blob) => {
+          if (!alive) return;
+          const url = URL.createObjectURL(blob);
+          originalBlobRef.current = url;
+          setOriginalSrc(url);
+        })
+        .catch(() => {
+          /* 原图拿不到时保留缩略图 */
+        });
+    };
+    probe.src = originalUrl;
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView, file.id, isImage, originalUrl, cover, originalFailed]);
+
+  useEffect(
+    () => () => {
+      if (originalBlobRef.current) URL.revokeObjectURL(originalBlobRef.current);
+    },
+    []
+  );
+
+  const displayCover = originalSrc || cover;
+  const showCover = isImage && !!displayCover;
 
   // 视频：静态首帧 + 悬停播放
   const [videoFailed, setVideoFailed] = useState(false);
@@ -176,6 +251,12 @@ export function FileCard({
   }
 
   function handleCoverError() {
+    // 原图替换失败时退回缩略图，不再反复重试
+    if (originalSrc && displayCover === originalSrc) {
+      setOriginalSrc('');
+      setOriginalFailed(true);
+      return;
+    }
     if (cover) setFailedSrc(cover);
     onCoverError?.(file);
   }
@@ -204,7 +285,7 @@ export function FileCard({
   ) : showCover ? (
     <FileMedia
       file={file}
-      src={cover}
+      src={displayCover}
       alt={file.name || '文件'}
       className={mediaClass}
       reveal
@@ -228,7 +309,10 @@ export function FileCard({
   // 图标变体：只出正方形媒体块，选择/删除等交互由调用方保留在原布局里
   if (isIcon) {
     return (
-      <div className={`relative aspect-square rounded-xl overflow-hidden bg-[#F2F2F7] ${className}`}>
+      <div
+        ref={rootRef}
+        className={`relative aspect-square rounded-xl overflow-hidden bg-[#F2F2F7] ${className}`}
+      >
         {media}
       </div>
     );
@@ -249,6 +333,7 @@ export function FileCard({
 
   return (
     <div
+      ref={rootRef}
       title={onOpen ? `${displayName} · 双击打开` : displayName}
       tabIndex={0}
       onMouseEnter={() => setHovered(true)}

@@ -313,7 +313,7 @@ export function GalleryView({
   return (
     <ContentSection aria-label="图文笔记">
       {/* 顶部分类：PC 端间距按断点递进 6/8/12/16px，移动端保持原刻度 */}
-      <div className="sticky top-14 z-10 bg-app-surface/95 px-2 backdrop-blur-xl dark:bg-black/95">
+      <div className="sticky top-14 z-10 border-b border-app-border bg-app-filter/95 px-2 backdrop-blur-xl">
         <div className="flex items-center gap-2 py-2">
           <div
             role="tablist"

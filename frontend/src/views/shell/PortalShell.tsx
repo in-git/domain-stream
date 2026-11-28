@@ -293,9 +293,7 @@ export function PortalShell({
             : 'bg-app-bg'
         }`}
       >
-        <AnimatePresence>
           {showSplash && <SplashScreen onComplete={onSplashComplete} />}
-        </AnimatePresence>
 
         <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh] overflow-hidden">
           <AnimatePresence>
@@ -321,7 +319,6 @@ export function PortalShell({
               overlay={activeSectionKey === 'videos' && isMobileViewport && videoViewMode === 'feed'}
               solidBlack={activeSectionKey === 'videos' && isMobileViewport && videoViewMode === 'grid'}
               showViewToggle={activeSectionKey === 'videos' && isMobileViewport}
-              sectionBackground={activeSectionKey === 'articles' ? 'page' : 'default'}
               pcImmersive={activeSectionKey === 'videos' && !isMobileViewport && videoViewMode === 'feed'}
               viewMode={videoViewMode}
               onToggleViewMode={() =>

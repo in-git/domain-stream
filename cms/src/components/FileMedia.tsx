@@ -16,6 +16,7 @@ import {
   isAudioFile,
   isImageFile,
   isVideoFile,
+  requiresAuthDownload,
   toOpenUrl,
   toStreamUrl,
   type DevFile,
@@ -86,6 +87,11 @@ function typedBlob(file: DevFile, blob: Blob): Blob {
     return new Blob([blob], { type: AUDIO_MIME[suffixOf(file)] || 'audio/mpeg' });
   }
   return blob;
+}
+
+/** 带 token 拉取文件并按类型补好 MIME，供卡片预加载原图使用 */
+export async function fetchTypedFileBlob(file: DevFile): Promise<Blob> {
+  return typedBlob(file, await fetchFileBlob(file));
 }
 
 interface FileImageProps {
@@ -398,7 +404,7 @@ export function FileMedia({
             className={className}
             fallback={fallback}
             onError={onError}
-            authFirst={isSvg || !src || imageSrc === original}
+            authFirst={isSvg || !src || requiresAuthDownload(imageSrc)}
           />
           {/* 高清层容器常驻并预先停在底部，悬停时只切换位移，保证进场也有过渡 */}
           <div
@@ -419,7 +425,7 @@ export function FileMedia({
                   });
                 }}
                 onError={() => setRevealIn(false)}
-                authFirst
+                authFirst={isSvg || requiresAuthDownload(original)}
                 instant
               />
             )}
@@ -436,7 +442,7 @@ export function FileMedia({
         fallback={fallback}
         onError={onError}
         instant={highResReady}
-        authFirst={hoverHighRes ? isSvg : isSvg || !src || imageSrc === original}
+        authFirst={isSvg || !src || requiresAuthDownload(hoverHighRes ? original : imageSrc)}
         onImgEnter={handleThumbEnter}
         onImgLeave={handleThumbLeave}
       />
@@ -487,7 +493,7 @@ export function FileMedia({
           className={`max-w-full max-h-[65vh] object-contain rounded-lg ${className}`}
           fallback={<Unsupported />}
           onError={onError}
-          authFirst={isSvg || !src || src === original}
+          authFirst={isSvg || !src || requiresAuthDownload(src ?? original)}
         />
       </div>
     );

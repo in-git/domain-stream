@@ -376,32 +376,37 @@ export function parseSplashCanvas(raw?: string): SplashCanvasDoc | null {
 }
 
 /**
- * 移动端画布固定带一个「跳过开屏」文本组件：
- * 不可删除，设计师只负责调整位置与样式，客户端用它渲染跳过按钮。
+ * 横屏 / 竖屏画布都固定带一个「跳过开屏」文本组件：
+ * 默认在左上角，不可删除，设计师只负责调整位置与样式，客户端用它渲染跳过按钮。
  */
-function skipTextNode(size: { width: number; height: number }): CanvasNode {
-  const width = Math.max(64, Math.round(size.width * 0.24));
+function skipTextNode(orientation: SplashOrientation, size: { width: number; height: number }): CanvasNode {
+  const fontSize = orientation === 'pc' ? 16 : 13;
+  const width = Math.max(fontSize * 5, Math.round(size.width * (orientation === 'pc' ? 0.12 : 0.24)));
   return {
     id: 'sys-skip',
     type: 'text',
     fixed: 'skip',
     text: '跳过开屏',
-    x: size.width - width - 16,
+    x: 16,
     y: 24,
     width,
     height: 28,
-    fontSize: size.width >= 600 ? 16 : 13,
+    fontSize,
     fontWeight: 500,
     color: '#FFFFFF',
-    align: 'right',
+    align: 'left',
   };
 }
 
 function ensureSkipNode(doc: SplashCanvasDoc): SplashCanvasDoc {
-  if (doc.mobile.nodes.some((node) => node.fixed === 'skip')) return doc;
+  const withSkip = (orientation: SplashOrientation, target: SplashOrientationDoc) =>
+    target.nodes.some((node) => node.fixed === 'skip')
+      ? target
+      : { ...target, nodes: [...target.nodes, skipTextNode(orientation, target)] };
   return {
     ...doc,
-    mobile: { ...doc.mobile, nodes: [...doc.mobile.nodes, skipTextNode(doc.mobile)] },
+    pc: withSkip('pc', doc.pc),
+    mobile: withSkip('mobile', doc.mobile),
   };
 }
 

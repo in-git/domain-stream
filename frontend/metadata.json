@@ -1,6 +1,0 @@
-{
-  "name": "Lumina",
-  "description": "Apple 风格响应式视觉与内容客户端，涵盖视频、文章、纯图片画廊与个人中心，配备 SwiftUI 弹簧动效与开屏加载体验。",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

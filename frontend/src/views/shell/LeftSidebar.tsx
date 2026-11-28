@@ -1,7 +1,7 @@
 import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
-import { useSystemInfo } from '../../lib/systemInfo';
-import { navIconUrl, parseNav } from './navConfig';
+import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
+import { findModuleKeyBySection, navIconUrl, parseNav } from './navConfig';
 
 interface LeftSidebarProps {
   activeSection: string;
@@ -23,17 +23,34 @@ export const BUILTIN_SECTIONS: readonly string[] = [
 ];
 
 export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
-  const { config } = useSystemInfo();
+  const { title, config } = useSystemInfo();
+  const logoUrl = publicFileUrl(config.logoUrl);
   const icpNo = (config.icpNo || '').trim();
   const policeNo = (config.policeNo || '').trim();
   const navItems = parseNav(config.navItems);
   return (
     <aside
       aria-label="左侧主导航"
-      className="hidden md:flex flex-col justify-between fixed left-0 top-0 h-screen w-20 lg:w-60 bg-app-surface/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
+      className="hidden md:flex flex-col justify-between fixed left-0 top-0 h-screen w-20 lg:w-60 bg-[#F2F2F7]/90 dark:bg-[#1C1C1E]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
     >
-      {/* Primary Vertical Navigation */}
-      <div>
+      {/* Top Brand + Primary Vertical Navigation */}
+      <div className="space-y-6">
+        {/* 品牌标题：仅显示 CMS 配置的内容，不再内置静态 Logo */}
+        <button
+          type="button"
+          onClick={() => onSelectSection(findModuleKeyBySection(navItems, 'videos') ?? 'videos', true)}
+          className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary"
+        >
+          {logoUrl && (
+            <span className="flex items-center justify-center w-9 h-9 shrink-0">
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </span>
+          )}
+          <span className="hidden lg:inline text-lg font-semibold tracking-tight text-app-text whitespace-nowrap">
+            {title}
+          </span>
+        </button>
+
         {/* Douyin-style Left Vertical Nav Links */}
         <nav aria-label="板块导航" className="space-y-1.5">
           {navItems.map(({ id, label, iconUrl }) => {

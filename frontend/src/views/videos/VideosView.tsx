@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MediaPlayerInstance } from '@vidstack/react';
 import type { Swiper as SwiperClass } from 'swiper';
+import { Film } from 'lucide-react';
 import type { VideoItem } from '../../types/content';
 import { EmptyState } from '../../components/PortalStates';
 import { VideoFeedPlayer } from './VideoFeedPlayer';
@@ -689,12 +690,27 @@ export function VideosView({
 
       {!isMini && viewMode === 'feed' && !loadingVideos && filteredVideos.length === 0 && (
         <div className={`flex items-center justify-center bg-black ${headerFloating ? 'h-[100dvh]' : 'h-[calc(100dvh-3.5rem)]'}`}>
-          <EmptyState className="w-full px-10 py-16" title="暂无数据" onDark />
+          <EmptyState
+            icon={Film}
+            title="暂无视频"
+            description={
+              normalizedQuery ? '没有找到匹配的视频，换个关键词试试' : '内容发布后将在这里显示'
+            }
+            className=" px-10 py-16"
+            onDark
+          />
         </div>
       )}
 
       {!isMini && viewMode === 'grid' && !loadingVideos && filteredVideos.length === 0 && (
-        <EmptyState className="w-full" title="暂无数据" />
+        <EmptyState
+          icon={Film}
+          title="暂无视频"
+          description={
+            normalizedQuery ? '没有找到匹配的视频，换个关键词试试' : '内容发布后将在这里显示'
+          }
+          className="w-full"
+        />
       )}
 
       {/* 沉浸刷看：始终挂载，网格模式下用 CSS 隐藏，保证 <video> 不被销毁重建 */}

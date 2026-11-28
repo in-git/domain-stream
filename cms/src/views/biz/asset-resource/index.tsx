@@ -91,6 +91,40 @@ function typeLabel(type: string, options: { value: string; label: string }[]): s
   return options.find((item) => item.value === type)?.label || type || '其他';
 }
 
+/** 分辨率缓存：资源库没有落库宽高，首次渲染时从图片 / 视频元数据量一次 */
+const resolutionCache = new Map<string, string>();
+
+/** 读取图片或视频的分辨率，失败返回空串 */
+function measureResolution(type: string, src: string): Promise<string> {
+  if (!src) return Promise.resolve('');
+  if (type === 'VIDEO') {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      const finish = (text: string) => {
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        video.removeAttribute('src');
+        video.load();
+        resolve(text);
+      };
+      video.onloadedmetadata = () =>
+        finish(video.videoWidth && video.videoHeight ? `${video.videoWidth}×${video.videoHeight}` : '');
+      video.onerror = () => finish('');
+      video.src = src;
+    });
+  }
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.referrerPolicy = 'no-referrer';
+    image.onload = () =>
+      resolve(image.naturalWidth && image.naturalHeight ? `${image.naturalWidth}×${image.naturalHeight}` : '');
+    image.onerror = () => resolve('');
+    image.src = src;
+  });
+}
+
 export default function AssetResourceView() {
   const canAdd = true;
 
@@ -133,6 +167,9 @@ export default function AssetResourceView() {
   const [materialCategories, setMaterialCategories] = useState<BizCategory[]>([]);
   const [materialCategoryLoading, setMaterialCategoryLoading] = useState(false);
   const searchTimerRef = useRef<number | null>(null);
+  /** 卡片分辨率：图片 / 视频异步测量后写入，已测过的走模块级缓存 */
+  const [resolutions, setResolutions] = useState<Record<string, string>>({});
+  const resolvingRef = useRef<Set<string>>(new Set());
 
   const pageSize = PAGE_SIZE;
 
@@ -225,6 +262,38 @@ export default function AssetResourceView() {
       if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
     };
   }, [search]);
+
+  /** 当前页的图片 / 视频逐个测量分辨率，失败时回退远程直链再试一次 */
+  useEffect(() => {
+    const targets = items.filter(
+      (item) =>
+        (item.type === 'IMAGE' || item.type === 'VIDEO') &&
+        !resolutionCache.has(item.id) &&
+        !resolvingRef.current.has(item.id)
+    );
+    if (!targets.length) return;
+    let alive = true;
+    targets.forEach((item) => {
+      resolvingRef.current.add(item.id);
+      const candidates = [proxyUrl(item.imageUrl), item.remoteImageUrl].filter(
+        (value, index, list): value is string => !!value && list.indexOf(value) === index
+      );
+      void (async () => {
+        let text = '';
+        for (const candidate of candidates) {
+          text = await measureResolution(item.type, candidate);
+          if (text) break;
+        }
+        resolvingRef.current.delete(item.id);
+        if (!text) return;
+        resolutionCache.set(item.id, text);
+        if (alive) setResolutions((prev) => ({ ...prev, [item.id]: text }));
+      })();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [items]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -733,7 +802,12 @@ export default function AssetResourceView() {
                 onToggleSelect={toggleSelect}
                 onOpen={() => setPreview(item)}
                 fit={item.type === 'ICON' || item.type === 'SVG' ? 'contain' : 'cover'}
-                meta={typeLabel(item.type, typeOptions)}
+                meta={[
+                  typeLabel(item.type, typeOptions),
+                  resolutions[item.id] || resolutionCache.get(item.id),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
                 badge={
                   added ? (
                     <span className="px-1.5 py-0.5 rounded-full bg-[#30D158]/90 text-white text-[10px]">已加入</span>
