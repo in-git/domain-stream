@@ -25,6 +25,7 @@ import vip.xiaonuo.biz.modular.asset.param.BizAssetCollectUrlParam;
 import vip.xiaonuo.biz.modular.asset.param.BizAssetResourcePageParam;
 import vip.xiaonuo.biz.modular.asset.service.BizAssetResourceService;
 import vip.xiaonuo.biz.modular.asset.util.AssetHttpUtil;
+import vip.xiaonuo.biz.modular.asset.util.AssetPageRenderer;
 import vip.xiaonuo.biz.modular.asset.util.ByteArrayMultipartFile;
 import vip.xiaonuo.biz.modular.asset.vo.AssetCollectEventVo;
 import vip.xiaonuo.biz.modular.asset.vo.BizAssetResourceVo;
@@ -74,12 +75,6 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     /** 网址采集允许的资源类型 */
     private static final List<String> COLLECT_TYPES = Arrays.asList("IMAGE", "VIDEO", "SVG", "ICON");
 
-    private static final int DEFAULT_COLLECT_LIMIT = 20;
-    private static final int MAX_COLLECT_LIMIT = 50;
-
-    /** 深度搜索保护上限：防止站内链接形成环路或站点过大时无限抓取 */
-    private static final int DEEP_MAX_PAGES = 500;
-    private static final int DEEP_MAX_MEDIA = 2000;
     private static final int DEEP_PAGE_TIMEOUT = 20000;
 
     /** 页面中需要继续跟踪的链接 */
@@ -149,10 +144,11 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     }
 
     @Override
-    public void addToMaterial(List<String> ids) {
+    public void addToMaterial(List<String> ids, String categoryCode) {
         if (CollUtil.isEmpty(ids)) {
             throw new CommonException("请选择要加入素材中心的素材");
         }
+        String targetCategoryCode = StrUtil.trim(categoryCode);
         List<BizAssetResource> resources = resourceMapper.selectBatchIds(ids);
         if (resources.size() != ids.size()) {
             throw new CommonException("部分素材不存在，请刷新后重试");
@@ -170,9 +166,11 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                 if (bytes.length == 0) {
                     throw new CommonException("下载内容为空");
                 }
-                String categoryCode = BizAssetCategoryEnum.ICON.getValue().equals(resource.getType())
+                String uploadCategoryCode = StrUtil.isNotBlank(targetCategoryCode)
+                        ? targetCategoryCode
+                        : (BizAssetCategoryEnum.ICON.getValue().equals(resource.getType())
                         ? BizAssetCategoryEnum.ICON.getValue()
-                        : BizAssetCategoryEnum.WALLPAPER.getValue();
+                        : BizAssetCategoryEnum.WALLPAPER.getValue());
                 String suffix = StrUtil.blankToDefault(resource.getSuffix(), "jpg");
                 byte[] uploadBytes = bytes;
                 String uploadSuffix = suffix;
@@ -192,7 +190,7 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                         null,
                         new ByteArrayMultipartFile(uploadBytes, "file", fileName, uploadContentType),
                         "MATERIAL",
-                        categoryCode);
+                        uploadCategoryCode);
 
                 resource.setInMaterial(YES);
                 resource.setMaterialFileId(fileId);
@@ -285,7 +283,7 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         DeepCollectResult deepResult = deep ? resolveDeepMediaUrls(url, fetched, type, null) : null;
         List<String> mediaUrls = deep
                 ? deepResult.mediaUrls
-                : resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+                : resolveRenderedMediaUrls(url, fetched, type);
         if (mediaUrls.isEmpty()) {
             throw new CommonException("网页中未找到可采集的" + type + "资源");
         }
@@ -320,7 +318,8 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                     deepResult = resolveDeepMediaUrls(url, fetched, type, emitter);
                     mediaUrls = deepResult.mediaUrls;
                 } else {
-                    mediaUrls = resolveMediaUrls(url, fetched, type, resolveCollectLimit(param.getLimit()));
+                    emit(emitter, "progress", 0, 0, "正在渲染页面，等待动态内容加载", null);
+                    mediaUrls = resolveRenderedMediaUrls(url, fetched, type);
                 }
                 if (mediaUrls.isEmpty()) {
                     emit(emitter, "error", 0, 0, "网页中未找到可采集的" + type + "资源", null);
@@ -394,11 +393,24 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         return head.contains("<!doctype html") || head.contains("<html");
     }
 
-    private List<String> resolveMediaUrls(String baseUrl, HttpFetchResult fetched, String type, int limit) {
+    /**
+     * 优先用无头浏览器渲染页面后再解析媒体地址，兼容图片由 JS / 接口动态加载的站点；
+     * 浏览器不可用或渲染失败时回退静态 HTML 解析。
+     */
+    private List<String> resolveRenderedMediaUrls(String url, HttpFetchResult fetched, String type) {
         Map<String, String> chosen = new LinkedHashMap<>();
-        collectMediaUrls(baseUrl, fetched, type, chosen);
-        List<String> result = new ArrayList<>(chosen.values());
-        return result.size() <= limit ? result : new ArrayList<>(result.subList(0, limit));
+        AssetPageRenderer.Rendered rendered = AssetPageRenderer.render(url);
+        if (rendered != null && StrUtil.isNotBlank(rendered.html())) {
+            HttpFetchResult renderedPage = new HttpFetchResult(
+                    rendered.html().getBytes(StandardCharsets.UTF_8), "text/html; charset=utf-8");
+            collectMediaUrls(url, renderedPage, type, chosen);
+            for (String mediaUrl : rendered.networkMediaUrls()) {
+                offerMediaUrl(url, mediaUrl, type, chosen);
+            }
+        } else {
+            collectMediaUrls(url, fetched, type, chosen);
+        }
+        return new ArrayList<>(chosen.values());
     }
 
     /** 把当前页面里的资源按规范 ID 收集到 chosen，高分地址（如 4K）会替换低分地址 */
@@ -482,11 +494,6 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         return score;
     }
 
-    private int resolveCollectLimit(Integer rawLimit) {
-        if (rawLimit == null || rawLimit <= 0) return DEFAULT_COLLECT_LIMIT;
-        return Math.min(rawLimit, MAX_COLLECT_LIMIT);
-    }
-
     private boolean isDeepSearch(BizAssetCollectUrlParam param) {
         return param != null && Boolean.TRUE.equals(param.getDeepSearch());
     }
@@ -506,7 +513,7 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         queuedPages.add(canonicalPageKey(startUrl));
 
         int scanned = 0;
-        while (!queue.isEmpty() && scanned < DEEP_MAX_PAGES && chosen.size() < DEEP_MAX_MEDIA) {
+        while (!queue.isEmpty()) {
             String pageUrl = queue.poll();
             if (!visitedPages.add(canonicalPageKey(pageUrl))) {
                 continue;

@@ -19,8 +19,8 @@ public interface BizAssetResourceService {
 
     Page<BizAssetResourceVo> page(BizAssetResourcePageParam param);
 
-    /** 把选中的远端素材下载并写入素材中心本地文件库 */
-    void addToMaterial(List<String> ids);
+    /** 把选中的远端素材下载并写入素材中心本地文件库，categoryCode 为空时按资源类型取默认分类 */
+    void addToMaterial(List<String> ids, String categoryCode);
 
     /** 从资源库删除记录（逻辑删除，不删除已加入素材中心的文件） */
     void delete(List<String> ids);

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import vip.xiaonuo.biz.modular.asset.param.BizAssetAddToMaterialParam;
 import vip.xiaonuo.biz.modular.asset.param.BizAssetCollectUrlParam;
 import vip.xiaonuo.biz.modular.asset.param.BizAssetResourcePageParam;
 import vip.xiaonuo.biz.modular.asset.service.BizAssetResourceService;
@@ -68,8 +69,8 @@ public class BizAssetResourceController {
     @Operation(summary = "加入素材中心")
     @CommonLog("加入素材中心")
     @PostMapping("/biz/asset-resource/add-to-material")
-    public CommonResult<String> addToMaterial(@RequestBody IdsParam param) {
-        bizAssetResourceService.addToMaterial(param.getIds());
+    public CommonResult<String> addToMaterial(@RequestBody BizAssetAddToMaterialParam param) {
+        bizAssetResourceService.addToMaterial(param.getIds(), param.getCategoryCode());
         return CommonResult.ok();
     }
 

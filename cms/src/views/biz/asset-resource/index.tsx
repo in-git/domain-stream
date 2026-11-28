@@ -26,6 +26,9 @@ import {
   X,
 } from 'lucide-react';
 import { assetResourceApi, proxyUrl, type AssetResource } from '../../../lib/assetResource.ts';
+import { categoryApi, type BizCategory } from '../../../lib/category.ts';
+import type { DevFile } from '../../../lib/fileCenter.ts';
+import { FileMedia } from '../../../components/FileMedia.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 
@@ -62,6 +65,28 @@ function typeLabel(type: string): string {
   return TYPE_OPTIONS.find((item) => item.value === type)?.label || type || '其他';
 }
 
+/** 取资源地址后缀，用于拼装通用文件渲染组件的 DevFile */
+function urlSuffix(raw?: string): string {
+  if (!raw) return '';
+  const path = raw.split('?')[0].split('#')[0];
+  const dot = path.lastIndexOf('.');
+  return dot >= 0 ? path.slice(dot + 1).toLowerCase() : '';
+}
+
+/** 资源库没有真实文件记录，按资源类型拼一个 DevFile 交给通用文件渲染组件 */
+function assetAsFile(item: AssetResource): DevFile {
+  const video = item.type === 'VIDEO';
+  const suffix = urlSuffix(item.imageUrl) || (video ? 'mp4' : 'jpg');
+  return {
+    id: item.id,
+    name: `${item.title || '素材'}.${suffix}`,
+    // SVG / 图标并不是素材中心里的真实文件，标成位图后缀，避免组件走带 token 的授权下载
+    suffix: item.type === 'SVG' || item.type === 'ICON' ? 'png' : suffix,
+    category: video ? 'VIDEO' : 'IMAGE',
+    downloadPath: item.imageUrl,
+  };
+}
+
 export default function AssetResourceView() {
   const canAdd = true;
 
@@ -96,6 +121,11 @@ export default function AssetResourceView() {
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTargets, setDeleteTargets] = useState<AssetResource[]>([]);
+  /** 加入素材中心：先选素材分类再提交 */
+  const [materialDialog, setMaterialDialog] = useState<{ ids: string[] } | null>(null);
+  const [materialCategoryCode, setMaterialCategoryCode] = useState('');
+  const [materialCategories, setMaterialCategories] = useState<BizCategory[]>([]);
+  const [materialCategoryLoading, setMaterialCategoryLoading] = useState(false);
   const searchTimerRef = useRef<number | null>(null);
 
   const pageSize = PAGE_SIZE;
@@ -225,7 +255,7 @@ export default function AssetResourceView() {
     });
     try {
       await assetResourceApi.collectUrlStream(
-        { url, type: collectType, limit: deepSearch ? undefined : 20, deepSearch },
+        { url, type: collectType, deepSearch },
         (event) => {
           setCollectProgress({ index: event.index, total: event.total, message: event.message });
           const resource = event.resource;
@@ -257,15 +287,43 @@ export default function AssetResourceView() {
     }
   }
 
-  async function addToMaterial(ids: string[]) {
+  /** 加载素材模块的通用分类（逐页拉全量） */
+  const loadMaterialCategories = useCallback(async () => {
+    setMaterialCategoryLoading(true);
+    try {
+      const all: BizCategory[] = [];
+      for (let current = 1; ; current++) {
+        const result = await categoryApi.page({ current, size: 20, module: 'MATERIAL', status: 'ENABLE' });
+        const records = result?.records || [];
+        all.push(...records);
+        if (records.length < 20 || all.length >= (result?.total ?? all.length)) break;
+      }
+      setMaterialCategories(all);
+    } catch {
+      setMaterialCategories([]);
+    } finally {
+      setMaterialCategoryLoading(false);
+    }
+  }, []);
+
+  /** 打开「加入素材中心」弹窗，先让用户选择素材分类 */
+  function openMaterialDialog(ids: string[]) {
     if (!ids.length) {
       showToast('请先选择素材', 'warning');
       return;
     }
+    setMaterialCategoryCode('');
+    setMaterialDialog({ ids });
+    void loadMaterialCategories();
+  }
+
+  async function submitAddToMaterial() {
+    if (!materialDialog) return;
     setBusy(true);
     try {
-      await assetResourceApi.addToMaterial(ids);
+      await assetResourceApi.addToMaterial(materialDialog.ids, materialCategoryCode || undefined);
       showToast('已加入素材中心', 'success');
+      setMaterialDialog(null);
       setPreview(null);
       await Promise.all([load(), loadCounts()]);
     } catch (err) {
@@ -459,7 +517,7 @@ export default function AssetResourceView() {
               <button
                 type="button"
                 disabled={busy || !selected.size}
-                onClick={() => void addToMaterial([...selected])}
+                onClick={() => openMaterialDialog([...selected])}
                 className="h-9 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
                 <Images className="w-4 h-4" />
@@ -824,7 +882,7 @@ export default function AssetResourceView() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void addToMaterial([item.id])}
+                      onClick={() => openMaterialDialog([item.id])}
                       className="h-8 px-2.5 rounded-lg bg-[#0071E3]/8 text-[#0071E3] text-[12px] font-medium hover:bg-[#0071E3]/12 disabled:opacity-50 transition-colors"
                     >
                       加入素材中心
@@ -1014,7 +1072,7 @@ export default function AssetResourceView() {
                 {canAdd && preview.inMaterial !== 'YES' && (
                   <button
                     disabled={busy}
-                    onClick={() => void addToMaterial([preview.id])}
+                    onClick={() => openMaterialDialog([preview.id])}
                     className="w-full h-9 rounded-lg bg-[#0071E3] text-white text-[13px] disabled:opacity-50"
                   >
                     加入素材中心
@@ -1077,9 +1135,9 @@ export default function AssetResourceView() {
                 <p className="text-[12px] text-[#6E6E73]">
                   {collectProgress.message || '采集结果会在这里实时更新'}
                 </p>
-                <div className="max-h-[55vh] overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="max-h-[55vh] overflow-y-auto columns-2 sm:columns-3 gap-2">
                   {collectedResources.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-[12px] text-[#86868B]">
+                    <div className="py-12 text-center text-[12px] text-[#86868B]">
                       {collectPhase === 'running' ? '正在采集，资源入库后会立即显示' : '暂无采集结果'}
                     </div>
                   ) : collectedResources.map((resource) => (
@@ -1087,32 +1145,93 @@ export default function AssetResourceView() {
                       key={resource.id}
                       type="button"
                       onClick={() => setPreview(resource)}
-                      className="w-full min-w-0 flex items-center gap-2 p-2 rounded-xl bg-[#F5F5F7] hover:bg-[#EDEDF1] text-left transition-colors"
+                      className="group relative mb-2 block w-full break-inside-avoid overflow-hidden rounded-xl border border-[#E5E5EA] bg-white text-left transition-colors hover:border-[#D1D1D6]"
                     >
-                      <span className="w-10 h-10 rounded-lg bg-[#E5E5EA] overflow-hidden shrink-0 flex items-center justify-center">
-                        {resource.type === 'VIDEO' ? (
-                          <video src={assetSrc(resource)} muted playsInline preload="metadata" className="w-full h-full object-cover" />
-                        ) : (
-                          <img
-                            src={assetSrc(resource)}
-                            alt={resource.title}
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            className={`w-full h-full ${resource.type === 'ICON' || resource.type === 'SVG' ? 'object-contain' : 'object-cover'}`}
-                            onError={() => handleImageError(resource)}
-                          />
-                        )}
+                      <FileMedia
+                        file={assetAsFile(resource)}
+                        src={assetSrc(resource)}
+                        alt={resource.title || '采集素材'}
+                        className="block w-full h-auto"
+                        fallback={
+                          <span className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-1 bg-[#F5F5F7] text-[#86868B]">
+                            <ImageIcon className="w-5 h-5" strokeWidth={1.5} />
+                            <span className="text-[10px]">{typeLabel(resource.type)}</span>
+                          </span>
+                        }
+                        onError={() => handleImageError(resource)}
+                      />
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-2 pb-1.5 pt-4">
+                        <span className="block truncate text-[11px] font-medium text-white">
+                          {resource.title || '未命名素材'}
+                        </span>
+                        <span className="block text-[10px] text-white/80">
+                          {typeLabel(resource.type)} · 已入库
+                        </span>
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[12px] font-medium text-[#1D1D1F] truncate">{resource.title || '未命名素材'}</span>
-                        <span className="block text-[11px] text-[#86868B]">{typeLabel(resource.type)} · 已入库</span>
-                      </span>
-                      <Check className="w-3.5 h-3.5 text-[#248A3D] shrink-0" />
                     </button>
                   ))}
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 加入素材中心：先选择素材分类 */}
+      {materialDialog && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4"
+          onClick={() => { if (!busy) setMaterialDialog(null); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="加入素材中心"
+            className="w-full max-w-sm bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.24)] p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-[15px] font-semibold text-[#1D1D1F]">加入素材中心</h3>
+              <p className="mt-1 text-[12px] text-[#86868B]">
+                为 {materialDialog.ids.length} 个资源选择素材分类
+              </p>
+            </div>
+            <SelectField
+              value={materialCategoryCode}
+              onChange={setMaterialCategoryCode}
+              label="素材分类"
+              ariaLabel="选择素材分类"
+              isDisabled={materialCategoryLoading}
+              placeholder={materialCategoryLoading ? '正在加载分类...' : '默认分类（按资源类型）'}
+              options={[
+                { value: '', label: '默认分类（按资源类型）' },
+                ...materialCategories
+                  .filter((category) => !!category.code)
+                  .map((category) => ({
+                    value: category.code as string,
+                    label: category.name || category.code || '未命名分类',
+                  })),
+              ]}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setMaterialDialog(null)}
+                className="h-9 px-4 rounded-lg border border-[#D2D2D7] bg-white text-[#1D1D1F] text-[13px] hover:bg-[#F5F5F7] transition-colors disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void submitAddToMaterial()}
+                className="h-9 px-4 rounded-lg bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                加入
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -95,11 +95,15 @@ interface FileImageProps {
   className?: string;
   fallback?: ReactNode;
   onError?: () => void;
-  /**
-   * 先用带 token 的下载拿到 blob 再渲染，不直接请求 src。
-   * SVG 直连返回 octet-stream 会被浏览器显示成裂图，所以首帧就跳过直连。
+  /** 先用带 token 的下载拿到 blob 再渲染，不直接请求 src。
+   *  SVG 直连返回 octet-stream 会被浏览器显示成裂图，所以首帧就跳过直连。
    */
   authFirst?: boolean;
+  /** 缩略图悬停：把真实 img 节点交给调用方做原图切换 */
+  onImgEnter?: (img: HTMLImageElement) => void;
+  onImgLeave?: () => void;
+  /** 原图已预加载：直接显示，不再走淡入，避免切换瞬间闪空 */
+  instant?: boolean;
 }
 
 /** 图片 / SVG：直连失败时自动带 token 重新拉取一次 */
@@ -111,6 +115,9 @@ function FileImage({
   fallback = null,
   onError,
   authFirst = false,
+  onImgEnter,
+  onImgLeave,
+  instant = false,
 }: FileImageProps) {
   const skipDirect =
     authFirst && !!src && !/^(data:|blob:)/i.test(src);
@@ -176,10 +183,12 @@ function FileImage({
       referrerPolicy="no-referrer"
       onLoad={() => setLoaded(true)}
       onError={() => void handleError()}
+      onMouseEnter={(event) => onImgEnter?.(event.currentTarget)}
+      onMouseLeave={() => onImgLeave?.()}
       className={className}
       style={{
-        opacity: loaded ? 1 : 0,
-        transition: 'opacity 160ms ease-out',
+        opacity: instant || loaded ? 1 : 0,
+        transition: instant ? 'none' : 'opacity 160ms ease-out',
       }}
     />
   );
@@ -268,6 +277,38 @@ export function FileMedia({
   /** SVG 无论来自缩略图还是原文件，都可能拿到 octet-stream，统一走授权下载 */
   const isSvg = kind === 'image' && suffixOf(file) === 'svg';
 
+  /** 鼠标悬停切到原图，移开还原缩略图：先预加载原图，加载完成后再切换，避免闪空 */
+  const [hoverHighRes, setHoverHighRes] = useState(false);
+  const [highResReady, setHighResReady] = useState(false);
+  const hoveringRef = useRef(false);
+  const highResLoadedRef = useRef(false);
+
+  function handleThumbEnter() {
+    if (isPlayer || kind !== 'image' || !original) return;
+    hoveringRef.current = true;
+    if (highResLoadedRef.current) {
+      setHoverHighRes(true);
+      return;
+    }
+    // 预加载原图；授权地址预加载失败时交给 FileImage 自身的授权下载兜底
+    const probe = new Image();
+    probe.referrerPolicy = 'no-referrer';
+    probe.onload = () => {
+      highResLoadedRef.current = true;
+      setHighResReady(true);
+      if (hoveringRef.current) setHoverHighRes(true);
+    };
+    probe.onerror = () => {
+      if (hoveringRef.current) setHoverHighRes(true);
+    };
+    probe.src = original;
+  }
+
+  function handleThumbLeave() {
+    hoveringRef.current = false;
+    setHoverHighRes(false);
+  }
+
   if (!isPlayer) {
     if (kind === 'audio' || kind === 'other') return <>{fallback}</>;
     const imageSrc = src ?? thumb;
@@ -275,12 +316,15 @@ export function FileMedia({
     return (
       <FileImage
         file={file}
-        src={imageSrc}
+        src={hoverHighRes ? original : imageSrc}
         alt={alt}
         className={className}
         fallback={fallback}
         onError={onError}
-        authFirst={isSvg || !src || imageSrc === original}
+        instant={highResReady}
+        authFirst={hoverHighRes ? isSvg : isSvg || !src || imageSrc === original}
+        onImgEnter={handleThumbEnter}
+        onImgLeave={handleThumbLeave}
       />
     );
   }

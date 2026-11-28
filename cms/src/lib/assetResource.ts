@@ -121,10 +121,10 @@ export const assetResourceApi = {
     }
     if (buffer.trim()) handleFrame(buffer);
   },
-  addToMaterial(ids: string[]): Promise<void> {
+  addToMaterial(ids: string[], categoryCode?: string): Promise<void> {
     return snowyRequest<void>(`${BASE}/add-to-material`, {
       method: 'POST',
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ ids, categoryCode }),
     });
   },
   /** 删除资源库记录（逻辑删除，不影响已加入素材中心的文件） */
