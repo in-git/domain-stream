@@ -448,6 +448,15 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
             case "m4v" -> "video/x-m4v";
             case "mp3" -> "audio/mpeg";
             case "wav" -> "audio/wav";
+            // SVG 必须以 image/svg+xml 返回，浏览器 <img> 不会嗅探该类型，否则开屏画布 SVG 无法显示
+            case "svg" -> "image/svg+xml";
+            case "png" -> "image/png";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "gif" -> "image/gif";
+            case "webp" -> "image/webp";
+            case "bmp" -> "image/bmp";
+            case "ico" -> "image/x-icon";
+            case "avif" -> "image/avif";
             default -> "application/octet-stream";
         };
     }

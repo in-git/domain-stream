@@ -41,10 +41,19 @@ interface VideoPickerProps {
   multiple?: boolean;
   /** 弹窗标题 */
   title?: string;
+  /** 打开时默认勾选的状态筛选，不传为「全部」 */
+  status?: StatusTab;
 }
 
-export function VideoPicker({ open, onClose, onSelect, multiple = false, title = '选择视频' }: VideoPickerProps) {
-  const [status, setStatus] = useState<StatusTab>('all');
+export function VideoPicker({
+  open,
+  onClose,
+  onSelect,
+  multiple = false,
+  title = '选择视频',
+  status: initialStatus = 'all',
+}: VideoPickerProps) {
+  const [status, setStatus] = useState<StatusTab>(initialStatus);
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -88,15 +97,22 @@ export function VideoPicker({ open, onClose, onSelect, multiple = false, title =
     return undefined;
   }, [open, load]);
 
+  // 打开或传入的状态变化时自动勾选对应筛选
+  useEffect(() => {
+    if (!open) return;
+    setStatus(initialStatus);
+    setPage(1);
+  }, [open, initialStatus]);
+
   // 关闭时复位到默认状态，下次打开与首次一致
   useEffect(() => {
     if (open) return;
     setSelected([]);
     setSearch('');
     setCategory('');
-    setStatus('all');
+    setStatus(initialStatus);
     setPage(1);
-  }, [open]);
+  }, [open, initialStatus]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 

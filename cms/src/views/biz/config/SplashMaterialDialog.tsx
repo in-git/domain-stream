@@ -1,7 +1,7 @@
 /**
  * 开屏设置弹窗
  * ------------------------------------------------------------------
- * 开屏不再区分「形式」：主体始终是 PC / 移动双画布编辑器（文本、图片、进度条），
+ * 开屏不再区分「形式」：主体始终是 PC / 移动双画布编辑器（文本、图片、图形、HTML），
  * 背景素材在画布配置里选图片或视频，客户端按背景类型决定渲染视频还是组件。
  * 左侧只放整屏级别的设置：网页标题、开屏时间、开屏音频（背景是视频时隐藏）。
  *
@@ -11,7 +11,6 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 import {
   Check,
-  FolderOpen,
   Image as ImageIcon,
   Loader2,
   Music,
@@ -177,13 +176,10 @@ export function SplashMaterialDialog({
   const audioName = audioFilled
     ? decodeURIComponent(audioValue.split('/').pop() || '') || '已设置'
     : '未设置';
-  // 画布任一方向把背景配成视频时，开屏音频不再叠加；没选图片背景时音频入口不出现
+  // 没选图片背景时音频入口不出现
   const splashCanvasDoc = parseSplashCanvas(values[SPLASH_CANVAS_KEY]);
   const hasBackgroundImage = Boolean(
     splashCanvasDoc && (splashCanvasDoc.pc.backgroundImage || splashCanvasDoc.mobile.backgroundImage)
-  );
-  const hasBackgroundVideo = Boolean(
-    splashCanvasDoc && (splashCanvasDoc.pc.backgroundVideo || splashCanvasDoc.mobile.backgroundVideo)
   );
 
   function changeDuration(raw: string) {
@@ -307,14 +303,7 @@ export function SplashMaterialDialog({
                   </div>
                 </FieldBlock>
 
-                {hasBackgroundVideo ? (
-                  <div>
-                    <p className="text-[11px] text-[#86868B]">开屏音频</p>
-                    <p className="mt-2 text-[10.5px] leading-relaxed text-[#A1A1A6]">
-                      画布背景已使用视频，视频自带声音，不再叠加音频；把背景切回图片后可重新设置
-                    </p>
-                  </div>
-                ) : hasBackgroundImage ? (
+                {hasBackgroundImage && (
                   <div className="flex flex-col gap-2">
                     <p className="text-[11px] text-[#86868B]">开屏音频</p>
                     <MediaCard
@@ -327,12 +316,7 @@ export function SplashMaterialDialog({
                       onRemove={() => onChange(SPLASH_AUDIO_KEY, '')}
                     />
                   </div>
-                ) : null}
-
-                <p className="mt-auto flex items-start gap-1.5 text-[10.5px] leading-relaxed text-[#86868B]">
-                  <FolderOpen className="mt-0.5 h-3 w-3 shrink-0" />
-                  背景素材在右侧画布配置里设置：选视频客户端就播视频，选图片或只放组件就是封面画布。
-                </p>
+                )}
               </div>
 
               {/* 右侧：PC / 移动双画布编辑器 */}

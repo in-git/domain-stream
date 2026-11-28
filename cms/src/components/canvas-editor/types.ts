@@ -2,13 +2,13 @@
  * 通用画布编辑器 —— 文档模型
  * ------------------------------------------------------------------
  * 与具体业务解耦的「可拖拽画布」模型：画布是一份设计像素尺寸的文档，
- * 里面的节点只有文本 / 图片 / 进度条三种，坐标和尺寸都按设计像素存，
+ * 里面的节点有文本 / 图片 / 进度条 / 矩形 / 圆形 / SVG，坐标和尺寸都按设计像素存，
  * 展示端再按百分比换算，任何分辨率下比例都一致。
  *
  * 调用方只需要提供 { width, height, background, nodes } 即可渲染，
  * 存库格式、多套尺寸（如 PC / 移动端）由调用方自己组织。
  */
-export type CanvasNodeType = 'text' | 'image' | 'progress';
+export type CanvasNodeType = 'text' | 'image' | 'rect' | 'ellipse' | 'svg' | 'html';
 /**
  * 图片 / 背景素材的填充方式。
  * 与前台 CSS 的 object-fit 语义一一对应（见 imageBoxFor 的注释）：
@@ -40,11 +40,93 @@ export const CANVAS_IMAGE_MODES: { value: CanvasImageMode; label: string }[] = [
 ];
 
 /**
- * 画面风格滤镜（图片节点 / 画布背景共用）。
+ * 画面调节（图片节点 / 画布背景共用）。
  * 编辑器里通过 Leafer 的 @leafer-in/filter 插件渲染（同一套 CSS filter 语法），
  * 客户端直接用 CSS filter，两边视觉效果一致。
  */
-export type CanvasFilterStyle =
+export interface CanvasFilterParams {
+  /** 亮度 0-200，100 为原图 */
+  brightness: number;
+  /** 对比度 0-200，100 为原图 */
+  contrast: number;
+  /** 饱和度 0-200，100 为原图 */
+  saturate: number;
+  /** 色相 -180-180 度，0 为原图 */
+  hue: number;
+  /** 灰度 0-100，0 为原图 */
+  grayscale: number;
+  /** 复古（棕调）0-100，0 为原图 */
+  sepia: number;
+}
+
+export const DEFAULT_CANVAS_FILTER: CanvasFilterParams = {
+  brightness: 100,
+  contrast: 100,
+  saturate: 100,
+  hue: 0,
+  grayscale: 0,
+  sepia: 0,
+};
+
+/** 面板上的数值项：与 CanvasFilterParams 字段一一对应 */
+export const CANVAS_FILTER_FIELDS: {
+  key: keyof CanvasFilterParams;
+  label: string;
+  min: number;
+  max: number;
+  unit: string;
+}[] = [
+  { key: 'brightness', label: '亮度', min: 0, max: 200, unit: '%' },
+  { key: 'contrast', label: '对比度', min: 0, max: 200, unit: '%' },
+  { key: 'saturate', label: '饱和度', min: 0, max: 200, unit: '%' },
+  { key: 'hue', label: '色相', min: -180, max: 180, unit: '°' },
+  { key: 'grayscale', label: '灰度', min: 0, max: 100, unit: '%' },
+  { key: 'sepia', label: '复古', min: 0, max: 100, unit: '%' },
+];
+
+/** 解析库存 / 外部传入的调节参数：缺失字段回退默认值，并夹到合法区间 */
+export function normalizeCanvasFilter(value: unknown): CanvasFilterParams | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const row = value as Record<string, unknown>;
+  const result = { ...DEFAULT_CANVAS_FILTER };
+  for (const field of CANVAS_FILTER_FIELDS) {
+    const num = Number(row[field.key]);
+    if (!Number.isFinite(num)) continue;
+    result[field.key] = Math.min(field.max, Math.max(field.min, Math.round(num)));
+  }
+  return result;
+}
+
+export function isDefaultCanvasFilter(filter?: CanvasFilterParams): boolean {
+  if (!filter) return true;
+  return CANVAS_FILTER_FIELDS.every((field) => filter[field.key] === DEFAULT_CANVAS_FILTER[field.key]);
+}
+
+/** 两个调节参数是否一致（用于外部文档同步判断） */
+export function sameCanvasFilter(
+  a?: CanvasFilterParams,
+  b?: CanvasFilterParams
+): boolean {
+  if (!a || !b) return a === b;
+  return CANVAS_FILTER_FIELDS.every((field) => a[field.key] === b[field.key]);
+}
+
+/** 生成 CSS filter；全部为默认值时返回空字符串，表示不加滤镜 */
+export function filterCss(filter?: Partial<CanvasFilterParams>): string {
+  if (!filter) return '';
+  const value = { ...DEFAULT_CANVAS_FILTER, ...filter };
+  const parts: string[] = [];
+  if (value.brightness !== 100) parts.push(`brightness(${value.brightness / 100})`);
+  if (value.contrast !== 100) parts.push(`contrast(${value.contrast / 100})`);
+  if (value.saturate !== 100) parts.push(`saturate(${value.saturate / 100})`);
+  if (value.hue !== 0) parts.push(`hue-rotate(${value.hue}deg)`);
+  if (value.grayscale > 0) parts.push(`grayscale(${value.grayscale / 100})`);
+  if (value.sepia > 0) parts.push(`sepia(${value.sepia / 100})`);
+  return parts.join(' ');
+}
+
+/** 旧版预设风格，仅用于读取历史配置时换算成数值参数 */
+export type LegacyCanvasFilterStyle =
   | 'none'
   | 'grayscale'
   | 'sepia'
@@ -55,52 +137,56 @@ export type CanvasFilterStyle =
   | 'fade'
   | 'drama';
 
-export const CANVAS_FILTERS: { value: CanvasFilterStyle; label: string }[] = [
-  { value: 'none', label: '原色' },
-  { value: 'grayscale', label: '黑白' },
-  { value: 'sepia', label: '复古棕' },
-  { value: 'vintage', label: '胶片' },
-  { value: 'warm', label: '暖阳' },
-  { value: 'cool', label: '冷调' },
-  { value: 'vivid', label: '鲜艳' },
-  { value: 'fade', label: '褪色' },
-  { value: 'drama', label: '戏剧' },
-];
-
-/** 判断给定值是否为合法滤镜风格（解析存储配置时做白名单校验） */
-export function isCanvasFilterStyle(value: unknown): value is CanvasFilterStyle {
-  return CANVAS_FILTERS.some((item) => item.value === value);
-}
-
-/**
- * 按风格 + 强度（0-100）生成 CSS filter 字符串。
- * none / 强度 0 返回空字符串，表示不加滤镜。
- * 编辑器（Leafer filter 插件）与客户端（CSS filter）共用同一语法。
- */
-export function filterCss(style?: CanvasFilterStyle, intensity?: number): string {
-  if (!style || style === 'none') return '';
+/** 旧版「预设风格 + 强度」换算为数值参数；未知风格或强度为 0 返回 undefined */
+export function legacyCanvasFilter(
+  style: unknown,
+  intensity?: number
+): CanvasFilterParams | undefined {
+  if (typeof style !== 'string' || style === 'none') return undefined;
   const p = Math.min(100, Math.max(0, Math.round(intensity ?? 100))) / 100;
-  if (p <= 0) return '';
-  switch (style) {
+  if (p <= 0) return undefined;
+  const value = { ...DEFAULT_CANVAS_FILTER };
+  switch (style as LegacyCanvasFilterStyle) {
     case 'grayscale':
-      return `grayscale(${p})`;
+      value.grayscale = 100 * p;
+      break;
     case 'sepia':
-      return `sepia(${p})`;
+      value.sepia = 100 * p;
+      break;
     case 'vintage':
-      return `sepia(${0.45 * p}) contrast(${1 - 0.1 * p}) brightness(${1 + 0.06 * p}) saturate(${1 - 0.2 * p})`;
+      value.sepia = 45 * p;
+      value.contrast = 100 - 10 * p;
+      value.brightness = 100 + 6 * p;
+      value.saturate = 100 - 20 * p;
+      break;
     case 'warm':
-      return `saturate(${1 + 0.25 * p}) brightness(${1 + 0.05 * p}) sepia(${0.18 * p})`;
+      value.saturate = 100 + 25 * p;
+      value.brightness = 100 + 5 * p;
+      value.sepia = 18 * p;
+      break;
     case 'cool':
-      return `saturate(${1 + 0.15 * p}) brightness(${1 + 0.03 * p}) hue-rotate(${-12 * p}deg)`;
+      value.saturate = 100 + 15 * p;
+      value.brightness = 100 + 3 * p;
+      value.hue = -12 * p;
+      break;
     case 'vivid':
-      return `saturate(${1 + 0.8 * p}) contrast(${1 + 0.12 * p})`;
+      value.saturate = 100 + 80 * p;
+      value.contrast = 100 + 12 * p;
+      break;
     case 'fade':
-      return `contrast(${1 - 0.25 * p}) brightness(${1 + 0.1 * p}) saturate(${1 - 0.45 * p})`;
+      value.contrast = 100 - 25 * p;
+      value.brightness = 100 + 10 * p;
+      value.saturate = 100 - 45 * p;
+      break;
     case 'drama':
-      return `contrast(${1 + 0.3 * p}) brightness(${1 - 0.08 * p}) saturate(${1 + 0.15 * p})`;
+      value.contrast = 100 + 30 * p;
+      value.brightness = 100 - 8 * p;
+      value.saturate = 100 + 15 * p;
+      break;
     default:
-      return '';
+      return undefined;
   }
+  return normalizeCanvasFilter(value);
 }
 
 /** 所有节点共用的几何与状态字段 */
@@ -122,6 +208,8 @@ export interface CanvasNodeBase {
   allowSkew?: boolean;
   /** 允许拖出画布做溢出效果，默认 false（限制在画布内） */
   overflow?: boolean;
+  /** 系统固定组件（如「跳过开屏」），不可删除 */
+  fixed?: 'skip';
 }
 
 export interface CanvasTextNode extends CanvasNodeBase {
@@ -144,20 +232,60 @@ export interface CanvasImageNode extends CanvasNodeBase {
   mode: CanvasImageMode;
   radius: number;
   opacity: number;
-  /** 画面风格滤镜，默认原色（none） */
-  filterStyle?: CanvasFilterStyle;
-  /** 滤镜强度 0-100，默认 100 */
-  filterIntensity?: number;
+  /** 画面调节参数，缺省表示原图 */
+  filter?: CanvasFilterParams;
 }
 
-export interface CanvasProgressNode extends CanvasNodeBase {
-  type: 'progress';
-  trackColor: string;
-  fillColor: string;
+/** 几何框，绘制图形时由拖拽范围决定 */
+export type CanvasNodeBox = Pick<CanvasNodeBase, 'x' | 'y' | 'width' | 'height'>;
+
+export interface CanvasRectNode extends CanvasNodeBase {
+  type: 'rect';
+  fill: string;
   radius: number;
+  opacity: number;
+  /** 描边颜色；不写表示无描边 */
+  stroke?: string;
+  /** 描边宽度（设计像素） */
+  strokeWidth?: number;
 }
 
-export type CanvasNode = CanvasTextNode | CanvasImageNode | CanvasProgressNode;
+export interface CanvasEllipseNode extends CanvasNodeBase {
+  type: 'ellipse';
+  fill: string;
+  opacity: number;
+  /** 描边颜色；不写表示无描边 */
+  stroke?: string;
+  /** 描边宽度（设计像素） */
+  strokeWidth?: number;
+}
+
+export interface CanvasSvgNode extends CanvasNodeBase {
+  type: 'svg';
+  /** 图片地址：内置图形的 data URI，或上传 SVG 的后端存储路径 */
+  url: string;
+  /** 内置图形标识；上传的 SVG 没有该字段 */
+  preset?: string;
+  /** 内置图形的着色（改色时按它重新生成 data URI） */
+  color?: string;
+  opacity: number;
+}
+
+/** HTML 代码组件：画布内以代码占位显示，客户端开屏按原始 HTML 渲染 */
+export interface CanvasHtmlNode extends CanvasNodeBase {
+  type: 'html';
+  /** 用户输入的 HTML 片段 */
+  html: string;
+  opacity: number;
+}
+
+export type CanvasNode =
+  | CanvasTextNode
+  | CanvasImageNode
+  | CanvasRectNode
+  | CanvasEllipseNode
+  | CanvasSvgNode
+  | CanvasHtmlNode;
 
 export interface CanvasDoc extends CanvasSize {
   background: string;
@@ -169,10 +297,8 @@ export interface CanvasDoc extends CanvasSize {
   backgroundVideoCover?: string;
   /** 背景素材铺法：等比铺满 / 原比例 / 拉伸铺满 / 横向拉伸 / 纵向拉伸，图片与视频共用，默认等比铺满 */
   backgroundMode?: CanvasImageMode;
-  /** 背景画面风格滤镜（图片 / 视频背景共用），默认原色 */
-  backgroundFilterStyle?: CanvasFilterStyle;
-  /** 背景滤镜强度 0-100，默认 100 */
-  backgroundFilterIntensity?: number;
+  /** 背景画面调节参数（图片 / 视频背景共用），缺省表示原图 */
+  backgroundFilter?: CanvasFilterParams;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布，默认开启 */
   allowPan?: boolean;
   nodes: CanvasNode[];
@@ -213,10 +339,6 @@ export const CANVAS_TEXT_DECORATIONS: { value: CanvasTextDecoration; label: stri
 
 export function round1(value: number): number {
   return Math.round(value * 10) / 10;
-}
-
-export function hasProgress(nodes: CanvasNode[]): boolean {
-  return nodes.some((node) => node.type === 'progress');
 }
 
 /**
@@ -337,37 +459,135 @@ export function createTextNode(
   };
 }
 
-/** 新增进度条：全画布唯一，调用方需先判断 hasProgress */
-export function createProgressNode(
+/** 新增 HTML 代码组件：代码由弹窗输入，画布里显示占位预览 */
+export function createHtmlNode(
   canvas: CanvasSize,
-  options: { width?: number; color?: string; trackColor?: string } = {}
-): CanvasProgressNode {
-  const width =
-    options.width ??
-    (canvas.width >= 1000 ? Math.round(canvas.width * 0.22) : Math.round(canvas.width * 0.45));
-  const height = 6;
+  html: string,
+  box?: CanvasNodeBox
+): CanvasHtmlNode {
+  const width = box?.width ?? Math.min(Math.round(canvas.width * 0.5), 480);
+  const height = box?.height ?? 160;
   return {
     id: createCanvasNodeId(),
-    type: 'progress',
-    x: Math.round((canvas.width - width) / 2),
-    y: Math.round(canvas.height * 0.62),
+    type: 'html',
+    x: box?.x ?? Math.round((canvas.width - width) / 2),
+    y: box?.y ?? Math.round((canvas.height - height) / 2),
     width,
     height,
-    trackColor: options.trackColor ?? '#3A3A3C',
-    fillColor: options.color ?? '#FFFFFF',
-    radius: Math.round(height / 2),
+    html,
+    opacity: 1,
   };
 }
 
-/** 由画布底色推算文字/进度条的默认配色，浅色底自动转深色，避免看不见 */
-export function defaultInkColor(background: string): string {
-  return isLightColor(background) ? '#1D1D1F' : '#FFFFFF';
+/** 内置矢量图形：path 取 24×24 视图里的 Material 图标路径 */
+export const CANVAS_SVG_PRESETS: { value: string; label: string; path: string }[] = [
+  {
+    value: 'star',
+    label: '星形',
+    path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+  },
+  {
+    value: 'heart',
+    label: '心形',
+    path: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
+  },
+  {
+    value: 'check',
+    label: '对勾',
+    path: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  },
+  {
+    value: 'arrow',
+    label: '箭头',
+    path: 'M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z',
+  },
+  {
+    value: 'plus',
+    label: '加号',
+    path: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+  },
+  {
+    value: 'bolt',
+    label: '闪电',
+    path: 'M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z',
+  },
+];
+
+/** 内置图形转 data URI：颜色直接写进 SVG，编辑器和前台都按图片渲染 */
+export function svgPresetUrl(preset: string, color: string): string {
+  const item = CANVAS_SVG_PRESETS.find((row) => row.value === preset) ?? CANVAS_SVG_PRESETS[0];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}"><path d="${item.path}"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-export function defaultProgressColors(background: string): { color: string; trackColor: string } {
-  return isLightColor(background)
-    ? { color: '#0071E3', trackColor: '#E5E5EA' }
-    : { color: '#FFFFFF', trackColor: '#3A3A3C' };
+/** 新增图形：默认落在画布居中；传入 box 时用拖拽画出来的框 */
+export function createRectNode(
+  canvas: CanvasSize,
+  options: { box?: CanvasNodeBox; fill?: string } = {}
+): CanvasRectNode {
+  const width = canvas.width >= 1000 ? 240 : 120;
+  const height = Math.round(width * 0.65);
+  return {
+    id: createCanvasNodeId(),
+    type: 'rect',
+    ...(options.box ?? {
+      x: Math.round((canvas.width - width) / 2),
+      y: Math.round((canvas.height - height) / 2),
+      width,
+      height,
+    }),
+    fill: options.fill ?? '#FFFFFF',
+    radius: 0,
+    opacity: 1,
+  };
+}
+
+export function createEllipseNode(
+  canvas: CanvasSize,
+  options: { box?: CanvasNodeBox; fill?: string } = {}
+): CanvasEllipseNode {
+  const width = canvas.width >= 1000 ? 240 : 120;
+  const height = Math.round(width * 0.65);
+  return {
+    id: createCanvasNodeId(),
+    type: 'ellipse',
+    ...(options.box ?? {
+      x: Math.round((canvas.width - width) / 2),
+      y: Math.round((canvas.height - height) / 2),
+      width,
+      height,
+    }),
+    fill: options.fill ?? '#FFFFFF',
+    opacity: 1,
+  };
+}
+
+export function createSvgNode(
+  canvas: CanvasSize,
+  options: { box?: CanvasNodeBox; preset?: string; color?: string } = {}
+): CanvasSvgNode {
+  const preset = options.preset ?? CANVAS_SVG_PRESETS[0].value;
+  const color = options.color ?? '#FFFFFF';
+  const size = canvas.width >= 1000 ? 160 : 96;
+  return {
+    id: createCanvasNodeId(),
+    type: 'svg',
+    ...(options.box ?? {
+      x: Math.round((canvas.width - size) / 2),
+      y: Math.round((canvas.height - size) / 2),
+      width: size,
+      height: size,
+    }),
+    url: svgPresetUrl(preset, color),
+    preset,
+    color,
+    opacity: 1,
+  };
+}
+
+/** 由画布底色推算文字 / 图形的默认配色，浅色底自动转深色，避免看不见 */
+export function defaultInkColor(background: string): string {
+  return isLightColor(background) ? '#1D1D1F' : '#FFFFFF';
 }
 
 /** 粗略判断底色深浅：只认 #RGB / #RRGGBB，解析失败按深色处理 */

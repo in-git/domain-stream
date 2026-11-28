@@ -36,7 +36,12 @@ const IMAGE_SUFFIXES = [
 ];
 
 function suffixOf(file: DevFile): string {
-  return (file.suffix || '').toLowerCase().replace('.', '');
+  const raw = (file.suffix || '').toLowerCase().replace('.', '').trim();
+  if (raw) return raw;
+  // 后端没写 suffix 时退回文件名后缀，避免 SVG 等被当成「其他」类型
+  const name = (file.name || file.objName || '').toLowerCase();
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 ? name.slice(dot + 1) : '';
 }
 
 export function isVideoFile(file: DevFile): boolean {

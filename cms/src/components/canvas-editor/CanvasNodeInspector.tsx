@@ -24,6 +24,7 @@ import {
   AlignStartVertical,
   Bold,
   Check,
+  Code2,
   CopyPlus,
   Film,
   FolderOpen,
@@ -31,20 +32,26 @@ import {
   Lock,
   LockOpen,
   Maximize2,
+  MoveHorizontal,
   Strikethrough,
   Trash2,
   Underline,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Button, Label, Popover, Slider } from '@heroui/react';
 import { ColorField } from './ColorField';
 import { Hint } from './Hint';
 import { loadVideoFrame } from './videoFrame';
 import {
-  CANVAS_FILTERS,
+  CANVAS_FILTER_FIELDS,
   CANVAS_IMAGE_MODES,
+  CANVAS_SVG_PRESETS,
+  DEFAULT_CANVAS_FILTER,
+  isDefaultCanvasFilter,
   previewUrl,
+  svgPresetUrl,
   type CanvasAlignMode,
-  type CanvasFilterStyle,
+  type CanvasFilterParams,
   type CanvasImageMode,
   type CanvasNode,
   type CanvasTextAlign,
@@ -75,7 +82,10 @@ const FONT_SIZES = [
 const TYPE_LABELS: Record<CanvasNode['type'], string> = {
   text: '文本',
   image: '图片',
-  progress: '进度条',
+  rect: '矩形',
+  ellipse: '圆形',
+  svg: 'SVG 图形',
+  html: 'HTML 代码',
 };
 
 /** 按预设梯度增减字号，落在两个预设之间时取相邻的更大 / 更小值 */
@@ -327,16 +337,20 @@ export interface CanvasInspectorContext {
   backgroundVideoCover: string;
   /** 背景素材铺法 */
   backgroundMode: CanvasImageMode;
-  /** 背景画面风格滤镜 */
-  backgroundFilterStyle?: CanvasFilterStyle;
-  /** 背景滤镜强度 0-100 */
-  backgroundFilterIntensity?: number;
+  /** 背景画面调节参数 */
+  backgroundFilter?: CanvasFilterParams;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布 */
   allowPan: boolean;
   /** 当前选中的节点数量，多选时提示样式会批量应用 */
   selectedCount?: number;
   onPatch: (patch: Record<string, unknown>) => void;
   onReplaceImage: () => void;
+  /** 替换 SVG 组件的图形文件 */
+  onReplaceSvg: () => void;
+  /** 打开 HTML 代码编辑弹窗 */
+  onEditHtml: () => void;
+  /** 文本宽度自适应内容 */
+  onFitText: () => void;
   /** 切换图片填充方式：按原始比例重新排一遍框 */
   onImageMode: (mode: CanvasImageMode) => void;
   onDelete: () => void;
@@ -354,8 +368,7 @@ export interface CanvasInspectorContext {
     backgroundImage?: string;
     backgroundVideo?: string;
     backgroundMode?: CanvasImageMode;
-    backgroundFilterStyle?: CanvasFilterStyle;
-    backgroundFilterIntensity?: number;
+    backgroundFilter?: CanvasFilterParams;
     allowPan?: boolean;
   }) => void;
   /** 视图复位到「适配画布」 */
@@ -377,12 +390,14 @@ export function CanvasNodeInspector({
   backgroundVideo,
   backgroundVideoCover,
   backgroundMode,
-  backgroundFilterStyle,
-  backgroundFilterIntensity,
+  backgroundFilter,
   allowPan,
   selectedCount = 0,
   onPatch,
   onReplaceImage,
+  onReplaceSvg,
+  onEditHtml,
+  onFitText,
   onImageMode,
   onDelete,
   onDuplicate,
@@ -421,6 +436,35 @@ export function CanvasNodeInspector({
           </span>
         )}
       </div>
+
+      {/* 组件操作：副本 / 锁定 / 删除固定在面板顶部 */}
+      {node && (
+        <div className="flex shrink-0 items-center justify-start gap-1.5 border-b border-[#F2F2F7] p-3">
+          <IconButton
+            icon={CopyPlus}
+            label="创建副本（Ctrl+D）"
+            onClick={() => onDuplicate?.()}
+            disabled={!onDuplicate}
+            className="h-7 w-7"
+          />
+          <IconButton
+            icon={node.locked ? LockOpen : Lock}
+            label={node.locked ? '解锁图层（Ctrl+Shift+L）' : '锁定图层（Ctrl+Shift+L）'}
+            onClick={() => onToggleLock?.()}
+            disabled={!onToggleLock}
+            active={!!node.locked}
+            className="h-7 w-7"
+          />
+          <IconButton
+            icon={Trash2}
+            label={node.fixed ? '系统固定组件不可删除' : '删除组件（Delete）'}
+            onClick={onDelete}
+            disabled={!!node.fixed}
+            danger
+            className="h-7 w-7"
+          />
+        </div>
+      )}
 
       {!node ? (
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -532,18 +576,8 @@ export function CanvasNodeInspector({
 
           {(backgroundImage || backgroundVideo) && (
             <FilterSection
-              style={backgroundFilterStyle ?? 'none'}
-              intensity={backgroundFilterIntensity ?? 100}
-              onChange={(style, intensity) => {
-                if (style === 'none') {
-                  onCanvasPatch({ backgroundFilterStyle: 'none' });
-                } else {
-                  onCanvasPatch({
-                    backgroundFilterStyle: style,
-                    backgroundFilterIntensity: intensity,
-                  });
-                }
-              }}
+              filter={backgroundFilter}
+              onChange={(filter) => onCanvasPatch({ backgroundFilter: filter })}
             />
           )}
 
@@ -665,6 +699,15 @@ export function CanvasNodeInspector({
                   </div>
                 </div>
 
+                <div className="flex justify-start">
+                  <IconButton
+                    icon={MoveHorizontal}
+                    label="自适应文本宽度"
+                    onClick={onFitText}
+                    className="h-7 w-7"
+                  />
+                </div>
+
                 <div>
                   <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">对齐</span>
                   <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#F0F0F3] p-0.5">
@@ -693,12 +736,14 @@ export function CanvasNodeInspector({
 
             {node.type === 'image' && (
               <>
-                <IconButton
-                  icon={FolderOpen}
-                  label="替换图片"
-                  onClick={onReplaceImage}
-                  className="h-8 w-full"
-                />
+                <div className="flex justify-start">
+                  <IconButton
+                    icon={FolderOpen}
+                    label="替换图片"
+                    onClick={onReplaceImage}
+                    className="h-8 w-8"
+                  />
+                </div>
 
                 <div>
                   <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
@@ -761,113 +806,206 @@ export function CanvasNodeInspector({
                 </div>
 
                 <FilterSection
-                  style={node.filterStyle ?? 'none'}
-                  intensity={node.filterIntensity ?? 100}
-                  onChange={(style, intensity) => {
-                    if (style === 'none') {
-                      onPatch({ filterStyle: 'none' });
-                    } else {
-                      onPatch({ filterStyle: style, filterIntensity: intensity });
-                    }
-                  }}
+                  filter={node.filter}
+                  onChange={(filter) => onPatch({ filter })}
                 />
               </>
             )}
 
-            {node.type === 'progress' && (
+            {node.type === 'rect' && (
               <>
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-[#6E6E73]">宽度</span>
-                    <span className="text-[11px] tabular-nums text-[#1D1D1F]">
-                      {node.width}px
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={40}
-                    max={canvasWidth}
-                    step={1}
-                    value={Math.min(node.width, canvasWidth)}
-                    onChange={(event) =>
-                      onPatch({
-                        width: Number(event.target.value),
-                        // 以中心为基准缩放，改宽度时保持水平居中
-                        x: Math.round(node.x + (node.width - Number(event.target.value)) / 2),
-                      })
-                    }
-                    className="w-full accent-[#0071E3]"
-                    aria-label="进度条宽度"
-                  />
-                </div>
-
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-[#6E6E73]">粗细</span>
-                    <span className="text-[11px] tabular-nums text-[#1D1D1F]">
-                      {node.height}px
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={2}
-                    max={40}
-                    step={1}
-                    value={node.height}
-                    onChange={(event) => {
-                      const height = Number(event.target.value);
-                      onPatch({
-                        height,
-                        radius: Math.round(height / 2),
-                        // 以中心为基准变粗，避免进度条整体往下长
-                        y: Math.round(node.y + (node.height - height) / 2),
-                      });
-                    }}
-                    className="w-full accent-[#0071E3]"
-                    aria-label="进度条粗细"
-                  />
-                </div>
-
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-[#6E6E73]">圆角</span>
-                    <span className="text-[11px] tabular-nums text-[#1D1D1F]">
-                      {node.radius}px
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(2, Math.round(node.height / 2))}
-                    step={1}
-                    value={node.radius}
-                    onChange={(event) => onPatch({ radius: Number(event.target.value) })}
-                    className="w-full accent-[#0071E3]"
-                    aria-label="进度条圆角"
-                  />
-                </div>
-
-                <div>
-                  <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
-                    轨道颜色
-                  </span>
-                  <ColorField
-                    key={`${node.id}-track`}
-                    color={node.trackColor}
-                    onChange={(value) => onPatch({ trackColor: value })}
-                  />
-                </div>
-
                 <div>
                   <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
                     填充颜色
                   </span>
                   <ColorField
                     key={`${node.id}-fill`}
-                    color={node.fillColor}
-                    onChange={(value) => onPatch({ fillColor: value })}
+                    color={node.fill}
+                    onChange={(value) => onPatch({ fill: value })}
                   />
                 </div>
+                <RangeSetting
+                  label="圆角"
+                  ariaLabel="矩形圆角"
+                  value={Math.round(node.radius)}
+                  min={0}
+                  max={Math.max(1, Math.round(Math.min(node.width, node.height) / 2))}
+                  unit="px"
+                  onChange={(value) => onPatch({ radius: value })}
+                />
+                <RangeSetting
+                  label="透明度"
+                  ariaLabel="矩形透明度"
+                  value={Math.round(node.opacity * 100)}
+                  min={10}
+                  max={100}
+                  unit="%"
+                  onChange={(value) => onPatch({ opacity: value / 100 })}
+                />
+                <div>
+                  <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
+                    描边颜色
+                  </span>
+                  <ColorField
+                    key={`${node.id}-stroke`}
+                    color={node.stroke ?? '#000000'}
+                    onChange={(value) =>
+                      onPatch({ stroke: value, strokeWidth: node.strokeWidth || 1 })
+                    }
+                  />
+                </div>
+                <RangeSetting
+                  label="描边粗细"
+                  ariaLabel="矩形描边粗细"
+                  value={node.strokeWidth ?? 0}
+                  min={0}
+                  max={20}
+                  unit="px"
+                  onChange={(value) =>
+                    onPatch({ strokeWidth: value, stroke: node.stroke ?? '#000000' })
+                  }
+                />
+              </>
+            )}
+
+            {node.type === 'ellipse' && (
+              <>
+                <div>
+                  <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
+                    填充颜色
+                  </span>
+                  <ColorField
+                    key={`${node.id}-fill`}
+                    color={node.fill}
+                    onChange={(value) => onPatch({ fill: value })}
+                  />
+                </div>
+                <RangeSetting
+                  label="透明度"
+                  ariaLabel="圆形透明度"
+                  value={Math.round(node.opacity * 100)}
+                  min={10}
+                  max={100}
+                  unit="%"
+                  onChange={(value) => onPatch({ opacity: value / 100 })}
+                />
+                <div>
+                  <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
+                    描边颜色
+                  </span>
+                  <ColorField
+                    key={`${node.id}-stroke`}
+                    color={node.stroke ?? '#000000'}
+                    onChange={(value) =>
+                      onPatch({ stroke: value, strokeWidth: node.strokeWidth || 1 })
+                    }
+                  />
+                </div>
+                <RangeSetting
+                  label="描边粗细"
+                  ariaLabel="圆形描边粗细"
+                  value={node.strokeWidth ?? 0}
+                  min={0}
+                  max={20}
+                  unit="px"
+                  onChange={(value) =>
+                    onPatch({ strokeWidth: value, stroke: node.stroke ?? '#000000' })
+                  }
+                />
+              </>
+            )}
+
+            {node.type === 'svg' && (
+              <>
+                <div className="flex justify-start">
+                  <IconButton
+                    icon={FolderOpen}
+                    label="上传 / 替换 SVG 文件"
+                    onClick={onReplaceSvg}
+                    className="h-8 w-8"
+                  />
+                </div>
+                <div>
+                  <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
+                    内置图形
+                  </span>
+                  <div className="grid grid-cols-6 gap-1">
+                    {CANVAS_SVG_PRESETS.map((preset) => (
+                      <Hint key={preset.value} label={preset.label} className="inline-flex h-8">
+                        <button
+                          type="button"
+                          aria-label={preset.label}
+                          aria-pressed={node.preset === preset.value}
+                          onClick={() =>
+                            onPatch({
+                              preset: preset.value,
+                              url: svgPresetUrl(preset.value, node.color ?? '#FFFFFF'),
+                            })
+                          }
+                          className={`inline-flex h-full w-full items-center justify-center rounded-lg border transition-colors ${
+                            node.preset === preset.value
+                              ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
+                              : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
+                          }`}
+                        >
+                          <img
+                            src={svgPresetUrl(preset.value, '#1D1D1F')}
+                            alt=""
+                            className="h-4 w-4"
+                          />
+                        </button>
+                      </Hint>
+                    ))}
+                  </div>
+                </div>
+                {node.preset && (
+                  <div>
+                    <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
+                      图形颜色
+                    </span>
+                    <ColorField
+                      key={`${node.id}-svg-color`}
+                      color={node.color ?? '#FFFFFF'}
+                      onChange={(value) =>
+                        onPatch({
+                          color: value,
+                          url: svgPresetUrl(node.preset ?? 'star', value),
+                        })
+                      }
+                    />
+                  </div>
+                )}
+                <RangeSetting
+                  label="透明度"
+                  ariaLabel="SVG 透明度"
+                  value={Math.round(node.opacity * 100)}
+                  min={10}
+                  max={100}
+                  unit="%"
+                  onChange={(value) => onPatch({ opacity: value / 100 })}
+                />
+              </>
+            )}
+
+            {node.type === 'html' && (
+              <>
+                <div className="flex justify-start">
+                  <IconButton
+                    icon={Code2}
+                    label="编辑 HTML 代码"
+                    onClick={onEditHtml}
+                    className="h-8 w-8"
+                  />
+                </div>
+                <RangeSetting
+                  label="透明度"
+                  ariaLabel="HTML 透明度"
+                  value={Math.round(node.opacity * 100)}
+                  min={10}
+                  max={100}
+                  unit="%"
+                  onChange={(value) => onPatch({ opacity: value / 100 })}
+                />
               </>
             )}
 
@@ -918,31 +1056,6 @@ export function CanvasNodeInspector({
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2 border-t border-[#F2F2F7] p-3">
-            <IconButton
-              icon={CopyPlus}
-              label="创建副本（Ctrl+D）"
-              onClick={() => onDuplicate?.()}
-              disabled={!onDuplicate}
-              className="h-8 flex-1"
-            />
-            <IconButton
-              icon={node.locked ? LockOpen : Lock}
-              label={node.locked ? '解锁图层（Ctrl+Shift+L）' : '锁定图层（Ctrl+Shift+L）'}
-              onClick={() => onToggleLock?.()}
-              disabled={!onToggleLock}
-              active={!!node.locked}
-              className="h-8 flex-1"
-            />
-            <IconButton
-              icon={Trash2}
-              label="删除组件（Delete）"
-              onClick={onDelete}
-              danger
-              className="h-8 flex-1"
-            />
           </div>
         </>
       )}
@@ -1010,59 +1123,193 @@ function ModeGlyph({ mode, className }: { mode: CanvasImageMode; className?: str
   );
 }
 
+/** 画面调节提交节流间隔：拖动滑杆时避免每帧都触发画布重绘 */
+const FILTER_THROTTLE_MS = 100;
+
+function filterSignature(filter: CanvasFilterParams): string {
+  return CANVAS_FILTER_FIELDS.map((field) => filter[field.key]).join(',');
+}
+
 /**
- * 画面风格滤镜设置：预设风格九宫格 + 强度滑杆（强度只在选了风格后生效）。
- * 图片节点与画布背景共用；选择「原色」即清除滤镜。
+ * 画面调节：亮度 / 对比度 / 饱和度 / 色相 / 灰度 / 复古 数值滑杆。
+ * 图片节点与画布背景共用；「重置」恢复默认值即清除滤镜。
+ * 滑杆先更新本地显示，再节流提交给画布，兼顾跟手与性能。
  */
 function FilterSection({
-  style,
-  intensity,
+  filter,
   onChange,
 }: {
-  style: CanvasFilterStyle;
-  intensity: number;
-  onChange: (style: CanvasFilterStyle, intensity: number) => void;
+  filter?: CanvasFilterParams;
+  onChange: (filter: CanvasFilterParams) => void;
 }) {
-  const hasFilter = style !== 'none';
+  const [value, setValue] = useState<CanvasFilterParams>(() => ({
+    ...DEFAULT_CANVAS_FILTER,
+    ...filter,
+  }));
+  const lastEmittedRef = useRef(filterSignature(value));
+  const pendingRef = useRef<CanvasFilterParams | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const lastRunRef = useRef(0);
+  const isDefault = isDefaultCanvasFilter(value);
+
+  // 外部文档变化（重置 / 撤销）时同步；自己刚提交的值不回写，避免拖动过程中跳回旧值
+  useEffect(() => {
+    const next = { ...DEFAULT_CANVAS_FILTER, ...filter };
+    const signature = filterSignature(next);
+    if (signature === lastEmittedRef.current) return;
+    lastEmittedRef.current = signature;
+    setValue(next);
+  }, [filter]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    []
+  );
+
+  function flush() {
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (!pending) return;
+    lastRunRef.current = Date.now();
+    lastEmittedRef.current = filterSignature(pending);
+    onChange(pending);
+  }
+
+  /** 首次立即提交，之后最多每 100ms 一次，结束时补发最后一帧 */
+  function emit(next: CanvasFilterParams) {
+    pendingRef.current = next;
+    const wait = FILTER_THROTTLE_MS - (Date.now() - lastRunRef.current);
+    if (wait <= 0) {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      flush();
+      return;
+    }
+    if (timerRef.current === null) {
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        flush();
+      }, wait);
+    }
+  }
+
+  function reset() {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    pendingRef.current = null;
+    const next = { ...DEFAULT_CANVAS_FILTER };
+    setValue(next);
+    lastEmittedRef.current = filterSignature(next);
+    lastRunRef.current = Date.now();
+    onChange(next);
+  }
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[11px] font-medium text-[#6E6E73]">画面调节</span>
+      <Popover>
+        <Popover.Trigger className="h-6 px-2.5 rounded-md border border-[#E5E5EA] bg-white text-[11px] text-[#6E6E73] outline-none transition-colors hover:border-[#0071E3] hover:text-[#0071E3] data-[open]:border-[#0071E3] data-[open]:text-[#0071E3]">
+          调节
+        </Popover.Trigger>
+        <Popover.Content
+          placement="bottom right"
+          offset={6}
+          className="dark w-[232px] rounded-xl border border-white/10 bg-[#1C1C1E] text-[#F5F5F7] shadow-2xl p-0"
+        >
+          <Popover.Dialog aria-label="画面调节" className="p-3 outline-none">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[#F5F5F7]">画面调节</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                isDisabled={isDefault}
+                onPress={reset}
+                className="h-6 min-w-0 px-1.5 text-[11px] text-[#0A84FF]"
+              >
+                重置
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {CANVAS_FILTER_FIELDS.map((field) => (
+                <Slider
+                  key={field.key}
+                  aria-label={field.label}
+                  minValue={field.min}
+                  maxValue={field.max}
+                  step={1}
+                  value={Math.round(value[field.key])}
+                  onChange={(next) => {
+                    const updated = {
+                      ...value,
+                      [field.key]: Array.isArray(next) ? next[0] : next,
+                    };
+                    setValue(updated);
+                    emit(updated);
+                  }}
+                  className="gap-1"
+                >
+                  <Label className="!text-[11px] !font-normal !text-white/55">{field.label}</Label>
+                  <Slider.Output className="!text-[11px] !font-normal tabular-nums !text-white/90">
+                    {Math.round(value[field.key])}
+                    {field.unit}
+                  </Slider.Output>
+                  <Slider.Track>
+                    <Slider.Fill />
+                    <Slider.Thumb />
+                  </Slider.Track>
+                </Slider>
+              ))}
+            </div>
+          </Popover.Dialog>
+        </Popover.Content>
+      </Popover>
+    </div>
+  );
+}
+
+/** 数值滑杆行：标签 + 当前值 + 滑杆，矩形 / 圆形 / SVG 的圆角与透明度共用 */
+function RangeSetting({
+  label,
+  ariaLabel,
+  value,
+  min,
+  max,
+  unit,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  onChange: (value: number) => void;
+}) {
   return (
     <div>
-      <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">画面风格</span>
-      <div className="grid grid-cols-3 gap-1">
-        {CANVAS_FILTERS.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            aria-pressed={style === item.value}
-            onClick={() => onChange(item.value, intensity)}
-            className={`h-7 rounded-md border text-[11px] transition-colors ${
-              style === item.value
-                ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
-                : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[11px] font-medium text-[#6E6E73]">{label}</span>
+        <span className="text-[11px] tabular-nums text-[#1D1D1F]">
+          {value}
+          {unit}
+        </span>
       </div>
-      <div className={hasFilter ? 'mt-2' : 'mt-2 opacity-40'}>
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[11px] font-medium text-[#6E6E73]">强度</span>
-          <span className="text-[11px] tabular-nums text-[#1D1D1F]">
-            {hasFilter ? `${Math.round(intensity)}%` : '—'}
-          </span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={Math.round(intensity)}
-          disabled={!hasFilter}
-          onChange={(event) => onChange(style, Number(event.target.value))}
-          className="w-full accent-[#0071E3] disabled:cursor-not-allowed"
-          aria-label="滤镜强度"
-        />
-      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full accent-[#0071E3]"
+        aria-label={ariaLabel}
+      />
     </div>
   );
 }

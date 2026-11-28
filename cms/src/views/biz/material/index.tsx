@@ -55,6 +55,7 @@ import { SelectField } from '../../../components/SelectField.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
 import { QuickCreateCategory } from '../../../components/QuickCreateCategory.tsx';
+import { FileMedia } from '../../../components/FileMedia.tsx';
 
 const PAGE_SIZE = 24;
 
@@ -251,13 +252,12 @@ function MaterialCard({
             className="w-full h-full object-cover"
           />
         ) : showCover ? (
-          <img
+          <FileMedia
+            file={file}
             src={cover}
             alt={file.name || '素材'}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setThumbFailed(true)}
             className="w-full h-full object-cover"
+            onError={() => setThumbFailed(true)}
           />
         ) : isVideo ? null : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
@@ -392,13 +392,12 @@ function MaterialTableThumb({ file }: { file: DevFile }) {
       style={isImageFile(file) ? IMAGE_TILE_BG : undefined}
     >
       {showCover ? (
-        <img
+        <FileMedia
+          file={file}
           src={cover}
           alt={file.name || '素材'}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setThumbFailed(true)}
           className="w-full h-full object-cover"
+          onError={() => setThumbFailed(true)}
         />
       ) : (
         <Icon className="w-4 h-4" strokeWidth={1.6} />

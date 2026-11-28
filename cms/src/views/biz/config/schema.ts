@@ -143,7 +143,7 @@ export const SPLASH_AUDIO_KEY = 'splashAudioUrl';
 /**
  * 开屏画布文档（JSON 字符串）
  * ------------------------------------------------------------------
- * 开屏的主体内容改由「PC / 移动两块独立画布」描述：文本、图片、进度条，
+ * 开屏的主体内容改由「PC / 移动两块独立画布」描述：文本、图片、图形、HTML，
  * 坐标与尺寸存设计像素，客户端换算成百分比渲染。背景素材（图片 / 视频互斥）
  * 存在画布文档里，客户端按背景类型决定渲染视频还是组件。
  */
@@ -157,7 +157,7 @@ export const SPLASH_MEDIA_KEYS: string[] = [
 ];
 
 /**
- * 旧版开屏标题 / 进度条的位置（百分比 JSON）
+ * 旧版开屏标题的位置（百分比 JSON）
  * ------------------------------------------------------------------
  * 开屏改由画布文档 splashCanvas 描述后，这些位置只用于「首次打开画布时
  * 迁移成初始节点」，不再出现在设置面板里，也不再直接影响渲染。
@@ -166,36 +166,105 @@ export const SPLASH_TITLE_POS_KEYS = [
   'splashTitlePosLandscape',
   'splashTitlePosPortrait',
 ];
-export const SPLASH_PROGRESS_POS_KEYS = [
-  'splashProgressPosLandscape',
-  'splashProgressPosPortrait',
-];
-export const SPLASH_LAYOUT_KEYS: string[] = [
-  ...SPLASH_TITLE_POS_KEYS,
-  ...SPLASH_PROGRESS_POS_KEYS,
-];
+export const SPLASH_LAYOUT_KEYS: string[] = [...SPLASH_TITLE_POS_KEYS];
 
 /**
- * 旧版开屏标题 / 进度条的样式：字号、颜色、进度条宽度。
+ * 旧版开屏标题的样式：字号、颜色。
  * 同样只用于迁移初始画布；画布节点自己有完整的样式字段。
  */
 export const SPLASH_TITLE_SIZE_KEY = 'splashTitleFontSize';
 export const SPLASH_TITLE_COLOR_KEY = 'splashTitleColor';
-export const SPLASH_PROGRESS_WIDTH_KEY = 'splashProgressWidth';
-export const SPLASH_PROGRESS_COLOR_KEY = 'splashProgressColor';
-export const SPLASH_STYLE_KEYS: string[] = [
-  SPLASH_TITLE_SIZE_KEY,
-  SPLASH_TITLE_COLOR_KEY,
-  SPLASH_PROGRESS_WIDTH_KEY,
-  SPLASH_PROGRESS_COLOR_KEY,
-];
+export const SPLASH_STYLE_KEYS: string[] = [SPLASH_TITLE_SIZE_KEY, SPLASH_TITLE_COLOR_KEY];
+
+/**
+ * 开屏配置整体存进这一个属性，值是 JSON 对象。
+ * 数据库里不再分散保存 splashXxx 字段，读取时展开回各表单项，
+ * 保存时重新合并；历史扁平字段仍可读取，保存一次后即合并成 splash。
+ */
+export const SPLASH_CONFIG_KEY = 'splash';
+
+/**
+ * schema 属性名 → splash 对象里的字段名。
+ * 只要新增开屏属性，在这里登记即可自动参与合并 / 展开。
+ */
+const SPLASH_SUB_KEYS: Record<string, string> = {
+  [SPLASH_DURATION_KEY]: 'duration',
+  [SPLASH_VIDEO_KEYS[0]]: 'videoLandscapeUrl',
+  [SPLASH_VIDEO_KEYS[1]]: 'videoPortraitUrl',
+  [SPLASH_IMAGE_KEYS[0]]: 'imageLandscapeUrl',
+  [SPLASH_IMAGE_KEYS[1]]: 'imagePortraitUrl',
+  [SPLASH_AUDIO_KEY]: 'audioUrl',
+  [SPLASH_TITLE_POS_KEYS[0]]: 'titlePosLandscape',
+  [SPLASH_TITLE_POS_KEYS[1]]: 'titlePosPortrait',
+  [SPLASH_TITLE_SIZE_KEY]: 'titleFontSize',
+  [SPLASH_TITLE_COLOR_KEY]: 'titleColor',
+  [SPLASH_CANVAS_KEY]: 'canvas',
+};
+
+/** 是否属于开屏配置（保存时并入 splash 对象） */
+export function isSplashField(key: string): boolean {
+  return key in SPLASH_SUB_KEYS;
+}
+
+/** 把各开屏表单项合并成 splash 的 JSON；画布以对象形式嵌套，空值不写 */
+export function buildSplashValue(values: Record<string, string>): string {
+  const json: Record<string, unknown> = {};
+  for (const [key, name] of Object.entries(SPLASH_SUB_KEYS)) {
+    const value = (values[key] ?? '').trim();
+    if (!value) continue;
+    if (key === SPLASH_CANVAS_KEY) {
+      try {
+        json[name] = JSON.parse(value);
+      } catch {
+        json[name] = value;
+      }
+    } else {
+      json[name] = value;
+    }
+  }
+  return JSON.stringify(json);
+}
+
+/** 展开 splash JSON 成各表单项的值；画布对象转回 JSON 字符串 */
+export function expandSplashValue(raw: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const text = (raw || '').trim();
+  if (!text) return result;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return result;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return result;
+  const row = parsed as Record<string, unknown>;
+  for (const [key, name] of Object.entries(SPLASH_SUB_KEYS)) {
+    const value = row[name];
+    if (typeof value === 'string') {
+      result[key] = value;
+    } else if (key === SPLASH_CANVAS_KEY && value && typeof value === 'object') {
+      result[key] = JSON.stringify(value);
+    }
+  }
+  return result;
+}
+
+/** 草稿 → 提交给后端的属性列表：开屏字段合并成一个 splash 属性 */
+export function configItemsFromValues(values: Record<string, string>): PageConfigItem[] {
+  const items: PageConfigItem[] = CONFIG_FIELDS.filter(
+    (field) => !isSplashField(field.key)
+  ).map((field) => ({
+    key: field.key,
+    value: values[field.key] ?? field.defaultValue,
+  }));
+  items.push({ key: SPLASH_CONFIG_KEY, value: buildSplashValue(values) });
+  return items;
+}
 
 /** 样式留空时的默认值（客户端与预览对齐；标题宽度大屏时更大） */
 export const SPLASH_DEFAULT_STYLES = {
   titleSize: 48,
-  progressWidth: 176,
   titleColor: '#FFFFFF',
-  progressColor: '#FFFFFF',
 };
 export interface SplashPosition {
   /** 相对屏幕宽度的百分比（元素水平中心） */
@@ -204,10 +273,9 @@ export interface SplashPosition {
   y: number;
 }
 
-/** 默认位置：标题在上、进度条在下，都在屏幕中间区域 */
-export const SPLASH_DEFAULT_POSITIONS: Record<'title' | 'progress', SplashPosition> = {
+/** 默认位置：标题在上，位于屏幕中间区域 */
+export const SPLASH_DEFAULT_POSITIONS: Record<'title', SplashPosition> = {
   title: { x: 50, y: 38 },
-  progress: { x: 50, y: 62 },
 };
 
 /** 解析位置配置；缺省或脏数据回退到默认位置 */
@@ -361,7 +429,7 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     mediaAccept: 'audio',
     defaultValue: '',
   },
-  // 以下 6 个旧版位置不渲染成表单，仅用于首次打开画布时迁移初始节点
+  // 以下 4 个旧版位置 / 样式不渲染成表单，仅用于首次打开画布时迁移初始节点
   {
     key: SPLASH_TITLE_POS_KEYS[0],
     label: '标题位置（横屏）',
@@ -372,21 +440,8 @@ export const CONFIG_FIELDS: ConfigFieldDef[] = [
     label: '标题位置（竖屏）',
     defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.title),
   },
-  {
-    key: SPLASH_PROGRESS_POS_KEYS[0],
-    label: '进度条位置（横屏）',
-    defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.progress),
-  },
-  {
-    key: SPLASH_PROGRESS_POS_KEYS[1],
-    label: '进度条位置（竖屏）',
-    defaultValue: stringifySplashPosition(SPLASH_DEFAULT_POSITIONS.progress),
-  },
-  // 以下 4 个旧版样式不渲染成表单，仅用于首次打开画布时迁移初始节点
   { key: SPLASH_TITLE_SIZE_KEY, label: '标题字号', defaultValue: '' },
   { key: SPLASH_TITLE_COLOR_KEY, label: '标题颜色', defaultValue: '' },
-  { key: SPLASH_PROGRESS_WIDTH_KEY, label: '进度条宽度', defaultValue: '' },
-  { key: SPLASH_PROGRESS_COLOR_KEY, label: '进度条颜色', defaultValue: '' },
   // 开屏画布：PC / 移动两块独立画布的节点文档，由「设置开屏」弹窗的可视化编辑器写入
   { key: SPLASH_CANVAS_KEY, label: '开屏画布', defaultValue: '' },
   {
@@ -622,22 +677,35 @@ export interface ConfigDraft {
 /** 把后端返回的属性列表合并成草稿（缺失属性用默认值，兼容 aliases） */
 export function draftFromItems(items: PageConfigItem[]): ConfigDraft {
   const stored = new Map(items.map((item) => [item.key, item.value]));
+  // 开屏属性优先从 splash 对象展开；历史扁平字段仍按原逻辑兜底
+  const hasSplash = stored.has(SPLASH_CONFIG_KEY);
+  const splash = hasSplash ? expandSplashValue(stored.get(SPLASH_CONFIG_KEY) ?? '') : {};
   const values: Record<string, string> = {};
   const storedKeys: Record<string, string | null> = {};
 
   for (const field of CONFIG_FIELDS) {
     let matchedKey: string | null = null;
-    let value: string | undefined = stored.get(field.key);
-    if (value !== undefined) {
-      matchedKey = field.key;
+    let value: string | undefined;
+    if (isSplashField(field.key) && splash[field.key] !== undefined) {
+      value = splash[field.key];
+      matchedKey = SPLASH_CONFIG_KEY;
     } else {
-      for (const alias of field.aliases ?? []) {
-        const aliasValue = stored.get(alias);
-        if (aliasValue !== undefined) {
-          value = aliasValue;
-          matchedKey = alias;
-          break;
+      value = stored.get(field.key);
+      if (value !== undefined) {
+        matchedKey = field.key;
+      } else {
+        for (const alias of field.aliases ?? []) {
+          const aliasValue = stored.get(alias);
+          if (aliasValue !== undefined) {
+            value = aliasValue;
+            matchedKey = alias;
+            break;
+          }
         }
+      }
+      // splash 里没有这一项时也视为已保存，避免误报「未保存」
+      if (isSplashField(field.key) && matchedKey === null && hasSplash) {
+        matchedKey = SPLASH_CONFIG_KEY;
       }
     }
 
@@ -665,11 +733,19 @@ export function configSwitchOn(value?: string): boolean {
   return normalized !== 'NO' && normalized !== 'FALSE' && normalized !== '0';
 }
 
-/** 草稿生成将要写入数据库的 JSON（只包含 schema 中定义的属性） */
+/** 草稿生成将要写入数据库的 JSON（开屏字段合并为 splash 对象） */
 export function draftToJson(values: Record<string, string>): string {
-  const json: Record<string, string> = {};
-  for (const field of CONFIG_FIELDS) {
-    json[field.key] = values[field.key] ?? field.defaultValue;
+  const json: Record<string, unknown> = {};
+  for (const item of configItemsFromValues(values)) {
+    if (item.key === SPLASH_CONFIG_KEY) {
+      try {
+        json[item.key] = JSON.parse(item.value);
+      } catch {
+        json[item.key] = item.value;
+      }
+    } else {
+      json[item.key] = item.value;
+    }
   }
   return JSON.stringify(json, null, 2);
 }

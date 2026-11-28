@@ -7,13 +7,14 @@ import {
   type SyntheticEvent,
 } from 'react';
 import { motion } from 'motion/react';
+import splashSvgRaw from '../assets/splash-icon.svg?raw';
 import { APPLE_EASE, SWIFTUI_SMOOTH } from '../lib/motion';
 import { publicFileUrl, useSystemInfo, useSystemInfoSettled } from '../lib/systemInfo';
 import {
   parseSplashCanvas,
   resolveSplashMode,
   splashFilterCss,
-  type SplashFilterStyle,
+  type SplashFilterParams,
   type SplashImageMode,
   type SplashNode,
   type SplashOrientationDoc,
@@ -26,16 +27,23 @@ const MAX_MEDIA_DURATION = 8000;
 /** 等系统配置的最长时间：超时仍用默认时长开跑，避免接口异常时开屏卡死 */
 const CONFIG_WAIT_TIMEOUT = 1200;
 
-/** 标题 / 进度条的默认位置（百分比：x 为水平中心、y 为顶边） */
+/**
+ * 开屏 SVG 内联代码：去掉 XML 声明 / DOCTYPE，并让图形铺满节点框，
+ * 直接写进开屏页面渲染，绕开 <img> 对 SVG Content-Type 的依赖。
+ */
+const SPLASH_SVG_MARKUP = splashSvgRaw
+  .replace(/^[\s\S]*?<svg/i, '<svg')
+  .replace(/<svg\b/i, '<svg style="display:block;width:100%;height:100%"');
+
+
+/** 标题的默认位置（百分比：x 为水平中心、y 为顶边） */
 const DEFAULT_POSITIONS = {
   title: { x: 50, y: 38 },
-  progress: { x: 50, y: 62 },
 };
 
 /** 与后台「设置开屏素材」对应：横屏 / 竖屏各一套位置 */
 const POSITION_KEYS = {
   title: ['splashTitlePosLandscape', 'splashTitlePosPortrait'],
-  progress: ['splashProgressPosLandscape', 'splashProgressPosPortrait'],
 };
 
 interface SplashPosition {
@@ -110,14 +118,16 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   /** 画布背景视频（封面模式下的动态背景），与开屏音频互斥 */
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  /** 进度条填充层：用 rAF 直接改宽度，避免每帧重渲染整个开屏 */
-  const progressFillRef = useRef<HTMLDivElement | null>(null);
   const portrait = usePortrait();
-
   // 开屏不再有「形式」开关：画布配了背景视频就播视频，否则渲染画布组件；
   // 完全没有画布文档的旧配置才回退到「有视频播视频，否则整屏图片」
   const canvasDoc = parseSplashCanvas(config.splashCanvas);
   const canvas = canvasDoc ? (portrait ? canvasDoc.mobile : canvasDoc.pc) : null;
+  // 画布里的固定「跳过开屏」文本：位置 / 样式由后台决定，客户端拿它渲染跳过按钮
+  const skipNode =
+    canvas?.nodes.find(
+      (node): node is SplashTextNode => node.type === 'text' && node.fixed === 'skip'
+    ) ?? null;
   // 背景视频只跟随当前方向的画布，横竖屏各自独立
   const backgroundVideoUrl = canvas?.backgroundVideo
     ? publicFileUrl(canvas.backgroundVideo)
@@ -145,15 +155,9 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     config[POSITION_KEYS.title[orientationIndex]],
     DEFAULT_POSITIONS.title
   );
-  const progressPos = readPosition(
-    config[POSITION_KEYS.progress[orientationIndex]],
-    DEFAULT_POSITIONS.progress
-  );
-  // 后台「设置开屏素材 → 样式」里调整过的字号 / 颜色 / 进度条宽度，留空沿用默认样式
+  // 后台「设置开屏素材 → 样式」里调整过的字号 / 颜色，留空沿用默认样式
   const titleSize = Number((config.splashTitleFontSize || '').trim()) || 0;
   const titleColor = (config.splashTitleColor || '').trim();
-  const progressWidth = Number((config.splashProgressWidth || '').trim()) || 0;
-  const progressColor = (config.splashProgressColor || '').trim();
   // 音频只在图片背景下播放：视频开屏（旧配置）和画布背景视频都自带声音，不叠加音频
   const audioUrl =
     videoUrl || backgroundVideoUrl ? '' : publicFileUrl(config.splashAudioUrl);
@@ -163,7 +167,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     Number.isFinite(configuredSeconds) && configuredSeconds > 0 ? configuredSeconds * 1000 : 0;
 
   // 配置还没回来时不要开跑：否则会先用默认 1.85s 开始，等配置到达又重新计时，
-  // 进度条会回跳，整体时长也和后台配置不一致。最多等 1.2s 兜底，避免接口异常时卡住开屏。
+  // 整体时长和后台配置不一致。最多等 1.2s 兜底，避免接口异常时卡住开屏。
   const [configTimedOut, setConfigTimedOut] = useState(false);
   useEffect(() => {
     if (systemInfoSettled) return;
@@ -175,13 +179,13 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   /**
    * 本次开屏的持续时间：配置就绪后只取一次并锁定，
    * 后面素材元数据（video/audio 的 duration）再变化也不会重启计时，
-   * 保证进度条和关闭时机都用后端返回的开屏时间。
+   * 保证关闭时机用后端返回的开屏时间。
    */
   const [runDuration, setRunDuration] = useState(0);
   useEffect(() => {
     if (!configSettled || runDuration) return;
     setRunDuration(
-      // 后端给了开屏时间就严格按它走，不再二次夹取，保证进度条时长与配置一致
+      // 后端给了开屏时间就严格按它走，不再二次夹取
       configuredDuration
         ? configuredDuration
         : mediaDuration
@@ -192,18 +196,6 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
 
   useEffect(() => {
     if (!runDuration) return;
-    // 进度条与开屏时间同步：按后端给的持续时间匀速走满，结束时正好 100%
-    const start = performance.now();
-    let raf = 0;
-    if (progressFillRef.current) progressFillRef.current.style.width = '0%';
-
-    const tick = (now: number) => {
-      const ratio = Math.min(1, (now - start) / runDuration);
-      if (progressFillRef.current) progressFillRef.current.style.width = `${ratio * 100}%`;
-      if (ratio < 1) raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
     const done = window.setTimeout(() => {
       // 开屏结束立刻停掉媒体，否则淡出的 0.5s 里音频 / 视频还会继续响
       videoRef.current?.pause();
@@ -213,7 +205,6 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     }, runDuration);
 
     return () => {
-      cancelAnimationFrame(raf);
       window.clearTimeout(done);
     };
   }, [runDuration, onComplete]);
@@ -353,7 +344,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         />
       )}
 
-      {/* 后台画布：文本 / 图片 / 进度条按设计像素换算成百分比铺满屏幕 */}
+      {/* 后台画布：文本 / 图片 / 图形 / HTML 按设计像素换算成百分比铺满屏幕 */}
       {canvas && (
         <div
           className="pointer-events-none absolute inset-0 z-10"
@@ -380,8 +371,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
                 playsInline
                 style={backgroundImageStyle(
                   canvas.backgroundMode,
-                  canvas.backgroundFilterStyle,
-                  canvas.backgroundFilterIntensity
+                  canvas.backgroundFilter
                 )}
                 aria-hidden="true"
               />
@@ -394,20 +384,16 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
                 aria-hidden="true"
                 style={backgroundImageStyle(
                   canvas.backgroundMode,
-                  canvas.backgroundFilterStyle,
-                  canvas.backgroundFilterIntensity
+                  canvas.backgroundFilter
                 )}
               />
             </div>
           ) : null}
-          {canvas.nodes.map((node) => (
-            <CanvasNode
-              key={node.id}
-              node={node}
-              canvas={canvas}
-              fillRef={progressFillRef}
-            />
-          ))}
+          {canvas.nodes
+            .filter((node) => !(node.type === 'text' && node.fixed === 'skip'))
+            .map((node) => (
+              <CanvasNode key={node.id} node={node} canvas={canvas} />
+            ))}
         </div>
       )}
 
@@ -439,32 +425,6 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         >
           {title}
         </motion.h1>
-
-        {/* Apple macOS-inspired ultra-thin boot progress bar */}
-        <motion.div
-          initial={{ opacity: 0, scaleX: 0.85 }}
-          animate={{ opacity: 1, scaleX: 1 }}
-          transition={{ duration: 0.4, delay: 0.25, ease: APPLE_EASE }}
-          style={{
-            ...(hasVisualMedia
-              ? { left: `${progressPos.x}%`, top: `${progressPos.y}%`, x: '-50%' }
-              : {}),
-            ...(progressWidth ? { width: `${progressWidth}px` } : {}),
-          }}
-          className={
-            hasVisualMedia
-              ? 'absolute h-[3px] w-44 rounded-full bg-white/15 overflow-hidden'
-              : 'mt-10 w-44 h-[3px] rounded-full bg-white/15 overflow-hidden'
-          }
-          role="progressbar"
-          aria-label="开屏加载进度"
-        >
-          <div
-            ref={progressFillRef}
-            className="h-full rounded-full bg-app-card"
-            style={{ width: '0%', backgroundColor: progressColor || undefined }}
-          />
-        </motion.div>
         </div>
       )}
 
@@ -482,11 +442,39 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         whileHover={{ opacity: 1 }}
         whileTap={{ scale: 0.96 }}
         transition={{ delay: 0.45 }}
-        className={`absolute z-20 ${
-          hasVisualMedia ? 'top-5 right-5' : 'bottom-8'
-        } px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app`}
+        style={
+          skipNode && canvas
+            ? {
+                left: `${(skipNode.x / canvas.width) * 100}%`,
+                top: `${(skipNode.y / canvas.height) * 100}%`,
+                width: `${(skipNode.width / canvas.width) * 100}%`,
+                height: `${(skipNode.height / canvas.height) * 100}%`,
+                color: skipNode.color,
+                fontSize: `${(skipNode.fontSize / canvas.width) * 100}vw`,
+                fontWeight: skipNode.fontWeight,
+                textAlign: skipNode.align,
+                justifyContent:
+                  skipNode.align === 'left'
+                    ? 'flex-start'
+                    : skipNode.align === 'right'
+                      ? 'flex-end'
+                      : 'center',
+                transform: skipNode.rotation
+                  ? `rotate(${skipNode.rotation}deg)`
+                  : undefined,
+                transformOrigin: '50% 50%',
+              }
+            : undefined
+        }
+        className={
+          skipNode
+            ? 'absolute z-20 flex items-center justify-center p-0 text-app-subtle transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app'
+            : `absolute z-20 ${
+                hasVisualMedia ? 'top-5 right-5' : 'bottom-8'
+              } px-4 py-2 min-h-[44px] text-xs font-medium text-app-subtle hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] rounded-app`
+        }
       >
-        跳过开屏
+        {skipNode?.text || '跳过开屏'}
       </motion.button>
     </motion.div>
   );
@@ -510,13 +498,12 @@ function textDecorationCss(decoration: SplashTextNode['decoration']): string {
  */
 function backgroundImageStyle(
   mode: SplashImageMode = 'cover',
-  filterStyle?: SplashFilterStyle,
-  filterIntensity?: number
+  filter?: SplashFilterParams
 ): CSSProperties {
   const base: CSSProperties = { position: 'absolute', left: 0, top: 0 };
-  // 画面风格滤镜：与后台编辑器共用同一套 CSS filter 语法
-  const filter = splashFilterCss(filterStyle, filterIntensity);
-  if (filter) base.filter = filter;
+  // 画面调节：与后台编辑器共用同一套 CSS filter 语法
+  const css = splashFilterCss(filter);
+  if (css) base.filter = css;
   if (mode === 'fit') {
     return { ...base, width: '100%', height: '100%', objectFit: 'contain' };
   }
@@ -535,7 +522,6 @@ function backgroundImageStyle(
 interface CanvasNodeProps {
   node: SplashNode;
   canvas: SplashOrientationDoc;
-  fillRef: RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -545,7 +531,7 @@ interface CanvasNodeProps {
  * 位置和尺寸用 % 交给容器，字号、圆角这类绝对单位按画布宽度折算成 vw，
  * 保证任何屏幕宽度下视觉比例都与后台画布一致。
  */
-function CanvasNode({ node, canvas, fillRef }: CanvasNodeProps) {
+function CanvasNode({ node, canvas }: CanvasNodeProps) {
   const left = `${(node.x / canvas.width) * 100}%`;
   const top = `${(node.y / canvas.height) * 100}%`;
   const width = `${(node.width / canvas.width) * 100}%`;
@@ -565,7 +551,7 @@ function CanvasNode({ node, canvas, fillRef }: CanvasNodeProps) {
           height,
           // 围绕左上角旋转，和后台 Leafer 画布的旋转轴心一致
           transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
-          transformOrigin: '0 0',
+          transformOrigin: '50% 50%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: justify,
@@ -586,6 +572,25 @@ function CanvasNode({ node, canvas, fillRef }: CanvasNodeProps) {
     );
   }
 
+  if (node.type === 'html') {
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left,
+          top,
+          width,
+          height,
+          transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+          transformOrigin: '50% 50%',
+          opacity: node.opacity,
+        }}
+        dangerouslySetInnerHTML={{ __html: node.html }}
+      />
+    );
+  }
+
   if (node.type === 'image') {
     return (
       <img
@@ -599,42 +604,103 @@ function CanvasNode({ node, canvas, fillRef }: CanvasNodeProps) {
           width,
           height,
           transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
-          transformOrigin: '0 0',
+          transformOrigin: '50% 50%',
           objectFit: 'fill',
           borderRadius: scaled(node.radius),
           opacity: node.opacity,
-          filter: splashFilterCss(node.filterStyle, node.filterIntensity) || undefined,
+          filter: splashFilterCss(node.filter) || undefined,
         }}
       />
     );
   }
 
-  return (
-    <div
-      role="progressbar"
-      aria-label="开屏加载进度"
-      style={{
-        position: 'absolute',
-        left,
-        top,
-        width,
-        height,
-        transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
-        transformOrigin: '0 0',
-        borderRadius: scaled(node.radius),
-        backgroundColor: node.trackColor,
-        overflow: 'hidden',
-      }}
-    >
+  if (node.type === 'rect') {
+    return (
       <div
-        ref={fillRef}
+        aria-hidden="true"
         style={{
-          width: '0%',
-          height: '100%',
+          position: 'absolute',
+          left,
+          top,
+          width,
+          height,
+          transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+          transformOrigin: '50% 50%',
           borderRadius: scaled(node.radius),
-          backgroundColor: node.fillColor,
+          backgroundColor: node.fill,
+          border:
+            node.stroke && node.strokeWidth
+              ? `${scaled(node.strokeWidth)} solid ${node.stroke}`
+              : undefined,
+          opacity: node.opacity,
         }}
       />
-    </div>
-  );
+    );
+  }
+
+  if (node.type === 'ellipse') {
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left,
+          top,
+          width,
+          height,
+          transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+          transformOrigin: '50% 50%',
+          borderRadius: '50%',
+          backgroundColor: node.fill,
+          border:
+            node.stroke && node.strokeWidth
+              ? `${scaled(node.strokeWidth)} solid ${node.stroke}`
+              : undefined,
+          opacity: node.opacity,
+        }}
+      />
+    );
+  }
+
+  if (node.type === 'svg') {
+    // 内置图形是 data URI，直接当图片显示；上传的 SVG 内联写入页面
+    if (node.url.startsWith('data:')) {
+      return (
+        <img
+          src={node.url}
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left,
+            top,
+            width,
+            height,
+            transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+            transformOrigin: '50% 50%',
+            objectFit: 'contain',
+            opacity: node.opacity,
+          }}
+        />
+      );
+    }
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left,
+          top,
+          width,
+          height,
+          transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+          transformOrigin: '50% 50%',
+          opacity: node.opacity,
+        }}
+        dangerouslySetInnerHTML={{ __html: SPLASH_SVG_MARKUP }}
+      />
+    );
+  }
+
+  return null;
 }

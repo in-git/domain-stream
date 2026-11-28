@@ -2,64 +2,17 @@
  * 文件中心弹窗集合：预览播放、详情、删除确认
  * 供 biz/file/index 使用，UI 风格与私域工作台保持一致。
  */
-import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { CategoryModal, PrimaryButton, SecondaryButton } from '../category/dialogs.tsx';
-import {
-  fetchFileBlob,
-  isAudioFile,
-  isImageFile,
-  isVideoFile,
-  toOpenUrl,
-  toStreamUrl,
-  type DevFile,
-} from '../../../lib/fileCenter.ts';
+import type { DevFile } from '../../../lib/fileCenter.ts';
+import { FileMedia } from '../../../components/FileMedia.tsx';
 import { formatDateShort } from '../../../lib/format.ts';
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : '操作失败，请稍后重试';
-}
-
 /**
- * 素材预览弹窗：视频/音频走流式播放（公开文件带签名可直接 Range 拖动），
- * 授权文件先经 authDownload 拉取 blob 再本地播放；图片直接展示。
+ * 素材预览弹窗：图片 / SVG / 视频 / 音频统一交给 FileMedia 渲染。
  */
 export function FilePreviewDialog({ file, onClose }: { file: DevFile; onClose: () => void }) {
-  const [objectUrl, setObjectUrl] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const isVideo = isVideoFile(file);
-  const isAudio = isAudioFile(file);
-  const isImage = isImageFile(file);
-  // 公开文件优先用流式/直连地址，无需下载整个文件
-  const directUrl = isImage ? toOpenUrl(file) : toStreamUrl(file);
-
-  useEffect(() => {
-    // 无公开地址时，视频/音频/图片都走 authDownload 拉 blob 本地播放或预览
-    if (directUrl || (!isVideo && !isAudio && !isImage)) return;
-    let revoked = '';
-    let alive = true;
-    setLoading(true);
-    setError('');
-    fetchFileBlob(file)
-      .then((blob) => {
-        if (!alive) return;
-        revoked = URL.createObjectURL(blob);
-        setObjectUrl(revoked);
-      })
-      .catch((err) => {
-        if (alive) setError(errorMessage(err));
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-      if (revoked) URL.revokeObjectURL(revoked);
-    };
-  }, [file, directUrl, isVideo, isAudio, isImage]);
-
   return (
     <CategoryModal
       title={file.name || '素材预览'}
@@ -67,46 +20,7 @@ export function FilePreviewDialog({ file, onClose }: { file: DevFile; onClose: (
       onClose={onClose}
       width="max-w-3xl"
     >
-      {loading ? (
-        <div className="py-16 flex flex-col items-center gap-3 text-[#86868B]">
-          <Loader2 className="w-6 h-6 animate-spin text-[#0071E3]" />
-          <span className="text-[13px]">正在加载素材...</span>
-        </div>
-      ) : error ? (
-        <div className="py-12 text-center text-[13px] text-[#D70015]">{error}</div>
-      ) : isVideo && (directUrl || objectUrl) ? (
-        <div className="rounded-xl overflow-hidden bg-black">
-          <video
-            src={directUrl || objectUrl}
-            poster={file.thumbnail}
-            controls
-            autoPlay
-            playsInline
-            preload="metadata"
-            className="w-full max-h-[65vh] bg-black"
-          />
-        </div>
-      ) : isAudio && (directUrl || objectUrl) ? (
-        <div className="py-10 flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-[#0071E3]/8 flex items-center justify-center text-[#0071E3] text-2xl">
-            ♪
-          </div>
-          <audio src={directUrl || objectUrl} controls autoPlay className="w-full max-w-md" />
-        </div>
-      ) : isImage && (directUrl || objectUrl) ? (
-        <div className="flex justify-center rounded-xl bg-[#F5F5F7] p-3">
-          <img
-            src={directUrl || objectUrl}
-            alt={file.name || '图片'}
-            referrerPolicy="no-referrer"
-            className="max-w-full max-h-[65vh] object-contain rounded-lg"
-          />
-        </div>
-      ) : (
-        <div className="py-12 text-center text-[13px] text-[#86868B]">
-          该格式暂不支持在线预览，可通过下载查看
-        </div>
-      )}
+      <FileMedia file={file} variant="player" />
     </CategoryModal>
   );
 }

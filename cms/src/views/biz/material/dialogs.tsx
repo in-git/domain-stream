@@ -14,6 +14,7 @@ import {
   type DevFile,
 } from '../../../lib/fileCenter.ts';
 import { formatDateTime } from '../../../lib/format.ts';
+import { FileMedia } from '../../../components/FileMedia.tsx';
 
 /** 把代理相对地址补全为可直接在浏览器打开的绝对地址 */
 export function absoluteFileUrl(file: DevFile): string {
@@ -177,12 +178,12 @@ export function MaterialDetailDialog({
         {/* 缩略 */}
         <div className="rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] overflow-hidden aspect-[4/3] md:aspect-square flex items-center justify-center">
           {isImage && !thumbFailed ? (
-            <img
+            <FileMedia
+              file={file}
               src={url}
               alt={file.name || '素材'}
-              referrerPolicy="no-referrer"
-              onError={() => setThumbFailed(true)}
               className="w-full h-full object-cover"
+              onError={() => setThumbFailed(true)}
             />
           ) : isVideo ? (
             <Film className="w-10 h-10 text-[#C7C7CC]" strokeWidth={1.2} />

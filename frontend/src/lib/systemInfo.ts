@@ -146,6 +146,48 @@ export function applyClientTheme(config: Record<string, string> = {}): void {
   });
 }
 
+/**
+ * 开屏属性在 CMS 里统一存在 config.splash（JSON 对象）中，
+ * 这里展开成扁平 key，组件仍按 config.splashXxx 读取。
+ */
+const SPLASH_SUB_KEYS: Record<string, string> = {
+  splashDuration: 'duration',
+  splashVideoLandscapeUrl: 'videoLandscapeUrl',
+  splashVideoPortraitUrl: 'videoPortraitUrl',
+  splashImageLandscapeUrl: 'imageLandscapeUrl',
+  splashImagePortraitUrl: 'imagePortraitUrl',
+  splashAudioUrl: 'audioUrl',
+  splashTitlePosLandscape: 'titlePosLandscape',
+  splashTitlePosPortrait: 'titlePosPortrait',
+  splashTitleFontSize: 'titleFontSize',
+  splashTitleColor: 'titleColor',
+  splashCanvas: 'canvas',
+};
+
+/** 把 config.splash 展开成扁平配置；没有 splash 时保持原样（兼容旧数据） */
+function normalizePortalConfig(raw: Record<string, string>): Record<string, string> {
+  const splashRaw = (raw.splash || '').trim();
+  if (!splashRaw) return raw;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(splashRaw);
+  } catch {
+    return raw;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return raw;
+  const splash = parsed as Record<string, unknown>;
+  const config = { ...raw };
+  for (const [flatKey, name] of Object.entries(SPLASH_SUB_KEYS)) {
+    const value = splash[name];
+    if (typeof value === 'string') {
+      config[flatKey] = value;
+    } else if (flatKey === 'splashCanvas' && value && typeof value === 'object') {
+      config[flatKey] = JSON.stringify(value);
+    }
+  }
+  return config;
+}
+
 /** 读取一次系统信息（多次调用只请求一次；失败时允许下次重试） */
 export async function loadSystemInfo(): Promise<void> {
   if (loaded) return;
@@ -155,7 +197,7 @@ export async function loadSystemInfo(): Promise<void> {
     info = {
       siteName: data.siteName || FALLBACK_TITLE,
       title: data.title || data.siteName || FALLBACK_TITLE,
-      config: data.config ?? {},
+      config: normalizePortalConfig(data.config ?? {}),
     };
     document.title = info.title;
     applyFavicon(publicFileUrl(info.config.faviconUrl));

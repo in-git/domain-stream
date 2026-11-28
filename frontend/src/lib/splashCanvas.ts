@@ -17,6 +17,8 @@ export interface SplashTextNode {
   rotation?: number;
   /** 允许该组件显示在画布外（后台组件配置里的「超出画布」） */
   overflow?: boolean;
+  /** 系统固定组件（跳过开屏），不可删除 */
+  fixed?: 'skip';
   text: string;
   fontSize: number;
   fontWeight: number;
@@ -42,60 +44,177 @@ export interface SplashImageNode {
   url: string;
   radius: number;
   opacity: number;
-  /** 画面风格滤镜，默认原色 */
-  filterStyle?: SplashFilterStyle;
-  /** 滤镜强度 0-100，默认 100 */
-  filterIntensity?: number;
+  /** 画面调节参数，缺省表示原图 */
+  filter?: SplashFilterParams;
 }
 
-export interface SplashProgressNode {
+/** HTML 代码：后台画布录入的自定义片段，客户端按原样渲染 */
+export interface SplashHtmlNode {
   id: string;
-  type: 'progress';
+  type: 'html';
   x: number;
   y: number;
   width: number;
   height: number;
-  /** 旋转角度（度），围绕节点中心 */
   rotation?: number;
-  /** 允许该组件显示在画布外（后台组件配置里的「超出画布」） */
   overflow?: boolean;
-  trackColor: string;
-  fillColor: string;
-  radius: number;
+  html: string;
+  opacity: number;
 }
 
-export type SplashNode = SplashTextNode | SplashImageNode | SplashProgressNode;
+export type SplashNode =
+  | SplashTextNode
+  | SplashImageNode
+  | SplashRectNode
+  | SplashEllipseNode
+  | SplashSvgNode
+  | SplashHtmlNode;
+
+/** 矩形：后台画布里的基础色块 */
+export interface SplashRectNode {
+  id: string;
+  type: 'rect';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** 旋转角度（度），围绕节点左上角 */
+  rotation?: number;
+  /** 允许该组件显示在画布外 */
+  overflow?: boolean;
+  fill: string;
+  radius: number;
+  opacity: number;
+  stroke?: string;
+  strokeWidth?: number;
+}
+
+/** 圆形 / 椭圆 */
+export interface SplashEllipseNode {
+  id: string;
+  type: 'ellipse';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  overflow?: boolean;
+  fill: string;
+  opacity: number;
+  stroke?: string;
+  strokeWidth?: number;
+}
+
+/** SVG 图形：内置图形是 data URI，上传的 SVG 是后端存储路径 */
+export interface SplashSvgNode {
+  id: string;
+  type: 'svg';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  overflow?: boolean;
+  url: string;
+  opacity: number;
+}
 
 export type SplashImageMode = 'fit' | 'cover' | 'stretch' | 'stretch-x' | 'stretch-y';
 
-/** 画面风格滤镜：与后台 canvas-editor 的取值一致 */
-export type SplashFilterStyle =
-  | 'none'
-  | 'grayscale'
-  | 'sepia'
-  | 'vintage'
-  | 'warm'
-  | 'cool'
-  | 'vivid'
-  | 'fade'
-  | 'drama';
+/** 画面调节：与后台 canvas-editor 的数值参数保持一致 */
+export interface SplashFilterParams {
+  brightness: number;
+  contrast: number;
+  saturate: number;
+  hue: number;
+  grayscale: number;
+  sepia: number;
+}
 
-const FILTER_STYLES: readonly SplashFilterStyle[] = [
-  'none',
-  'grayscale',
-  'sepia',
-  'vintage',
-  'warm',
-  'cool',
-  'vivid',
-  'fade',
-  'drama',
+const DEFAULT_FILTER: SplashFilterParams = {
+  brightness: 100,
+  contrast: 100,
+  saturate: 100,
+  hue: 0,
+  grayscale: 0,
+  sepia: 0,
+};
+
+const FILTER_LIMITS: { key: keyof SplashFilterParams; min: number; max: number }[] = [
+  { key: 'brightness', min: 0, max: 200 },
+  { key: 'contrast', min: 0, max: 200 },
+  { key: 'saturate', min: 0, max: 200 },
+  { key: 'hue', min: -180, max: 180 },
+  { key: 'grayscale', min: 0, max: 100 },
+  { key: 'sepia', min: 0, max: 100 },
 ];
 
-function filterStyle(value: unknown): SplashFilterStyle {
-  return FILTER_STYLES.includes(value as SplashFilterStyle)
-    ? (value as SplashFilterStyle)
-    : 'none';
+function clampFilter(value: SplashFilterParams): SplashFilterParams {
+  const result = { ...DEFAULT_FILTER };
+  for (const field of FILTER_LIMITS) {
+    result[field.key] = Math.min(field.max, Math.max(field.min, Math.round(value[field.key])));
+  }
+  return result;
+}
+
+function normalizeFilter(value: unknown): SplashFilterParams | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const row = value as Record<string, unknown>;
+  const result = { ...DEFAULT_FILTER };
+  for (const field of FILTER_LIMITS) {
+    const num = Number(row[field.key]);
+    if (Number.isFinite(num)) result[field.key] = num;
+  }
+  return clampFilter(result);
+}
+
+/** 旧版「预设风格 + 强度」换算为数值参数，兼容已保存的开屏配置 */
+function legacyFilter(style: unknown, intensity?: number): SplashFilterParams | undefined {
+  if (typeof style !== 'string' || style === 'none') return undefined;
+  const p = Math.min(100, Math.max(0, Math.round(intensity ?? 100))) / 100;
+  if (p <= 0) return undefined;
+  const value = { ...DEFAULT_FILTER };
+  switch (style) {
+    case 'grayscale':
+      value.grayscale = 100 * p;
+      break;
+    case 'sepia':
+      value.sepia = 100 * p;
+      break;
+    case 'vintage':
+      value.sepia = 45 * p;
+      value.contrast = 100 - 10 * p;
+      value.brightness = 100 + 6 * p;
+      value.saturate = 100 - 20 * p;
+      break;
+    case 'warm':
+      value.saturate = 100 + 25 * p;
+      value.brightness = 100 + 5 * p;
+      value.sepia = 18 * p;
+      break;
+    case 'cool':
+      value.saturate = 100 + 15 * p;
+      value.brightness = 100 + 3 * p;
+      value.hue = -12 * p;
+      break;
+    case 'vivid':
+      value.saturate = 100 + 80 * p;
+      value.contrast = 100 + 12 * p;
+      break;
+    case 'fade':
+      value.contrast = 100 - 25 * p;
+      value.brightness = 100 + 10 * p;
+      value.saturate = 100 - 45 * p;
+      break;
+    case 'drama':
+      value.contrast = 100 + 30 * p;
+      value.brightness = 100 - 8 * p;
+      value.saturate = 100 + 15 * p;
+      break;
+    default:
+      return undefined;
+  }
+  return clampFilter(value);
 }
 
 function filterIntensity(value: unknown): number {
@@ -103,34 +222,35 @@ function filterIntensity(value: unknown): number {
   return Number.isFinite(result) ? Math.min(100, Math.max(0, result)) : 100;
 }
 
+function isDefaultFilter(filter: SplashFilterParams): boolean {
+  return FILTER_LIMITS.every((field) => filter[field.key] === DEFAULT_FILTER[field.key]);
+}
+
+/** 解析画面调节：优先读数值参数，旧版预设风格换算；默认值返回 undefined */
+function parseFilter(
+  value: unknown,
+  legacyStyle?: unknown,
+  legacyIntensity?: unknown
+): SplashFilterParams | undefined {
+  const result = normalizeFilter(value) ?? legacyFilter(legacyStyle, filterIntensity(legacyIntensity));
+  return result && !isDefaultFilter(result) ? result : undefined;
+}
+
 /**
  * 滤镜 CSS：后台编辑器与客户端共用同一套 CSS filter 语法，保证所见即所得。
- * none / 强度 0 返回空字符串，调用方不要设置 filter。
+ * 默认参数返回空字符串，调用方不要设置 filter。
  */
-export function splashFilterCss(style?: SplashFilterStyle, intensity?: number): string {
-  if (!style || style === 'none') return '';
-  const p = Math.min(100, Math.max(0, Math.round(intensity ?? 100))) / 100;
-  if (p <= 0) return '';
-  switch (style) {
-    case 'grayscale':
-      return `grayscale(${p})`;
-    case 'sepia':
-      return `sepia(${p})`;
-    case 'vintage':
-      return `sepia(${0.45 * p}) contrast(${1 - 0.1 * p}) brightness(${1 + 0.06 * p}) saturate(${1 - 0.2 * p})`;
-    case 'warm':
-      return `saturate(${1 + 0.25 * p}) brightness(${1 + 0.05 * p}) sepia(${0.18 * p})`;
-    case 'cool':
-      return `saturate(${1 + 0.15 * p}) brightness(${1 + 0.03 * p}) hue-rotate(${-12 * p}deg)`;
-    case 'vivid':
-      return `saturate(${1 + 0.8 * p}) contrast(${1 + 0.12 * p})`;
-    case 'fade':
-      return `contrast(${1 - 0.25 * p}) brightness(${1 + 0.1 * p}) saturate(${1 - 0.45 * p})`;
-    case 'drama':
-      return `contrast(${1 + 0.3 * p}) brightness(${1 - 0.08 * p}) saturate(${1 + 0.15 * p})`;
-    default:
-      return '';
-  }
+export function splashFilterCss(filter?: Partial<SplashFilterParams>): string {
+  if (!filter) return '';
+  const value = { ...DEFAULT_FILTER, ...filter };
+  const parts: string[] = [];
+  if (value.brightness !== 100) parts.push(`brightness(${value.brightness / 100})`);
+  if (value.contrast !== 100) parts.push(`contrast(${value.contrast / 100})`);
+  if (value.saturate !== 100) parts.push(`saturate(${value.saturate / 100})`);
+  if (value.hue !== 0) parts.push(`hue-rotate(${value.hue}deg)`);
+  if (value.grayscale > 0) parts.push(`grayscale(${value.grayscale / 100})`);
+  if (value.sepia > 0) parts.push(`sepia(${value.sepia / 100})`);
+  return parts.join(' ');
 }
 
 export interface SplashOrientationDoc {
@@ -145,10 +265,8 @@ export interface SplashOrientationDoc {
   backgroundVideoCover?: string;
   /** 背景素材铺法，缺省按等比铺满 */
   backgroundMode?: SplashImageMode;
-  /** 背景画面风格滤镜（图片 / 视频背景共用），默认原色 */
-  backgroundFilterStyle?: SplashFilterStyle;
-  /** 背景滤镜强度 0-100，默认 100 */
-  backgroundFilterIntensity?: number;
+  /** 背景画面调节参数（图片 / 视频背景共用），缺省表示原图 */
+  backgroundFilter?: SplashFilterParams;
   /** 是否把元素限制在画布内（旧版画布级配置，现按组件存 overflow，这里保留兼容） */
   contained?: boolean;
   nodes: SplashNode[];
@@ -192,6 +310,7 @@ function parseNode(
     height: num(row.height, 48),
     rotation: num(row.rotation, 0),
     overflow: row.overflow === true ? true : undefined,
+    fixed: row.fixed === 'skip' ? ('skip' as const) : undefined,
   };
 
   if (row.type === 'text') {
@@ -215,13 +334,44 @@ function parseNode(
     };
   }
 
-  if (row.type === 'progress') {
+  if (row.type === 'rect') {
     return {
       ...base,
-      type: 'progress',
-      trackColor: color(row.trackColor, '#3A3A3C'),
-      fillColor: color(row.fillColor, '#FFFFFF'),
-      radius: num(row.radius, 3),
+      type: 'rect',
+      fill: color(row.fill, '#FFFFFF'),
+      radius: Math.max(0, num(row.radius, 0)),
+      opacity: Math.min(1, Math.max(0, num(row.opacity, 1))),
+      stroke: typeof row.stroke === 'string' && row.stroke.trim() ? color(row.stroke, '#000000') : undefined,
+      strokeWidth: Math.max(0, num(row.strokeWidth, 0)) || undefined,
+    };
+  }
+
+  if (row.type === 'ellipse') {
+    return {
+      ...base,
+      type: 'ellipse',
+      fill: color(row.fill, '#FFFFFF'),
+      opacity: Math.min(1, Math.max(0, num(row.opacity, 1))),
+      stroke: typeof row.stroke === 'string' && row.stroke.trim() ? color(row.stroke, '#000000') : undefined,
+      strokeWidth: Math.max(0, num(row.strokeWidth, 0)) || undefined,
+    };
+  }
+
+  if (row.type === 'html') {
+    return {
+      ...base,
+      type: 'html',
+      html: typeof row.html === 'string' ? row.html : '',
+      opacity: Math.min(1, Math.max(0, num(row.opacity, 1))),
+    };
+  }
+
+  if (row.type === 'svg') {
+    return {
+      ...base,
+      type: 'svg',
+      url: typeof row.url === 'string' ? row.url.trim() : '',
+      opacity: Math.min(1, Math.max(0, num(row.opacity, 1))),
     };
   }
 
@@ -232,8 +382,7 @@ function parseNode(
       url: typeof row.url === 'string' ? row.url.trim() : '',
       radius: num(row.radius, 0),
       opacity: Math.min(1, Math.max(0, num(row.opacity, 1))),
-      filterStyle: filterStyle(row.filterStyle),
-      filterIntensity: filterIntensity(row.filterIntensity),
+      filter: parseFilter(row.filter, row.filterStyle, row.filterIntensity),
     };
   }
 
@@ -266,21 +415,18 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
       ? row.backgroundMode
       :         // 脏数据 / 旧字段缺失时回退等比铺满（与旧版整屏素材的 object-cover 一致）
         'cover';
-  doc.backgroundFilterStyle = filterStyle(row.backgroundFilterStyle);
-  doc.backgroundFilterIntensity = filterIntensity(row.backgroundFilterIntensity);
+  doc.backgroundFilter = parseFilter(
+    row.backgroundFilter,
+    row.backgroundFilterStyle,
+    row.backgroundFilterIntensity
+  );
   doc.contained = row.contained === false ? false : undefined;
 
   const list = Array.isArray(row.nodes) ? row.nodes : [];
-  let progressTaken = false;
   const ids = new Set<string>();
   list.forEach((entry, index) => {
     const node = parseNode(entry, size, index);
     if (!node) return;
-    // 进度条唯一：异常数据里出现多个时只渲染第一个
-    if (node.type === 'progress') {
-      if (progressTaken) return;
-      progressTaken = true;
-    }
     if (ids.has(node.id)) return;
     ids.add(node.id);
     doc.nodes.push(node);

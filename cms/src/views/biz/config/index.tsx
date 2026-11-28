@@ -26,12 +26,14 @@ import {
 } from 'lucide-react';
 import { convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
 import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
+import { hasPendingUploads, resolvePendingFiles } from '../../../lib/pendingUploads.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
 import { SwitchField } from '../../../components/SwitchField.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { pageConfigApi } from '../../../lib/pageConfig.ts';
 import {
   CONFIG_FIELDS,
+  configItemsFromValues,
   configSwitchOn,
   draftFromItems,
   SPLASH_AUDIO_KEY,
@@ -444,15 +446,30 @@ export default function ConfigView() {
     });
   }, []);
 
+  /**
+   * 保存前先把配置里「还没上服务器」的图片地址传掉：
+   * 画布拖入的文件是 blob:，内置 SVG / 内联图片是 data:image，上传后回填后端路径。
+   */
+  async function resolvePendingConfig(
+    values: Record<string, string>
+  ): Promise<Record<string, string>> {
+    const entries = await Promise.all(
+      Object.entries(values).map(async ([key, value]) => {
+        if (!value || !hasPendingUploads(value)) return [key, value] as const;
+        return [key, await resolvePendingFiles(value)] as const;
+      })
+    );
+    return Object.fromEntries(entries);
+  }
+
   async function handleSave() {
     if (!draft || !hasAnyChange) return;
     setSaving(true);
     try {
-      // 一次提交全部属性：后端整体覆盖写入（存在则更新、不存在则新增，允许空值）
-      const items = CONFIG_FIELDS.map((field) => ({
-        key: field.key,
-        value: draft.values[field.key] ?? '',
-      }));
+      // 先把画布里拖入的本地文件上传，再整体提交
+      const values = await resolvePendingConfig(draft.values);
+      // 一次提交全部属性：开屏相关字段合并成一个 splash 对象
+      const items = configItemsFromValues(values);
       await pageConfigApi.save(items);
       showToast('配置已保存，客户端立即生效', 'success');
       await load();
@@ -472,14 +489,13 @@ export default function ConfigView() {
         values: { ...draft.values, [key]: value },
         storedKeys: { ...draft.storedKeys, [key]: draft.storedKeys[key] ?? key },
       };
+      // 结构性变更也会整体写回：动手前先把配置里还没上传的图片 / SVG 传掉
+      next.values = await resolvePendingConfig(next.values);
 
       setDraft(next);
       setSaving(true);
       try {
-        const items = CONFIG_FIELDS.map((field) => ({
-          key: field.key,
-          value: next.values[field.key] ?? '',
-        }));
+        const items = configItemsFromValues(next.values);
         await pageConfigApi.save(items);
         setOriginal(next);
         showToast('模块已删除并同步到服务器', 'success');

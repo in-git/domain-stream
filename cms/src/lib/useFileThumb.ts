@@ -11,13 +11,18 @@
 import { useEffect, useState } from 'react';
 import { fetchThumbnailBlob, thumbnailFetchPath, type DevFile } from './fileCenter.ts';
 
-export function useFileThumbSrc(file: DevFile, fallbackUrl = ''): string {
+export function useFileThumbSrc(file: DevFile, fallbackUrl = '', enabled = true): string {
   const [src, setSrc] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = '';
     setSrc('');
+
+    if (!enabled) {
+      setSrc(fallbackUrl);
+      return () => {};
+    }
 
     if (!thumbnailFetchPath(file.thumbnail)) {
       setSrc(file.thumbnail || fallbackUrl);
@@ -42,7 +47,7 @@ export function useFileThumbSrc(file: DevFile, fallbackUrl = ''): string {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [file.id, file.thumbnail, fallbackUrl]);
+  }, [file.id, file.thumbnail, fallbackUrl, enabled]);
 
   return src;
 }

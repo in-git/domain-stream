@@ -3,7 +3,7 @@
  * ------------------------------------------------------------------
  * 画布本身来自通用组件 `components/canvas-editor`，这里只负责开屏特有的部分：
  *   - PC（1440×900）/ 移动端（390×844）两块独立画布的组织与序列化；
- *   - 库存 JSON 的容错解析、旧配置（标题/进度条位置、横竖屏图片）迁移。
+ *   - 库存 JSON 的容错解析、旧配置（标题位置、横竖屏图片）迁移。
  *
  * 存库结构（splashCanvas 配置项，整体是一个 JSON 字符串）：
  *   { "version": 1, "pc": { ... }, "mobile": { ... } }
@@ -12,9 +12,6 @@
 import {
   SPLASH_DEFAULT_STYLES,
   SPLASH_IMAGE_KEYS,
-  SPLASH_PROGRESS_COLOR_KEY,
-  SPLASH_PROGRESS_POS_KEYS,
-  SPLASH_PROGRESS_WIDTH_KEY,
   SPLASH_TITLE_COLOR_KEY,
   SPLASH_TITLE_POS_KEYS,
   SPLASH_TITLE_SIZE_KEY,
@@ -23,10 +20,12 @@ import {
 } from '../schema';
 import {
   createCanvasNodeId as createNodeId,
-  isCanvasFilterStyle,
+  isDefaultCanvasFilter,
+  legacyCanvasFilter,
+  normalizeCanvasFilter,
   round1,
   type CanvasDoc,
-  type CanvasFilterStyle,
+  type CanvasFilterParams,
   type CanvasImageMode,
   type CanvasNode,
   type CanvasTextAlign,
@@ -78,15 +77,21 @@ function readMode(value: unknown): CanvasImageMode {
     : 'cover';
 }
 
-/** 画面风格滤镜：白名单校验，脏数据回退原色 */
-function readFilterStyle(value: unknown): CanvasFilterStyle {
-  return isCanvasFilterStyle(value) ? value : 'none';
-}
-
-/** 滤镜强度：0-100，非法值回退 100 */
+/** 旧版滤镜强度：0-100，非法值回退 100 */
 function readIntensity(value: unknown): number {
   const num = Number(value);
   return Number.isFinite(num) ? num : 100;
+}
+
+/** 画面调节：优先读数值参数，旧版「预设风格 + 强度」换算；默认值返回 undefined 便于省略 */
+function readFilter(
+  value: unknown,
+  legacyStyle?: unknown,
+  legacyIntensity?: unknown
+): CanvasFilterParams | undefined {
+  const normalized = normalizeCanvasFilter(value);
+  const result = normalized ?? legacyCanvasFilter(legacyStyle, readIntensity(legacyIntensity));
+  return result && !isDefaultCanvasFilter(result) ? result : undefined;
 }
 
 /** 文本装饰：只认四种，脏数据回退无装饰 */
@@ -123,25 +128,15 @@ function normalizeOrientation(
     // 视频封面：从视频模块选视频时带入，客户端渲染背景视频时作 poster
     backgroundVideoCover: (doc.backgroundVideoCover || '').trim(),
     backgroundMode: readMode(doc.backgroundMode),
-    // 背景画面风格：默认原色 / 强度 100 时不写进 JSON
-    backgroundFilterStyle:
-      doc.backgroundFilterStyle && doc.backgroundFilterStyle !== 'none'
-        ? doc.backgroundFilterStyle
-        : undefined,
-    backgroundFilterIntensity:
-      doc.backgroundFilterStyle && doc.backgroundFilterStyle !== 'none'
-        ? clamp(round1(readIntensity(doc.backgroundFilterIntensity)), 0, 100)
-        : undefined,
+    // 背景画面调节：默认值时省略
+    backgroundFilter: readFilter(doc.backgroundFilter),
     // 画布级只保留视图交互：拖拽平移默认开，关掉时才写进 JSON
     allowPan: doc.allowPan === false ? false : undefined,
     nodes: doc.nodes.map((node) => normalizeNode(node, size)),
   };
 }
 
-function normalizeNode(
-  node: SplashNode,
-  size: { width: number; height: number }
-): SplashNode {
+function normalizeNode(node: SplashNode, _size: { width: number; height: number }): SplashNode {
   const base = {
     id: node.id || createNodeId(),
     x: round1(node.x),
@@ -157,6 +152,7 @@ function normalizeNode(
     allowResize: node.allowResize === false ? false : undefined,
     allowSkew: node.allowSkew === true ? true : undefined,
     overflow: node.overflow === true ? true : undefined,
+    fixed: node.fixed,
   };
 
   if (node.type === 'text') {
@@ -181,32 +177,72 @@ function normalizeNode(
       mode: node.mode,
       radius: Math.max(0, round1(node.radius)),
       opacity: clamp(round1(node.opacity), 0, 1),
-      // 画面风格：默认原色 / 强度 100 时不写进 JSON
-      filterStyle: node.filterStyle && node.filterStyle !== 'none' ? node.filterStyle : undefined,
-      filterIntensity:
-        node.filterStyle && node.filterStyle !== 'none'
-          ? clamp(round1(readIntensity(node.filterIntensity)), 0, 100)
-          : undefined,
+      // 画面调节：默认值时省略
+      filter: readFilter(node.filter),
     };
   }
 
-  return {
-    ...base,
-    type: 'progress',
-    height: Math.max(2, round1(node.height)),
-    trackColor: readColor(node.trackColor, '#3A3A3C'),
-    fillColor: readColor(node.fillColor, '#FFFFFF'),
-    radius: Math.max(0, round1(node.radius)),
-    // 尺寸兜底：即使脏数据超出画布也给个可用值
-    width: clamp(base.width, 8, size.width * 4),
-  };
+  if (node.type === 'rect') {
+    return {
+      ...base,
+      type: 'rect',
+      fill: readColor(node.fill, '#FFFFFF'),
+      radius: Math.max(0, round1(node.radius)),
+      opacity: clamp(round1(node.opacity), 0, 1),
+      stroke: node.stroke ? readColor(node.stroke, '#000000') : undefined,
+      strokeWidth: node.strokeWidth ? Math.max(0, round1(node.strokeWidth)) : undefined,
+    };
+  }
+
+  if (node.type === 'ellipse') {
+    return {
+      ...base,
+      type: 'ellipse',
+      fill: readColor(node.fill, '#FFFFFF'),
+      opacity: clamp(round1(node.opacity), 0, 1),
+      stroke: node.stroke ? readColor(node.stroke, '#000000') : undefined,
+      strokeWidth: node.strokeWidth ? Math.max(0, round1(node.strokeWidth)) : undefined,
+    };
+  }
+
+  if (node.type === 'html') {
+    return {
+      ...base,
+      type: 'html',
+      html: typeof node.html === 'string' ? node.html : '',
+      opacity: clamp(round1(node.opacity ?? 1), 0, 1),
+    };
+  }
+
+  if (node.type === 'svg') {
+    return {
+      ...base,
+      type: 'svg',
+      // 内置图形是 data URI，上传的 SVG 是后端路径，都原样保留
+      url: (node.url || '').trim(),
+      preset: node.preset,
+      color: node.color ? readColor(node.color, '#FFFFFF') : undefined,
+      opacity: clamp(round1(node.opacity), 0, 1),
+    };
+  }
+
+  return node;
 }
 
 function parseNode(raw: unknown, size: { width: number; height: number }): SplashNode | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
   const type = row.type;
-  if (type !== 'text' && type !== 'image' && type !== 'progress') return null;
+  if (
+    type !== 'text' &&
+    type !== 'image' &&
+    type !== 'rect' &&
+    type !== 'ellipse' &&
+    type !== 'svg' &&
+    type !== 'html'
+  ) {
+    return null;
+  }
 
   const base = {
     id: typeof row.id === 'string' && row.id.trim() ? row.id.trim() : createNodeId(),
@@ -221,6 +257,7 @@ function parseNode(raw: unknown, size: { width: number; height: number }): Splas
     allowResize: row.allowResize === false ? false : undefined,
     allowSkew: row.allowSkew === true ? true : undefined,
     overflow: row.overflow === true ? true : undefined,
+    fixed: row.fixed === 'skip' ? ('skip' as const) : undefined,
   };
 
   if (type === 'text') {
@@ -240,13 +277,56 @@ function parseNode(raw: unknown, size: { width: number; height: number }): Splas
     };
   }
 
-  if (type === 'progress') {
+  if (type === 'rect') {
     return {
       ...base,
-      type: 'progress',
-      trackColor: readColor(row.trackColor, '#3A3A3C'),
-      fillColor: readColor(row.fillColor, '#FFFFFF'),
-      radius: readNumber(row.radius, 3),
+      type: 'rect',
+      fill: readColor(row.fill, '#FFFFFF'),
+      radius: Math.max(0, readNumber(row.radius, 0)),
+      opacity: clamp(readNumber(row.opacity, 1), 0, 1),
+      stroke:
+        typeof row.stroke === 'string' && row.stroke.trim()
+          ? readColor(row.stroke, '#000000')
+          : undefined,
+      strokeWidth: Math.max(0, readNumber(row.strokeWidth, 0)) || undefined,
+    };
+  }
+
+  if (type === 'ellipse') {
+    return {
+      ...base,
+      type: 'ellipse',
+      fill: readColor(row.fill, '#FFFFFF'),
+      opacity: clamp(readNumber(row.opacity, 1), 0, 1),
+      stroke:
+        typeof row.stroke === 'string' && row.stroke.trim()
+          ? readColor(row.stroke, '#000000')
+          : undefined,
+      strokeWidth: Math.max(0, readNumber(row.strokeWidth, 0)) || undefined,
+    };
+  }
+
+  if (type === 'html') {
+    return {
+      ...base,
+      type: 'html',
+      html: typeof row.html === 'string' ? row.html : '',
+      opacity: clamp(readNumber(row.opacity, 1), 0, 1),
+    };
+  }
+
+  if (type === 'svg') {
+    return {
+      ...base,
+      type: 'svg',
+      url: typeof row.url === 'string' ? row.url.trim() : '',
+      preset:
+        typeof row.preset === 'string' && row.preset.trim() ? row.preset.trim() : undefined,
+      color:
+        typeof row.color === 'string' && row.color.trim()
+          ? readColor(row.color, '#FFFFFF')
+          : undefined,
+      opacity: clamp(readNumber(row.opacity, 1), 0, 1),
     };
   }
 
@@ -262,8 +342,7 @@ function parseNode(raw: unknown, size: { width: number; height: number }): Splas
     mode,
     radius: readNumber(row.radius, 0),
     opacity: readNumber(row.opacity, 1),
-    filterStyle: readFilterStyle(row.filterStyle),
-    filterIntensity: clamp(round1(readIntensity(row.filterIntensity)), 0, 100),
+    filter: readFilter(row.filter, row.filterStyle, row.filterIntensity),
   };
 }
 
@@ -283,7 +362,37 @@ export function parseSplashCanvas(raw?: string): SplashCanvasDoc | null {
   if (!row.pc && !row.mobile) return null;
   const pc = parseOrientation(row.pc, 'pc');
   const mobile = parseOrientation(row.mobile, 'mobile');
-  return { version: 1, pc, mobile };
+  return ensureSkipNode({ version: 1, pc, mobile });
+}
+
+/**
+ * 移动端画布固定带一个「跳过开屏」文本组件：
+ * 不可删除，设计师只负责调整位置与样式，客户端用它渲染跳过按钮。
+ */
+function skipTextNode(size: { width: number; height: number }): CanvasNode {
+  const width = Math.max(64, Math.round(size.width * 0.24));
+  return {
+    id: 'sys-skip',
+    type: 'text',
+    fixed: 'skip',
+    text: '跳过开屏',
+    x: size.width - width - 16,
+    y: 24,
+    width,
+    height: 28,
+    fontSize: size.width >= 600 ? 16 : 13,
+    fontWeight: 500,
+    color: '#FFFFFF',
+    align: 'right',
+  };
+}
+
+function ensureSkipNode(doc: SplashCanvasDoc): SplashCanvasDoc {
+  if (doc.mobile.nodes.some((node) => node.fixed === 'skip')) return doc;
+  return {
+    ...doc,
+    mobile: { ...doc.mobile, nodes: [...doc.mobile.nodes, skipTextNode(doc.mobile)] },
+  };
 }
 
 function parseOrientation(
@@ -305,26 +414,19 @@ function parseOrientation(
   base.backgroundVideoCover =
     typeof row.backgroundVideoCover === 'string' ? row.backgroundVideoCover.trim() : '';
   base.backgroundMode = readMode(row.backgroundMode);
-  base.backgroundFilterStyle = readFilterStyle(row.backgroundFilterStyle);
-  base.backgroundFilterIntensity = clamp(
-    round1(readIntensity(row.backgroundFilterIntensity)),
-    0,
-    100
+  base.backgroundFilter = readFilter(
+    row.backgroundFilter,
+    row.backgroundFilterStyle,
+    row.backgroundFilterIntensity
   );
   // 画布级只保留视图交互：拖拽平移
   base.allowPan = row.allowPan === false ? false : undefined;
 
   const list = Array.isArray(row.nodes) ? row.nodes : [];
   const ids = new Set<string>();
-  let progressTaken = false;
   for (const entry of list) {
     const node = parseNode(entry, size);
     if (!node) continue;
-    // 进度条全画布唯一：脏数据里出现多个时只留第一个
-    if (node.type === 'progress') {
-      if (progressTaken) continue;
-      progressTaken = true;
-    }
     if (ids.has(node.id)) node.id = createNodeId();
     ids.add(node.id);
     base.nodes.push(node);
@@ -347,24 +449,21 @@ function readLegacyNumber(raw: string | undefined, fallback: number): number {
  * 避免升级后老站点开屏内容丢失。
  */
 export function createDefaultCanvasDoc(values: Record<string, string> = {}): SplashCanvasDoc {
-  return {
+  return ensureSkipNode({
     version: 1,
     pc: createOrientationDoc('pc', values),
     mobile: createOrientationDoc('mobile', values),
-  };
+  });
 }
 
 /** 旧版开屏是否配置过内容：只看开屏专属字段，网页标题等无关配置不算 */
 function hasLegacySplashConfig(values: Record<string, string>): boolean {
   const keys = [
     ...SPLASH_TITLE_POS_KEYS,
-    ...SPLASH_PROGRESS_POS_KEYS,
     ...SPLASH_IMAGE_KEYS,
     ...SPLASH_VIDEO_KEYS,
     SPLASH_TITLE_SIZE_KEY,
     SPLASH_TITLE_COLOR_KEY,
-    SPLASH_PROGRESS_COLOR_KEY,
-    SPLASH_PROGRESS_WIDTH_KEY,
   ];
   return keys.some((key) => (values[key] || '').trim().length > 0);
 }
@@ -401,16 +500,11 @@ function createOrientationDoc(
     values[SPLASH_TITLE_POS_KEYS[landscape ? 0 : 1]],
     { x: 50, y: landscape ? 34 : 38 }
   );
-  const progressPos = parseSplashPosition(
-    values[SPLASH_PROGRESS_POS_KEYS[landscape ? 0 : 1]],
-    { x: 50, y: landscape ? 60 : 62 }
-  );
   const titleSize = readLegacyNumber(
     values[SPLASH_TITLE_SIZE_KEY],
     landscape ? SPLASH_DEFAULT_STYLES.titleSize : 30
   );
   const titleColor = readColor(values[SPLASH_TITLE_COLOR_KEY], '#FFFFFF');
-  const progressColor = readColor(values[SPLASH_PROGRESS_COLOR_KEY], '#FFFFFF');
 
   const titleWidth = Math.round(size.width * 0.8);
   const titleHeight = Math.round(titleSize * 1.4);
@@ -421,21 +515,7 @@ function createOrientationDoc(
   const subtitleHeight = Math.round(subtitleSize * 1.4);
   const subtitleWidth = Math.round(size.width * 0.72);
   const gap = Math.round(size.height * 0.015);
-  const progressY = Math.round((progressPos.y / 100) * size.height);
-  let subtitleY = titleY + titleHeight + gap;
-  // 标题与进度条离得太近时，副标题夹在两者中间，避免重叠
-  if (subtitleY + subtitleHeight > progressY - 8) {
-    subtitleY = Math.max(
-      titleY + titleHeight,
-      Math.round((titleY + titleHeight + progressY - subtitleHeight) / 2)
-    );
-  }
-
-  const progressWidth = readLegacyNumber(
-    values[SPLASH_PROGRESS_WIDTH_KEY],
-    landscape ? Math.round(size.width * 0.22) : SPLASH_DEFAULT_STYLES.progressWidth
-  );
-  const progressHeight = 6;
+  const subtitleY = titleY + titleHeight + gap;
 
   // 旧版「横屏/竖屏图片」迁移成画布最底层的整屏图片，素材不丢
   const legacyImageKey = SPLASH_IMAGE_KEYS[landscape ? 0 : 1];
@@ -472,17 +552,6 @@ function createOrientationDoc(
       fontWeight: 400,
       color: '#C7C7CC',
       align: 'center',
-    },
-    {
-      id: createNodeId(),
-      type: 'progress',
-      x: Math.round((size.width - progressWidth) / 2),
-      y: progressY,
-      width: progressWidth,
-      height: progressHeight,
-      trackColor: '#3A3A3C',
-      fillColor: progressColor,
-      radius: Math.round(progressHeight / 2),
     },
   ];
 

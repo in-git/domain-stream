@@ -50,6 +50,7 @@ import {
   FilePreviewDialog,
 } from './dialogs.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
+import { FileMedia } from '../../../components/FileMedia.tsx';
 
 const PAGE_SIZE = 24;
 
@@ -117,10 +118,15 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
   /** 音频卡片内联播放：同一时间只允许一个音频在播 */
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  /** 卡片内联播放进度（秒 / 总时长） */
+  const [audioTime, setAudioTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
   const audioUrl = isAudio ? toStreamUrl(file) || toOpenUrl(file) : '';
 
   useEffect(() => {
     setAudioPlaying(false);
+    setAudioTime(0);
+    setAudioDuration(0);
   }, [file.id]);
 
   function toggleAudio() {
@@ -185,13 +191,12 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
             aria-label={`播放 ${file.name || '视频'}`}
           />
         ) : showCover ? (
-          <img
+          <FileMedia
+            file={file}
             src={cover}
             alt={file.name || '素材'}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setFailedSrc(cover)}
             className="w-full h-full object-cover"
+            onError={() => setFailedSrc(cover)}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
@@ -224,7 +229,14 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
               preload="metadata"
               onPlay={() => setAudioPlaying(true)}
               onPause={() => setAudioPlaying(false)}
-              onEnded={() => setAudioPlaying(false)}
+              onEnded={() => {
+                setAudioPlaying(false);
+                setAudioTime(0);
+              }}
+              onTimeUpdate={(e) => setAudioTime(e.currentTarget.currentTime)}
+              onLoadedMetadata={(e) =>
+                setAudioDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)
+              }
               className="hidden"
             />
             <button
@@ -244,6 +256,20 @@ function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }
                 <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
               )}
             </button>
+            {(audioPlaying || audioTime > 0) && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 overflow-hidden rounded-b-[11px] bg-white/25">
+                <div
+                  className="h-full bg-[#0071E3] transition-[width] duration-150"
+                  style={{
+                    width: `${
+                      audioDuration > 0
+                        ? Math.min(100, (audioTime / audioDuration) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -352,7 +378,6 @@ export default function FileCenterView() {
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectingAll, setSelectingAll] = useState(false);
   const [checkingInvalid, setCheckingInvalid] = useState(false);
   const [cleaningInvalid, setCleaningInvalid] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -479,29 +504,6 @@ export default function FileCenterView() {
       setDialog({ kind: 'delete', files: targets });
     } catch (err) {
       notify('error', `读取已选文件失败：${errorMessage(err)}`);
-    }
-  }
-
-  /** 全选/取消全选当前筛选条件下的所有文件（跨分页） */
-  async function toggleSelectAllResults() {
-    if (selected.size >= total) {
-      setSelected(new Set());
-      return;
-    }
-    setSelectingAll(true);
-    try {
-      const data = await fileCenterApi.page({
-        current: 1,
-        size: Math.max(total, 1),
-        category: category || undefined,
-        bizType: library,
-        searchKey: search.trim() || undefined,
-      });
-      setSelected(new Set((data.records || []).map((r) => r.id)));
-    } catch (err) {
-      notify('error', `全选失败：${errorMessage(err)}`);
-    } finally {
-      setSelectingAll(false);
     }
   }
 
@@ -661,20 +663,6 @@ export default function FileCenterView() {
             </span>
             全选本页
           </button>
-          {total > records.length && (
-            <button
-              type="button"
-              disabled={selectingAll}
-              onClick={() => void toggleSelectAllResults()}
-              className="h-8 px-2 rounded-[10px] text-[11px] font-medium text-[#0071E3] hover:bg-[#0071E3]/8 disabled:opacity-50 transition-colors"
-            >
-              {selectingAll
-                ? '选择中...'
-                : selected.size >= total
-                  ? '取消全选'
-                  : `选择全部 ${total} 个`}
-            </button>
-          )}
           {/* 分类 Tab */}
           <div className="flex items-center rounded-xl bg-[#F5F5F7] p-0.5">
             {[{ value: '', label: '全部' }, ...FILE_CATEGORIES].map((cat) => (
@@ -745,7 +733,7 @@ export default function FileCenterView() {
             ref={uploadInputRef}
             type="file"
             multiple
-            accept="video/*,audio/*,image/*"
+            accept="video/*,audio/*,image/*,.svg"
             className="hidden"
             onChange={(e) => {
               if (e.target.files?.length) void handleUpload(e.target.files);

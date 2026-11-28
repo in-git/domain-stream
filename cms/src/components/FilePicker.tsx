@@ -54,6 +54,7 @@ import {
 } from '../lib/fileCenter.ts';
 import { categoryApi, type BizCategory } from '../lib/category.ts';
 import { useFileThumbSrc } from '../lib/useFileThumb.ts';
+import { FileMedia } from './FileMedia.tsx';
 
 type Library = 'ALL' | 'USER' | 'MATERIAL';
 /** 预设类型 / MIME 类型 / 扩展名（如 .png）均可作为 accept 项 */
@@ -296,13 +297,12 @@ function PickerCard({
             className="w-full h-full object-cover"
           />
         ) : showCover ? (
-          <img
+          <FileMedia
+            file={file}
             src={cover}
             alt={file.name || '文件'}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setThumbFailed(true)}
             className="w-full h-full object-cover"
+            onError={() => setThumbFailed(true)}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
