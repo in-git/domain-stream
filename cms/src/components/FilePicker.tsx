@@ -24,37 +24,28 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
-  File as FileIcon,
-  FileText,
-  Film,
   FolderOpen,
   Image as ImageIcon,
-  Images,
   Loader2,
-  Music,
   RefreshCw,
   Search,
   Upload,
   X,
 } from 'lucide-react';
 import {
-  categoryLabel,
   fileCenterApi,
   FILE_CATEGORIES,
   isAudioFile,
   isImageFile,
   isVideoFile,
   toOpenUrl,
-  toPlayableVideoUrl,
   uploadLibraryFile,
   type DevFile,
 } from '../lib/fileCenter.ts';
 import { categoryApi, type BizCategory } from '../lib/category.ts';
-import { useFileThumbSrc } from '../lib/useFileThumb.ts';
-import { FileMedia } from './FileMedia.tsx';
+import { FileCard } from './FileCard.tsx';
 
 type Library = 'ALL' | 'USER' | 'MATERIAL';
 /** 预设类型 / MIME 类型 / 扩展名（如 .png）均可作为 accept 项 */
@@ -91,22 +82,6 @@ interface FilePickerProps {
   allowUpload?: boolean;
 }
 
-function coverIcon(file: DevFile) {
-  if (isVideoFile(file)) return Film;
-  if (isAudioFile(file)) return Music;
-  if (isImageFile(file)) return Images;
-  if ((file.category || '') === 'DOC') return FileText;
-  return FileIcon;
-}
-
-function tileTone(file: DevFile): string {
-  const grayWhite = 'bg-gradient-to-br from-[#F7F7F9] to-[#EDEDF1]';
-  if (isVideoFile(file)) return `${grayWhite} text-[#1D1D1F]`;
-  if (isAudioFile(file)) return `${grayWhite} text-[#FF375F]`;
-  if (isImageFile(file)) return `${grayWhite} text-[#0071E3]`;
-  if ((file.category || '') === 'DOC') return `${grayWhite} text-[#5E5CE6]`;
-  return `${grayWhite} text-[#8E8E93]`;
-}
 
 /** 单个 accept 规则的匹配 */
 function matchesOne(file: DevFile, rule: FileAccept): boolean {
@@ -173,169 +148,6 @@ function acceptForInput(accept: FileAccept | FileAccept[] | undefined): string |
           : rule
     )
     .join(',');
-}
-
-/** 图片 / 视频分辨率缓存：同一个文件翻页回来只量一次 */
-const mediaSizeCache = new Map<string, string>();
-
-function rememberMediaSize(key: string, width: number, height: number): string {
-  if (!key || !width || !height) return '';
-  const text = `${width}×${height}`;
-  mediaSizeCache.set(key, text);
-  return text;
-}
-
-/**
- * 图片分辨率：缩略图会被压缩，尺寸不准，所以用原图量；
- * 视频由卡片里的 <video> 读元数据，不额外发请求。
- */
-function useImageSize(file: DevFile): string {
-  const key = file.id || file.objName || file.fileKey || '';
-  const [size, setSize] = useState(() => mediaSizeCache.get(key) ?? '');
-  useEffect(() => {
-    if (!key || mediaSizeCache.has(key) || !isImageFile(file)) return;
-    let cancelled = false;
-    const image = new window.Image();
-    image.onload = () => {
-      const text = rememberMediaSize(key, image.naturalWidth, image.naturalHeight);
-      if (!cancelled && text) setSize(text);
-    };
-    image.src = toOpenUrl(file);
-    return () => {
-      cancelled = true;
-    };
-  }, [key, file]);
-  return size;
-}
-
-/** 单张文件卡片 */
-function PickerCard({
-  file,
-  selected,
-  onToggle,
-  onConfirm,
-}: {
-  file: DevFile;
-  selected: boolean;
-  onToggle: () => void;
-  onConfirm: () => void;
-}) {
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const [videoFailed, setVideoFailed] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const Icon = coverIcon(file);
-  const isVideo = isVideoFile(file);
-  const mediaKey = file.id || file.objName || file.fileKey || '';
-  const imageSize = useImageSize(file);
-  const [videoSize, setVideoSize] = useState(() => mediaSizeCache.get(mediaKey) ?? '');
-  const mediaSize = imageSize || videoSize;
-  // 缩略图接口需要 token，交给 hook 拉 blob；图片卡片回退到原图
-  const cover = useFileThumbSrc(file, isImageFile(file) ? toOpenUrl(file) : '');
-  const showCover = !!cover && !thumbFailed;
-  // 视频卡片用 <video> 渲染，缩略图作 poster；鼠标悬停时播放预览
-  const videoUrl = isVideo ? toPlayableVideoUrl(toOpenUrl(file)) : '';
-
-  function playPreview() {
-    const video = videoRef.current;
-    if (!video) return;
-    // 元数据未就绪时设置 currentTime 会抛 InvalidStateError，先判断 readyState
-    if (video.readyState >= 1) video.currentTime = 0;
-    void video.play().catch(() => {
-      /* 浏览器拒绝自动播放时保持静帧 */
-    });
-  }
-
-  function stopPreview() {
-    const video = videoRef.current;
-    if (!video) return;
-    video.pause();
-    if (video.readyState >= 1) video.currentTime = 0;
-  }
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      title={`${file.name || file.objName || file.id}${file.sizeInfo ? ` · ${file.sizeInfo}` : ''}${mediaSize ? ` · ${mediaSize}` : ''}`}
-      onClick={onToggle}
-      onDoubleClick={onConfirm}
-      onMouseEnter={isVideo ? playPreview : undefined}
-      onMouseLeave={isVideo ? stopPreview : undefined}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onToggle();
-        }
-      }}
-      className={`group relative p-1.5 rounded-[14px] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 ${
-        selected ? 'bg-[#0071E3]/8' : 'hover:bg-[#F5F5F7]'
-      }`}
-    >
-      <div
-        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden ${
-          showCover ? 'bg-gradient-to-br from-[#F7F7F9] to-[#EDEDF1]' : tileTone(file)
-        } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'}`}
-      >
-        {isVideo && !videoFailed ? (
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            poster={showCover ? cover : undefined}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            onError={() => setVideoFailed(true)}
-            onLoadedMetadata={(event) => {
-              const text = rememberMediaSize(
-                mediaKey,
-                event.currentTarget.videoWidth,
-                event.currentTarget.videoHeight
-              );
-              if (text) setVideoSize(text);
-            }}
-            className="w-full h-full object-cover"
-          />
-        ) : showCover ? (
-          <FileMedia
-            file={file}
-            src={cover}
-            alt={file.name || '文件'}
-            className="w-full h-full object-cover"
-            onError={() => setThumbFailed(true)}
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
-            <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
-            <span className="text-[9px] font-medium uppercase tracking-wide opacity-70">
-              {categoryLabel(file.category)}
-            </span>
-          </div>
-        )}
-
-        {selected && (
-          <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#0071E3] text-white flex items-center justify-center shadow-sm">
-            <Check className="w-3 h-3" strokeWidth={3} />
-          </span>
-        )}
-        {/* 文件标题：绝对定位在缩略图左上角，过长截断，给右上角选中勾留出空间 */}
-        <span
-          title={file.name || file.objName}
-          className="absolute top-1.5 left-1.5 max-w-[calc(100%-44px)] truncate px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none"
-        >
-          {file.name || file.objName || file.id}
-        </span>
-        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none">
-          {file.bizType === 'MATERIAL' ? '素材' : '文件'}
-        </span>
-        {mediaSize && (
-          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none tabular-nums">
-            {mediaSize}
-          </span>
-        )}
-      </div>
-    </div>
-  );
 }
 
 export function FilePicker({
@@ -665,15 +477,20 @@ export function FilePicker({
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
               {files.map((file) => (
-                <PickerCard
+                <FileCard
                   key={file.id}
                   file={file}
                   selected={selected.includes(file.id)}
-                  onToggle={() => toggle(file.id)}
-                  onConfirm={() => {
+                  onToggleSelect={() => toggle(file.id)}
+                  onOpen={() => {
                     onSelect([file]);
                     onClose();
                   }}
+                  badge={
+                    <span className="px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[9px] leading-none">
+                      {file.bizType === 'MATERIAL' ? '素材' : '文件'}
+                    </span>
+                  }
                 />
               ))}
             </div>

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 素材中心
  * ------------------------------------------------------------------
  * 对后端菜单：path = /biz/material，component = biz/material/index
@@ -36,13 +36,11 @@ import {
 import {
   categoryLabel,
   fileCenterApi,
-  fileResolution,
   FILE_CATEGORIES,
   isAudioFile,
   isImageFile,
   isVideoFile,
   toOpenUrl,
-  toPlayableVideoUrl,
   uploadMaterial,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
@@ -56,6 +54,7 @@ import { showToast } from '../../../components/AppToast.tsx';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
 import { QuickCreateCategory } from '../../../components/QuickCreateCategory.tsx';
 import { FileMedia } from '../../../components/FileMedia.tsx';
+import { FileCard, type FileCardAction } from '../../../components/FileCard.tsx';
 
 const PAGE_SIZE = 24;
 
@@ -104,276 +103,6 @@ function tileTone(file: DevFile): string {
   return 'bg-gradient-to-br from-[#F2F2F7] to-[#E5E5EA] text-[#8E8E93]';
 }
 
-function typeLabel(file: DevFile): string {
-  return (file.suffix || '').replace('.', '').toUpperCase() || categoryLabel(file.category);
-}
-
-/** 分辨率缓存：同一素材翻页回来只量一次 */
-const mediaSizeCache = new Map<string, string>();
-
-function mediaKey(file: DevFile): string {
-  return file.id || file.objName || file.fileKey || '';
-}
-
-/** 图片分辨率：用原图量；视频在卡片里的 video 元数据回调中记录 */
-function useFileResolution(file: DevFile): string {
-  const stored = fileResolution(file);
-  const key = mediaKey(file);
-  const [auto, setAuto] = useState(() => mediaSizeCache.get(key) ?? '');
-
-  useEffect(() => {
-    if (stored || auto || !key || !isImageFile(file)) return;
-    let cancelled = false;
-    const image = new window.Image();
-    image.onload = () => {
-      if (!image.naturalWidth || !image.naturalHeight) return;
-      const text = `${image.naturalWidth}×${image.naturalHeight}`;
-      mediaSizeCache.set(key, text);
-      if (!cancelled) setAuto(text);
-    };
-    image.src = toOpenUrl(file);
-    return () => {
-      cancelled = true;
-    };
-  }, [key, stored, auto, file]);
-
-  return stored || auto;
-}
-
-/* ------------------------------------------------------------------ */
-/* 网格卡片                                                            */
-/* ------------------------------------------------------------------ */
-
-interface CardProps {
-  file: DevFile;
-  selected: boolean;
-  onToggleSelect: (id: string) => void;
-  onOpen: (file: DevFile) => void;
-  onDetail: (file: DevFile) => void;
-  onCopy: (file: DevFile) => void;
-  onDelete: (file: DevFile) => void;
-  onEdit?: (file: DevFile) => void;
-  canDelete: boolean;
-}
-
-function MaterialCard({
-  file,
-  selected,
-  onToggleSelect,
-  onOpen,
-  onDetail,
-  onCopy,
-  onDelete,
-  onEdit,
-  canDelete,
-}: CardProps) {
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const [videoFailed, setVideoFailed] = useState(false);
-  const [videoPlaying, setVideoPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const Icon = coverIcon(file);
-  const isImage = isImageFile(file);
-  const isVideo = isVideoFile(file);
-  const media = isImage || isVideo || isAudioFile(file);
-  const cover = useFileThumbSrc(file, isImage ? toOpenUrl(file) : '');
-  const showCover = !!cover && !thumbFailed;
-  const [videoSize, setVideoSize] = useState(() => mediaSizeCache.get(mediaKey(file)) ?? '');
-  const resolution = useFileResolution(file) || videoSize;
-  const videoUrl = isVideo ? toPlayableVideoUrl(toOpenUrl(file)) : '';
-
-  useEffect(() => {
-    setThumbFailed(false);
-    setVideoFailed(false);
-    setVideoPlaying(false);
-  }, [file.id]);
-
-  function playPreview() {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.readyState >= 1) video.currentTime = 0;
-    void video.play().catch(() => {
-      /* 浏览器拒绝播放时保持封面 */
-    });
-  }
-
-  function stopPreview() {
-    const video = videoRef.current;
-    if (!video) return;
-    video.pause();
-    if (video.readyState >= 1) video.currentTime = 0;
-  }
-
-  return (
-    <div
-      title={`${file.name || '素材'} · ${media ? '双击预览' : '双击查看详情'}`}
-      tabIndex={0}
-      onClick={() => onToggleSelect(file.id)}
-      onDoubleClick={() => onOpen(file)}
-      onMouseEnter={isVideo ? playPreview : undefined}
-      onMouseLeave={isVideo ? stopPreview : undefined}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen(file);
-        }
-      }}
-      className={`group relative p-1.5 rounded-[16px] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 ${
-        selected ? 'bg-[#0071E3]/8' : 'hover:bg-[#F5F5F7]'
-      }`}
-    >
-      <div
-        className={`relative aspect-[4/3] rounded-[12px] overflow-hidden ${
-          isImage ? '' : showCover ? 'bg-[#F2F2F7]' : tileTone(file)
-        } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
-        style={isImage ? IMAGE_TILE_BG : undefined}
-      >
-        {isVideo && videoUrl && !videoFailed ? (
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            poster={showCover ? cover : undefined}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={(event) => {
-              const video = event.currentTarget;
-              if (!video.videoWidth || !video.videoHeight) return;
-              const text = `${video.videoWidth}×${video.videoHeight}`;
-              mediaSizeCache.set(mediaKey(file), text);
-              setVideoSize(text);
-            }}
-            onPlay={() => setVideoPlaying(true)}
-            onPause={() => setVideoPlaying(false)}
-            onError={() => {
-              setVideoFailed(true);
-              setVideoPlaying(false);
-            }}
-            className="w-full h-full object-cover"
-          />
-        ) : showCover ? (
-          <FileMedia
-            file={file}
-            src={cover}
-            alt={file.name || '素材'}
-            className="w-full h-full object-cover"
-            onError={() => setThumbFailed(true)}
-          />
-        ) : isVideo ? null : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
-            <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
-            <span className="text-[9px] font-medium uppercase tracking-wide opacity-70">
-              {typeLabel(file)}
-            </span>
-          </div>
-        )}
-
-        {/* 四角信息：标题 / 分辨率 / 文件大小 */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/55 via-black/20 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
-        <div className="pointer-events-none absolute left-7 right-1.5 top-1.5 flex items-start justify-between gap-1.5">
-          <span
-            className="min-w-0 truncate text-[11px] font-medium leading-4 text-white drop-shadow-sm"
-            title={file.name}
-          >
-            {file.name || '未命名素材'}
-          </span>
-          <span className="shrink-0 max-w-[55%] truncate rounded-[5px] bg-black/45 px-1 py-0.5 text-[9px] font-medium leading-none text-white/90 tabular-nums">
-            {resolution || typeLabel(file)}
-          </span>
-        </div>
-        <span className="pointer-events-none absolute bottom-1.5 left-1.5 text-[10px] font-medium leading-none text-white/85 tabular-nums drop-shadow-sm">
-          {file.sizeInfo || '-'}
-        </span>
-
-        {isVideo && !videoPlaying && (
-          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="w-10 h-10 rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm text-white flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.28)] transition-transform group-hover:scale-105">
-              <Film className="w-4 h-4" />
-            </span>
-          </span>
-        )}
-
-        {/* 选择圈 */}
-        <button
-          type="button"
-          aria-label={`${selected ? '取消选择' : '选择'} ${file.name || file.id}`}
-          aria-pressed={selected}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect(file.id);
-          }}
-          className={`absolute top-1.5 left-1.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-all ${
-            selected
-              ? 'bg-[#0071E3] border-[#0071E3] text-white'
-              : 'bg-white/85 border-black/10 text-transparent opacity-0 group-hover:opacity-100'
-          }`}
-        >
-          <Check className="w-2.5 h-2.5" strokeWidth={3} />
-        </button>
-
-        {/* 悬浮操作 */}
-        <div
-          className="absolute bottom-1.5 right-1.5 flex items-center gap-0.5 p-0.5 rounded-lg bg-white/90 backdrop-blur-md shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-        >
-          {media && (
-            <button
-              type="button"
-              onClick={() => onOpen(file)}
-              aria-label={`预览 ${file.name}`}
-              title="预览"
-              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onCopy(file)}
-            aria-label={`复制 ${file.name} 的直链`}
-            title="复制直链"
-            className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDetail(file)}
-            aria-label={`详情 ${file.name}`}
-            title="详情与引用"
-            className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-          >
-            <Info className="w-3.5 h-3.5" />
-          </button>
-          {onEdit && (
-            <button
-              type="button"
-              onClick={() => onEdit(file)}
-              aria-label={`编辑 ${file.name}`}
-              title="编辑信息"
-              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {canDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(file)}
-              aria-label={`删除 ${file.name}`}
-              title="删除"
-              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /** 表格行缩略图：与网格卡片共用同一套封面地址，失败时回退类型图标 */
 function MaterialTableThumb({ file }: { file: DevFile }) {
@@ -1043,17 +772,25 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-1.5 gap-y-3">
           {visibleRecords.map((file) => (
-            <MaterialCard
+            <FileCard
               key={file.id}
               file={file}
               selected={selected.has(file.id)}
               onToggleSelect={toggleSelect}
               onOpen={openFile}
-              onDetail={(target) => setDialog({ kind: 'detail', file: target })}
-              onCopy={(target) => void copyFileLink(target)}
-              onDelete={(target) => setDialog({ kind: 'delete', files: [target] })}
-              onEdit={canEdit ? (target) => setDialog({ kind: 'edit', file: target }) : undefined}
-              canDelete={canDelete}
+              actions={[
+                ...(isVideoFile(file) || isAudioFile(file) || isImageFile(file)
+                  ? [{ key: 'preview', label: '预览', icon: Eye, onClick: () => openFile(file) }]
+                  : []),
+                { key: 'copy', label: '复制直链', icon: Copy, onClick: () => void copyFileLink(file) },
+                { key: 'detail', label: '详情', icon: Info, onClick: () => setDialog({ kind: 'detail', file }) },
+                ...(canEdit
+                  ? [{ key: 'edit', label: '编辑', icon: Pencil, onClick: () => setDialog({ kind: 'edit' as const, file }) }]
+                  : []),
+                ...(canDelete
+                  ? [{ key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => setDialog({ kind: 'delete' as const, files: [file] }) }]
+                  : []),
+              ] as FileCardAction[]}
             />
           ))}
         </div>

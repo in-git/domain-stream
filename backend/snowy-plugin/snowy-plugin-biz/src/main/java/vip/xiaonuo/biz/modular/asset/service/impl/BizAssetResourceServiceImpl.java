@@ -17,6 +17,7 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import vip.xiaonuo.biz.modular.asset.entity.BizAssetResource;
 import vip.xiaonuo.biz.modular.asset.enums.BizAssetCategoryEnum;
@@ -101,6 +102,27 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     /** 已知文件后缀 */
     private static final List<String> KNOWN_SUFFIXES = Arrays.asList(
             "jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "mp4", "webm", "mov", "m4v");
+
+    /**
+     * 不影响图片身份的查询参数：尺寸/质量/格式等变换参数、追踪参数、签名与缓存参数。
+     * 采集时同一张图常以 w=480 / w=1280、带 token 等不同地址出现，去掉后才能识别为同一条。
+     */
+    private static final Set<String> MEDIA_QUERY_IGNORED_KEYS = Set.of(
+            "w", "h", "width", "height",
+            "q", "quality", "fm", "format", "fit", "crop", "auto", "dpr",
+            "size", "resize", "thumbnail", "thumb", "maxwidth", "maxheight", "minwidth", "minheight",
+            "bg", "blur", "sharp",
+            "ixlib", "ixid",
+            "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+            "fbclid", "gclid",
+            "v", "t", "ts", "_", "cb", "cache", "cachebuster", "timestamp",
+            "expires", "exp", "sign", "signature", "token", "policy", "auth_key");
+
+    /** 取图片宽度/高度参数，用于在同图多尺寸中选最大的一张 */
+    private static final Pattern WIDTH_PARAM_PATTERN = Pattern.compile(
+            "[?&](?:w|width)=(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HEIGHT_PARAM_PATTERN = Pattern.compile(
+            "[?&](?:h|height)=(\\d+)", Pattern.CASE_INSENSITIVE);
 
     /** 预览图内存缓存：列表频繁重复请求同一张远程图，缓存可避免反复超时 */
     private final ConcurrentMap<String, byte[]> previewCache = new ConcurrentHashMap<>();
@@ -461,6 +483,9 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
     private String canonicalMediaKey(String url) {
         try {
             URI uri = URI.create(url);
+            // 协议与域名不区分大小写，统一小写避免同一图被当成两条
+            String origin = StrUtil.blankToDefault(uri.getScheme(), "").toLowerCase(Locale.ROOT)
+                    + "://" + StrUtil.blankToDefault(uri.getAuthority(), "").toLowerCase(Locale.ROOT);
             String query = uri.getQuery();
             if (StrUtil.isNotBlank(query)) {
                 List<String> parts = new ArrayList<>();
@@ -468,17 +493,20 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
                     if (part.startsWith("id=") && part.length() > 3) {
                         return "id:" + URLDecoder.decode(part.substring(3), StandardCharsets.UTF_8);
                     }
-                    // 追踪参数不影响图片身份，去掉后可以避免同一资源被重复采集
-                    String lower = part.toLowerCase(Locale.ROOT);
-                    if (lower.startsWith("utm_") || lower.startsWith("fbclid=") || lower.startsWith("gclid=")) {
+                    int eq = part.indexOf('=');
+                    String key = (eq >= 0 ? part.substring(0, eq) : part).toLowerCase(Locale.ROOT);
+                    // 尺寸/质量/追踪/签名参数不影响图片身份，去掉后避免同一资源被重复采集
+                    if (MEDIA_QUERY_IGNORED_KEYS.contains(key)) {
                         continue;
                     }
                     parts.add(part);
                 }
-                return uri.getScheme() + "://" + uri.getAuthority() + uri.getPath()
+                // 参数顺序不影响图片身份，排序后再拼接，避免同图不同顺序被当成两条
+                Collections.sort(parts);
+                return origin + uri.getPath()
                         + (parts.isEmpty() ? "" : "?" + String.join("&", parts));
             }
-            return uri.getScheme() + "://" + uri.getAuthority() + uri.getPath();
+            return origin + uri.getPath();
         } catch (Exception ignored) {
             // 非标准查询串直接按完整网址去重
             return url;
@@ -487,11 +515,21 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
 
     private int mediaScore(String url) {
         String lower = url.toLowerCase(Locale.ROOT);
-        int score = 0;
-        if (lower.contains("w=3840") || lower.contains("h=2160")) score += 4;
-        else if (lower.contains("w=2000")) score += 2;
+        // 归一化查询参数后，同一张图的不同尺寸会落到同一个 key，这里选分辨率最大的地址
+        int score = paramNumber(WIDTH_PARAM_PATTERN, lower) / 160
+                + paramNumber(HEIGHT_PARAM_PATTERN, lower) / 160;
         if (lower.contains("uhd")) score += 1;
         return score;
+    }
+
+    private int paramNumber(Pattern pattern, String url) {
+        Matcher matcher = pattern.matcher(url);
+        if (!matcher.find()) return 0;
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private boolean isDeepSearch(BizAssetCollectUrlParam param) {
@@ -643,12 +681,15 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         String sourceKey = "url:" + md5Hex(canonicalMediaKey(url));
         String legacySourceKey = "url:" + md5Hex(url);
 
-        // 同时兼容历史数据，命中旧地址记录时顺手迁移为新的规范去重键
-        BizAssetResource entity = findBySourceKey(sourceKey, legacySourceKey);
+        // 逻辑删除的记录仍占用唯一索引，这里连已删除数据一起查，命中后复用之
+        BizAssetResource entity = resourceMapper.selectBySourceKeyIncludeDeleted(sourceKey, legacySourceKey);
         boolean created = entity == null;
         if (created) {
             entity = new BizAssetResource();
             entity.setId(IdWorker.getIdStr());
+        } else if (!"NOT_DELETE".equals(entity.getDeleteFlag())) {
+            resourceMapper.restoreById(entity.getId());
+            entity.setDeleteFlag("NOT_DELETE");
         }
         entity.setSource(COLLECTED_SOURCE);
         entity.setSourceKey(sourceKey);
@@ -669,7 +710,19 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         entity.setStatus(ACTIVE);
         entity.setDownloads(0);
         if (created) {
-            resourceMapper.insert(entity);
+            try {
+                resourceMapper.insert(entity);
+            } catch (DuplicateKeyException e) {
+                // 并发采集兜底：另一请求已插入同源记录，回查后改为更新
+                BizAssetResource existing = resourceMapper.selectBySourceKeyIncludeDeleted(sourceKey, legacySourceKey);
+                if (existing == null) {
+                    throw e;
+                }
+                entity.setId(existing.getId());
+                entity.setDeleteFlag("NOT_DELETE");
+                resourceMapper.restoreById(existing.getId());
+                resourceMapper.updateById(entity);
+            }
         } else {
             resourceMapper.updateById(entity);
         }
@@ -888,20 +941,6 @@ public class BizAssetResourceServiceImpl implements BizAssetResourceService {
         };
     }
 
-    private BizAssetResource findBySourceKey(String... sourceKeys) {
-        List<String> keys = new ArrayList<>();
-        for (String key : sourceKeys) {
-            if (StrUtil.isNotBlank(key) && !keys.contains(key)) {
-                keys.add(key);
-            }
-        }
-        if (keys.isEmpty()) return null;
-        LambdaQueryWrapper<BizAssetResource> query = Wrappers.lambdaQuery();
-        query.in(BizAssetResource::getSourceKey, keys)
-                .orderByAsc(BizAssetResource::getId)
-                .last("limit 1");
-        return resourceMapper.selectOne(query);
-    }
 
     private BizAssetResourceVo toVo(BizAssetResource row) {
         BizAssetResourceVo vo = new BizAssetResourceVo();

@@ -9,6 +9,7 @@ export type ModuleKey =
   | 'files'
   | 'materials'
   | 'assetResource'
+  | 'businessDict'
   | 'config'
   | 'profile';
 

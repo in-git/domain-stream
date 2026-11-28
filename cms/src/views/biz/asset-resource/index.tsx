@@ -26,9 +26,13 @@ import {
   X,
 } from 'lucide-react';
 import { assetResourceApi, proxyUrl, type AssetResource } from '../../../lib/assetResource.ts';
+import { businessDictApi } from '../../../lib/dict.ts';
+import ManagedOptionTabs from '../../../components/ManagedOptionTabs.tsx';
+import DictItemsManageDialog from '../../../components/DictItemsManageDialog.tsx';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
 import type { DevFile } from '../../../lib/fileCenter.ts';
 import { FileMedia } from '../../../components/FileMedia.tsx';
+import { FileCard } from '../../../components/FileCard.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 
@@ -37,7 +41,7 @@ const PAGE_SIZE = 20;
 type ViewMode = 'grid' | 'list';
 type CollectPhase = 'idle' | 'running' | 'done' | 'error';
 
-/** 资源类型选项：用于采集表单、统计卡片和类型筛选 */
+/** 资源类型兜底选项：业务字典 ASSET_TYPE 未配置时使用 */
 const TYPE_OPTIONS = [
   { value: 'IMAGE', label: '图片' },
   { value: 'VIDEO', label: '视频' },
@@ -61,10 +65,6 @@ const ICON_84_STYLE: CSSProperties = {
   height: '84px',
 };
 
-function typeLabel(type: string): string {
-  return TYPE_OPTIONS.find((item) => item.value === type)?.label || type || '其他';
-}
-
 /** 取资源地址后缀，用于拼装通用文件渲染组件的 DevFile */
 function urlSuffix(raw?: string): string {
   if (!raw) return '';
@@ -87,6 +87,10 @@ function assetAsFile(item: AssetResource): DevFile {
   };
 }
 
+function typeLabel(type: string, options: { value: string; label: string }[]): string {
+  return options.find((item) => item.value === type)?.label || type || '其他';
+}
+
 export default function AssetResourceView() {
   const canAdd = true;
 
@@ -103,6 +107,8 @@ export default function AssetResourceView() {
   const [collectProgress, setCollectProgress] = useState({ index: 0, total: 0, message: '' });
 
   const [type, setType] = useState('IMAGE');
+  const [typeOptions, setTypeOptions] = useState(TYPE_OPTIONS);
+  const [manageTypesOpen, setManageTypesOpen] = useState(false);
   const [inMaterial, setInMaterial] = useState('');
   const [search, setSearch] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -167,19 +173,19 @@ export default function AssetResourceView() {
   const loadCounts = useCallback(async () => {
     try {
       const [typeResults, added] = await Promise.all([
-        Promise.all(TYPE_OPTIONS.map((option) =>
+        Promise.all(typeOptions.map((option) =>
           assetResourceApi.page({ current: 1, size: 1, type: option.value }))),
         assetResourceApi.page({ current: 1, size: 1, inMaterial: 'YES' }),
       ]);
       const next: Record<string, number> = { ADDED: Number(added.total || 0) };
-      TYPE_OPTIONS.forEach((option, index) => {
+      typeOptions.forEach((option, index) => {
         next[option.value] = Number(typeResults[index].total || 0);
       });
       setCounts(next);
     } catch {
       // 统计失败不影响主列表
     }
-  }, []);
+  }, [typeOptions]);
 
   useEffect(() => {
     void load();
@@ -188,6 +194,26 @@ export default function AssetResourceView() {
   useEffect(() => {
     void loadCounts();
   }, [loadCounts]);
+
+  // 资源类型来自业务字典 ASSET_TYPE，字典未配置时沿用内置选项
+  const loadTypeOptions = useCallback(async () => {
+    try {
+      const dictItems = await businessDictApi.options('ASSET_TYPE');
+      const next = (dictItems || [])
+        .filter((dict) => !!dict.dictValue && !!dict.dictLabel)
+        .map((dict) => ({ value: dict.dictValue as string, label: dict.dictLabel as string }));
+      if (!next.length) return;
+      setTypeOptions(next);
+      setType((prev) => (next.some((option) => option.value === prev) ? prev : next[0].value));
+      setCollectType((prev) => (next.some((option) => option.value === prev) ? prev : next[0].value));
+    } catch {
+      // 字典读取失败时继续使用内置类型
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTypeOptions();
+  }, [loadTypeOptions]);
 
   useEffect(() => {
     if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
@@ -365,7 +391,7 @@ export default function AssetResourceView() {
   }
 
   const statCards = [
-    ...TYPE_OPTIONS.map((option) => ({
+    ...typeOptions.map((option) => ({
       key: option.value,
       label: option.label,
       value: counts[option.value] || 0,
@@ -375,7 +401,7 @@ export default function AssetResourceView() {
     { key: 'ADDED', label: '已加入素材', value: counts.ADDED || 0, icon: Check, active: inMaterial === 'YES' },
   ];
 
-  const typeTabs = TYPE_OPTIONS;
+  const typeTabs = typeOptions;
 
   return (
     <div className="space-y-5">
@@ -538,27 +564,16 @@ export default function AssetResourceView() {
           </div>
         </div>
 
-        {/* 类型 Tab */}
-        <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-[#F2F2F7]">
-          {typeTabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => { setType(tab.value); setInMaterial(''); setPage(1); }}
-              className={`h-8 px-3 rounded-[10px] text-[12px] font-medium transition-colors ${
-                type === tab.value
-                  ? 'bg-[#0071E3]/10 text-[#0071E3]'
-                  : 'text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* 批量选择 */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#F2F2F7]">
-          <div className="flex flex-wrap items-center gap-1 ml-auto">
+        {/* 类型 Tab + 全选本页 */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#F2F2F7]">
+          <ManagedOptionTabs
+            options={typeTabs}
+            value={type}
+            onChange={(next) => { setType(next); setInMaterial(''); setPage(1); }}
+            onManage={() => setManageTypesOpen(true)}
+            manageTitle="管理文件类型"
+          />
+          <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
               role="checkbox"
@@ -680,17 +695,16 @@ export default function AssetResourceView() {
                   <button
                     type="button"
                     onClick={() => setPreview(item)}
-                    className="w-[84px] h-[84px] flex items-center justify-center rounded-xl bg-[#F2F2F7] hover:bg-[#E8E8ED] transition-colors"
+                    className="w-[84px] h-[84px] rounded-xl overflow-hidden hover:opacity-90 transition-opacity"
                     title={item.title}
                   >
-                    <img
+                    <FileCard
+                      file={assetAsFile(item)}
                       src={assetSrc(item)}
-                      alt={item.title}
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      className="object-contain"
-                      style={ICON_84_STYLE}
-                      onError={() => handleImageError(item)}
+                      variant="icon"
+                      fit="contain"
+                      className="w-full h-full"
+                      onCoverError={() => handleImageError(item)}
                     />
                   </button>
                   <div
@@ -710,89 +724,26 @@ export default function AssetResourceView() {
             const isSelected = selected.has(item.id);
             const added = item.inMaterial === 'YES';
             return (
-              <div
+              <FileCard
                 key={item.id}
-                className={`relative group bg-white rounded-[14px] border overflow-hidden transition-colors ${
-                  isSelected ? 'border-[#0071E3]/60 ring-1 ring-[#0071E3]/30' : 'border-[#E5E5EA] hover:border-[#D1D1D6]'
-                }`}
-              >
-                <button
-                  type="button"
-                  aria-label={`选择 ${item.title}`}
-                  onClick={() => toggleSelect(item.id)}
-                  className={`absolute top-1.5 left-1.5 z-10 w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all ${
-                    isSelected
-                      ? 'bg-[#0071E3] border-[#0071E3] text-white'
-                      : 'bg-white/85 border-black/10 text-transparent opacity-0 group-hover:opacity-100'
-                  }`}
-                >
-                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                </button>
-
-                {added && (
-                  <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-full bg-[#30D158]/90 text-white text-[10px]">
-                    已加入
-                  </span>
-                )}
-
-                <button
-                  type="button"
-                  aria-label={`删除 ${item.title}`}
-                  title="删除"
-                  disabled={deleting}
-                  onClick={() => setDeleteTargets([item])}
-                  className="absolute bottom-1.5 right-1.5 z-10 w-6 h-6 rounded-[8px] border border-[#FF3B30]/20 bg-white/90 text-[#D70015] flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white transition-opacity disabled:opacity-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-
-                <button type="button" className="block w-full" onClick={() => setPreview(item)}>
-                  <div
-                    className="aspect-[4/3] flex items-center justify-center overflow-hidden"
-                    style={ASSET_BG_STYLE}
-                  >
-                    {item.type === 'ICON' || item.type === 'SVG' ? (
-                      <div className="w-[84px] h-[84px] flex items-center justify-center shrink-0" style={ASSET_BG_STYLE}>
-                        <img
-                          src={assetSrc(item)}
-                          alt={item.title}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="object-contain"
-                          style={ICON_84_STYLE}
-                          onError={() => handleImageError(item)}
-                        />
-                      </div>
-                    ) : item.type === 'VIDEO' ? (
-                      <video
-                        src={assetSrc(item)}
-                        muted
-                        playsInline
-                        preload="metadata"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <img
-                        src={assetSrc(item)}
-                        alt={item.title}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                        onError={() => handleImageError(item)}
-                      />
-                    )}
-                  </div>
-                </button>
-
-                <div className="mt-1.5 px-0.5 min-w-0 pb-2">
-                  <div className="text-[12px] font-medium text-[#1D1D1F] truncate" title={item.title}>
-                    {item.title || '未命名素材'}
-                  </div>
-                  <div className="mt-0.5 text-[10px] text-[#86868B]">
-                    {typeLabel(item.type)}
-                  </div>
-                </div>
-              </div>
+                file={assetAsFile(item)}
+                title={item.title || '未命名素材'}
+                src={assetSrc(item)}
+                selected={isSelected}
+                onToggleSelect={toggleSelect}
+                onOpen={() => setPreview(item)}
+                fit={item.type === 'ICON' || item.type === 'SVG' ? 'contain' : 'cover'}
+                meta={typeLabel(item.type, typeOptions)}
+                badge={
+                  added ? (
+                    <span className="px-1.5 py-0.5 rounded-full bg-[#30D158]/90 text-white text-[10px]">已加入</span>
+                  ) : undefined
+                }
+                actions={[
+                  { key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => setDeleteTargets([item]) },
+                ]}
+                onCoverError={() => handleImageError(item)}
+              />
             );
           })}
         </div>
@@ -828,34 +779,26 @@ export default function AssetResourceView() {
                     className={`${item.type === 'ICON' || item.type === 'SVG' ? 'w-[84px] h-[84px]' : 'w-8 h-8'} rounded-lg flex items-center justify-center shrink-0 overflow-hidden`}
                     style={ASSET_BG_STYLE}
                   >
-                    {item.type === 'VIDEO' ? (
-                      <video
-                        src={assetSrc(item)}
-                        muted
-                        playsInline
-                        preload="metadata"
-                        className="w-8 h-8 object-cover rounded-lg"
-                      />
-                    ) : (
-                      <img
-                        src={assetSrc(item)}
-                        alt={item.title}
-                        className={`${item.type === 'ICON' || item.type === 'SVG' ? 'object-contain' : 'w-8 h-8 object-cover'} rounded-lg`}
-                        style={item.type === 'ICON' || item.type === 'SVG' ? ICON_84_STYLE : undefined}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={() => handleImageError(item)}
-                      />
-                    )}
+                    <FileMedia
+                      file={assetAsFile(item)}
+                      src={assetSrc(item)}
+                      alt={item.title || '素材'}
+                      className={
+                        item.type === 'ICON' || item.type === 'SVG'
+                          ? 'w-[84px] h-[84px] object-contain'
+                          : 'w-8 h-8 object-cover rounded-lg'
+                      }
+                      onError={() => handleImageError(item)}
+                    />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] text-[#1D1D1F] truncate">{item.title || '未命名素材'}</span>
                     <span className="block text-[11px] text-[#86868B] truncate sm:hidden">
-                      {typeLabel(item.type)}
+                      {typeLabel(item.type, typeOptions)}
                     </span>
                   </span>
                 </button>
-                <span className="hidden sm:block text-[12px] text-[#6E6E73] truncate">{typeLabel(item.type)}</span>
+                <span className="hidden sm:block text-[12px] text-[#6E6E73] truncate">{typeLabel(item.type, typeOptions)}</span>
                 <span className="hidden sm:block text-[12px] text-[#6E6E73]">
                   {added ? <span className="text-[#248A3D]">已加入</span> : <span className="text-[#86868B]">未加入</span>}
                 </span>
@@ -977,7 +920,7 @@ export default function AssetResourceView() {
                   ariaLabel="选择资源类型"
                   value={collectType}
                   onChange={setCollectType}
-                  options={TYPE_OPTIONS}
+                  options={typeOptions}
                   className="w-full"
                 />
               </div>
@@ -1065,7 +1008,7 @@ export default function AssetResourceView() {
                 <h3 className="text-[17px] font-semibold text-[#1D1D1F] break-words">{preview.title}</h3>
                 <p className="text-[12px] text-[#86868B] leading-5">{preview.description}</p>
                 <dl className="text-[12px] space-y-1.5 text-[#6E6E73]">
-                  <div className="flex justify-between gap-3"><dt>资源类型</dt><dd className="text-right text-[#1D1D1F]">{typeLabel(preview.type)}</dd></div>
+                  <div className="flex justify-between gap-3"><dt>资源类型</dt><dd className="text-right text-[#1D1D1F]">{typeLabel(preview.type, typeOptions)}</dd></div>
                   <div className="flex justify-between gap-3"><dt>作者</dt><dd className="text-right text-[#1D1D1F] truncate max-w-[180px]">{preview.author || '未知'}</dd></div>
                   <div className="flex justify-between gap-3"><dt>许可</dt><dd className="text-right text-[#1D1D1F] truncate max-w-[180px]">{preview.license || '未知'}</dd></div>
                 </dl>
@@ -1094,12 +1037,12 @@ export default function AssetResourceView() {
             role="dialog"
             aria-modal="true"
             aria-label="采集结果"
-            className={`w-full bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.24)] overflow-hidden transition-all ${
-              collectPanelCollapsed ? 'max-w-lg' : 'max-w-2xl'
+            className={`w-[70vw] bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.24)] overflow-hidden flex flex-col transition-all ${
+              collectPanelCollapsed ? 'h-auto' : 'h-[80vh]'
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="h-12 px-5 flex items-center gap-2 border-b border-[#F2F2F7]">
+            <div className="h-12 shrink-0 px-5 flex items-center gap-2 border-b border-[#F2F2F7]">
               <button
                 type="button"
                 onClick={() => setCollectPanelCollapsed((collapsed) => !collapsed)}
@@ -1123,7 +1066,7 @@ export default function AssetResourceView() {
               </button>
             </div>
             {!collectPanelCollapsed && (
-              <div className="p-5 space-y-3">
+              <div className="flex-1 min-h-0 flex flex-col gap-3 p-5">
                 {collectPhase === 'running' && (
                   <div className="h-1.5 rounded-full bg-[#F2F2F7] overflow-hidden">
                     <div
@@ -1135,9 +1078,10 @@ export default function AssetResourceView() {
                 <p className="text-[12px] text-[#6E6E73]">
                   {collectProgress.message || '采集结果会在这里实时更新'}
                 </p>
-                <div className="max-h-[55vh] overflow-y-auto columns-2 sm:columns-3 gap-2">
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 content-start">
                   {collectedResources.length === 0 ? (
-                    <div className="py-12 text-center text-[12px] text-[#86868B]">
+                    <div className="col-span-full py-12 text-center text-[12px] text-[#86868B]">
                       {collectPhase === 'running' ? '正在采集，资源入库后会立即显示' : '暂无采集结果'}
                     </div>
                   ) : collectedResources.map((resource) => (
@@ -1145,17 +1089,17 @@ export default function AssetResourceView() {
                       key={resource.id}
                       type="button"
                       onClick={() => setPreview(resource)}
-                      className="group relative mb-2 block w-full break-inside-avoid overflow-hidden rounded-xl border border-[#E5E5EA] bg-white text-left transition-colors hover:border-[#D1D1D6]"
+                      className="group relative block w-full overflow-hidden rounded-xl border border-[#E5E5EA] bg-white text-left transition-colors hover:border-[#D1D1D6]"
                     >
                       <FileMedia
                         file={assetAsFile(resource)}
                         src={assetSrc(resource)}
                         alt={resource.title || '采集素材'}
-                        className="block w-full h-auto"
+                        className="block w-full aspect-[4/3] object-cover"
                         fallback={
                           <span className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-1 bg-[#F5F5F7] text-[#86868B]">
                             <ImageIcon className="w-5 h-5" strokeWidth={1.5} />
-                            <span className="text-[10px]">{typeLabel(resource.type)}</span>
+                            <span className="text-[10px]">{typeLabel(resource.type, typeOptions)}</span>
                           </span>
                         }
                         onError={() => handleImageError(resource)}
@@ -1165,16 +1109,26 @@ export default function AssetResourceView() {
                           {resource.title || '未命名素材'}
                         </span>
                         <span className="block text-[10px] text-white/80">
-                          {typeLabel(resource.type)} · 已入库
+                          {typeLabel(resource.type, typeOptions)} · 已入库
                         </span>
                       </span>
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {manageTypesOpen && (
+        <DictItemsManageDialog
+          typeCode="ASSET_TYPE"
+          title="管理文件类型"
+          onClose={() => setManageTypesOpen(false)}
+          onChanged={() => void loadTypeOptions()}
+        />
       )}
 
       {/* 加入素材中心：先选择素材分类 */}

@@ -37,6 +37,7 @@ const DEFAULT_PATHS: Record<ModuleKey, string> = {
   files: '/biz/file',
   materials: '/biz/material',
   assetResource: '/biz-asset-resource',
+  businessDict: '/biz-business-dict',
   config: '/biz/config',
   profile: '/profile',
 };
@@ -71,6 +72,8 @@ const MATCHERS: ModuleMatcher[] = [
   { key: 'materials', label: '素材中心', keywords: ['biz/material', 'bizmaterial'] },
   // 素材资源库：菜单 component = biz/asset-resource/index，path = /biz-asset-resource
   { key: 'assetResource', label: '素材资源库', keywords: ['biz/asset-resource', 'bizasset-resource', 'biz-asset-resource'] },
+  // 业务字典：菜单 component = biz/business-dict/index，path = /biz-business-dict
+  { key: 'businessDict', label: '业务字典', keywords: ['biz/business-dict', 'bizbusiness-dict', 'biz-business-dict'] },
   // 页面配置：菜单 component = biz/config/index，path = /biz/config
   { key: 'config', label: '页面配置', keywords: ['biz/config', 'bizconfig'] },
 ];
@@ -199,6 +202,7 @@ const MODULE_PERM_PREFIX: Record<Exclude<ModuleKey, 'dashboard' | 'profile'>, st
   files: 'bizFile',
   materials: 'bizMaterial',
   assetResource: 'bizAssetResource',
+  businessDict: 'bizBusinessDict',
   config: 'bizConfig',
 };
 

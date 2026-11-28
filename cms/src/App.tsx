@@ -58,6 +58,7 @@ import CommentView from './views/biz/comment/index.tsx';
 import FileCenterView from './views/biz/file/index.tsx';
 import MaterialCenterView from './views/biz/material/index.tsx';
 import AssetResourceView from './views/biz/asset-resource/index.tsx';
+import BusinessDictView from './views/biz/business-dict/index.tsx';
 import ConfigView from './views/biz/config/index.tsx';
 
 const MODULE_TITLES: Record<ModuleKey, string> = {
@@ -71,6 +72,7 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   files: '文件中心',
   materials: '素材中心',
   assetResource: '素材资源库',
+  businessDict: '业务字典',
   config: '页面配置',
   profile: '个人中心',
 };
@@ -832,6 +834,8 @@ export default function App() {
             <MaterialCenterView permissions={permissions} />
           ) : route.module === 'assetResource' ? (
             <AssetResourceView />
+          ) : route.module === 'businessDict' ? (
+            <BusinessDictView />
           ) : route.module === 'config' ? (
             <ConfigView />
           ) : (

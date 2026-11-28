@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 文件中心（素材库）管理页
  * ------------------------------------------------------------------
  * 对应后端菜单：path = /biz/file，component = biz/file/index
@@ -19,27 +19,22 @@ import {
   Eye,
   FileText,
   Film,
-  File as FileIcon,
   ImagePlus,
   Images,
   Loader2,
   Music,
-  Pause,
-  Play,
   RefreshCw,
   Search,
   Trash2,
   X,
 } from 'lucide-react';
 import {
-  categoryLabel,
   fileCenterApi,
   FILE_CATEGORIES,
   isAudioFile,
   isImageFile,
   isVideoFile,
   toOpenUrl,
-  toStreamUrl,
   uploadLibraryFile,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
@@ -50,7 +45,7 @@ import {
   FilePreviewDialog,
 } from './dialogs.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
-import { FileMedia } from '../../../components/FileMedia.tsx';
+import { FileCard, type FileCardAction } from '../../../components/FileCard.tsx';
 
 const PAGE_SIZE = 24;
 
@@ -69,303 +64,18 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败，请稍后重试';
 }
 
-/** 素材卡片占位图标 */
-function coverIcon(file: DevFile) {
-  if (isVideoFile(file)) return Film;
-  if (isAudioFile(file)) return Music;
-  if (isImageFile(file)) return Images;
-  if ((file.category || '') === 'DOC') return FileText;
-  return FileIcon;
-}
-
-/** 占位封面底色：按素材类型区分，接近「文件」App 的彩色图标 */
-interface FileCardProps {
-  file: DevFile;
-  selected: boolean;
-  onToggleSelect: (id: string) => void;
-  onOpen: (file: DevFile) => void;
-  onDetail: (file: DevFile) => void;
-  onDelete: (file: DevFile) => void;
-}
-
-/** 当前正在播放的卡片音频，切换播放时先暂停上一个 */
-let activeAudio: HTMLAudioElement | null = null;
-
-/** 苹果文件 App 风格素材卡片：大封面 + 名称/大小，悬浮操作，双击打开 */
-function FileCard({ file, selected, onToggleSelect, onOpen, onDetail, onDelete }: FileCardProps) {
-  /** 加载失败的地址，缩略图失败后自动回退到原图 */
-  const [failedSrc, setFailedSrc] = useState('');
-  useEffect(() => setFailedSrc(''), [file.id]);
-  const Icon = coverIcon(file);
-  const isMedia = isVideoFile(file) || isAudioFile(file) || isImageFile(file);
-  const isVideo = isVideoFile(file);
-  const isAudio = isAudioFile(file);
-  const thumbnail = file.thumbnail || '';
-  const originalUrl = isImageFile(file) ? toOpenUrl(file) : '';
-  const cover =
-    thumbnail && thumbnail !== failedSrc
-      ? thumbnail
-      : originalUrl && originalUrl !== failedSrc
-        ? originalUrl
-        : '';
-  const showCover = !!cover;
-  /** 鼠标移入才挂载视频，移出即卸载，避免一次为所有卡片加载视频流 */
-  const [hovered, setHovered] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const videoUrl = toStreamUrl(file) || toOpenUrl(file);
-  const darkCover = isVideo || showCover || (isVideo && hovered && !!videoUrl);
-
-  /** 音频卡片内联播放：同一时间只允许一个音频在播 */
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  /** 卡片内联播放进度（秒 / 总时长） */
-  const [audioTime, setAudioTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(0);
-  const audioUrl = isAudio ? toStreamUrl(file) || toOpenUrl(file) : '';
-
-  useEffect(() => {
-    setAudioPlaying(false);
-    setAudioTime(0);
-    setAudioDuration(0);
-  }, [file.id]);
-
-  function toggleAudio() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
-      if (activeAudio && activeAudio !== audio) activeAudio.pause();
-      activeAudio = audio;
-      void audio.play().catch(() => {
-        /* 浏览器拒绝播放时保持静止 */
-      });
-    } else {
-      audio.pause();
-    }
+/** 文件中心的卡片操作：预览 / 详情 / 下载 / 删除 */
+function fileActions(file: DevFile, open: (state: DialogState) => void): FileCardAction[] {
+  const actions: FileCardAction[] = [];
+  if (isVideoFile(file) || isAudioFile(file) || isImageFile(file)) {
+    actions.push({ key: 'preview', label: '预览', icon: Eye, onClick: () => open({ kind: 'preview', file }) });
   }
-
-  useEffect(() => {
-    if (!isVideo) return;
-    const video = videoRef.current;
-    if (!video) return;
-    if (hovered) void video.play().catch(() => {});
-    else {
-      video.pause();
-      video.currentTime = 0;
-    }
-  }, [hovered, isVideo]);
-
-  return (
-    <div
-      title={isMedia ? '双击预览' : '双击查看详情'}
-      tabIndex={0}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={() => onToggleSelect(file.id)}
-      onDoubleClick={() => onOpen(file)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen(file);
-        }
-      }}
-      className={`group relative p-1.5 rounded-[14px] cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 ${
-        selected ? 'bg-[#0071E3]/8' : 'hover:bg-[#F5F5F7]'
-      }`}
-    >
-      {/* 封面 */}
-      <div
-        className={`relative aspect-[4/3] rounded-[11px] overflow-hidden ${
-          isVideo ? 'bg-black' : 'bg-gradient-to-br from-[#FDFDFE] via-[#F5F5F7] to-[#E9E9ED] text-[#6E6E73]'
-        } ${selected ? 'ring-2 ring-[#0071E3]' : 'ring-1 ring-black/5'} transition-shadow group-hover:shadow-[0_10px_26px_rgba(0,0,0,0.10)]`}
-      >
-        {isVideo && hovered && videoUrl ? (
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            muted
-            loop
-            playsInline
-            autoPlay
-            preload="auto"
-            className="absolute inset-0 w-full h-full object-contain bg-black"
-            aria-label={`播放 ${file.name || '视频'}`}
-          />
-        ) : showCover ? (
-          <FileMedia
-            file={file}
-            src={cover}
-            alt={file.name || '素材'}
-            className="w-full h-full object-cover"
-            onError={() => setFailedSrc(cover)}
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 select-none">
-            {isVideo ? (
-              <Film className="absolute w-20 h-20 text-white/10" strokeWidth={1} />
-            ) : isAudio ? null : (
-              <>
-                <Icon className="w-8 h-8 opacity-80" strokeWidth={1.4} />
-                <span className="text-[9px] font-medium uppercase tracking-wide opacity-70">
-                  {(file.suffix || '').replace('.', '') || categoryLabel(file.category)}
-                </span>
-              </>
-            )}
-          </div>
-        )}
-
-        {isVideo && !hovered && (
-          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="w-10 h-10 rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur-sm text-white flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.28)] transition-transform group-hover:scale-105">
-              <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
-            </span>
-          </span>
-        )}
-
-        {isAudio && audioUrl && (
-          <>
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              preload="metadata"
-              onPlay={() => setAudioPlaying(true)}
-              onPause={() => setAudioPlaying(false)}
-              onEnded={() => {
-                setAudioPlaying(false);
-                setAudioTime(0);
-              }}
-              onTimeUpdate={(e) => setAudioTime(e.currentTarget.currentTime)}
-              onLoadedMetadata={(e) =>
-                setAudioDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)
-              }
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleAudio();
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              aria-label={`${audioPlaying ? '暂停' : '播放'} ${file.name || '音频'}`}
-              title={audioPlaying ? '暂停' : '播放'}
-              className="absolute inset-0 m-auto z-10 w-11 h-11 rounded-full bg-white/90 backdrop-blur-sm ring-1 ring-black/5 text-[#0071E3] shadow-[0_4px_14px_rgba(0,0,0,0.18)] flex items-center justify-center hover:scale-105 transition-transform"
-            >
-              {audioPlaying ? (
-                <Pause className="w-4.5 h-4.5 fill-current" />
-              ) : (
-                <Play className="w-4.5 h-4.5 fill-current translate-x-[1px]" />
-              )}
-            </button>
-            {(audioPlaying || audioTime > 0) && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 overflow-hidden rounded-b-[11px] bg-white/25">
-                <div
-                  className="h-full bg-[#0071E3] transition-[width] duration-150"
-                  style={{
-                    width: `${
-                      audioDuration > 0
-                        ? Math.min(100, (audioTime / audioDuration) * 100)
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        {/* 四角信息：左下名称、右下大小与格式，绝对定位覆盖在封面上 */}
-        <div
-          className={`pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-[11px] bg-gradient-to-t ${
-            darkCover ? 'from-black/65 via-black/25 to-transparent' : 'from-white/95 via-white/55 to-transparent'
-          }`}
-        />
-        <div className="pointer-events-none absolute bottom-1.5 left-1.5 right-1.5 z-10 flex items-end justify-between gap-2">
-          <span
-            className={`min-w-0 truncate text-[12px] font-medium drop-shadow-sm ${
-              darkCover ? 'text-white' : 'text-[#1D1D1F]'
-            }`}
-            title={file.name}
-          >
-            {file.name || '未命名素材'}
-          </span>
-          <span
-            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] backdrop-blur-sm ${
-              darkCover ? 'bg-black/35 text-white/90' : 'bg-black/5 text-[#6E6E73]'
-            }`}
-          >
-            {file.sizeInfo || '-'} · {(file.suffix || '').toUpperCase() || categoryLabel(file.category)}
-          </span>
-        </div>
-
-        {/* 选择圈 */}
-        <button
-          type="button"
-          aria-label={`${selected ? '取消选择' : '选择'} ${file.name || file.id}`}
-          aria-pressed={selected}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect(file.id);
-          }}
-          className={`absolute top-1.5 left-1.5 z-10 w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-all ${
-            selected
-              ? 'bg-[#0071E3] border-[#0071E3] text-white'
-              : 'bg-white/85 border-black/10 text-transparent opacity-0 group-hover:opacity-100'
-          }`}
-        >
-          <Check className="w-2.5 h-2.5" strokeWidth={3} />
-        </button>
-
-        {/* 悬浮操作条 */}
-        <div
-          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 p-0.5 rounded-lg bg-white/90 backdrop-blur-md shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-        >
-          {isMedia && (
-            <button
-              type="button"
-              onClick={() => onOpen(file)}
-              aria-label={`预览 ${file.name}`}
-              title={isVideo || isAudioFile(file) ? '播放' : '预览'}
-              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onDetail(file)}
-            aria-label={`详情 ${file.name}`}
-            title="详情"
-            className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" />
-          </button>
-          {file.downloadPath && (
-            <a
-              href={toOpenUrl(file)}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`下载 ${file.name}`}
-              title="下载"
-              className="p-1 rounded-md text-[#3A3A3C] hover:text-[#0071E3] hover:bg-[#F2F2F7] transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => onDelete(file)}
-            aria-label={`删除 ${file.name}`}
-            title="删除"
-            className="p-1 rounded-md text-[#3A3A3C] hover:text-[#D70015] hover:bg-[#FF3B30]/8 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  actions.push({ key: 'detail', label: '详情', icon: FileText, onClick: () => open({ kind: 'detail', file }) });
+  if (file.downloadPath) {
+    actions.push({ key: 'download', label: '下载', icon: Download, href: toOpenUrl(file) });
+  }
+  actions.push({ key: 'delete', label: '删除', icon: Trash2, danger: true, onClick: () => open({ kind: 'delete', files: [file] }) });
+  return actions;
 }
 
 export default function FileCenterView() {
@@ -819,8 +529,7 @@ export default function FileCenterView() {
                   setDialog({ kind: 'detail', file: target });
                 }
               }}
-              onDetail={(target) => setDialog({ kind: 'detail', file: target })}
-              onDelete={(target) => setDialog({ kind: 'delete', files: [target] })}
+              actions={fileActions(file, setDialog)}
             />
           ))}
         </div>

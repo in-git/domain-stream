@@ -2,7 +2,7 @@
  * 通用文件预览组件
  * ------------------------------------------------------------------
  * 按文件类型统一渲染：图片 / SVG / 视频 / 音频，其它类型给出占位提示。
- *   variant="thumb"  文件卡片封面，只出静态画面（视频给海报，没有则交回占位）
+ *   variant="thumb"  文件卡片封面，只出静态画面（视频直接渲染静音首帧，失败则交回占位）
  *   variant="player" 弹窗内完整预览（视频 / 音频带控制条）
  *
  * 后端 /dev/file/download 返回的是 application/octet-stream，SVG 等类型
@@ -104,6 +104,8 @@ interface FileImageProps {
   onImgLeave?: () => void;
   /** 原图已预加载：直接显示，不再走淡入，避免切换瞬间闪空 */
   instant?: boolean;
+  /** 图片解码完成回调（如高清图层就绪后触发滑入） */
+  onLoad?: () => void;
 }
 
 /** 图片 / SVG：直连失败时自动带 token 重新拉取一次 */
@@ -118,6 +120,7 @@ function FileImage({
   onImgEnter,
   onImgLeave,
   instant = false,
+  onLoad,
 }: FileImageProps) {
   const skipDirect =
     authFirst && !!src && !/^(data:|blob:)/i.test(src);
@@ -181,7 +184,10 @@ function FileImage({
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onLoad={() => setLoaded(true)}
+      onLoad={() => {
+        setLoaded(true);
+        onLoad?.();
+      }}
       onError={() => void handleError()}
       onMouseEnter={(event) => onImgEnter?.(event.currentTarget)}
       onMouseLeave={() => onImgLeave?.()}
@@ -195,7 +201,7 @@ function FileImage({
 }
 
 /** 视频 / 音频：优先流式直连，没有公开地址时带 token 拉 blob */
-function useMediaSource(file: DevFile, directUrl: string) {
+function useMediaSource(file: DevFile, directUrl: string, enabled = true) {
   const [authUrl, setAuthUrl] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -203,6 +209,10 @@ function useMediaSource(file: DevFile, directUrl: string) {
     let revoked = '';
     let alive = true;
     setAuthUrl('');
+    if (!enabled) {
+      setLoading(false);
+      return () => {};
+    }
     if (directUrl) {
       setLoading(false);
       return () => {};
@@ -222,7 +232,7 @@ function useMediaSource(file: DevFile, directUrl: string) {
       alive = false;
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [file.id, directUrl]);
+  }, [file.id, directUrl, enabled]);
 
   return { src: directUrl || authUrl, loading };
 }
@@ -256,6 +266,8 @@ export interface FileMediaProps {
   fallback?: ReactNode;
   /** 图片最终加载失败时通知调用方回退占位 */
   onError?: () => void;
+  /** 图片有缩略图时，悬停让高清原图从底部滑出（替换原来的原位切换） */
+  reveal?: boolean;
 }
 
 export function FileMedia({
@@ -266,6 +278,7 @@ export function FileMedia({
   className = '',
   fallback = null,
   onError,
+  reveal = false,
 }: FileMediaProps) {
   const kind = fileKindOf(file);
   const isPlayer = variant === 'player';
@@ -273,15 +286,52 @@ export function FileMedia({
   // 卡片已传 src 时省掉一次缩略图请求
   const thumb = useFileThumbSrc(file, kind === 'image' ? original : '', !src);
   const direct = kind === 'video' || kind === 'audio' ? toStreamUrl(file) || original : original;
-  const media = useMediaSource(file, isPlayer && (kind === 'video' || kind === 'audio') ? direct : '');
+  /** 只有播放器、或没有直连地址的视频封面才需要带 token 拉流 */
+  const needsStream = kind === 'video' || kind === 'audio';
+  const needMedia = needsStream && (isPlayer || (kind === 'video' && !src));
+  const media = useMediaSource(file, needMedia ? direct : '', needMedia);
   /** SVG 无论来自缩略图还是原文件，都可能拿到 octet-stream，统一走授权下载 */
   const isSvg = kind === 'image' && suffixOf(file) === 'svg';
 
   /** 鼠标悬停切到原图，移开还原缩略图：先预加载原图，加载完成后再切换，避免闪空 */
   const [hoverHighRes, setHoverHighRes] = useState(false);
   const [highResReady, setHighResReady] = useState(false);
+  /** thumb 视频首帧加载失败：回收成占位，避免留一个黑框 */
+  const [videoDead, setVideoDead] = useState(false);
   const hoveringRef = useRef(false);
   const highResLoadedRef = useRef(false);
+  /** 高清原图从底部滑出：open 控制挂载，in 控制位移，loaded 记录是否已解码 */
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealIn, setRevealIn] = useState(false);
+  const [revealLoaded, setRevealLoaded] = useState(false);
+  const revealTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setVideoDead(false);
+    setRevealOpen(false);
+    setRevealIn(false);
+    setRevealLoaded(false);
+  }, [file.id, src]);
+
+  useEffect(
+    () => () => {
+      if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current);
+    },
+    []
+  );
+
+  function openReveal() {
+    if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current);
+    setRevealOpen(true);
+    // 已加载过的高清图下一帧再滑入，避免和挂载同一帧导致没有过渡
+    if (revealLoaded) window.requestAnimationFrame(() => setRevealIn(true));
+  }
+
+  function closeReveal() {
+    setRevealIn(false);
+    if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = window.setTimeout(() => setRevealOpen(false), 320);
+  }
 
   function handleThumbEnter() {
     if (isPlayer || kind !== 'image' || !original) return;
@@ -311,8 +361,72 @@ export function FileMedia({
 
   if (!isPlayer) {
     if (kind === 'audio' || kind === 'other') return <>{fallback}</>;
+    // 视频封面：静音渲染首帧，与图片卡片一样只出静态画面
+    if (kind === 'video') {
+      const videoSrc = src || media.src;
+      if (!videoSrc || videoDead) return <>{fallback}</>;
+      return (
+        <video
+          src={videoSrc}
+          muted
+          playsInline
+          preload="metadata"
+          className={className}
+          aria-label={alt || file.name || '视频'}
+          onError={() => {
+            setVideoDead(true);
+            onError?.();
+          }}
+        />
+      );
+    }
     const imageSrc = src ?? thumb;
     if (!imageSrc) return <>{fallback}</>;
+    // 有缩略图时：高清原图悬停从底部滑出，不再原位切换/放大
+    const canReveal = reveal && !!file.thumbnail && !!original && imageSrc !== original;
+    if (canReveal) {
+      return (
+        <div
+          className="relative w-full h-full overflow-hidden"
+          onMouseEnter={openReveal}
+          onMouseLeave={closeReveal}
+        >
+          <FileImage
+            file={file}
+            src={imageSrc}
+            alt={alt}
+            className={className}
+            fallback={fallback}
+            onError={onError}
+            authFirst={isSvg || !src || imageSrc === original}
+          />
+          {/* 高清层容器常驻并预先停在底部，悬停时只切换位移，保证进场也有过渡 */}
+          <div
+            className={`pointer-events-none absolute inset-0 z-10 transition-transform duration-300 ease-out ${
+              revealIn ? 'translate-y-0' : 'translate-y-full'
+            }`}
+          >
+            {revealOpen && (
+              <FileImage
+                file={file}
+                src={original}
+                alt={alt}
+                className={className}
+                onLoad={() => {
+                  setRevealLoaded(true);
+                  window.requestAnimationFrame(() => {
+                    window.requestAnimationFrame(() => setRevealIn(true));
+                  });
+                }}
+                onError={() => setRevealIn(false)}
+                authFirst
+                instant
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
     return (
       <FileImage
         file={file}
