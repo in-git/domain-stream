@@ -119,6 +119,8 @@ export function normalizeFileUrl(raw?: string): string {
     if (u.origin !== window.location.origin && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('/api/')) {
       return raw;
     }
+    // 已带 /snowy 前缀的地址（如视频模块历史存储的封面 / 视频地址）原样返回，避免叠加成 /snowy/snowy
+    if (u.pathname.startsWith('/snowy/')) return raw;
     const path = u.pathname.replace(/^\/api/, '');
     return `/snowy${path}${u.search}`;
   } catch {
