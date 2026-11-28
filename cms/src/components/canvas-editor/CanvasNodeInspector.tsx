@@ -203,11 +203,11 @@ function decorationState(value: CanvasTextDecoration | undefined): {
   };
 }
 
-/** 背景视频缩略图：抽首帧当静态图，抽不出来（编码不支持等）就显示胶片占位 */
-function VideoThumb({ src }: { src: string }) {
+/** 背景视频缩略图：优先用视频封面（视频模块带入），没有封面时抽首帧；都拿不到显示胶片占位 */
+function VideoThumb({ src, posterUrl }: { src: string; posterUrl?: string }) {
   const [frame, setFrame] = useState('');
   useEffect(() => {
-    if (!src) {
+    if (!src || posterUrl) {
       setFrame('');
       return;
     }
@@ -219,16 +219,16 @@ function VideoThumb({ src }: { src: string }) {
     return () => {
       alive = false;
     };
-  }, [src]);
+  }, [src, posterUrl]);
 
-  if (!src || !frame) {
+  if (!src || (!posterUrl && !frame)) {
     return (
       <div className="flex h-[88px] w-full items-center justify-center bg-[#F5F5F7] text-[#C7C7CC]">
         <Film className="h-5 w-5" />
       </div>
     );
   }
-  return <img src={frame} alt="" className="h-[88px] w-full object-cover" />;
+  return <img src={posterUrl ? previewUrl(posterUrl) : frame} alt="" className="h-[88px] w-full object-cover" />;
 }
 
 /**
@@ -321,6 +321,8 @@ export interface CanvasInspectorContext {
   backgroundImage: string;
   /** 背景视频（后端路径）；与背景图可同时保留，渲染时视频优先 */
   backgroundVideo: string;
+  /** 背景视频封面（后端路径，视频模块带入）；编辑器渲染背景视频缩略时优先用封面 */
+  backgroundVideoCover: string;
   /** 背景素材铺法 */
   backgroundMode: CanvasImageMode;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布 */
@@ -365,6 +367,7 @@ export function CanvasNodeInspector({
   background,
   backgroundImage,
   backgroundVideo,
+  backgroundVideoCover,
   backgroundMode,
   allowPan,
   selectedCount = 0,
@@ -458,7 +461,7 @@ export function CanvasNodeInspector({
                   filled={!!backgroundVideo}
                   onPick={onPickBackgroundVideo}
                   onRemove={onClearBackgroundVideo}
-                  cover={<VideoThumb src={backgroundVideo} />}
+                  cover={<VideoThumb src={backgroundVideo} posterUrl={backgroundVideoCover} />}
                 />
                 <p className="text-[10.5px] leading-relaxed text-[#86868B]">
                   编辑器里只显示首帧，前台开屏时播放

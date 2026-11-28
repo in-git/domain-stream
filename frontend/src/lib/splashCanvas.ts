@@ -72,6 +72,8 @@ export interface SplashOrientationDoc {
   backgroundImage?: string;
   /** 背景视频（后端路径），与背景图互斥；有视频时不再叠加开屏音频 */
   backgroundVideo?: string;
+  /** 背景视频封面（后端路径，视频模块带入）；渲染背景视频时作为 poster */
+  backgroundVideoCover?: string;
   /** 背景素材铺法，缺省按等比铺满 */
   backgroundMode?: SplashImageMode;
   /** 是否把元素限制在画布内（旧版画布级配置，现按组件存 overflow，这里保留兼容） */
@@ -176,7 +178,9 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
   doc.background = color(row.background, '#000000');
   doc.backgroundImage = typeof row.backgroundImage === 'string' ? row.backgroundImage.trim() : '';
   doc.backgroundVideo = typeof row.backgroundVideo === 'string' ? row.backgroundVideo.trim() : '';
-  // 两种背景素材都保留时视频优先：忽略背景图，避免双层背景
+  doc.backgroundVideoCover =
+    typeof row.backgroundVideoCover === 'string' ? row.backgroundVideoCover.trim() : '';
+  // 两种背景素材都保留时视频优先：忽略背景图，避免双层背景；视频封面保留作 poster
   if (doc.backgroundVideo) doc.backgroundImage = '';
   doc.backgroundMode =
     row.backgroundMode === 'fit' ||

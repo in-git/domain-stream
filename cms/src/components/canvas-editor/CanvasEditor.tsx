@@ -69,6 +69,8 @@ import {
   Ungroup,
 } from 'lucide-react';
 import { FilePicker } from '../FilePicker.tsx';
+import { VideoPicker } from '../VideoPicker.tsx';
+import type { VideoItem } from '../../types/cms.ts';
 import { toOpenUrl, type DevFile } from '../../lib/fileCenter.ts';
 import {
   CanvasNodeInspector,
@@ -352,6 +354,7 @@ export function CanvasEditor({
     background: string;
     backgroundImage: string;
     backgroundVideo: string;
+    backgroundVideoCover: string;
     backgroundMode: CanvasImageMode;
     /** 画布视图交互开关：是否允许空格 + 拖动平移 */
     allowPan: boolean;
@@ -361,6 +364,7 @@ export function CanvasEditor({
     background: value.background,
     backgroundImage: (value.backgroundImage || '').trim(),
     backgroundVideo: (value.backgroundVideo || '').trim(),
+    backgroundVideoCover: (value.backgroundVideoCover || '').trim(),
     backgroundMode: value.backgroundMode ?? 'cover',
     allowPan: value.allowPan !== false,
   });
@@ -384,6 +388,8 @@ export function CanvasEditor({
   );
   /** 右键菜单：命中节点 + 菜单在画布容器内的坐标 */
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  /** 背景视频选择器（视频模块）：替代文件中心选择视频 */
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false);
   const rightDownRef = useRef<string | null>(null);
   /** 外部换文档 / 撤销重做时递增，用来强制重挂 Leafer 实例 */
   const [revision, setRevision] = useState(0);
@@ -473,13 +479,18 @@ export function CanvasEditor({
     setRevision((current) => current + 1);
   }, [applyNodes]);
 
-  /** 画布级配置（底色 / 背景图 / 背景视频 / 拖拽平移开关）：直接改根节点，不重建画布、不打断缩放 */
+  /** 画布级配置（底色 / 背景图 / 背景视频及封面 / 拖拽平移开关）：直接改根节点，不重建画布、不打断缩放 */
   const patchCanvas = useCallback(
     (
       patch: Partial<
         Pick<
           CanvasDoc,
-          'background' | 'backgroundImage' | 'backgroundVideo' | 'backgroundMode' | 'allowPan'
+          | 'background'
+          | 'backgroundImage'
+          | 'backgroundVideo'
+          | 'backgroundVideoCover'
+          | 'backgroundMode'
+          | 'allowPan'
         >
       >
     ) => {
@@ -490,6 +501,7 @@ export function CanvasEditor({
       if (
         patch.backgroundImage !== undefined ||
         patch.backgroundVideo !== undefined ||
+        patch.backgroundVideoCover !== undefined ||
         patch.backgroundMode !== undefined
       ) {
         backgroundSyncRef.current?.();
@@ -549,6 +561,7 @@ export function CanvasEditor({
       value.background === meta.background &&
       (value.backgroundImage || '').trim() === meta.backgroundImage &&
       (value.backgroundVideo || '').trim() === meta.backgroundVideo &&
+      (value.backgroundVideoCover || '').trim() === meta.backgroundVideoCover &&
       (value.backgroundMode ?? 'cover') === meta.backgroundMode &&
       (value.allowPan !== false) === meta.allowPan
     ) {
@@ -560,6 +573,7 @@ export function CanvasEditor({
       background: value.background,
       backgroundImage: (value.backgroundImage || '').trim(),
       backgroundVideo: (value.backgroundVideo || '').trim(),
+      backgroundVideoCover: (value.backgroundVideoCover || '').trim(),
       backgroundMode: value.backgroundMode ?? 'cover',
       allowPan: value.allowPan !== false,
     };
@@ -779,6 +793,17 @@ export function CanvasEditor({
       };
 
       if (videoUrl) {
+        const coverUrl = (metaRef.current.backgroundVideoCover || '').trim();
+        // 有视频封面（视频模块带入）直接用封面渲染，省去每次抽首帧
+        if (coverUrl) {
+          void loadNaturalSize(previewUrl(coverUrl)).then((natural) => {
+            if (backgroundElement !== element) return;
+            if (metaRef.current.backgroundVideo !== videoUrl) return;
+            element.set({ visible: true, url: previewUrl(coverUrl) });
+            applyBox(natural);
+          });
+          return;
+        }
         // 换素材期间先藏起来，避免上一张图残留在画布上
         element.set({ visible: false });
         void loadVideoFrame(videoUrl).then((frame) => {
@@ -1078,10 +1103,10 @@ export function CanvasEditor({
     // revision：外部换文档 / 撤销重做时重挂实例
   }, [syncFromCanvas, revision, snap, updateSelection]);
 
-  // 告诉外层弹窗：选择器 / 右键菜单打开时 Esc 先由它们自己处理
+  // 告诉外层弹窗：选择器 / 视频选择器 / 右键菜单打开时 Esc 先由它们自己处理
   useEffect(() => {
-    onOverlayChange?.(pickerOpen || menu !== null);
-  }, [pickerOpen, menu, onOverlayChange]);
+    onOverlayChange?.(pickerOpen || videoPickerOpen || menu !== null);
+  }, [pickerOpen, videoPickerOpen, menu, onOverlayChange]);
 
   // 右键菜单打开时 Esc 只关菜单
   useEffect(() => {
@@ -1690,11 +1715,22 @@ export function CanvasEditor({
     setPickerOpen(true);
   }
 
-  /** 选画布背景视频：同样写进画布配置（与背景图并存，视频优先渲染） */
+  /** 选画布背景视频：打开视频选择器（视频模块），选中后视频与封面一起写进画布配置 */
   function pickBackgroundVideo() {
-    setReplacingId(null);
-    setPickerTarget('background-video');
-    setPickerOpen(true);
+    setVideoPickerOpen(true);
+  }
+
+  /** 视频选择器确认：视频地址与封面都存纯后端路径，与背景图并存（视频优先渲染） */
+  function handleVideoPicked(items: VideoItem[]) {
+    const video = items[0];
+    setVideoPickerOpen(false);
+    if (!video) return;
+    const toStored = (raw?: string) =>
+      (raw || '').trim().replace(/^https?:\/\/[^/]+/i, '').replace(/^\/snowy/, '');
+    patchCanvas({
+      backgroundVideo: toStored(video.videoUrl),
+      backgroundVideoCover: toStored(video.coverUrl),
+    });
   }
 
   function closePicker() {
@@ -1741,6 +1777,7 @@ export function CanvasEditor({
     background: metaRef.current.background,
     backgroundImage: metaRef.current.backgroundImage,
     backgroundVideo: metaRef.current.backgroundVideo,
+    backgroundVideoCover: metaRef.current.backgroundVideoCover,
     backgroundMode: metaRef.current.backgroundMode,
     allowPan: metaRef.current.allowPan,
     selectedCount: selectedIds.length,
@@ -1768,7 +1805,7 @@ export function CanvasEditor({
     onPickBackgroundImage: pickBackgroundImage,
     onClearBackgroundImage: () => patchCanvas({ backgroundImage: '' }),
     onPickBackgroundVideo: pickBackgroundVideo,
-    onClearBackgroundVideo: () => patchCanvas({ backgroundVideo: '' }),
+    onClearBackgroundVideo: () => patchCanvas({ backgroundVideo: '', backgroundVideoCover: '' }),
   };
 
   const inspector =
@@ -2039,6 +2076,14 @@ export function CanvasEditor({
         accept={pickerTarget === 'background-video' ? 'video' : 'image'}
         title={PICKER_TITLES[pickerTarget]}
         onSelect={handlePicked}
+      />
+
+      {/* 背景视频选择器：从视频模块选视频，视频地址与封面一起回填画布 */}
+      <VideoPicker
+        open={videoPickerOpen}
+        onClose={() => setVideoPickerOpen(false)}
+        onSelect={handleVideoPicked}
+        title="选择背景视频"
       />
     </div>
   );

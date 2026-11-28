@@ -371,6 +371,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
               <video
                 ref={backgroundVideoRef}
                 src={publicFileUrl(canvas.backgroundVideo)}
+                poster={canvas.backgroundVideoCover ? publicFileUrl(canvas.backgroundVideoCover) : undefined}
                 autoPlay
                 muted
                 loop
