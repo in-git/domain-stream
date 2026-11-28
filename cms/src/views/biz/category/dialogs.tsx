@@ -38,7 +38,6 @@ import {
 } from '../../../lib/category.ts';
 import { formatDateShort } from '../../../lib/format.ts';
 import { SelectField } from '../../../components/SelectField.tsx';
-import { SwitchField } from '../../../components/SwitchField.tsx';
 
 const INPUT_CLASS =
   'w-full h-9 px-3 rounded-xl bg-[#F5F5F7] border border-transparent text-[13px] text-[#1D1D1F] placeholder:text-[#AEAEB2] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/25 focus:border-[#0071E3]/30 transition-all';
@@ -859,14 +858,38 @@ export function CategoryFormDialog({
                 </div>
                 <div>
                   <label className={LABEL_CLASS}>状态</label>
-                  <div className="h-9 flex items-center">
-                    <SwitchField
-                      checked={status === 'ENABLE'}
-                      onChange={(next) => setStatus(next ? 'ENABLE' : 'DISABLE')}
-                      ariaLabel="分类状态"
-                      onLabel="启用"
-                      offLabel="停用"
-                    />
+                  <div
+                    role="radiogroup"
+                    aria-label="分类状态"
+                    className="h-9 flex items-center gap-1"
+                  >
+                    {(
+                      [
+                        { value: 'ENABLE', label: '启用' },
+                        { value: 'PRIVATE', label: '私密' },
+                        { value: 'DISABLE', label: '禁用' },
+                      ] as const
+                    ).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={status === option.value}
+                        onClick={() => setStatus(option.value)}
+                        title={
+                          option.value === 'PRIVATE'
+                            ? '分类及其下内容对客户端不可见'
+                            : undefined
+                        }
+                        className={`h-8 px-3 rounded-lg text-[12px] font-medium transition-colors ${
+                          status === option.value
+                            ? 'bg-[#0071E3] text-white'
+                            : 'bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#EBEBF0] hover:text-[#1D1D1F]'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div>

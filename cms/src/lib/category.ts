@@ -82,6 +82,7 @@ export function useCategoryModules(): CategoryModuleOption[] {
 export const CATEGORY_STATUSES = [
   { value: 'ENABLE', label: '启用' },
   { value: 'DISABLE', label: '禁用' },
+  { value: 'PRIVATE', label: '私密' },
 ] as const;
 
 export function categoryModuleLabel(value?: string): string {

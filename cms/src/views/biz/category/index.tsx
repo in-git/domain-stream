@@ -15,6 +15,7 @@ import {
   CornerDownRight,
   Download,
   Eye,
+  EyeOff,
   FolderTree,
   LayoutGrid,
   Loader2,
@@ -223,6 +224,14 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
     () => items.filter((i) => (i.status || 'ENABLE') === 'ENABLE').length,
     [items]
   );
+  const privateCount = useMemo(
+    () => items.filter((i) => i.status === 'PRIVATE').length,
+    [items]
+  );
+  const disabledCount = useMemo(
+    () => items.filter((i) => i.status === 'DISABLE').length,
+    [items]
+  );
   const moduleCount = useMemo(
     () => new Set(items.map((i) => i.module || 'COMMON')).size,
     [items]
@@ -309,11 +318,12 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
   return (
     <div className="space-y-5">
       {/* 概览 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           { label: '全部分类', value: items.length, icon: FolderTree },
           { label: '已启用', value: enabledCount, icon: Tag },
-          { label: '已禁用', value: items.length - enabledCount, icon: X },
+          { label: '私密', value: privateCount, icon: EyeOff },
+          { label: '已禁用', value: disabledCount, icon: X },
           { label: '适用模块', value: moduleCount, icon: LayoutGrid },
         ].map((stat) => (
           <div
@@ -421,6 +431,7 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
               {[
                 { value: 'all', label: '全部状态' },
                 { value: 'ENABLE', label: '已启用' },
+                { value: 'PRIVATE', label: '私密' },
                 { value: 'DISABLE', label: '已禁用' },
               ].map((s) => {
                 const active = (query.status || 'all') === s.value;
@@ -679,7 +690,9 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
                       className={`inline-flex w-fit px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
                         (item.status || 'ENABLE') === 'ENABLE'
                           ? 'bg-[#16A34A]/10 text-[#16A34A] hover:bg-[#16A34A]/20'
-                          : 'bg-[#D97706]/10 text-[#D97706] hover:bg-[#D97706]/20'
+                          : item.status === 'PRIVATE'
+                            ? 'bg-[#AF52DE]/10 text-[#AF52DE] hover:bg-[#AF52DE]/20'
+                            : 'bg-[#D97706]/10 text-[#D97706] hover:bg-[#D97706]/20'
                       } disabled:cursor-default`}
                     >
                       {categoryStatusLabel(item.status)}

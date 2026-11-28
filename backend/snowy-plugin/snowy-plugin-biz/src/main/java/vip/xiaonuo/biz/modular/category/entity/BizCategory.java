@@ -63,8 +63,8 @@ public class BizCategory {
     @Schema(description = "分类描述")
     private String description;
 
-    /** 状态：ENABLE启用/DISABLE禁用 */
-    @Schema(description = "状态：ENABLE启用/DISABLE禁用")
+    /** 状态：ENABLE启用/DISABLE禁用/PRIVATE私密（分类及内容对客户端不可见） */
+    @Schema(description = "状态：ENABLE启用/DISABLE禁用/PRIVATE私密（分类及内容对客户端不可见）")
     private String status;
 
     /** 排序 */

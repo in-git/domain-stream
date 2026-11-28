@@ -142,12 +142,26 @@ public class BizPortalController {
         return publicVideoQuery(category, null);
     }
 
+    /** 私密分类编码集合：设为私密的分类连同其下内容都对客户端不可见 */
+    private Set<String> privateCategoryCodes() {
+        LambdaQueryWrapper<BizCategory> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(BizCategory::getStatus, "PRIVATE");
+        return bizCategoryMapper.selectList(queryWrapper).stream()
+                .map(BizCategory::getCode)
+                .filter(StrUtil::isNotBlank)
+                .collect(Collectors.toSet());
+    }
+
     /**
      * 已发布视频查询条件；excludeIds 用于随机推荐时排除已返回过的视频，避免批次之间重复
      */
     private LambdaQueryWrapper<BizVideo> publicVideoQuery(String category, Set<String> excludeIds) {
         LambdaQueryWrapper<BizVideo> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(BizVideo::getStatus, "PUBLISHED");
+        Set<String> privateCodes = privateCategoryCodes();
+        if (!privateCodes.isEmpty()) {
+            queryWrapper.notIn(BizVideo::getCategory, privateCodes);
+        }
         if (excludeIds != null && !excludeIds.isEmpty()) {
             queryWrapper.notIn(BizVideo::getId, excludeIds);
         }
@@ -292,8 +306,12 @@ public class BizPortalController {
     @GetMapping("/public/articles")
     public CommonResult<List<BizArticle>> articles() {
         LambdaQueryWrapper<BizArticle> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(BizArticle::getStatus, "PUBLISHED")
-                .orderByDesc(BizArticle::getIsTop)
+        queryWrapper.eq(BizArticle::getStatus, "PUBLISHED");
+        Set<String> privateCodes = privateCategoryCodes();
+        if (!privateCodes.isEmpty()) {
+            queryWrapper.notIn(BizArticle::getCategory, privateCodes);
+        }
+        queryWrapper.orderByDesc(BizArticle::getIsTop)
                 .orderByAsc(BizArticle::getSortCode)
                 .orderByDesc(BizArticle::getPublishTime);
         return CommonResult.data(bizArticleMapper.selectList(queryWrapper));
@@ -310,6 +328,10 @@ public class BizPortalController {
     public CommonResult<List<BizGraphic>> graphics(@RequestParam(value = "category", required = false) String category) {
         LambdaQueryWrapper<BizGraphic> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(BizGraphic::getStatus, "PUBLISHED");
+        Set<String> privateCategoryCodes = privateCategoryCodes();
+        if (!privateCategoryCodes.isEmpty()) {
+            queryWrapper.notIn(BizGraphic::getCategory, privateCategoryCodes);
+        }
 
         String categoryFilter = StrUtil.blankToDefault(category, "").trim();
         if (StrUtil.isNotBlank(categoryFilter) && !"全部".equals(categoryFilter)) {
