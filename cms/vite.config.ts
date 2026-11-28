@@ -48,6 +48,11 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    optimizeDeps: {
+      // Leafer 全家桶显式纳入预构建：运行中新增依赖（如画布滤镜插件）时
+      // 不会触发 504 Outdated Optimize Dep，冷启动也不用二次刷新
+      include: ['leafer-ui', '@leafer-in/editor', '@leafer-in/resize', '@leafer-in/filter'],
+    },
     server: {
       proxy: snowyProxy,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
