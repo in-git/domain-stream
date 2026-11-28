@@ -44,6 +44,7 @@ import {
   Text as LeaferText,
   type IFontWeight,
   type IEditorConfig,
+  type IFilter,
   type IUI,
   type IUIEvent,
 } from 'leafer-ui';
@@ -53,6 +54,7 @@ import {
   InnerEditorEvent,
 } from '@leafer-in/editor';
 import '@leafer-in/resize';
+import '@leafer-in/filter';
 import {
   ArrowDownToLine,
   ArrowUpToLine,
@@ -88,18 +90,21 @@ import {
   createTextNode,
   defaultInkColor,
   defaultProgressColors,
+  filterCss,
   hasProgress,
   imageBoxFor,
   previewUrl,
   round1,
   type CanvasAlignMode,
   type CanvasDoc,
+  type CanvasFilterStyle,
   type CanvasImageMode,
   type CanvasNode,
   type CanvasSize,
   type CanvasTextDecoration,
   type CanvasTextNode,
 } from './types';
+import './canvasFilters';
 
 /**  Leafer 元素的最小读写面：几何可直接读，样式统一走 set */
 type LeaferElement = IUI & {
@@ -356,6 +361,8 @@ export function CanvasEditor({
     backgroundVideo: string;
     backgroundVideoCover: string;
     backgroundMode: CanvasImageMode;
+    backgroundFilterStyle: CanvasFilterStyle;
+    backgroundFilterIntensity: number;
     /** 画布视图交互开关：是否允许空格 + 拖动平移 */
     allowPan: boolean;
   }>({
@@ -366,6 +373,8 @@ export function CanvasEditor({
     backgroundVideo: (value.backgroundVideo || '').trim(),
     backgroundVideoCover: (value.backgroundVideoCover || '').trim(),
     backgroundMode: value.backgroundMode ?? 'cover',
+    backgroundFilterStyle: value.backgroundFilterStyle ?? 'none',
+    backgroundFilterIntensity: value.backgroundFilterIntensity ?? 100,
     allowPan: value.allowPan !== false,
   });
   const backgroundSyncRef = useRef<(() => void) | null>(null);
@@ -490,6 +499,8 @@ export function CanvasEditor({
           | 'backgroundVideo'
           | 'backgroundVideoCover'
           | 'backgroundMode'
+          | 'backgroundFilterStyle'
+          | 'backgroundFilterIntensity'
           | 'allowPan'
         >
       >
@@ -502,7 +513,9 @@ export function CanvasEditor({
         patch.backgroundImage !== undefined ||
         patch.backgroundVideo !== undefined ||
         patch.backgroundVideoCover !== undefined ||
-        patch.backgroundMode !== undefined
+        patch.backgroundMode !== undefined ||
+        patch.backgroundFilterStyle !== undefined ||
+        patch.backgroundFilterIntensity !== undefined
       ) {
         backgroundSyncRef.current?.();
       }
@@ -563,6 +576,8 @@ export function CanvasEditor({
       (value.backgroundVideo || '').trim() === meta.backgroundVideo &&
       (value.backgroundVideoCover || '').trim() === meta.backgroundVideoCover &&
       (value.backgroundMode ?? 'cover') === meta.backgroundMode &&
+      (value.backgroundFilterStyle ?? 'none') === meta.backgroundFilterStyle &&
+      (value.backgroundFilterIntensity ?? 100) === meta.backgroundFilterIntensity &&
       (value.allowPan !== false) === meta.allowPan
     ) {
       return;
@@ -575,6 +590,8 @@ export function CanvasEditor({
       backgroundVideo: (value.backgroundVideo || '').trim(),
       backgroundVideoCover: (value.backgroundVideoCover || '').trim(),
       backgroundMode: value.backgroundMode ?? 'cover',
+      backgroundFilterStyle: value.backgroundFilterStyle ?? 'none',
+      backgroundFilterIntensity: value.backgroundFilterIntensity ?? 100,
       allowPan: value.allowPan !== false,
     };
     nodesRef.current = value.nodes;
@@ -781,6 +798,13 @@ export function CanvasEditor({
         root.add(backgroundFrame, 0);
       }
       const element = backgroundElement;
+      // 背景画面风格：与图片节点共用同一套滤镜（CSS filter 语法）
+      element.set({
+        filter: leaferFilter(
+          metaRef.current.backgroundFilterStyle,
+          metaRef.current.backgroundFilterIntensity
+        ),
+      });
       const canvas = { width: metaRef.current.width, height: metaRef.current.height };
       /** 按素材原始比例铺进画布，规则与前台 CSS 的 object-fit 一致 */
       const applyBox = (natural: CanvasSize) => {
@@ -1779,6 +1803,8 @@ export function CanvasEditor({
     backgroundVideo: metaRef.current.backgroundVideo,
     backgroundVideoCover: metaRef.current.backgroundVideoCover,
     backgroundMode: metaRef.current.backgroundMode,
+    backgroundFilterStyle: metaRef.current.backgroundFilterStyle,
+    backgroundFilterIntensity: metaRef.current.backgroundFilterIntensity,
     allowPan: metaRef.current.allowPan,
     selectedCount: selectedIds.length,
     onPatch: (patch) => {
@@ -2089,7 +2115,12 @@ export function CanvasEditor({
   );
 }
 
-/** 把节点属性写回 Leafer 元素（几何 + 样式） */
+/** 把画面风格转成 Leafer filter 属性值；无滤镜时返回 undefined 清除已设置的滤镜 */
+function leaferFilter(style?: CanvasFilterStyle, intensity?: number): IFilter | undefined {
+  const css = filterCss(style, intensity);
+  return css ? { type: 'dsFilter', css } : undefined;
+}
+
 function applyNodeToElement(element: LeaferElement, node: CanvasNode) {
   const geometry = {
     x: node.x,
@@ -2125,6 +2156,7 @@ function applyNodeToElement(element: LeaferElement, node: CanvasNode) {
       url: previewUrl(node.url),
       cornerRadius: node.radius,
       opacity: node.opacity,
+      filter: leaferFilter(node.filterStyle, node.filterIntensity),
     });
     return;
   }

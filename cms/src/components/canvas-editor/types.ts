@@ -39,6 +39,70 @@ export const CANVAS_IMAGE_MODES: { value: CanvasImageMode; label: string }[] = [
   { value: 'stretch-y', label: '纵向拉伸' },
 ];
 
+/**
+ * 画面风格滤镜（图片节点 / 画布背景共用）。
+ * 编辑器里通过 Leafer 的 @leafer-in/filter 插件渲染（同一套 CSS filter 语法），
+ * 客户端直接用 CSS filter，两边视觉效果一致。
+ */
+export type CanvasFilterStyle =
+  | 'none'
+  | 'grayscale'
+  | 'sepia'
+  | 'vintage'
+  | 'warm'
+  | 'cool'
+  | 'vivid'
+  | 'fade'
+  | 'drama';
+
+export const CANVAS_FILTERS: { value: CanvasFilterStyle; label: string }[] = [
+  { value: 'none', label: '原色' },
+  { value: 'grayscale', label: '黑白' },
+  { value: 'sepia', label: '复古棕' },
+  { value: 'vintage', label: '胶片' },
+  { value: 'warm', label: '暖阳' },
+  { value: 'cool', label: '冷调' },
+  { value: 'vivid', label: '鲜艳' },
+  { value: 'fade', label: '褪色' },
+  { value: 'drama', label: '戏剧' },
+];
+
+/** 判断给定值是否为合法滤镜风格（解析存储配置时做白名单校验） */
+export function isCanvasFilterStyle(value: unknown): value is CanvasFilterStyle {
+  return CANVAS_FILTERS.some((item) => item.value === value);
+}
+
+/**
+ * 按风格 + 强度（0-100）生成 CSS filter 字符串。
+ * none / 强度 0 返回空字符串，表示不加滤镜。
+ * 编辑器（Leafer filter 插件）与客户端（CSS filter）共用同一语法。
+ */
+export function filterCss(style?: CanvasFilterStyle, intensity?: number): string {
+  if (!style || style === 'none') return '';
+  const p = Math.min(100, Math.max(0, Math.round(intensity ?? 100))) / 100;
+  if (p <= 0) return '';
+  switch (style) {
+    case 'grayscale':
+      return `grayscale(${p})`;
+    case 'sepia':
+      return `sepia(${p})`;
+    case 'vintage':
+      return `sepia(${0.45 * p}) contrast(${1 - 0.1 * p}) brightness(${1 + 0.06 * p}) saturate(${1 - 0.2 * p})`;
+    case 'warm':
+      return `saturate(${1 + 0.25 * p}) brightness(${1 + 0.05 * p}) sepia(${0.18 * p})`;
+    case 'cool':
+      return `saturate(${1 + 0.15 * p}) brightness(${1 + 0.03 * p}) hue-rotate(${-12 * p}deg)`;
+    case 'vivid':
+      return `saturate(${1 + 0.8 * p}) contrast(${1 + 0.12 * p})`;
+    case 'fade':
+      return `contrast(${1 - 0.25 * p}) brightness(${1 + 0.1 * p}) saturate(${1 - 0.45 * p})`;
+    case 'drama':
+      return `contrast(${1 + 0.3 * p}) brightness(${1 - 0.08 * p}) saturate(${1 + 0.15 * p})`;
+    default:
+      return '';
+  }
+}
+
 /** 所有节点共用的几何与状态字段 */
 export interface CanvasNodeBase {
   id: string;
@@ -80,6 +144,10 @@ export interface CanvasImageNode extends CanvasNodeBase {
   mode: CanvasImageMode;
   radius: number;
   opacity: number;
+  /** 画面风格滤镜，默认原色（none） */
+  filterStyle?: CanvasFilterStyle;
+  /** 滤镜强度 0-100，默认 100 */
+  filterIntensity?: number;
 }
 
 export interface CanvasProgressNode extends CanvasNodeBase {
@@ -101,6 +169,10 @@ export interface CanvasDoc extends CanvasSize {
   backgroundVideoCover?: string;
   /** 背景素材铺法：等比铺满 / 原比例 / 拉伸铺满 / 横向拉伸 / 纵向拉伸，图片与视频共用，默认等比铺满 */
   backgroundMode?: CanvasImageMode;
+  /** 背景画面风格滤镜（图片 / 视频背景共用），默认原色 */
+  backgroundFilterStyle?: CanvasFilterStyle;
+  /** 背景滤镜强度 0-100，默认 100 */
+  backgroundFilterIntensity?: number;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布，默认开启 */
   allowPan?: boolean;
   nodes: CanvasNode[];

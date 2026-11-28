@@ -20,6 +20,7 @@
     "@heroui/react": "^3.2.7",
     "@heroui/styles": "^3.2.7",
     "@leafer-in/editor": "^2.3.4",
+    "@leafer-in/filter": "^2.3.4",
     "@leafer-in/resize": "^2.3.4",
     "@tailwindcss/vite": "^4.3.3",
     "@vidstack/react": "^1.15.7",

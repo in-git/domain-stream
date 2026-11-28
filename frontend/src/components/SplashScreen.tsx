@@ -12,6 +12,8 @@ import { publicFileUrl, useSystemInfo, useSystemInfoSettled } from '../lib/syste
 import {
   parseSplashCanvas,
   resolveSplashMode,
+  splashFilterCss,
+  type SplashFilterStyle,
   type SplashImageMode,
   type SplashNode,
   type SplashOrientationDoc,
@@ -376,7 +378,11 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
                 muted
                 loop
                 playsInline
-                style={backgroundImageStyle(canvas.backgroundMode)}
+                style={backgroundImageStyle(
+                  canvas.backgroundMode,
+                  canvas.backgroundFilterStyle,
+                  canvas.backgroundFilterIntensity
+                )}
                 aria-hidden="true"
               />
             </div>
@@ -386,7 +392,11 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
                 src={publicFileUrl(canvas.backgroundImage)}
                 alt=""
                 aria-hidden="true"
-                style={backgroundImageStyle(canvas.backgroundMode)}
+                style={backgroundImageStyle(
+                  canvas.backgroundMode,
+                  canvas.backgroundFilterStyle,
+                  canvas.backgroundFilterIntensity
+                )}
               />
             </div>
           ) : null}
@@ -498,8 +508,15 @@ function textDecorationCss(decoration: SplashTextNode['decoration']): string {
  *   stretch-x  → 宽撑满、高等比，垂直居中
  *   stretch-y  → 高撑满、宽等比，水平居中
  */
-function backgroundImageStyle(mode: SplashImageMode = 'cover'): CSSProperties {
+function backgroundImageStyle(
+  mode: SplashImageMode = 'cover',
+  filterStyle?: SplashFilterStyle,
+  filterIntensity?: number
+): CSSProperties {
   const base: CSSProperties = { position: 'absolute', left: 0, top: 0 };
+  // 画面风格滤镜：与后台编辑器共用同一套 CSS filter 语法
+  const filter = splashFilterCss(filterStyle, filterIntensity);
+  if (filter) base.filter = filter;
   if (mode === 'fit') {
     return { ...base, width: '100%', height: '100%', objectFit: 'contain' };
   }
@@ -586,6 +603,7 @@ function CanvasNode({ node, canvas, fillRef }: CanvasNodeProps) {
           objectFit: 'fill',
           borderRadius: scaled(node.radius),
           opacity: node.opacity,
+          filter: splashFilterCss(node.filterStyle, node.filterIntensity) || undefined,
         }}
       />
     );

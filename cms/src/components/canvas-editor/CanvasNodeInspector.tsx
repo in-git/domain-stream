@@ -40,9 +40,11 @@ import { ColorField } from './ColorField';
 import { Hint } from './Hint';
 import { loadVideoFrame } from './videoFrame';
 import {
+  CANVAS_FILTERS,
   CANVAS_IMAGE_MODES,
   previewUrl,
   type CanvasAlignMode,
+  type CanvasFilterStyle,
   type CanvasImageMode,
   type CanvasNode,
   type CanvasTextAlign,
@@ -325,6 +327,10 @@ export interface CanvasInspectorContext {
   backgroundVideoCover: string;
   /** 背景素材铺法 */
   backgroundMode: CanvasImageMode;
+  /** 背景画面风格滤镜 */
+  backgroundFilterStyle?: CanvasFilterStyle;
+  /** 背景滤镜强度 0-100 */
+  backgroundFilterIntensity?: number;
   /** 画布视图交互开关：是否允许空格 + 拖动平移画布 */
   allowPan: boolean;
   /** 当前选中的节点数量，多选时提示样式会批量应用 */
@@ -342,12 +348,14 @@ export interface CanvasInspectorContext {
   onAlign?: (mode: CanvasAlignMode) => void;
   /** 精确设置旋转角度（度），以元素视觉中心为轴 */
   onRotate?: (deg: number) => void;
-  /** 画布级配置：底色 / 背景图 / 背景视频 / 背景铺法 / 拖拽平移开关 */
+  /** 画布级配置：底色 / 背景图 / 背景视频 / 背景铺法 / 背景滤镜 / 拖拽平移开关 */
   onCanvasPatch: (patch: {
     background?: string;
     backgroundImage?: string;
     backgroundVideo?: string;
     backgroundMode?: CanvasImageMode;
+    backgroundFilterStyle?: CanvasFilterStyle;
+    backgroundFilterIntensity?: number;
     allowPan?: boolean;
   }) => void;
   /** 视图复位到「适配画布」 */
@@ -369,6 +377,8 @@ export function CanvasNodeInspector({
   backgroundVideo,
   backgroundVideoCover,
   backgroundMode,
+  backgroundFilterStyle,
+  backgroundFilterIntensity,
   allowPan,
   selectedCount = 0,
   onPatch,
@@ -518,6 +528,23 @@ export function CanvasNodeInspector({
                 ))}
               </div>
             </div>
+          )}
+
+          {(backgroundImage || backgroundVideo) && (
+            <FilterSection
+              style={backgroundFilterStyle ?? 'none'}
+              intensity={backgroundFilterIntensity ?? 100}
+              onChange={(style, intensity) => {
+                if (style === 'none') {
+                  onCanvasPatch({ backgroundFilterStyle: 'none' });
+                } else {
+                  onCanvasPatch({
+                    backgroundFilterStyle: style,
+                    backgroundFilterIntensity: intensity,
+                  });
+                }
+              }}
+            />
           )}
 
           <div>
@@ -732,6 +759,18 @@ export function CanvasNodeInspector({
                     aria-label="图片透明度"
                   />
                 </div>
+
+                <FilterSection
+                  style={node.filterStyle ?? 'none'}
+                  intensity={node.filterIntensity ?? 100}
+                  onChange={(style, intensity) => {
+                    if (style === 'none') {
+                      onPatch({ filterStyle: 'none' });
+                    } else {
+                      onPatch({ filterStyle: style, filterIntensity: intensity });
+                    }
+                  }}
+                />
               </>
             )}
 
@@ -968,6 +1007,63 @@ function ModeGlyph({ mode, className }: { mode: CanvasImageMode; className?: str
         strokeWidth="0.9"
       />
     </svg>
+  );
+}
+
+/**
+ * 画面风格滤镜设置：预设风格九宫格 + 强度滑杆（强度只在选了风格后生效）。
+ * 图片节点与画布背景共用；选择「原色」即清除滤镜。
+ */
+function FilterSection({
+  style,
+  intensity,
+  onChange,
+}: {
+  style: CanvasFilterStyle;
+  intensity: number;
+  onChange: (style: CanvasFilterStyle, intensity: number) => void;
+}) {
+  const hasFilter = style !== 'none';
+  return (
+    <div>
+      <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">画面风格</span>
+      <div className="grid grid-cols-3 gap-1">
+        {CANVAS_FILTERS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            aria-pressed={style === item.value}
+            onClick={() => onChange(item.value, intensity)}
+            className={`h-7 rounded-md border text-[11px] transition-colors ${
+              style === item.value
+                ? 'border-[#0071E3] bg-[#F2F8FF] text-[#0071E3]'
+                : 'border-[#E5E5EA] bg-white text-[#6E6E73] hover:border-[#0071E3] hover:text-[#0071E3]'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className={hasFilter ? 'mt-2' : 'mt-2 opacity-40'}>
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[11px] font-medium text-[#6E6E73]">强度</span>
+          <span className="text-[11px] tabular-nums text-[#1D1D1F]">
+            {hasFilter ? `${Math.round(intensity)}%` : '—'}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(intensity)}
+          disabled={!hasFilter}
+          onChange={(event) => onChange(style, Number(event.target.value))}
+          className="w-full accent-[#0071E3] disabled:cursor-not-allowed"
+          aria-label="滤镜强度"
+        />
+      </div>
+    </div>
   );
 }
 

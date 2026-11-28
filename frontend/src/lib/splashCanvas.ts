@@ -42,6 +42,10 @@ export interface SplashImageNode {
   url: string;
   radius: number;
   opacity: number;
+  /** 画面风格滤镜，默认原色 */
+  filterStyle?: SplashFilterStyle;
+  /** 滤镜强度 0-100，默认 100 */
+  filterIntensity?: number;
 }
 
 export interface SplashProgressNode {
@@ -64,6 +68,71 @@ export type SplashNode = SplashTextNode | SplashImageNode | SplashProgressNode;
 
 export type SplashImageMode = 'fit' | 'cover' | 'stretch' | 'stretch-x' | 'stretch-y';
 
+/** 画面风格滤镜：与后台 canvas-editor 的取值一致 */
+export type SplashFilterStyle =
+  | 'none'
+  | 'grayscale'
+  | 'sepia'
+  | 'vintage'
+  | 'warm'
+  | 'cool'
+  | 'vivid'
+  | 'fade'
+  | 'drama';
+
+const FILTER_STYLES: readonly SplashFilterStyle[] = [
+  'none',
+  'grayscale',
+  'sepia',
+  'vintage',
+  'warm',
+  'cool',
+  'vivid',
+  'fade',
+  'drama',
+];
+
+function filterStyle(value: unknown): SplashFilterStyle {
+  return FILTER_STYLES.includes(value as SplashFilterStyle)
+    ? (value as SplashFilterStyle)
+    : 'none';
+}
+
+function filterIntensity(value: unknown): number {
+  const result = Number(value);
+  return Number.isFinite(result) ? Math.min(100, Math.max(0, result)) : 100;
+}
+
+/**
+ * 滤镜 CSS：后台编辑器与客户端共用同一套 CSS filter 语法，保证所见即所得。
+ * none / 强度 0 返回空字符串，调用方不要设置 filter。
+ */
+export function splashFilterCss(style?: SplashFilterStyle, intensity?: number): string {
+  if (!style || style === 'none') return '';
+  const p = Math.min(100, Math.max(0, Math.round(intensity ?? 100))) / 100;
+  if (p <= 0) return '';
+  switch (style) {
+    case 'grayscale':
+      return `grayscale(${p})`;
+    case 'sepia':
+      return `sepia(${p})`;
+    case 'vintage':
+      return `sepia(${0.45 * p}) contrast(${1 - 0.1 * p}) brightness(${1 + 0.06 * p}) saturate(${1 - 0.2 * p})`;
+    case 'warm':
+      return `saturate(${1 + 0.25 * p}) brightness(${1 + 0.05 * p}) sepia(${0.18 * p})`;
+    case 'cool':
+      return `saturate(${1 + 0.15 * p}) brightness(${1 + 0.03 * p}) hue-rotate(${-12 * p}deg)`;
+    case 'vivid':
+      return `saturate(${1 + 0.8 * p}) contrast(${1 + 0.12 * p})`;
+    case 'fade':
+      return `contrast(${1 - 0.25 * p}) brightness(${1 + 0.1 * p}) saturate(${1 - 0.45 * p})`;
+    case 'drama':
+      return `contrast(${1 + 0.3 * p}) brightness(${1 - 0.08 * p}) saturate(${1 + 0.15 * p})`;
+    default:
+      return '';
+  }
+}
+
 export interface SplashOrientationDoc {
   width: number;
   height: number;
@@ -76,6 +145,10 @@ export interface SplashOrientationDoc {
   backgroundVideoCover?: string;
   /** 背景素材铺法，缺省按等比铺满 */
   backgroundMode?: SplashImageMode;
+  /** 背景画面风格滤镜（图片 / 视频背景共用），默认原色 */
+  backgroundFilterStyle?: SplashFilterStyle;
+  /** 背景滤镜强度 0-100，默认 100 */
+  backgroundFilterIntensity?: number;
   /** 是否把元素限制在画布内（旧版画布级配置，现按组件存 overflow，这里保留兼容） */
   contained?: boolean;
   nodes: SplashNode[];
@@ -159,6 +232,8 @@ function parseNode(
       url: typeof row.url === 'string' ? row.url.trim() : '',
       radius: num(row.radius, 0),
       opacity: Math.min(1, Math.max(0, num(row.opacity, 1))),
+      filterStyle: filterStyle(row.filterStyle),
+      filterIntensity: filterIntensity(row.filterIntensity),
     };
   }
 
@@ -189,8 +264,10 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
     row.backgroundMode === 'stretch-x' ||
     row.backgroundMode === 'stretch-y'
       ? row.backgroundMode
-      : // 脏数据 / 旧字段缺失时回退等比铺满（与旧版整屏素材的 object-cover 一致）
+      :         // 脏数据 / 旧字段缺失时回退等比铺满（与旧版整屏素材的 object-cover 一致）
         'cover';
+  doc.backgroundFilterStyle = filterStyle(row.backgroundFilterStyle);
+  doc.backgroundFilterIntensity = filterIntensity(row.backgroundFilterIntensity);
   doc.contained = row.contained === false ? false : undefined;
 
   const list = Array.isArray(row.nodes) ? row.nodes : [];

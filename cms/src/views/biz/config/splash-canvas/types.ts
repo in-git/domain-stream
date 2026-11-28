@@ -23,8 +23,10 @@ import {
 } from '../schema';
 import {
   createCanvasNodeId as createNodeId,
+  isCanvasFilterStyle,
   round1,
   type CanvasDoc,
+  type CanvasFilterStyle,
   type CanvasImageMode,
   type CanvasNode,
   type CanvasTextAlign,
@@ -76,6 +78,17 @@ function readMode(value: unknown): CanvasImageMode {
     : 'cover';
 }
 
+/** 画面风格滤镜：白名单校验，脏数据回退原色 */
+function readFilterStyle(value: unknown): CanvasFilterStyle {
+  return isCanvasFilterStyle(value) ? value : 'none';
+}
+
+/** 滤镜强度：0-100，非法值回退 100 */
+function readIntensity(value: unknown): number {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 100;
+}
+
 /** 文本装饰：只认四种，脏数据回退无装饰 */
 function readDecoration(value: unknown): CanvasTextDecoration {
   return value === 'under' || value === 'delete' || value === 'under-delete' ? value : 'none';
@@ -110,6 +123,15 @@ function normalizeOrientation(
     // 视频封面：从视频模块选视频时带入，客户端渲染背景视频时作 poster
     backgroundVideoCover: (doc.backgroundVideoCover || '').trim(),
     backgroundMode: readMode(doc.backgroundMode),
+    // 背景画面风格：默认原色 / 强度 100 时不写进 JSON
+    backgroundFilterStyle:
+      doc.backgroundFilterStyle && doc.backgroundFilterStyle !== 'none'
+        ? doc.backgroundFilterStyle
+        : undefined,
+    backgroundFilterIntensity:
+      doc.backgroundFilterStyle && doc.backgroundFilterStyle !== 'none'
+        ? clamp(round1(readIntensity(doc.backgroundFilterIntensity)), 0, 100)
+        : undefined,
     // 画布级只保留视图交互：拖拽平移默认开，关掉时才写进 JSON
     allowPan: doc.allowPan === false ? false : undefined,
     nodes: doc.nodes.map((node) => normalizeNode(node, size)),
@@ -159,6 +181,12 @@ function normalizeNode(
       mode: node.mode,
       radius: Math.max(0, round1(node.radius)),
       opacity: clamp(round1(node.opacity), 0, 1),
+      // 画面风格：默认原色 / 强度 100 时不写进 JSON
+      filterStyle: node.filterStyle && node.filterStyle !== 'none' ? node.filterStyle : undefined,
+      filterIntensity:
+        node.filterStyle && node.filterStyle !== 'none'
+          ? clamp(round1(readIntensity(node.filterIntensity)), 0, 100)
+          : undefined,
     };
   }
 
@@ -234,6 +262,8 @@ function parseNode(raw: unknown, size: { width: number; height: number }): Splas
     mode,
     radius: readNumber(row.radius, 0),
     opacity: readNumber(row.opacity, 1),
+    filterStyle: readFilterStyle(row.filterStyle),
+    filterIntensity: clamp(round1(readIntensity(row.filterIntensity)), 0, 100),
   };
 }
 
@@ -275,6 +305,12 @@ function parseOrientation(
   base.backgroundVideoCover =
     typeof row.backgroundVideoCover === 'string' ? row.backgroundVideoCover.trim() : '';
   base.backgroundMode = readMode(row.backgroundMode);
+  base.backgroundFilterStyle = readFilterStyle(row.backgroundFilterStyle);
+  base.backgroundFilterIntensity = clamp(
+    round1(readIntensity(row.backgroundFilterIntensity)),
+    0,
+    100
+  );
   // 画布级只保留视图交互：拖拽平移
   base.allowPan = row.allowPan === false ? false : undefined;
 
