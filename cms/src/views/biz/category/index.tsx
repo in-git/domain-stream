@@ -7,7 +7,7 @@
  * 搜索 / 模块 / 状态筛选通过 page 接口在服务端完成；
  * 本页仅负责树形层级组装与分页展示。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronLeft,
@@ -147,6 +147,8 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
   const [query, setQuery] = useState<CategoryPageQuery>(DEFAULT_QUERY);
   const [searchText, setSearchText] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  /** 树形结构只在首次加载时默认全部折叠，之后的刷新/保存不再重置用户手动展开的状态 */
+  const defaultCollapsedAppliedRef = useRef(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -165,6 +167,17 @@ export default function CategoryView({ permissions }: { permissions?: string[] }
     try {
       const data = await listAllCategories(query);
       setItems(data);
+      // 首次加载：默认折叠所有有子级的分类，整棵树只显示顶级行
+      if (!defaultCollapsedAppliedRef.current) {
+        defaultCollapsedAppliedRef.current = true;
+        setCollapsed(
+          new Set(
+            data
+              .filter((item) => data.some((child) => child.parentId === item.id))
+              .map((item) => item.id)
+          )
+        );
+      }
     } catch (err) {
       setLoadError(errorMessage(err));
     } finally {
