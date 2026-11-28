@@ -94,22 +94,22 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
         </nav>
       </div>
 
-      {/* 备案模块：纯黑背景、靠左对齐，点击跳转官方查询站 */}
+      {/* 备案模块：贴底独立区块，用分割线 + 轻微抬升的底色与导航区分 */}
       {(icpNo || policeNo) && (
-        <div className="hidden lg:flex shrink-0 mt-3 -mx-4 -mb-3 flex-col items-start gap-1.5 bg-black px-4 py-2">
+        <div className="hidden lg:flex shrink-0 mt-3 -mx-4 -mb-3 flex-col items-start gap-1 border-t border-app-border bg-app-card/70 px-4 py-3">
           {icpNo && (
             <a
               href="https://beian.miit.gov.cn"
               target="_blank"
               rel="noopener noreferrer"
               title={`${icpNo}（点击前往工信部备案查询）`}
-              className="group flex items-center gap-1.5 max-w-full py-0.5 text-white/70 hover:text-white transition-colors"
+              className="group flex items-center gap-1.5 max-w-full py-0.5 text-app-subtle hover:text-app-muted transition-colors"
             >
               <img
                 src={icpIcon}
                 alt=""
                 aria-hidden="true"
-                className="w-3 h-3 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity"
+                className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-90 transition-opacity"
               />
               <span className="text-[10px] leading-none truncate">{icpNo}</span>
             </a>
@@ -120,13 +120,13 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
               target="_blank"
               rel="noopener noreferrer"
               title={`${policeNo}（点击前往公安备案查询）`}
-              className="group flex items-center gap-1.5 max-w-full py-0.5 text-white/70 hover:text-white transition-colors"
+              className="group flex items-center gap-1.5 max-w-full py-0.5 text-app-subtle hover:text-app-muted transition-colors"
             >
               <img
                 src={policeIcon}
                 alt=""
                 aria-hidden="true"
-                className="w-3 h-3 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity"
+                className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-90 transition-opacity"
               />
               <span className="text-[10px] leading-none truncate">{policeNo}</span>
             </a>
