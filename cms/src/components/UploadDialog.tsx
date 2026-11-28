@@ -1,8 +1,9 @@
 /**
- * 素材上传模态框
+ * 通用上传模态框（素材中心 / 文件选择器共用）
  * ------------------------------------------------------------------
  * 流程：选择文件（仅暂存在浏览器）→ 选择分类 → 点击「保存」才真正上传
- * 分类来自通用分类中 MODULE = MATERIAL 且状态为启用的分类。
+ * 分类来自通用分类中 MODULE = MATERIAL 且状态为启用的分类；
+ * requireCategory = false 时不显示分类、上传到用户文件库。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -17,9 +18,9 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react';
-import { categoryApi, type BizCategory } from '../../../lib/category.ts';
-import { SelectField } from '../../../components/SelectField.tsx';
-import { QuickCreateCategory } from '../../../components/QuickCreateCategory.tsx';
+import { categoryApi, type BizCategory } from '../lib/category.ts';
+import { SelectField } from './SelectField.tsx';
+import { QuickCreateCategory } from './QuickCreateCategory.tsx';
 
 export interface UploadSubmitPayload {
   files: File[];
@@ -36,6 +37,10 @@ interface UploadDialogProps {
   ) => Promise<File[] | void>;
   /** 打开时预填的文件（如页面拖拽进来的文件） */
   initialFiles?: File[];
+  /** 是否必须选择素材分类，默认 true */
+  requireCategory?: boolean;
+  /** 弹窗标题，默认「上传素材」 */
+  title?: string;
 }
 
 function fileIcon(file: File) {
@@ -51,7 +56,14 @@ function readableSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
-export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDialogProps) {
+export function UploadDialog({
+  open,
+  onClose,
+  onSubmit,
+  initialFiles,
+  requireCategory = true,
+  title = '上传素材',
+}: UploadDialogProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [categoryCode, setCategoryCode] = useState('');
   const [categories, setCategories] = useState<BizCategory[]>([]);
@@ -139,7 +151,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
       setError('请先选择要上传的文件');
       return;
     }
-    if (!categoryCode) {
+    if (requireCategory && !categoryCode) {
       setError('请选择分类');
       return;
     }
@@ -173,7 +185,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E5EA]">
           <h3 className="text-[16px] font-semibold text-[#1D1D1F] flex items-center gap-2">
             <ImagePlus className="w-4 h-4 text-[#0071E3]" />
-            上传素材
+            {title}
           </h3>
           <button
             type="button"
@@ -275,6 +287,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
           )}
 
           {/* 分类 */}
+          {requireCategory && (
           <div>
             {loadingCategories ? (
               <>
@@ -333,6 +346,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
               </div>
             )}
           </div>
+          )}
 
           {error && (
             <div className="px-3 py-2 rounded-xl bg-[#FFF1F0] border border-[#FFCCC7] text-[12px] text-[#CF1322]">
@@ -371,7 +385,7 @@ export function UploadDialog({ open, onClose, onSubmit, initialFiles }: UploadDi
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={submitting || !files.length || !categoryCode}
+            disabled={submitting || !files.length || (requireCategory && !categoryCode)}
             className="h-9 px-4 rounded-xl bg-[#0071E3] text-white text-[13px] font-medium hover:bg-[#0077ED] disabled:opacity-40 flex items-center gap-1.5"
           >
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

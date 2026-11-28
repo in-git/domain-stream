@@ -548,7 +548,7 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
 
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public void updateInfo(String id, String name, String resolution) {
+    public void updateInfo(String id, String name, String categoryCode, Integer width, Integer height) {
         DevFile devFile = this.queryEntity(id);
         if (StrUtil.isBlank(name)) {
             throw new CommonException("标题不能为空");
@@ -559,15 +559,32 @@ public class DevFileServiceImpl extends ServiceImpl<DevFileMapper, DevFile> impl
         } catch (Exception e) {
             extJson = new JSONObject();
         }
-        if (StrUtil.isBlank(resolution)) {
-            extJson.remove("resolution");
-        } else {
-            extJson.set("resolution", resolution.trim());
+        // 前端读取到媒体像素宽高时直接写入 EXT_JSON
+        boolean hasSize = width != null && height != null && width > 0 && height > 0;
+        if (hasSize) {
+            extJson.set("width", width);
+            extJson.set("height", height);
+            extJson.set("resolution", width + "×" + height);
+        } else if (isPic(devFile.getSuffix())
+                && DevFileEngineTypeEnum.LOCAL.getValue().equals(devFile.getEngine())) {
+            // 前端未传时，本地图片由后端兜底读取像素宽高（历史素材编辑时也能补全）
+            try {
+                BufferedImage image = ImgUtil.toBufferedImage(
+                        ImgUtil.toImage(FileUtil.readBytes(devFile.getStoragePath())));
+                extJson.set("width", image.getWidth());
+                extJson.set("height", image.getHeight());
+                extJson.set("resolution", image.getWidth() + "×" + image.getHeight());
+            } catch (Exception ignored) {
+            }
         }
         LambdaUpdateWrapper<DevFile> updateWrapper = Wrappers.lambdaUpdate();
         updateWrapper.eq(DevFile::getId, id)
                 .set(DevFile::getName, name.trim())
                 .set(DevFile::getExtJson, extJson.isEmpty() ? null : extJson.toString());
+        // 传了分类编码才更新；null 表示保持原分类，空串表示清空分类
+        if (categoryCode != null) {
+            updateWrapper.set(DevFile::getCategoryCode, StrUtil.blankToDefault(categoryCode, null));
+        }
         this.update(updateWrapper);
     }
 

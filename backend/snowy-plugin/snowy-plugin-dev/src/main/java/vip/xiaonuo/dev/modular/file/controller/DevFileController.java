@@ -215,7 +215,9 @@ public class DevFileController {
     public CommonResult<String> updateInfo(@RequestBody @Valid DevFileUpdateInfoParam devFileUpdateInfoParam) {
         devFileService.updateInfo(devFileUpdateInfoParam.getId(),
                 devFileUpdateInfoParam.getName(),
-                devFileUpdateInfoParam.getResolution());
+                devFileUpdateInfoParam.getCategoryCode(),
+                devFileUpdateInfoParam.getWidth(),
+                devFileUpdateInfoParam.getHeight());
         return CommonResult.ok();
     }
 

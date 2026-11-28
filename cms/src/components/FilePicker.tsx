@@ -42,10 +42,12 @@ import {
   isVideoFile,
   toOpenUrl,
   uploadLibraryFile,
+  uploadMaterial,
   type DevFile,
 } from '../lib/fileCenter.ts';
 import { categoryApi, type BizCategory } from '../lib/category.ts';
 import { FileCard } from './FileCard.tsx';
+import { UploadDialog, type UploadSubmitPayload } from './UploadDialog.tsx';
 
 type Library = 'ALL' | 'USER' | 'MATERIAL';
 /** 预设类型 / MIME 类型 / 扩展名（如 .png）均可作为 accept 项 */
@@ -172,7 +174,8 @@ export function FilePicker({
   const [selected, setSelected] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
   /** 已加载过的文件，翻页后仍能确认之前选中的文件 */
@@ -251,6 +254,8 @@ export function FilePicker({
       setCategoryCode('');
       setLibrary('MATERIAL');
       setPage(1);
+      setUploadOpen(false);
+      setPendingUploadFiles([]);
     }
   }, [open]);
 
@@ -272,29 +277,42 @@ export function FilePicker({
     onClose();
   }
 
-  async function handleUpload(picked: File | undefined) {
-    if (!picked) return;
-    setUploading(true);
-    setError('');
-    try {
-      const target = beforeUpload ? await beforeUpload(picked) : picked;
-      const bizType: 'USER' | 'MATERIAL' = library === 'MATERIAL' ? 'MATERIAL' : 'USER';
-      const { url } = await uploadLibraryFile(target, bizType);
+  /** 素材库上传需要选分类，用户文件/全部文件走用户库、不选分类 */
+  const uploadToMaterial = library === 'MATERIAL';
+
+  async function handleUploadSubmit(
+    { files: pickedFiles, categoryCode }: UploadSubmitPayload,
+    onProgress: (percent: number) => void
+  ): Promise<File[]> {
+    const failed: File[] = [];
+    const urls: string[] = [];
+    for (let i = 0; i < pickedFiles.length; i++) {
+      try {
+        const target = beforeUpload ? await beforeUpload(pickedFiles[i]) : pickedFiles[i];
+        const percent = (value: number) =>
+          onProgress(Math.round(((i + value / 100) / pickedFiles.length) * 100));
+        const { url } = uploadToMaterial
+          ? await uploadMaterial(target, percent, categoryCode)
+          : await uploadLibraryFile(target, 'USER', percent);
+        urls.push(url);
+      } catch {
+        failed.push(pickedFiles[i]);
+      }
+    }
+    if (urls.length) {
       // 新文件是最新的，回到第一页展示并刷新
       setPage(1);
       setReloadToken((value) => value + 1);
-      // 上传完成后尝试按地址选中新文件
-      const fresh = await fileCenterApi.page({ size: 1, bizType, searchKey: picked.name });
-      const uploaded = fresh.records?.find((file) => toOpenUrl(file) === url);
-      if (uploaded) {
-        fileCache.current.set(uploaded.id, uploaded);
-        setSelected((prev) => (multiple ? [...prev, uploaded.id] : [uploaded.id]));
+      const bizType: 'USER' | 'MATERIAL' = uploadToMaterial ? 'MATERIAL' : 'USER';
+      const fresh = await fileCenterApi.page({ size: Math.max(urls.length, 24), bizType });
+      const uploaded = (fresh.records || []).filter((file) => urls.includes(toOpenUrl(file)));
+      uploaded.forEach((file) => fileCache.current.set(file.id, file));
+      if (uploaded.length) {
+        const ids = uploaded.map((file) => file.id);
+        setSelected((prev) => (multiple ? Array.from(new Set([...prev, ...ids])) : [ids[0]]));
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '上传失败');
-    } finally {
-      setUploading(false);
     }
+    return failed;
   }
 
   if (!open) return null;
@@ -375,16 +393,18 @@ export function FilePicker({
               <input
                 type="file"
                 className="hidden"
-                disabled={uploading}
                 multiple={multiple}
                 accept={acceptForInput(accept)}
                 onChange={(event) => {
-                  void handleUpload(event.target.files?.[0]);
+                  const picked = Array.from(event.target.files || []);
                   event.target.value = '';
+                  if (!picked.length) return;
+                  setPendingUploadFiles(picked);
+                  setUploadOpen(true);
                 }}
               />
-              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {uploading ? '上传中' : '上传新文件'}
+              <Upload className="w-3.5 h-3.5" />
+              上传新文件
             </label>
           )}
         </div>
@@ -543,6 +563,18 @@ export function FilePicker({
           </div>
         </div>
       </div>
+
+      <UploadDialog
+        open={uploadOpen}
+        onClose={() => {
+          setUploadOpen(false);
+          setPendingUploadFiles([]);
+        }}
+        onSubmit={handleUploadSubmit}
+        initialFiles={pendingUploadFiles}
+        requireCategory={uploadToMaterial}
+        title={uploadToMaterial ? '上传素材' : '上传文件'}
+      />
     </div>
   );
 }

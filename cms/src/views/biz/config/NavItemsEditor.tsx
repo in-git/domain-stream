@@ -39,7 +39,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
+import { toOriginalUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
 import { DeleteConfirmModal } from '../../../components/DeleteConfirmModal.tsx';
 import {
@@ -325,7 +325,7 @@ function NavItemDialog({
         onSelect={(files: DevFile[]) => {
           if (!files[0]) return;
           // 存纯后端路径（去掉 CMS 的 /snowy 代理前缀），与卡片图/Logo 一致
-          setIconUrl(toOpenUrl(files[0]).replace(/^\/snowy/, ''));
+          setIconUrl(toOriginalUrl(files[0]).replace(/^\/snowy/, ''));
         }}
       />
     </div>

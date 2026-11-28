@@ -11,10 +11,13 @@ import {
   isImageFile,
   isVideoFile,
   toOpenUrl,
+  toPlayableVideoUrl,
   type DevFile,
 } from '../../../lib/fileCenter.ts';
 import { formatDateTime } from '../../../lib/format.ts';
+import type { BizCategory } from '../../../lib/category.ts';
 import { FileMedia } from '../../../components/FileMedia.tsx';
+import { SelectField } from '../../../components/SelectField.tsx';
 
 /** 把代理相对地址补全为可直接在浏览器打开的绝对地址 */
 export function absoluteFileUrl(file: DevFile): string {
@@ -270,16 +273,92 @@ const EDIT_LABEL_CLASS = 'block text-[12px] font-medium text-[#3A3A3C] mb-1.5';
 
 interface MaterialEditDialogProps {
   file: DevFile;
+  /** 可选的素材分类（通用分类 MATERIAL 模块） */
+  categories: BizCategory[];
   onClose: () => void;
-  onSubmit: (payload: { name: string; resolution: string }) => Promise<void>;
+  onSubmit: (payload: {
+    name: string;
+    categoryCode: string;
+    width?: number;
+    height?: number;
+  }) => Promise<void>;
 }
 
-/** 编辑素材信息：标题与分辨率（分辨率留空则回退为自动读取） */
-export function MaterialEditDialog({ file, onClose, onSubmit }: MaterialEditDialogProps) {
+interface MediaSize {
+  width: number;
+  height: number;
+}
+
+/** 读取图片/视频的像素宽高，失败或超时返回 null */
+function readMediaSize(file: DevFile): Promise<MediaSize | null> {
+  const url = toOpenUrl(file);
+  if (!url) return Promise.resolve(null);
+  if (isImageFile(file)) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const finish = (value: MediaSize | null) => {
+        window.clearTimeout(timer);
+        img.onload = null;
+        img.onerror = null;
+        resolve(value);
+      };
+      const timer = window.setTimeout(() => finish(null), 8000);
+      img.onload = () =>
+        finish(
+          img.naturalWidth > 0 && img.naturalHeight > 0
+            ? { width: img.naturalWidth, height: img.naturalHeight }
+            : null
+        );
+      img.onerror = () => finish(null);
+      img.src = url;
+    });
+  }
+  if (isVideoFile(file)) {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      const finish = (value: MediaSize | null) => {
+        window.clearTimeout(timer);
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        resolve(value);
+      };
+      const timer = window.setTimeout(() => finish(null), 8000);
+      video.onloadedmetadata = () =>
+        finish(
+          video.videoWidth > 0 && video.videoHeight > 0
+            ? { width: video.videoWidth, height: video.videoHeight }
+            : null
+        );
+      video.onerror = () => finish(null);
+      video.src = toPlayableVideoUrl(url);
+    });
+  }
+  return Promise.resolve(null);
+}
+
+/** 编辑素材信息：标题与分类（像素宽高在保存时由后端自动读取） */
+export function MaterialEditDialog({
+  file,
+  categories,
+  onClose,
+  onSubmit,
+}: MaterialEditDialogProps) {
   const [name, setName] = useState(file.name || '');
-  const [resolution, setResolution] = useState(fileResolution(file));
+  const [categoryCode, setCategoryCode] = useState(file.categoryCode || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const categoryOptions = [
+    { value: '', label: '未分类' },
+    ...categories.map((item) => ({
+      value: item.code || '',
+      label: item.name || '未命名分类',
+    })),
+  ];
+  if (file.categoryCode && !categories.some((item) => item.code === file.categoryCode)) {
+    categoryOptions.push({ value: file.categoryCode, label: file.categoryCode });
+  }
 
   async function save() {
     const nextName = name.trim();
@@ -290,7 +369,13 @@ export function MaterialEditDialog({ file, onClose, onSubmit }: MaterialEditDial
     setBusy(true);
     setError('');
     try {
-      await onSubmit({ name: nextName, resolution: resolution.trim() });
+      const size = await readMediaSize(file);
+      await onSubmit({
+        name: nextName,
+        categoryCode,
+        width: size?.width,
+        height: size?.height,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败，请稍后重试');
       setBusy(false);
@@ -334,18 +419,16 @@ export function MaterialEditDialog({ file, onClose, onSubmit }: MaterialEditDial
         </div>
 
         <div>
-          <label className={EDIT_LABEL_CLASS}>分辨率</label>
-          <input
-            value={resolution}
-            onChange={(e) => setResolution(e.target.value)}
-            maxLength={32}
-            placeholder="如 1920×1080"
-            className={EDIT_INPUT_CLASS}
+          <label className={EDIT_LABEL_CLASS}>分类</label>
+          <SelectField
+            value={categoryCode}
+            onChange={setCategoryCode}
+            isDisabled={busy}
+            options={categoryOptions}
           />
-          <p className="mt-1 text-[11px] text-[#86868B]">留空则按文件自动读取</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl bg-[#F5F5F7] px-3 py-2">
             <div className="text-[11px] text-[#86868B]">文件大小</div>
             <div className="mt-0.5 text-[12px] text-[#1D1D1F] tabular-nums">
@@ -356,6 +439,12 @@ export function MaterialEditDialog({ file, onClose, onSubmit }: MaterialEditDial
             <div className="text-[11px] text-[#86868B]">文件格式</div>
             <div className="mt-0.5 text-[12px] text-[#1D1D1F] uppercase">
               {(file.suffix || '').replace('.', '') || file.category || '-'}
+            </div>
+          </div>
+          <div className="rounded-xl bg-[#F5F5F7] px-3 py-2">
+            <div className="text-[11px] text-[#86868B]">像素宽高</div>
+            <div className="mt-0.5 text-[12px] text-[#1D1D1F] tabular-nums">
+              {fileResolution(file) || '-'}
             </div>
           </div>
         </div>

@@ -39,8 +39,16 @@ public class DevFileUpdateInfoParam {
     @Size(max = 255, message = "标题长度不能超过255个字符")
     private String name;
 
-    /** 分辨率，如 1920×1080；为空表示由前端自动读取 */
-    @Schema(description = "分辨率")
-    @Size(max = 32, message = "分辨率长度不能超过32个字符")
-    private String resolution;
+    /** 素材分类编码，关联 BIZ_CATEGORY.CODE；为空表示未分类 */
+    @Schema(description = "素材分类编码")
+    @Size(max = 50, message = "分类编码长度不能超过50个字符")
+    private String categoryCode;
+
+    /** 像素宽度，前端读取媒体信息后传入 */
+    @Schema(description = "像素宽度")
+    private Integer width;
+
+    /** 像素高度，前端读取媒体信息后传入 */
+    @Schema(description = "像素高度")
+    private Integer height;
 }

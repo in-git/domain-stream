@@ -84,7 +84,7 @@ import { FilePicker } from '../FilePicker.tsx';
 import { VideoPicker } from '../VideoPicker.tsx';
 import { snowyFetch } from '../../lib/snowy.ts';
 import type { VideoItem } from '../../types/cms.ts';
-import { toOpenUrl, type DevFile } from '../../lib/fileCenter.ts';
+import { toOriginalUrl, type DevFile } from '../../lib/fileCenter.ts';
 import { registerPendingFile } from '../../lib/pendingUploads.ts';
 import {
   CanvasNodeInspector,
@@ -2426,7 +2426,7 @@ export function CanvasEditor({
     const target = pickerTarget;
     closePicker();
     if (!file) return;
-    const stored = toOpenUrl(file).replace(/^\/snowy/, '');
+    const stored = toOriginalUrl(file).replace(/^\/snowy/, '');
     // 背景：图 / 视频可以同时保留，渲染时视频优先；删除由封面上的删除按钮负责
     if (target === 'background-video') {
       patchCanvas({ backgroundVideo: stored });

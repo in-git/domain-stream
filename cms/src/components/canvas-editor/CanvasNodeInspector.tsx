@@ -7,9 +7,10 @@
  * 交互开关（旋转 / 调整宽高 / 倾斜 / 超出画布）属于组件，跟着选中组件走。
  * 点中画布空白处会取消选中，面板自然回到画布配置。
  *
- * 几何尺寸交给画布上的拖拽手柄，这里只调样式；旋转角度可以用「角度」输入精确设定，
- * 字号用下拉框 + A− / A+ 微调，加粗 / 斜体 / 下划线 / 删除线用图标开关（B / I / U / S），
- * 底部三个图标分别是创建副本 / 锁定图层 / 删除组件。所有操作按钮只放图标，含义交给 tooltip 提示。
+ * 几何尺寸除了画布上的拖拽手柄，也可以在右侧面板精确输入位置（X/Y）和宽高；
+ * 旋转角度可以用「角度」输入精确设定，字号用下拉框 + A− / A+ 微调，加粗 / 斜体 /
+ * 下划线 / 删除线用图标开关（B / I / U / S），底部三个图标分别是创建副本 /
+ * 锁定图层 / 删除组件。所有操作按钮只放图标，含义交给 tooltip 提示。
  * 调用方可以通过 CanvasEditor 的 renderInspector 整个替换掉这块面板。
  */
 import {
@@ -203,6 +204,58 @@ function AngleField({ value, onChange }: { value: number; onChange: (deg: number
       aria-label="旋转角度"
       className="h-7 w-[64px] rounded-md border border-[#D2D2D7] bg-white px-1 text-center text-[11px] tabular-nums text-[#1D1D1F] outline-none focus:border-[#0071E3]"
     />
+  );
+}
+
+/**
+ * 位置 / 尺寸输入：本地保留正在输入的字符串，允许中途空值和小数；
+ * 输入即提交，失焦后回到文档里的真实数值。调用方用 key={node.id} 保证换选中时清空草稿。
+ */
+function GeometryField({
+  label,
+  value,
+  min,
+  max,
+  unit,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = Math.round(value * 10) / 10;
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10.5px] text-[#86868B]">{label}</span>
+      <div className="flex items-center rounded-md border border-[#D2D2D7] bg-white focus-within:border-[#0071E3]">
+        <input
+          type="number"
+          value={draft ?? String(display)}
+          step={1}
+          min={min}
+          max={max}
+          disabled={disabled}
+          onChange={(event) => {
+            const raw = event.target.value;
+            setDraft(raw);
+            if (raw.trim() === '') return;
+            const next = Number(raw);
+            if (!Number.isFinite(next)) return;
+            onChange(Math.round(Math.min(max, Math.max(min, next)) * 10) / 10);
+          }}
+          onBlur={() => setDraft(null)}
+          aria-label={label}
+          className="h-7 w-full min-w-0 rounded-md bg-transparent px-1.5 text-[11px] tabular-nums text-[#1D1D1F] outline-none disabled:text-[#C7C7CC]"
+        />
+        <span className="pr-1.5 text-[10px] text-[#86868B]">{unit}</span>
+      </div>
+    </label>
   );
 }
 
@@ -625,6 +678,56 @@ export function CanvasNodeInspector({
                       className="h-7 w-full"
                     />
                   ))}
+                </div>
+              </div>
+            )}
+
+            {selectedCount <= 1 && (
+              <div>
+                <span className="mb-1.5 block text-[11px] font-medium text-[#6E6E73]">
+                  位置与尺寸
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <GeometryField
+                    key={`${node.id}-x`}
+                    label="X"
+                    value={node.x}
+                    min={node.overflow ? -9999 : 0}
+                    max={node.overflow ? 9999 : Math.max(0, Math.round(canvasWidth))}
+                    unit="px"
+                    disabled={!!node.locked}
+                    onChange={(value) => onPatch({ x: value })}
+                  />
+                  <GeometryField
+                    key={`${node.id}-y`}
+                    label="Y"
+                    value={node.y}
+                    min={node.overflow ? -9999 : 0}
+                    max={node.overflow ? 9999 : Math.max(0, Math.round(canvasHeight))}
+                    unit="px"
+                    disabled={!!node.locked}
+                    onChange={(value) => onPatch({ y: value })}
+                  />
+                  <GeometryField
+                    key={`${node.id}-w`}
+                    label="宽"
+                    value={node.width}
+                    min={1}
+                    max={node.overflow ? 9999 : Math.max(1, Math.round(canvasWidth))}
+                    unit="px"
+                    disabled={!!node.locked}
+                    onChange={(value) => onPatch({ width: value })}
+                  />
+                  <GeometryField
+                    key={`${node.id}-h`}
+                    label="高"
+                    value={node.height}
+                    min={1}
+                    max={node.overflow ? 9999 : Math.max(1, Math.round(canvasHeight))}
+                    unit="px"
+                    disabled={!!node.locked}
+                    onChange={(value) => onPatch({ height: value })}
+                  />
                 </div>
               </div>
             )}

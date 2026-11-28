@@ -1,7 +1,7 @@
 import icpIcon from '../../assets/icp-icon.svg';
 import policeIcon from '../../assets/police-icon.svg';
-import { publicFileUrl, useSystemInfo } from '../../lib/systemInfo';
-import { findModuleKeyBySection, navIconUrl, parseNav } from './navConfig';
+import { useSystemInfo } from '../../lib/systemInfo';
+import { navIconUrl, parseNav } from './navConfig';
 
 interface LeftSidebarProps {
   activeSection: string;
@@ -23,8 +23,7 @@ export const BUILTIN_SECTIONS: readonly string[] = [
 ];
 
 export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps) {
-  const { title, config } = useSystemInfo();
-  const logoUrl = publicFileUrl(config.logoUrl);
+  const { config } = useSystemInfo();
   const icpNo = (config.icpNo || '').trim();
   const policeNo = (config.policeNo || '').trim();
   const navItems = parseNav(config.navItems);
@@ -33,32 +32,8 @@ export function LeftSidebar({ activeSection, onSelectSection }: LeftSidebarProps
       aria-label="左侧主导航"
       className="hidden md:flex flex-col justify-between fixed left-0 top-0 h-screen w-20 lg:w-60 bg-app-surface/85 dark:bg-[#0D0D0F]/90 backdrop-blur-xl px-3 lg:px-4 pt-5 pb-3 select-none z-30"
     >
-      {/* Top Brand + Primary Vertical Navigation */}
-      <div className="space-y-6">
-        {/* Brand Emblem & Wordmark */}
-        <button
-          type="button"
-          onClick={() => onSelectSection(findModuleKeyBySection(navItems, 'videos') ?? 'videos', true)}
-          className="w-full flex items-center justify-center lg:justify-start gap-3 px-2 lg:px-3 py-1.5 rounded-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-primary"
-        >
-          <span className="flex items-center justify-center w-9 h-9 shrink-0">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
-            ) : (
-              <span className="w-full h-full flex items-center justify-center rounded-app bg-app-primary text-app-primary-fg shadow-xs">
-                <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none" aria-hidden="true">
-                  <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="2" />
-                  <path d="M16 9L22.5 20.5H9.5L16 9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  <circle cx="16" cy="16" r="2.2" fill="var(--app-color-primary)" />
-                </svg>
-              </span>
-            )}
-          </span>
-          <span className="hidden lg:inline text-lg font-semibold tracking-tight text-app-text whitespace-nowrap">
-            {title}
-          </span>
-        </button>
-
+      {/* Primary Vertical Navigation */}
+      <div>
         {/* Douyin-style Left Vertical Nav Links */}
         <nav aria-label="板块导航" className="space-y-1.5">
           {navItems.map(({ id, label, iconUrl }) => {

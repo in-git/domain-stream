@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { convertToWebp, uploadFileWithProgress } from '../../../lib/api.ts';
-import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
+import { toOriginalUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { hasPendingUploads, resolvePendingFiles } from '../../../lib/pendingUploads.ts';
 import { FilePicker } from '../../../components/FilePicker.tsx';
 import { SwitchField } from '../../../components/SwitchField.tsx';
@@ -753,7 +753,7 @@ export default function ConfigView() {
         onSelect={(files: DevFile[]) => {
           if (!pickerField || !files[0]) return;
           // 文件选择器返回带 /snowy 的地址，存纯后端路径供 frontend 使用
-          setFieldValue(pickerField, toOpenUrl(files[0]).replace(/^\/snowy/, ''));
+          setFieldValue(pickerField, toOriginalUrl(files[0]).replace(/^\/snowy/, ''));
         }}
       />
 

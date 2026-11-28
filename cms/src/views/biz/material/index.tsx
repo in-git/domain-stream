@@ -48,7 +48,7 @@ import { useFileThumbSrc } from '../../../lib/useFileThumb.ts';
 import { formatDateTime } from '../../../lib/format.ts';
 import { FileDeleteDialog, FilePreviewDialog } from '../file/dialogs.tsx';
 import { absoluteFileUrl, copyText, MaterialDetailDialog, MaterialEditDialog } from './dialogs.tsx';
-import { UploadDialog, type UploadSubmitPayload } from './UploadDialog.tsx';
+import { UploadDialog, type UploadSubmitPayload } from '../../../components/UploadDialog.tsx';
 import { SelectField } from '../../../components/SelectField.tsx';
 import { showToast } from '../../../components/AppToast.tsx';
 import { categoryApi, type BizCategory } from '../../../lib/category.ts';
@@ -962,6 +962,7 @@ export default function MaterialCenterView({ permissions }: { permissions?: stri
       {dialog?.kind === 'edit' && (
         <MaterialEditDialog
           file={dialog.file}
+          categories={materialCategories}
           onClose={() => setDialog(null)}
           onSubmit={async (payload) => {
             await fileCenterApi.updateInfo({ id: dialog.file.id, ...payload });

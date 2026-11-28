@@ -169,12 +169,12 @@ public interface DevFileService extends IService<DevFile> {
     void updateCategoryCode(List<String> ids, String categoryCode);
 
     /**
-     * 编辑文件信息（标题与分辨率）
+     * 编辑文件信息（标题、素材分类）；图片像素宽高自动写入扩展信息
      *
      * @author domain-stream
      * @date 2026/11/28
      **/
-    void updateInfo(String id, String name, String resolution);
+    void updateInfo(String id, String name, String categoryCode, Integer width, Integer height);
 
     /**
      * 获取文件详情

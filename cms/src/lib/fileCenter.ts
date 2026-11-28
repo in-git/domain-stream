@@ -172,6 +172,27 @@ export function toOpenUrl(file: DevFile): string {
 }
 
 /**
+ * 选择素材时统一取原图地址：
+ * - 历史数据的 downloadPath 可能指向缩略图接口，这里纠正为 download
+ * - 资源库代理地址缺省补 full=true，避免拿到预览图
+ */
+export function toOriginalUrl(file: DevFile): string {
+  let url = normalizeFileUrl(file.downloadPath);
+  if (!url) return '';
+  if (url.includes('/dev/file/thumbnail')) {
+    url = url.replace('/dev/file/thumbnail', '/dev/file/download');
+  }
+  if (url.includes('/biz/asset-resource/media')) {
+    if (/[?&]full=false\b/.test(url)) {
+      url = url.replace(/([?&])full=false\b/, '$1full=true');
+    } else if (!/[?&]full=/.test(url)) {
+      url += (url.includes('?') ? '&' : '?') + 'full=true';
+    }
+  }
+  return url;
+}
+
+/**
  * 拉取文件二进制（授权文件无公开地址，走 authDownload 带 token 下载）。
  * 后端异常时响应可能是 JSON，需要给出可读提示。
  */
@@ -283,8 +304,14 @@ export const fileCenterApi = {
     });
   },
 
-  /** 编辑素材信息（标题、分辨率） */
-  updateInfo(payload: { id: string; name: string; resolution?: string }): Promise<void> {
+  /** 编辑素材信息（标题、分类；像素宽高自动读取） */
+  updateInfo(payload: {
+    id: string;
+    name: string;
+    categoryCode?: string;
+    width?: number;
+    height?: number;
+  }): Promise<void> {
     return snowyRequest<void>(`${BASE}/updateInfo`, {
       method: 'POST',
       body: JSON.stringify(payload),

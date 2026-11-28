@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { FilePicker } from '../../../components/FilePicker.tsx';
-import { toOpenUrl, type DevFile } from '../../../lib/fileCenter.ts';
+import { toOriginalUrl, type DevFile } from '../../../lib/fileCenter.ts';
 import { SPLASH_AUDIO_KEY, SPLASH_CANVAS_KEY, SPLASH_DURATION_KEY } from './schema';
 import { parseSplashCanvas, type SplashOrientation } from './splash-canvas/types';
 
@@ -192,7 +192,7 @@ export function SplashMaterialDialog({
     setPickerKey(null);
     if (!file || !pickerKey) return;
     // 文件选择器返回带 /snowy 的地址，存纯后端路径供 frontend 使用
-    onChange(pickerKey, toOpenUrl(file).replace(/^\/snowy/, ''));
+    onChange(pickerKey, toOriginalUrl(file).replace(/^\/snowy/, ''));
   }
 
   return (
