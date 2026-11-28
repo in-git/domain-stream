@@ -46,7 +46,7 @@ export function HtmlCodeDialog({
       onMouseDown={onClose}
     >
       <div
-        className="flex h-[86vh] w-[97vw] max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_70px_rgba(0,0,0,0.25)]"
+        className="flex h-[50vh] w-[60vw] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_70px_rgba(0,0,0,0.25)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#F2F2F7] px-5 py-3.5">
@@ -73,9 +73,9 @@ export function HtmlCodeDialog({
             spellCheck={false}
             placeholder='<div style="color:#fff">Hello</div>'
             aria-label="HTML 代码"
-            className="h-full min-h-[220px] w-full resize-none rounded-xl border border-[#E5E5EA] bg-[#FBFBFD] p-3 font-mono text-[13px] leading-relaxed text-[#1D1D1F] outline-none focus:border-[#0071E3] focus:bg-white"
+            className="h-full min-h-[140px] w-full resize-none rounded-xl border border-[#E5E5EA] bg-[#FBFBFD] p-3 font-mono text-[13px] leading-relaxed text-[#1D1D1F] outline-none focus:border-[#0071E3] focus:bg-white"
           />
-          <div className="h-full min-h-[220px] overflow-hidden rounded-xl border border-[#E5E5EA] bg-white">
+          <div className="h-full min-h-[140px] overflow-hidden rounded-xl border border-[#E5E5EA] bg-white">
             <iframe
               title="HTML 预览"
               srcDoc={draft}

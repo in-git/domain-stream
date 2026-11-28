@@ -17,6 +17,8 @@ export interface SplashTextNode {
   rotation?: number;
   /** 允许该组件显示在画布外（后台组件配置里的「超出画布」） */
   overflow?: boolean;
+  /** 是否可见，缺省可见；后台隐藏的组件客户端不渲染 */
+  visible?: boolean;
   /** 系统固定组件（跳过开屏），不可删除 */
   fixed?: 'skip';
   text: string;
@@ -41,6 +43,8 @@ export interface SplashImageNode {
   rotation?: number;
   /** 允许该组件显示在画布外（后台组件配置里的「超出画布」） */
   overflow?: boolean;
+  /** 是否可见，缺省可见；后台隐藏的组件客户端不渲染 */
+  visible?: boolean;
   url: string;
   radius: number;
   opacity: number;
@@ -58,6 +62,8 @@ export interface SplashHtmlNode {
   height: number;
   rotation?: number;
   overflow?: boolean;
+  /** 是否可见，缺省可见；后台隐藏的组件客户端不渲染 */
+  visible?: boolean;
   html: string;
   opacity: number;
 }
@@ -82,6 +88,8 @@ export interface SplashRectNode {
   rotation?: number;
   /** 允许该组件显示在画布外 */
   overflow?: boolean;
+  /** 是否可见，缺省可见；后台隐藏的组件客户端不渲染 */
+  visible?: boolean;
   fill: string;
   radius: number;
   opacity: number;
@@ -99,6 +107,8 @@ export interface SplashEllipseNode {
   height: number;
   rotation?: number;
   overflow?: boolean;
+  /** 是否可见，缺省可见；后台隐藏的组件客户端不渲染 */
+  visible?: boolean;
   fill: string;
   opacity: number;
   stroke?: string;
@@ -115,6 +125,8 @@ export interface SplashSvgNode {
   height: number;
   rotation?: number;
   overflow?: boolean;
+  /** 是否可见，缺省可见；后台隐藏的组件客户端不渲染 */
+  visible?: boolean;
   url: string;
   opacity: number;
 }
@@ -259,10 +271,12 @@ export interface SplashOrientationDoc {
   background: string;
   /** 背景图（后端路径），空表示纯色底 */
   backgroundImage?: string;
-  /** 背景视频（后端路径），与背景图互斥；有视频时不再叠加开屏音频 */
+  /** 背景视频（后端路径），与背景图可同时保留；是否渲染由 backgroundKind 决定 */
   backgroundVideo?: string;
   /** 背景视频封面（后端路径，视频模块带入）；渲染背景视频时作为 poster */
   backgroundVideoCover?: string;
+  /** 背景模式：image 显示背景图，video 显示背景视频，缺省时有视频即视频 */
+  backgroundKind?: 'image' | 'video';
   /** 背景素材铺法，缺省按等比铺满 */
   backgroundMode?: SplashImageMode;
   /** 背景画面调节参数（图片 / 视频背景共用），缺省表示原图 */
@@ -310,6 +324,7 @@ function parseNode(
     height: num(row.height, 48),
     rotation: num(row.rotation, 0),
     overflow: row.overflow === true ? true : undefined,
+    visible: row.visible === false ? false : undefined,
     fixed: row.fixed === 'skip' ? ('skip' as const) : undefined,
   };
 
@@ -404,8 +419,13 @@ function parseOrientation(raw: unknown, key: 'pc' | 'mobile'): SplashOrientation
   doc.backgroundVideo = typeof row.backgroundVideo === 'string' ? row.backgroundVideo.trim() : '';
   doc.backgroundVideoCover =
     typeof row.backgroundVideoCover === 'string' ? row.backgroundVideoCover.trim() : '';
-  // 两种背景素材都保留时视频优先：忽略背景图，避免双层背景；视频封面保留作 poster
-  if (doc.backgroundVideo) doc.backgroundImage = '';
+  // 背景模式：图片 / 视频，两种素材都保留时按它只渲染其中一类；旧配置按「有视频即视频」
+  doc.backgroundKind =
+    row.backgroundKind === 'image' || row.backgroundKind === 'video'
+      ? row.backgroundKind
+      : doc.backgroundVideo
+        ? 'video'
+        : 'image';
   doc.backgroundMode =
     row.backgroundMode === 'fit' ||
     row.backgroundMode === 'cover' ||

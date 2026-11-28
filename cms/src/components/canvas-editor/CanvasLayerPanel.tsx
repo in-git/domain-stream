@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Circle,
   Code2,
+  Eye,
+  EyeOff,
   Group as GroupIcon,
   Image as ImageIcon,
   Lock,
@@ -47,6 +49,8 @@ export interface CanvasLayerPanelProps {
   onSelect: (id: string) => void;
   /** 锁定 / 解锁指定节点（组行会传整组，子项只传自己） */
   onToggleLock: (ids: string[]) => void;
+  /** 显示 / 隐藏指定节点（组行会传整组，子项只传自己） */
+  onToggleVisible: (ids: string[]) => void;
   /** 删除指定节点 */
   onDelete: (ids: string[]) => void;
   /** 拖拽排序：传入从下到上的完整节点 id 顺序 */
@@ -148,6 +152,7 @@ export function CanvasLayerPanel({
   selectedIds,
   onSelect,
   onToggleLock,
+  onToggleVisible,
   onDelete,
   onReorder,
 }: CanvasLayerPanelProps) {
@@ -208,6 +213,7 @@ export function CanvasLayerPanel({
                       active={selected.has(item.node.id)}
                       onSelect={() => onSelect(item.node.id)}
                       onToggleLock={() => onToggleLock([item.node.id])}
+                      onToggleVisible={() => onToggleVisible([item.node.id])}
                       onDelete={() => onDelete([item.node.id])}
                     />
                   );
@@ -216,6 +222,7 @@ export function CanvasLayerPanel({
                 const { groupId, members } = item;
                 const groupActive = members.some((member) => selected.has(member.id));
                 const groupLocked = members.every((member) => member.locked);
+                const groupHidden = members.every((member) => member.visible === false);
                 const isCollapsed = collapsed.includes(groupId);
                 return (
                   <div key={groupId} className="flex flex-col">
@@ -257,6 +264,20 @@ export function CanvasLayerPanel({
                   <div className="inline-flex h-6 w-6 shrink-0">
                     <button
                       type="button"
+                      onClick={() => onToggleVisible(members.map((member) => member.id))}
+                      aria-label={groupHidden ? '显示整组' : '隐藏整组'}
+                      className={`inline-flex h-full w-full items-center justify-center rounded transition-colors ${
+                        groupHidden
+                          ? 'text-[#0071E3]'
+                          : 'text-[#C7C7CC] opacity-0 group-hover:opacity-100 hover:text-[#1D1D1F]'
+                      }`}
+                    >
+                      {groupHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                  </div>
+                  <div className="inline-flex h-6 w-6 shrink-0">
+                    <button
+                      type="button"
                       onClick={() => onToggleLock(members.map((member) => member.id))}
                       aria-label={groupLocked ? '解锁整组' : '锁定整组'}
                       className={`inline-flex h-full w-full items-center justify-center rounded transition-colors ${
@@ -284,6 +305,7 @@ export function CanvasLayerPanel({
                       active={selected.has(member.id)}
                       onSelect={() => onSelect(member.id)}
                       onToggleLock={() => onToggleLock([member.id])}
+                      onToggleVisible={() => onToggleVisible([member.id])}
                       onDelete={() => onDelete([member.id])}
                     />
                   ))}
@@ -306,10 +328,11 @@ interface LayerRowProps {
   indented?: boolean;
   onSelect: () => void;
   onToggleLock: () => void;
+  onToggleVisible: () => void;
   onDelete: () => void;
 }
 
-/** 单个图层行：类型图标 + 名称 + 锁定 / 删除开关，支持拖拽排序 */
+/** 单个图层行：类型图标 + 名称 + 可见 / 锁定 / 删除开关，支持拖拽排序 */
 function LayerRow({
   sortableId,
   node,
@@ -317,9 +340,11 @@ function LayerRow({
   indented,
   onSelect,
   onToggleLock,
+  onToggleVisible,
   onDelete,
 }: LayerRowProps) {
   const Icon = TYPE_ICONS[node.type];
+  const hidden = node.visible === false;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: sortableId });
   return (
@@ -340,11 +365,30 @@ function LayerRow({
           className={`flex w-full min-w-0 items-center gap-1.5 py-1.5 text-left text-[11.5px] transition-colors disabled:cursor-not-allowed ${
             indented ? 'pl-7' : 'pl-1.5'
           } ${
-            active ? 'text-[#0071E3]' : node.locked ? 'text-[#A1A1A6]' : 'text-[#1D1D1F]'
+            active
+              ? 'text-[#0071E3]'
+              : node.locked || hidden
+                ? 'text-[#A1A1A6]'
+                : 'text-[#1D1D1F]'
           }`}
         >
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{layerLabel(node)}</span>
+        </button>
+      </div>
+      <div className="inline-flex h-6 w-6 shrink-0">
+        <button
+          type="button"
+          onClick={onToggleVisible}
+          disabled={!!node.fixed}
+          aria-label={hidden ? '显示图层' : '隐藏图层'}
+          className={`inline-flex h-full w-full items-center justify-center rounded transition-colors disabled:cursor-not-allowed ${
+            hidden
+              ? 'text-[#0071E3]'
+              : 'text-[#C7C7CC] opacity-0 group-hover:opacity-100 hover:text-[#1D1D1F]'
+          }`}
+        >
+          {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
         </button>
       </div>
       <div className="inline-flex h-6 w-6 shrink-0">

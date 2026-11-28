@@ -26,6 +26,8 @@ import {
   Check,
   Code2,
   CopyPlus,
+  Eye,
+  EyeOff,
   Film,
   FolderOpen,
   Italic,
@@ -331,10 +333,12 @@ export interface CanvasInspectorContext {
   background: string;
   /** 背景图（后端路径），空表示纯色底 */
   backgroundImage: string;
-  /** 背景视频（后端路径）；与背景图可同时保留，渲染时视频优先 */
+  /** 背景视频（后端路径）；与背景图可同时保留，画布按当前预览类型只显示其中一类 */
   backgroundVideo: string;
   /** 背景视频封面（后端路径，视频模块带入）；编辑器渲染背景视频缩略时优先用封面 */
   backgroundVideoCover: string;
+  /** 画布背景当前预览的素材类型：图片 / 视频同时存在时只显示对应的那一类 */
+  backgroundKind: 'image' | 'video';
   /** 背景素材铺法 */
   backgroundMode: CanvasImageMode;
   /** 背景画面调节参数 */
@@ -377,6 +381,8 @@ export interface CanvasInspectorContext {
   onClearBackgroundImage: () => void;
   onPickBackgroundVideo: () => void;
   onClearBackgroundVideo: () => void;
+  /** 切换画布背景预览的素材类型：只影响画布显示，不修改保存的素材 */
+  onBackgroundKindChange: (kind: 'image' | 'video') => void;
 }
 
 export type CanvasNodeInspectorProps = CanvasInspectorContext;
@@ -389,6 +395,7 @@ export function CanvasNodeInspector({
   backgroundImage,
   backgroundVideo,
   backgroundVideoCover,
+  backgroundKind,
   backgroundMode,
   backgroundFilter,
   allowPan,
@@ -410,15 +417,9 @@ export function CanvasNodeInspector({
   onClearBackgroundImage,
   onPickBackgroundVideo,
   onClearBackgroundVideo,
+  onBackgroundKindChange,
 }: CanvasNodeInspectorProps) {
   const title = node ? `${TYPE_LABELS[node.type]}样式` : '画布配置';
-  /** 背景素材类型：默认按已有素材推断；切换分段只改当前展示的槽位，不清空素材 */
-  const [bgKind, setBgKind] = useState<'image' | 'video'>(backgroundVideo ? 'video' : 'image');
-  useEffect(() => {
-    // 上传完成 / 删除 / 换方向后让分段控件跟上实际内容；两边都空时保留用户刚选的那一类
-    if (backgroundVideo) setBgKind('video');
-    else if (backgroundImage) setBgKind('image');
-  }, [backgroundVideo, backgroundImage]);
 
   const fontSizes = FONT_SIZES.includes(node?.type === 'text' ? node.fontSize : -1)
     ? FONT_SIZES
@@ -453,6 +454,20 @@ export function CanvasNodeInspector({
             onClick={() => onToggleLock?.()}
             disabled={!onToggleLock}
             active={!!node.locked}
+            className="h-7 w-7"
+          />
+          <IconButton
+            icon={node.visible === false ? EyeOff : Eye}
+            label={
+              node.fixed
+                ? '系统固定组件不可隐藏'
+                : node.visible === false
+                  ? '显示组件'
+                  : '隐藏组件'
+            }
+            onClick={() => onPatch({ visible: node.visible === false ? undefined : false })}
+            disabled={!!node.fixed}
+            active={node.visible === false}
             className="h-7 w-7"
           />
           <IconButton
@@ -495,10 +510,10 @@ export function CanvasNodeInspector({
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => setBgKind(item.value)}
-                  aria-pressed={bgKind === item.value}
+                  onClick={() => onBackgroundKindChange(item.value)}
+                  aria-pressed={backgroundKind === item.value}
                   className={`inline-flex h-7 items-center justify-center rounded-md text-[11px] font-medium transition-colors ${
-                    bgKind === item.value
+                    backgroundKind === item.value
                       ? 'bg-white text-[#1D1D1F] shadow-sm'
                       : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                   }`}
@@ -508,7 +523,7 @@ export function CanvasNodeInspector({
               ))}
             </div>
 
-            {bgKind === 'video' ? (
+            {backgroundKind === 'video' ? (
               <div className="flex flex-col gap-2">
                 <BackgroundCover
                   label="视频"
@@ -538,7 +553,7 @@ export function CanvasNodeInspector({
                 />
                 {backgroundVideo && (
                   <p className="text-[10.5px] leading-relaxed text-[#86868B]">
-                    背景视频优先生效；删除视频后此图片才会作为背景
+                    当前画布显示图片；切到「视频」可预览背景视频，保存的素材互不影响
                   </p>
                 )}
               </div>

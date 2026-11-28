@@ -161,7 +161,7 @@ export function usePortalData(
       // 自定义模块没有数据源，直接忽略
       if (!isSectionId(rawSection)) return;
       const section = rawSection;
-      if (section === 'profile' || section === 'settings' || section === 'sites') return;
+      if (section === 'profile' || section === 'settings') return;
       // 已成功加载过的板块不再重复请求，避免切回视频时把常驻播放器卸载重建
       if (!force && loadedSectionsRef.current[section]) return;
       // 防重入：同一板块正在请求时直接返回，避免并发重复拉取

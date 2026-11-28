@@ -70,6 +70,11 @@ function readColor(value: unknown, fallback: string): string {
   return HEX_COLOR.test(raw) ? raw.toUpperCase() : fallback;
 }
 
+/** 背景素材类型：只认图片 / 视频，旧配置未保存时按「有视频即视频」兜底 */
+function readKind(value: unknown, hasVideo: boolean): 'image' | 'video' {
+  return value === 'image' || value === 'video' ? value : hasVideo ? 'video' : 'image';
+}
+
 /** 背景素材铺法：只认五种，脏数据回退等比铺满（与旧版整屏素材的 object-cover 一致） */
 function readMode(value: unknown): CanvasImageMode {
   return value === 'fit' || value === 'cover' || value === 'stretch' || value === 'stretch-x' || value === 'stretch-y'
@@ -118,15 +123,17 @@ function normalizeOrientation(
   orientation: SplashOrientation
 ): SplashOrientationDoc {
   const size = SPLASH_CANVAS_SIZES[orientation];
+  const video = (doc.backgroundVideo || '').trim();
   return {
     width: size.width,
     height: size.height,
     background: readColor(doc.background, SPLASH_CANVAS_BACKGROUND),
     backgroundImage: (doc.backgroundImage || '').trim(),
-    // 背景图 / 背景视频可同时保留，客户端渲染时视频优先
-    backgroundVideo: (doc.backgroundVideo || '').trim(),
+    // 背景图 / 背景视频可同时保留，客户端按 backgroundKind 只渲染其中一类
+    backgroundVideo: video,
     // 视频封面：从视频模块选视频时带入，客户端渲染背景视频时作 poster
     backgroundVideoCover: (doc.backgroundVideoCover || '').trim(),
+    backgroundKind: readKind(doc.backgroundKind, Boolean(video)),
     backgroundMode: readMode(doc.backgroundMode),
     // 背景画面调节：默认值时省略
     backgroundFilter: readFilter(doc.backgroundFilter),
@@ -146,6 +153,8 @@ function normalizeNode(node: SplashNode, _size: { width: number; height: number 
     // 旋转角度为 0 时不写进 JSON，避免每条节点都多一个无意义字段
     rotation: round1(node.rotation ?? 0) || undefined,
     locked: node.locked ? true : undefined,
+    // 只有隐藏时才写进 JSON，默认可见不带字段
+    visible: node.visible === false ? false : undefined,
     groupId: readGroupId(node.groupId),
     // 组件交互开关只在非默认值时写入：旋转 / 调整宽高默认开，倾斜 / 超出画布默认关
     allowRotate: node.allowRotate === false ? false : undefined,
@@ -252,6 +261,7 @@ function parseNode(raw: unknown, size: { width: number; height: number }): Splas
     height: readNumber(row.height, 48),
     rotation: readNumber(row.rotation, 0),
     locked: row.locked === true ? true : undefined,
+    visible: row.visible === false ? false : undefined,
     groupId: readGroupId(row.groupId),
     allowRotate: row.allowRotate === false ? false : undefined,
     allowResize: row.allowResize === false ? false : undefined,
@@ -413,6 +423,7 @@ function parseOrientation(
   base.backgroundVideo = typeof row.backgroundVideo === 'string' ? row.backgroundVideo.trim() : '';
   base.backgroundVideoCover =
     typeof row.backgroundVideoCover === 'string' ? row.backgroundVideoCover.trim() : '';
+  base.backgroundKind = readKind(row.backgroundKind, Boolean(base.backgroundVideo));
   base.backgroundMode = readMode(row.backgroundMode);
   base.backgroundFilter = readFilter(
     row.backgroundFilter,
@@ -491,6 +502,7 @@ function createOrientationDoc(
       height: size.height,
       background: SPLASH_CANVAS_BACKGROUND,
       backgroundVideo: legacyVideo,
+      backgroundKind: 'video',
       // 旧版整屏视频是 object-cover 渲染的，迁移成等比铺满保持视觉一致
       backgroundMode: 'cover',
       nodes: [],

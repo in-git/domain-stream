@@ -3,13 +3,12 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type RefObject,
   type SyntheticEvent,
 } from 'react';
 import { motion } from 'motion/react';
 import splashSvgRaw from '../assets/splash-icon.svg?raw';
 import { APPLE_EASE, SWIFTUI_SMOOTH } from '../lib/motion';
-import { publicFileUrl, useSystemInfo, useSystemInfoSettled } from '../lib/systemInfo';
+import { publicFileUrl, useSystemInfo, useSystemInfoLoaded, useSystemInfoSettled } from '../lib/systemInfo';
 import {
   parseSplashCanvas,
   resolveSplashMode,
@@ -113,6 +112,8 @@ interface SplashScreenProps {
 export function SplashScreen({ onComplete }: SplashScreenProps) {
   const { title, config } = useSystemInfo();
   const systemInfoSettled = useSystemInfoSettled();
+  // 配置真正加载成功后才展示旧版标题，避免加载期间先闪出默认标题「私域」
+  const systemInfoLoaded = useSystemInfoLoaded();
   const [mediaDuration, setMediaDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   /** 画布背景视频（封面模式下的动态背景），与开屏音频互斥 */
@@ -128,10 +129,11 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     canvas?.nodes.find(
       (node): node is SplashTextNode => node.type === 'text' && node.fixed === 'skip'
     ) ?? null;
-  // 背景视频只跟随当前方向的画布，横竖屏各自独立
-  const backgroundVideoUrl = canvas?.backgroundVideo
-    ? publicFileUrl(canvas.backgroundVideo)
-    : '';
+  // 背景视频只跟随当前方向的画布，横竖屏各自独立；背景模式为图片时不渲染视频
+  const backgroundVideoUrl =
+    canvas?.backgroundVideo && canvas.backgroundKind !== 'image'
+      ? publicFileUrl(canvas.backgroundVideo)
+      : '';
 
   // 兼容旧配置与单方向配置：缺哪个方向就沿用另一个方向的素材
   const rawLandscapeVideo = publicFileUrl(config.splashVideoLandscapeUrl || config.splashVideoUrl);
@@ -358,8 +360,8 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           }}
         >
           {/* 背景图铺在最底层，铺法跟后台画布配置一致；单独一层裁切，保证任何铺法都不超出画布 */}
-          {canvas.backgroundVideo ? (
-            // 背景视频与背景图互斥：有视频时整层换成视频，铺法复用同一套样式
+          {canvas.backgroundKind !== 'image' && canvas.backgroundVideo ? (
+            // 背景模式为视频时播放背景视频，铺法复用同一套样式
             <div className="absolute inset-0 overflow-hidden">
               <video
                 ref={backgroundVideoRef}
@@ -390,14 +392,17 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
             </div>
           ) : null}
           {canvas.nodes
-            .filter((node) => !(node.type === 'text' && node.fixed === 'skip'))
+            .filter((node) => {
+              if (node.visible === false) return false;
+              return !(node.type === 'text' && node.fixed === 'skip');
+            })
             .map((node) => (
               <CanvasNode key={node.id} node={node} canvas={canvas} />
             ))}
         </div>
       )}
 
-      {!canvas && (
+      {!canvas && systemInfoLoaded && (
         <div
           className={
             hasVisualMedia

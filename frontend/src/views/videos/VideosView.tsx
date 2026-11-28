@@ -689,12 +689,12 @@ export function VideosView({
 
       {!isMini && viewMode === 'feed' && !loadingVideos && filteredVideos.length === 0 && (
         <div className={`flex items-center justify-center bg-black ${headerFloating ? 'h-[100dvh]' : 'h-[calc(100dvh-3.5rem)]'}`}>
-          <EmptyState className="w-fit px-10 py-16" title="暂无数据" onDark />
+          <EmptyState className="w-full px-10 py-16" title="暂无数据" onDark />
         </div>
       )}
 
       {!isMini && viewMode === 'grid' && !loadingVideos && filteredVideos.length === 0 && (
-        <EmptyState title="暂无数据" />
+        <EmptyState className="w-full" title="暂无数据" />
       )}
 
       {/* 沉浸刷看：始终挂载，网格模式下用 CSS 隐藏，保证 <video> 不被销毁重建 */}

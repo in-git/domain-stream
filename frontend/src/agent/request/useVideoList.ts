@@ -22,7 +22,7 @@ export interface UseVideoListOptions {
 
 /**
  * 视频列表数据源（C 端只读）。
- * 结构与 useSiteList 保持一致：首屏 / 筛选走 fetchVideos，触底走 loadMore（追加）。
+ * 结构与列表 hook 保持一致：首屏 / 筛选走 fetchVideos，触底走 loadMore（追加）。
  */
 export function useVideoList(options: UseVideoListOptions = {}) {
   const {

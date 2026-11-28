@@ -16,7 +16,7 @@
  *   - 撤销 / 重做（文档层快照，Ctrl+Z / Ctrl+Shift+Z，不放按钮）
  *   - 图层锁定 / 编组：锁定后不可选中，同组节点整组选中一起移动
  *   - 复制 / 粘贴 / 创建副本（Ctrl+C / Ctrl+V / Ctrl+D，编组关系一并复制）
- *   - 快捷键：Delete 删除、[ 置底、] 置顶、Ctrl+G 编组、Ctrl+Shift+G 取消编组、Ctrl+Shift+L 锁定、
+ *   - 快捷键：Delete 删除、[ / ] 下移 / 上移一层、Ctrl+G 编组、Ctrl+Shift+G 取消编组、Ctrl+Shift+L 锁定、
  *     T 文本、I 图片、H HTML 代码；R / O / S 进入矩形 / 圆形 / SVG 的鼠标拖拽绘制模式（Esc 退出）
  *   - 拖拽本地文件到画布：图片 / SVG 变成节点、视频换成背景，先本地预览，保存配置时再上传
  *   - 左侧图层面板（固定宽度，编组以可折叠的组节点展示）+ 右侧属性面板
@@ -123,10 +123,6 @@ import {
 } from './types';
 import './canvasFilters';
 
-/** iframe 里的基础样式：去掉默认白底和边距，与客户端直接插入 HTML 的效果一致 */
-const HTML_FRAME_STYLE =
-  '<style>html,body{margin:0;padding:0;background:transparent;overflow:hidden;}</style>';
-
 /**  Leafer 元素的最小读写面：几何可直接读，样式统一走 set */
 type LeaferElement = IUI & {
   set(data: Record<string, unknown>): void;
@@ -175,7 +171,7 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl+G / Ctrl+Shift+G', '编组 / 取消编组'],
   ['Ctrl+Shift+L', '锁定 / 解锁图层'],
   ['Delete / Backspace', '删除选中组件'],
-  ['[ / ]', '置底 / 置顶'],
+  ['[ / ]', '下移 / 上移一层'],
   ['T / I / H', '新增文本 / 图片 / HTML'],
   ['R / O / S', '矩形 / 圆形 / SVG 拖拽绘制'],
   ['Shift + 拖动', '绘制正圆 / 正方形'],
@@ -251,6 +247,84 @@ function loadNaturalSize(url: string): Promise<CanvasSize> {
   });
 }
 
+/**
+ * HTML 组件转静态预览图。
+ * Leafer 画布只能渲染图片，iframe 浮层又会永远盖在所有画布元素之上（层级失效），
+ * 所以把 HTML 包进 SVG 的 foreignObject 再光栅化成图片，交给 Leafer 参与正常层级排序。
+ * 客户端开屏仍然渲染原始 HTML，这里只影响编辑器的预览。
+ */
+const htmlSnapshotCache = new Map<string, Promise<string>>();
+
+function htmlSnapshotKey(html: string, width: number, height: number) {
+  return `${Math.round(width)}x${Math.round(height)}:${html}`;
+}
+
+/** 把 SVG 光栅化成 2 倍图；浏览器不允许时退回 SVG 地址，仍然比不显示好 */
+function rasterizeHtmlSvg(svgUrl: string, width: number, height: number): Promise<string> {
+  return new Promise((resolve) => {
+    const image = new window.Image();
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * 2));
+        canvas.height = Math.max(1, Math.round(height * 2));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          resolve(svgUrl);
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(svgUrl);
+      }
+    };
+    image.onerror = () => resolve('');
+    image.src = svgUrl;
+  });
+}
+
+function htmlSnapshotUrl(html: string, width: number, height: number): Promise<string> {
+  const key = htmlSnapshotKey(html, width, height);
+  const cached = htmlSnapshotCache.get(key);
+  if (cached) return cached;
+  const task = (async () => {
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    let body = '';
+    try {
+      // 先经 DOM 归一化，避免用户输入的 HTML 不是合法 XML（如 <br>）导致整段 SVG 解析失败
+      const host = document.createElement('div');
+      host.style.cssText = `width:${w}px;height:${h}px;margin:0;padding:0;overflow:hidden;`;
+      host.innerHTML = html;
+      body = new XMLSerializer().serializeToString(host);
+    } catch {
+      return '';
+    }
+    const markup = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject x="0" y="0" width="100%" height="100%">${body}</foreignObject></svg>`;
+    const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+    return rasterizeHtmlSvg(svgUrl, w, h);
+  })().then((url) => {
+    // 失败不缓存，下次编辑或重新渲染时还会再试
+    if (!url) htmlSnapshotCache.delete(key);
+    return url;
+  });
+  htmlSnapshotCache.set(key, task);
+  return task;
+}
+
+/** 把 HTML 快照写到 Leafer 图片元素上；内容 / 尺寸没变就复用同一张图 */
+function applyHtmlSnapshot(element: LeaferElement, node: CanvasHtmlNode) {
+  const marker = element as unknown as { __htmlKey?: string };
+  const key = htmlSnapshotKey(node.html, node.width, node.height);
+  if (marker.__htmlKey === key) return;
+  marker.__htmlKey = key;
+  void htmlSnapshotUrl(node.html, node.width, node.height).then((url) => {
+    if (!url || marker.__htmlKey !== key) return;
+    element.set({ url });
+  });
+}
+
 /** 焦点在可输入元素里时，快捷键交给输入框自己处理 */
 function isEditableTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
@@ -261,6 +335,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
     element.tagName === 'TEXTAREA' ||
     element.tagName === 'SELECT'
   );
+}
+
+/** 背景素材类型：优先用文档里保存的值，旧配置按「有视频即视频」兜底 */
+function readBackgroundKind(doc: Pick<CanvasDoc, 'backgroundKind' | 'backgroundVideo'>) {
+  if (doc.backgroundKind === 'image' || doc.backgroundKind === 'video') return doc.backgroundKind;
+  return (doc.backgroundVideo || '').trim() ? 'video' : 'image';
 }
 
 /** 组内所有节点 id（未编组时只有自己），用于整组选中 / 整组操作 */
@@ -357,6 +437,8 @@ function createElement(node: CanvasNode): LeaferElement {
     // 锁定的图层不可选中 / 不可拖动，但仍可右键解锁
     editable: !node.locked,
     draggable: !node.locked,
+    // 隐藏的组件不渲染、不参与命中
+    visible: node.visible !== false,
     // 勾选「超出画布」的组件才允许拖出画布范围
     dragBounds: nodeDragBounds(node),
     // 旋转 / 缩放 / 倾斜按组件自己的开关决定
@@ -419,14 +501,15 @@ function createElement(node: CanvasNode): LeaferElement {
     return image;
   }
 
-  // HTML 代码：Leafer 不能直接渲染 HTML，这里只放一个透明的命中框，
-  // 真正的 HTML 由上层 iframe 浮层按节点位置渲染（见 syncHtmlOverlays）
+  // HTML 代码：Leafer 不能直接渲染 HTML，把片段光栅化成图片，才能和其它组件一起参与层级排序
   if (node.type === 'html') {
-    return new Rect({
+    const image = new LeaferImage({
       ...base,
-      fill: 'rgba(255,255,255,0.001)',
+      url: '',
       opacity: node.opacity,
     }) as unknown as LeaferElement;
+    applyHtmlSnapshot(image, node);
+    return image;
   }
 
   return new Rect({ ...base, fill: 'rgba(255,255,255,0.001)' }) as unknown as LeaferElement;
@@ -466,6 +549,8 @@ export function CanvasEditor({
     backgroundImage: string;
     backgroundVideo: string;
     backgroundVideoCover: string;
+    /** 背景素材类型：图片 / 视频，随文档一起保存，客户端按它渲染 */
+    backgroundKind: 'image' | 'video';
     backgroundMode: CanvasImageMode;
     backgroundFilter?: CanvasFilterParams;
     /** 画布视图交互开关：是否允许空格 + 拖动平移 */
@@ -477,11 +562,17 @@ export function CanvasEditor({
     backgroundImage: (value.backgroundImage || '').trim(),
     backgroundVideo: (value.backgroundVideo || '').trim(),
     backgroundVideoCover: (value.backgroundVideoCover || '').trim(),
+    backgroundKind: readBackgroundKind(value),
     backgroundMode: value.backgroundMode ?? 'cover',
     backgroundFilter: value.backgroundFilter,
     allowPan: value.allowPan !== false,
   });
   const backgroundSyncRef = useRef<(() => void) | null>(null);
+  /** 背景预览类型：图片 / 视频同时存在时只显示当前类型，并随文档保存 */
+  const [backgroundKind, setBackgroundKind] = useState<'image' | 'video'>(() =>
+    readBackgroundKind(value)
+  );
+  const backgroundKindRef = useRef<'image' | 'video'>(backgroundKind);
   /** 选中组件的交互开关变化时同步到 Editor 的 config（Leafer 每次交互都会实时合并 config） */
   const applyFlagsRef = useRef<((ids?: string[], refresh?: boolean) => void) | null>(null);
   const sizeBadgeRef = useRef<HTMLSpanElement | null>(null);
@@ -557,43 +648,6 @@ export function CanvasEditor({
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [helpOpen]);
-  /** HTML 渲染浮层：节点 id → 包裹层，位置随视图同步 */
-  const htmlLayersRef = useRef<Map<string, HTMLDivElement>>(new Map());
-  const syncHtmlOverlaysRef = useRef<() => void>(() => {});
-
-  /** 按当前视图（适配缩放 × 滚轮缩放 + 平移）摆放 HTML 浮层 */
-  const syncHtmlOverlays = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const { zoom, panX, panY } = viewRef.current;
-    const scale = baseScaleRef.current * zoom;
-    if (!scale) return;
-    const rootX = (container.clientWidth - metaRef.current.width * scale) / 2 + panX;
-    const rootY = (container.clientHeight - metaRef.current.height * scale) / 2 + panY;
-    for (const node of nodesRef.current) {
-      if (node.type !== 'html') continue;
-      const layer = htmlLayersRef.current.get(node.id);
-      if (!layer) continue;
-      layer.style.left = `${rootX + node.x * scale}px`;
-      layer.style.top = `${rootY + node.y * scale}px`;
-      layer.style.width = `${node.width * scale}px`;
-      layer.style.height = `${node.height * scale}px`;
-      layer.style.transform = node.rotation ? `rotate(${node.rotation}deg)` : '';
-      layer.style.opacity = String(node.opacity);
-      const frame = layer.firstElementChild as HTMLIFrameElement | null;
-      if (frame) {
-        // iframe 按设计像素排版，再整体缩放到当前画布比例，保证内容比例一致
-        frame.style.width = `${node.width}px`;
-        frame.style.height = `${node.height}px`;
-        frame.style.transform = `scale(${scale})`;
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    syncHtmlOverlaysRef.current = syncHtmlOverlays;
-    syncHtmlOverlays();
-  });
   const historyRef = useRef<{
     past: CanvasNode[][];
     future: CanvasNode[][];
@@ -698,6 +752,34 @@ export function CanvasEditor({
     []
   );
 
+  /** 切换背景素材类型：只让画布显示对应的素材，并随文档保存，客户端开屏按它渲染 */
+  const setBackgroundPreviewKind = useCallback((kind: 'image' | 'video') => {
+    if (backgroundKindRef.current === kind) return;
+    backgroundKindRef.current = kind;
+    setBackgroundKind(kind);
+    metaRef.current = { ...metaRef.current, backgroundKind: kind };
+    backgroundSyncRef.current?.();
+    onChangeRef.current({ ...metaRef.current, nodes: nodesRef.current });
+  }, []);
+
+  // 素材增删后自动切到可用的那一类：新加视频默认预览视频，当前素材被删除则回退到另一类
+  const backgroundMaterialRef = useRef({
+    image: (value.backgroundImage || '').trim(),
+    video: (value.backgroundVideo || '').trim(),
+  });
+  useEffect(() => {
+    const image = (value.backgroundImage || '').trim();
+    const video = (value.backgroundVideo || '').trim();
+    const prev = backgroundMaterialRef.current;
+    backgroundMaterialRef.current = { image, video };
+    const current = backgroundKindRef.current;
+    let next = current;
+    if (current === 'video' && !video) next = image ? 'image' : 'video';
+    else if (current === 'image' && !image) next = video ? 'video' : 'image';
+    else if (!prev.video && video) next = 'video';
+    if (next !== current) setBackgroundPreviewKind(next);
+  }, [value.backgroundImage, value.backgroundVideo, setBackgroundPreviewKind]);
+
 
   /** 从 Leafer 元素读回几何与文案；没有变化就不写回，避免无意义刷新 */
   const syncFromCanvas = useCallback(() => {
@@ -741,6 +823,7 @@ export function CanvasEditor({
   // 外部换了文档（引用不同且不是自己刚抛出去的）：重置内部状态并重挂画布
   useEffect(() => {
     const meta = metaRef.current;
+    const incomingKind = readBackgroundKind(value);
     if (
       value.nodes === nodesRef.current &&
       value.width === meta.width &&
@@ -749,6 +832,7 @@ export function CanvasEditor({
       (value.backgroundImage || '').trim() === meta.backgroundImage &&
       (value.backgroundVideo || '').trim() === meta.backgroundVideo &&
       (value.backgroundVideoCover || '').trim() === meta.backgroundVideoCover &&
+      incomingKind === meta.backgroundKind &&
       (value.backgroundMode ?? 'cover') === meta.backgroundMode &&
       sameCanvasFilter(value.backgroundFilter, meta.backgroundFilter) &&
       (value.allowPan !== false) === meta.allowPan
@@ -762,10 +846,15 @@ export function CanvasEditor({
       backgroundImage: (value.backgroundImage || '').trim(),
       backgroundVideo: (value.backgroundVideo || '').trim(),
       backgroundVideoCover: (value.backgroundVideoCover || '').trim(),
+      backgroundKind: incomingKind,
       backgroundMode: value.backgroundMode ?? 'cover',
       backgroundFilter: value.backgroundFilter,
       allowPan: value.allowPan !== false,
     };
+    if (backgroundKindRef.current !== incomingKind) {
+      backgroundKindRef.current = incomingKind;
+      setBackgroundKind(incomingKind);
+    }
     nodesRef.current = value.nodes;
     setNodes(value.nodes);
     setSelectedIds([]);
@@ -945,11 +1034,23 @@ export function CanvasEditor({
       hittable: false,
     });
     let backgroundElement: LeaferImage | null = null;
+    /** 当前真正要渲染的素材类型：选中的那一类缺失时回退到另一类 */
+    const effectiveBackgroundKind = (): 'image' | 'video' | null => {
+      const image = (metaRef.current.backgroundImage || '').trim();
+      const video = (metaRef.current.backgroundVideo || '').trim();
+      if (backgroundKindRef.current === 'video') {
+        if (video) return 'video';
+        return image ? 'image' : null;
+      }
+      if (image) return 'image';
+      return video ? 'video' : null;
+    };
     const syncBackground = () => {
       const { backgroundImage, backgroundVideo, backgroundMode } = metaRef.current;
       const imageUrl = (backgroundImage || '').trim();
       const videoUrl = (backgroundVideo || '').trim();
-      if (!imageUrl && !videoUrl) {
+      const kind = effectiveBackgroundKind();
+      if (!kind) {
         if (backgroundElement) {
           backgroundElement.remove();
           backgroundElement = null;
@@ -985,12 +1086,15 @@ export function CanvasEditor({
         element.set({ visible: true, ...imageBoxFor(backgroundMode, natural, canvas) });
       };
 
-      if (videoUrl) {
+      if (kind === 'video') {
         const coverUrl = (metaRef.current.backgroundVideoCover || '').trim();
         // 有视频封面（视频模块带入）直接用封面渲染，省去每次抽首帧
         if (coverUrl) {
+          // 换素材期间先藏起来，避免上一张图残留在画布上
+          element.set({ visible: false });
           void loadNaturalSize(previewUrl(coverUrl)).then((natural) => {
             if (backgroundElement !== element) return;
+            if (effectiveBackgroundKind() !== 'video') return;
             if (metaRef.current.backgroundVideo !== videoUrl) return;
             element.set({ visible: true, url: previewUrl(coverUrl) });
             applyBox(natural);
@@ -1001,6 +1105,7 @@ export function CanvasEditor({
         element.set({ visible: false });
         void loadVideoFrame(videoUrl).then((frame) => {
           if (backgroundElement !== element) return;
+          if (effectiveBackgroundKind() !== 'video') return;
           if (metaRef.current.backgroundVideo !== videoUrl) return;
           // 抽帧失败（编码不支持 / 跨域）就只留画布底色，不影响其它编辑
           if (!frame) {
@@ -1019,9 +1124,9 @@ export function CanvasEditor({
         return;
       }
       void loadNaturalSize(previewUrl(imageUrl)).then((natural) => {
-        if (backgroundElement !== element || metaRef.current.backgroundImage !== imageUrl) {
-          return;
-        }
+        if (backgroundElement !== element) return;
+        if (effectiveBackgroundKind() !== 'image') return;
+        if (metaRef.current.backgroundImage !== imageUrl) return;
         element.set(imageBoxFor(backgroundMode, natural, canvas));
       });
     };
@@ -1081,8 +1186,6 @@ export function CanvasEditor({
       }
       // 视图缩放后编辑框要重新贴合，否则选中框会停在旧比例上
       if (editorRef.current?.list.length) editorRef.current.updateEditBox();
-      // HTML 浮层跟着画布一起缩放 / 平移
-      syncHtmlOverlaysRef.current();
     };
 
     /** 视图变化后短暂亮出缩放比例，1.2s 后自动隐藏 */
@@ -1377,6 +1480,11 @@ export function CanvasEditor({
         if (element && updated) applyNodeToElement(element, updated, touchesControl);
       });
       commitNodes(next, { key });
+      // 隐藏后不可再操作：取消选中，避免编辑框停在看不见的元素上
+      if (patch.visible === false) {
+        editorRef.current?.cancel();
+        updateSelection(selectedIdsRef.current.filter((id) => !ids.includes(id)));
+      }
       // 交互开关可能刚被改过：按最新节点刷新编辑框手柄
       if (
         'allowRotate' in patch ||
@@ -1387,7 +1495,7 @@ export function CanvasEditor({
         applyFlagsRef.current?.(ids);
       }
     },
-    [commitNodes]
+    [commitNodes, updateSelection]
   );
 
   /** 精确设置旋转角度：以元素当前视觉中心为轴，等价于拖旋转手柄，元素不会甩出去 */
@@ -1938,6 +2046,31 @@ export function CanvasEditor({
     [commitNodes, raiseGuides, updateSelection]
   );
 
+  /** 层级微调：选中节点整体上移 / 下移一层（[ / ] 快捷键），不改变其它节点相对顺序 */
+  const moveSelectionOne = useCallback(
+    (direction: 'up' | 'down') => {
+      const selectedSet = new Set(selectedIdsRef.current);
+      if (!selectedSet.size) return;
+      const next = [...nodesRef.current];
+      if (direction === 'up') {
+        for (let i = next.length - 2; i >= 0; i -= 1) {
+          if (selectedSet.has(next[i].id) && !selectedSet.has(next[i + 1].id)) {
+            [next[i], next[i + 1]] = [next[i + 1], next[i]];
+          }
+        }
+      } else {
+        for (let i = 1; i < next.length; i += 1) {
+          if (selectedSet.has(next[i].id) && !selectedSet.has(next[i - 1].id)) {
+            [next[i], next[i - 1]] = [next[i - 1], next[i]];
+          }
+        }
+      }
+      if (next.every((node, index) => node.id === nodesRef.current[index].id)) return;
+      reorderNodes(next.map((node) => node.id));
+    },
+    [reorderNodes]
+  );
+
   /** 锁定 / 解锁：锁定的节点不再被选中，避免误拖；解锁后重新选中方便继续编辑 */
   const toggleLock = useCallback(
     (ids?: string[]) => {
@@ -1988,6 +2121,20 @@ export function CanvasEditor({
   const toggleLayerLock = useCallback(
     (ids: string[]) => toggleLock(ids),
     [toggleLock]
+  );
+
+  /** 显示 / 隐藏：只要还有可见的就整体隐藏，全部隐藏时再统一显示；系统固定组件不允许隐藏 */
+  const toggleVisible = useCallback(
+    (ids: string[]) => {
+      const targets = ids.filter(
+        (id) => !nodesRef.current.find((node) => node.id === id)?.fixed
+      );
+      if (!targets.length) return;
+      const selected = nodesRef.current.filter((node) => targets.includes(node.id));
+      const hide = selected.some((node) => node.visible !== false);
+      patchNodes(targets, { visible: hide ? false : undefined });
+    },
+    [patchNodes]
   );
 
   /** 编组：选中的节点共用一个 groupId，之后点击任一成员即整组选中 */
@@ -2088,7 +2235,7 @@ export function CanvasEditor({
    * 画布快捷键（焦点不在输入框、也不在文本内编辑时生效）：
    *   Ctrl/Cmd+Z 撤销、Ctrl/Cmd+Shift+Z / Ctrl+Y 重做
    *   Ctrl/Cmd+C 复制、Ctrl/Cmd+V 粘贴、Ctrl/Cmd+D 创建副本
-   *   Delete / Backspace 删除、[ 置底、] 置顶（与 Figma 一致）
+   *   Delete / Backspace 删除、[ / ] 下移 / 上移一层（与 Figma 一致）
    *   Ctrl/Cmd+G 编组、Ctrl/Cmd+Shift+G 取消编组、Ctrl/Cmd+Shift+L 锁定 / 解锁
    */
   useEffect(() => {
@@ -2176,12 +2323,12 @@ export function CanvasEditor({
       }
       if (key === '[') {
         event.preventDefault();
-        shiftSelection('bottom');
+        moveSelectionOne('down');
         return;
       }
       if (key === ']') {
         event.preventDefault();
-        shiftSelection('top');
+        moveSelectionOne('up');
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -2196,7 +2343,7 @@ export function CanvasEditor({
     ungroupSelected,
     toggleLock,
     removeNodes,
-    shiftSelection,
+    moveSelectionOne,
     startDraw,
     addTextNode,
     addNode,
@@ -2309,7 +2456,6 @@ export function CanvasEditor({
 
   const selectedNode = nodes.find((node) => node.id === selectedIds[0]) ?? null;
   const toolList = tools ?? DEFAULT_TOOLS;
-  const htmlNodes = nodes.filter((node) => node.type === 'html');
 
   const inspectorContext: CanvasInspectorContext = {
     node: selectedNode,
@@ -2319,6 +2465,7 @@ export function CanvasEditor({
     backgroundImage: metaRef.current.backgroundImage,
     backgroundVideo: metaRef.current.backgroundVideo,
     backgroundVideoCover: metaRef.current.backgroundVideoCover,
+    backgroundKind,
     backgroundMode: metaRef.current.backgroundMode,
     backgroundFilter: metaRef.current.backgroundFilter,
     allowPan: metaRef.current.allowPan,
@@ -2364,6 +2511,7 @@ export function CanvasEditor({
     onClearBackgroundImage: () => patchCanvas({ backgroundImage: '' }),
     onPickBackgroundVideo: pickBackgroundVideo,
     onClearBackgroundVideo: () => patchCanvas({ backgroundVideo: '', backgroundVideoCover: '' }),
+    onBackgroundKindChange: setBackgroundPreviewKind,
   };
 
   const inspector =
@@ -2385,6 +2533,7 @@ export function CanvasEditor({
             selectedIds={selectedIds}
             onSelect={selectFromLayers}
             onToggleLock={toggleLayerLock}
+            onToggleVisible={toggleVisible}
             onDelete={removeNodes}
             onReorder={reorderNodes}
           />
@@ -2549,38 +2698,6 @@ export function CanvasEditor({
             />
           )}
 
-          {/* HTML 组件：真正的 HTML 用 iframe 浮层渲染，不拦截指针，可正常拖拽选中 */}
-          {htmlNodes.map((node) => (
-            <div
-              key={node.id}
-              ref={(element) => {
-                if (element) htmlLayersRef.current.set(node.id, element);
-                else htmlLayersRef.current.delete(node.id);
-              }}
-              style={{
-                position: 'absolute',
-                zIndex: 8,
-                pointerEvents: 'none',
-                transformOrigin: '50% 50%',
-              }}
-            >
-              <iframe
-                title="HTML 内容"
-                srcDoc={`${HTML_FRAME_STYLE}${node.html}`}
-                sandbox=""
-                scrolling="no"
-                tabIndex={-1}
-                style={{
-                  border: 0,
-                  background: 'transparent',
-                  pointerEvents: 'none',
-                  transformOrigin: '0 0',
-                  overflow: 'hidden',
-                }}
-              />
-            </div>
-          ))}
-
           {/* 悬浮工具栏：画布正中心下方，只放新增组件 */}
           {toolList.length > 0 && (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center">
@@ -2695,7 +2812,6 @@ export function CanvasEditor({
                 <MenuItem
                   icon={ArrowUpToLine}
                   label="置顶"
-                  hint="]"
                   onClick={() => {
                     shiftSelection('top', menuIds);
                     closeMenu();
@@ -2704,7 +2820,6 @@ export function CanvasEditor({
                 <MenuItem
                   icon={ArrowDownToLine}
                   label="置底"
-                  hint="["
                   onClick={() => {
                     shiftSelection('bottom', menuIds);
                     closeMenu();
@@ -2839,6 +2954,7 @@ function applyNodeToElement(element: LeaferElement, node: CanvasNode, withContro
     width: node.width,
     height: node.height,
     rotation: node.rotation ?? 0,
+    visible: node.visible !== false,
     // 组件级交互开关：仅在开关类属性变化时重设，避免拖动数值滑杆时反复刷新编辑框
     ...(withControl
       ? {
@@ -2907,6 +3023,7 @@ function applyNodeToElement(element: LeaferElement, node: CanvasNode, withContro
 
   if (node.type === 'html') {
     element.set({ ...geometry, opacity: node.opacity });
+    applyHtmlSnapshot(element, node);
   }
 }
 

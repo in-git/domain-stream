@@ -18,7 +18,6 @@ import type { useUserSession, usePortalData, usePersistentPlayer } from '../app'
 import { VideosSection } from '../videos/VideosSection';
 import { ArticlesSection } from '../articles/ArticlesSection';
 import { GallerySection } from '../gallery/GallerySection';
-import WebListPicker from '../HomeView/WebListPicker';
 import { MessagesSection } from '../messages/MessagesSection';
 import { ProfilePCView } from '../profile/ProfilePCView';
 import { ProfileMobileView } from '../profile/ProfileMobileView';
@@ -438,19 +437,6 @@ export function PortalShell({
                     onToggleSave={toggleFavorite}
                     onToggleLike={toggleLike}
                   />
-                </motion.div>
-              )}
-
-              {activeSectionKey === 'sites' && (
-                <motion.div
-                  key="section-sites"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={SWIFTUI_SMOOTH}
-                >
-                  <PortalNav />
-                  <WebListPicker />
                 </motion.div>
               )}
 

@@ -693,5 +693,3 @@ export const portalApi = {
     }),
 };
 
-/* node: 网页模块已按 mac-home 原样迁入 src/views/HomeView/WebListPicker，接口见 src/api/site.ts */
-

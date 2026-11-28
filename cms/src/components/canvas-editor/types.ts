@@ -200,6 +200,8 @@ export interface CanvasNodeBase {
   rotation?: number;
   /** 锁定后不能在画布上选中 / 拖动，仍可右键解锁 */
   locked?: boolean;
+  /** 是否可见，不写默认可见；隐藏后画布与客户端都不渲染该组件 */
+  visible?: boolean;
   /** 同组节点会一起选中、一起移动 */
   groupId?: string;
   /** 组件交互开关：不写进 JSON 就用默认值（旋转 / 调整宽高默认开启，倾斜默认关闭） */
@@ -291,8 +293,10 @@ export interface CanvasDoc extends CanvasSize {
   background: string;
   /** 背景图（后端存储路径），空表示只用纯色底 */
   backgroundImage?: string;
-  /** 背景视频（后端存储路径）；与背景图可同时存在，渲染时视频优先，编辑器里只取首帧做静态预览 */
+  /** 背景视频（后端存储路径）；与背景图可同时存在，客户端按 backgroundKind 决定显示哪一类，编辑器里只取首帧做静态预览 */
   backgroundVideo?: string;
+  /** 背景素材类型：图片 / 视频，客户端开屏按它渲染，旧配置缺省时有视频即视频 */
+  backgroundKind?: 'image' | 'video';
   /** 背景视频封面（后端存储路径，来自视频模块记录）；编辑器与客户端渲染背景视频时作为 poster，免去抽帧 */
   backgroundVideoCover?: string;
   /** 背景素材铺法：等比铺满 / 原比例 / 拉伸铺满 / 横向拉伸 / 纵向拉伸，图片与视频共用，默认等比铺满 */

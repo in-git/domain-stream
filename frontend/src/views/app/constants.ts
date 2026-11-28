@@ -1,12 +1,11 @@
 import type { SectionId } from '../../types/content';
 
 /** 需要后端数据的板块（profile 的数据来自其他板块，不单独拉取） */
-export type ContentSection = 'videos' | 'articles' | 'sites' | 'gallery' | 'messages';
+export type ContentSection = 'videos' | 'articles' | 'gallery' | 'messages';
 
 export const SECTION_IDS: SectionId[] = [
   'videos',
   'articles',
-  'sites',
   'gallery',
   'messages',
   'profile',

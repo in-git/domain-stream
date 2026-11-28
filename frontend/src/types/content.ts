@@ -1,7 +1,6 @@
 export type SectionId =
   | 'videos'
   | 'articles'
-  | 'sites'
   | 'gallery'
   | 'messages'
   | 'profile'

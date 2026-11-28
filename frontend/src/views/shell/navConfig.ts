@@ -22,7 +22,6 @@ const SETTINGS_NAV_ITEM: SidebarNavItem = {
 export const DEFAULT_NAV: SidebarNavItem[] = [
   { id: 'videos', moduleKey: 'videos', sectionKey: 'videos', moduleType: 'builtin', label: '视频' },
   { id: 'articles', moduleKey: 'articles', sectionKey: 'articles', moduleType: 'builtin', label: '文章' },
-  { id: 'sites', moduleKey: 'sites', sectionKey: 'sites', moduleType: 'builtin', label: '网页' },
   { id: 'gallery', moduleKey: 'gallery', sectionKey: 'gallery', moduleType: 'builtin', label: '图文' },
   { id: 'messages', moduleKey: 'messages', sectionKey: 'messages', moduleType: 'builtin', label: '留言' },
   { ...SETTINGS_NAV_ITEM },
